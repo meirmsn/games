@@ -1,7 +1,7 @@
 // Shared sound for the site and every game.
 //
-// Phone browsers keep audio locked until the first tap, so the context is created and resumed on
-// the first pointer or key press; sounds are decoded ahead of time and play with no delay.
+// Phone browsers keep audio locked until the first tap. Sounds are decoded as soon as the page
+// loads, and the first pointer or key press unlocks audio, so even that first tap's sound plays.
 // Mute is one setting for the whole site, kept in this browser (localStorage 'sound' = 'off').
 //
 //   import { createSound } from '../shared/sound.js';
@@ -31,45 +31,34 @@ function saveMuted(muted) {
 
 export function createSound(files, { volume = 0.6 } = {}) {
   const Ctx = window.AudioContext || window.webkitAudioContext;
-  let ctx = null;
-  let gain = null;
   const buffers = new Map();
-  const raw = new Map();
   let muted = readMuted();
 
-  // Fetch the files now (cheap, and cached by the service worker); decode once a context exists.
-  for (const [name, url] of Object.entries(files)) {
-    raw.set(
-      name,
+  // The context is made now, while still locked, so every sound is decoded before the first tap;
+  // the first tap only has to resume it, and that tap's own sound plays.
+  const ctx = Ctx ? new Ctx() : null;
+  let gain = null;
+  if (ctx) {
+    gain = ctx.createGain();
+    gain.gain.value = volume;
+    gain.connect(ctx.destination);
+    for (const [name, url] of Object.entries(files)) {
       fetch(url)
         .then((r) => (r.ok ? r.arrayBuffer() : null))
-        .catch(() => null)
-    );
-  }
-
-  function decodeAll() {
-    for (const [name, pending] of raw) {
-      pending.then((data) => {
-        if (!data || !ctx) return;
-        ctx.decodeAudioData(
-          data.slice(0),
-          (buf) => buffers.set(name, buf),
-          () => {}
-        );
-      });
+        .then((data) => {
+          if (!data) return;
+          ctx.decodeAudioData(
+            data,
+            (buf) => buffers.set(name, buf),
+            () => {}
+          );
+        })
+        .catch(() => {});
     }
   }
 
   function unlock() {
-    if (!Ctx) return;
-    if (!ctx) {
-      ctx = new Ctx();
-      gain = ctx.createGain();
-      gain.gain.value = volume;
-      gain.connect(ctx.destination);
-      decodeAll();
-    }
-    if (ctx.state === 'suspended') ctx.resume();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
   }
 
   const opts = { capture: true, passive: true };

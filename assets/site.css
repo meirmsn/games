@@ -1,5 +1,10 @@
 /* Landing page. Colours, radius and spacing come only from the tokens in base.css. */
 
+/* `hidden` must win over component display rules (e.g. the Install button's .btn). */
+[hidden] {
+  display: none !important;
+}
+
 body {
   min-height: 100dvh;
   display: flex;

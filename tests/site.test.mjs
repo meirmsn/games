@@ -135,3 +135,130 @@ test('Escape in a game goes back to the landing page', async () => {
   await page.waitForURL(BASE);
   await context.close();
 });
+
+// A stand-in AudioContext that counts the sounds started, so tests can check what was played.
+const FAKE_AUDIO = () => {
+  window.__played = [];
+  window.__decoded = 0;
+  class FakeContext {
+    constructor() {
+      this.state = 'suspended';
+      this.destination = {};
+    }
+    resume() {
+      this.state = 'running';
+      return Promise.resolve();
+    }
+    createGain() {
+      return { gain: { value: 1 }, connect: (n) => n };
+    }
+    decodeAudioData(data, ok) {
+      window.__decoded++;
+      ok({ bytes: data.byteLength });
+    }
+    createBufferSource() {
+      const ctx = this;
+      return {
+        buffer: null,
+        playbackRate: { value: 1 },
+        connect: (n) => n,
+        start() {
+          window.__played.push({ state: ctx.state, bytes: this.buffer.bytes });
+        },
+      };
+    }
+  }
+  window.AudioContext = FakeContext;
+};
+
+async function openWithFakeAudio(path = '') {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  const page = await context.newPage();
+  await page.goto(BASE + path);
+  await page.waitForFunction((n) => window.__decoded >= n, 3); // tap, soon and toggle
+  return { context, page };
+}
+
+test("the very first tap's sound plays, and mute silences it", async () => {
+  const { context, page } = await openWithFakeAudio();
+  await page.locator('.tile.is-soon').first().click();
+  let played = await page.evaluate(() => window.__played);
+  assert.equal(played.length, 1, 'first tap plays a sound');
+  assert.equal(played[0].state, 'running', 'audio was unlocked by that tap');
+
+  await page.locator('[data-sound-toggle]').click(); // mute (its own sound is muted too)
+  await page.locator('.tile.is-soon').nth(1).click();
+  played = await page.evaluate(() => window.__played);
+  assert.equal(played.length, 1, 'nothing plays while muted');
+
+  await page.locator('[data-sound-toggle]').click(); // unmute plays the toggle sound
+  played = await page.evaluate(() => window.__played);
+  assert.equal(played.length, 2, 'unmuting plays again');
+  await context.close();
+});
+
+test('the Install button appears when the browser offers install, and hides after', async () => {
+  const context = await browser.newContext({ hasTouch: true });
+  // Hold back Chromium's own install offer so the test controls when one arrives.
+  await context.addInitScript(() => {
+    window.addEventListener(
+      'beforeinstallprompt',
+      (e) => {
+        if (e.isTrusted) e.stopImmediatePropagation();
+      },
+      true
+    );
+  });
+  const page = await context.newPage();
+  await page.goto(BASE);
+  await page.waitForLoadState('networkidle');
+  const btn = page.locator('[data-install]');
+  assert.equal(await btn.isVisible(), false);
+  await page.evaluate(() => {
+    const e = new Event('beforeinstallprompt', { cancelable: true });
+    e.prompt = () => {
+      window.__prompted = true;
+    };
+    e.userChoice = Promise.resolve({ outcome: 'accepted' });
+    window.dispatchEvent(e);
+  });
+  assert.equal(await btn.isVisible(), true);
+  await btn.click();
+  assert.equal(await page.evaluate(() => window.__prompted), true);
+  await btn.waitFor({ state: 'hidden' });
+  await context.close();
+});
+
+test('a playable tile plays its sound and opens its game', async () => {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  const page = await context.newPage();
+  // Serve the landing page with its first tile made playable, pointing at the test game.
+  await page.route(BASE, async (route) => {
+    const res = await route.fetch();
+    const html = (await res.text()).replace(
+      /<article class="tile is-soon tone-sun"([^>]*)>([\s\S]*?)<\/article>/,
+      '<a class="tile tone-sun" href="tests/fixtures/game/">$2</a>'
+    );
+    await route.fulfill({ response: res, body: html });
+  });
+  await page.goto(BASE);
+  await page.waitForFunction(() => window.__decoded >= 3);
+  await page.locator('a.tile').click();
+  await page.waitForURL(BASE + 'tests/fixtures/game/');
+  await context.close();
+});
+
+test('a game works offline once it has been played', async () => {
+  const { context, page } = await open();
+  assert.ok(await swReady(page), 'service worker registered');
+  await page.goto(BASE + 'tests/fixtures/game/'); // first visit, online: cached on the way
+  await page.locator('.shell-back').waitFor();
+  await page.waitForLoadState('networkidle');
+  await context.setOffline(true);
+  await page.reload();
+  await page.locator('.shell-back').waitFor({ timeout: 5000 });
+  assert.equal(await page.title(), 'Shell test game');
+  await context.close();
+});
