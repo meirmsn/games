@@ -262,3 +262,17 @@ test('a game works offline once it has been played', async () => {
   assert.equal(await page.title(), 'Shell test game');
   await context.close();
 });
+
+test('a game can keep Escape for itself', async () => {
+  const { context, page } = await open('tests/fixtures/game/');
+  await page.locator('.shell-back').waitFor();
+  await page.evaluate(() =>
+    window.addEventListener('keydown', (e) => e.key === 'Escape' && e.preventDefault(), {
+      capture: true,
+    })
+  );
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/');
+  await context.close();
+});

@@ -3,7 +3,9 @@
 // The landing page's files are cached on install. Everything else (each game's files) is cached
 // the first time it loads, so a game played once keeps working offline. Pages are fetched fresh
 // when online, falling back to the cache; other files come from the cache and refresh behind it.
-// Bump VERSION whenever a file in SHELL changes, so returning visitors pick up the new one.
+// Changed files reach returning visitors on their own: pages on the next load, other files on the
+// load after (they refresh in the background). Bump VERSION when SHELL itself changes (a file added,
+// removed or renamed) so the new list is cached and the old cache is cleared.
 
 const VERSION = 'v1';
 const CACHE = `games-${VERSION}`;
