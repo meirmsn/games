@@ -177,4 +177,6 @@ Superseded by [the owner's direction](direction.md): start with 2D games, isomet
 
 - **2026-11-05:** variety across game types is the main driver; mix short-form and long-form games; every game needs sound, good performance, a special hook and an elegant feel.
 - **2026-11-05:** touch first (phone, then tablet, then desktop); every game runs in the browser and the site installs as a PWA.
+- **2026-11-05:** the landing page shows 6 tiles (two rows of three on wide screens): Googly Faces, Pixel Leap, Shooting Gallery, High Seas, Marble Machine and Orbit. Upcoming games are dimmed "Coming soon" tiles. The names are working titles.
+- **2026-11-05:** the first game is **Googly Faces**: tap-only and sound-led, to play with a child. The Shooting Gallery comes later.
 - **2026-11-05:** start with 2D games. Isometric games use the same 2D engine for now; 3D comes later.

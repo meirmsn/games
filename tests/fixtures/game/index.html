@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Shell test game</title>
+    <link rel="stylesheet" href="../../../shared/game-shell.css" />
+    <script type="module">
+      import { mountShell } from '../../../shared/game-shell.js';
+      window.shell = mountShell();
+    </script>
+  </head>
+  <body style="background:#2a6">
+    <p>Test game: the shared shell's back button should return to the site root.</p>
+  </body>
+</html>
