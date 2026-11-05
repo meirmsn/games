@@ -1,6 +1,6 @@
 # Game ideas — discussion
 
-The working notes for choosing which games to build for this site. The games use art and sound from [Kenney](https://www.kenney.nl)'s CC0 asset packs. The preview images here are Kenney's pack previews (CC0), shown as thumbnails; the full asset packs are not in this repo.
+The working notes for choosing which games to build for this site. The games use art and sound from [Kenney](https://www.kenney.nl)'s CC0 asset packs. The preview images here are Kenney's pack previews (CC0), shown as thumbnails.
 
 **Start here:** [Direction: the owner's notes](direction.md), the guiding principles and the ideas on the owner's radar.
 
@@ -20,7 +20,7 @@ The working notes for choosing which games to build for this site. The games use
 | Icons | 8 | Game icons and keyboard/gamepad/touch input prompts. |
 | Audio | 16 | About 1,400 OGG files: UI clicks, impacts, retro sounds, sci-fi, jingles, music loops and voiceovers. |
 
-**License:** everything is CC0, so a game can publish the files it uses in the public repo. Only the full bundle can't be redistributed. We'll credit Kenney on the site anyway.
+**License:** everything is CC0, so each game can include the files it uses. We'll credit Kenney on the site anyway.
 
 ## Game ideas
 
