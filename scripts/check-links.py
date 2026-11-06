@@ -2,10 +2,13 @@
 """Fail if any relative link or image in a markdown file points at a missing file."""
 import glob, os, re, sys, urllib.parse
 
+CODE = re.compile(r"```.*?```|`[^`\n]+`", re.S)  # code is quoted, not linked
 LINK = re.compile(r'(?:src|href)="([^"]+)"|\]\(([^)\s]+)\)')
 broken = checked = 0
 for md in glob.glob("**/*.md", recursive=True):
-    text = open(md, encoding="utf-8").read()
+    if md.startswith("node_modules/"):
+        continue
+    text = CODE.sub("", open(md, encoding="utf-8").read())
     for m in LINK.finditer(text):
         url = (m.group(1) or m.group(2)).split("#")[0]
         if not url or re.match(r"^[a-z]+:", url):

@@ -1,0 +1,17 @@
+# Files in the repo that aren't part of the website (wrangler skips these when uploading).
+.git
+.github
+node_modules
+tests
+scripts
+discussion
+package.json
+package-lock.json
+wrangler.jsonc
+.assetsignore
+.gitignore
+.nojekyll
+README.md
+LICENSE
+test-results
+.wrangler

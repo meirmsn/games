@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Game explorations</title>
+    <meta name="description" content="Game explorations: small, relaxing browser games made with Kenney's art and sound. Touch-first, for phone, tablet and desktop." />
+    <meta name="theme-color" content="#f8f5ef" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#14161f" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Games" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script src="assets/theme.js"></script>
+    <link rel="stylesheet" href="assets/base.css" />
+    <link rel="stylesheet" href="assets/site.css" />
+    <script type="module" src="assets/site.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="inner">
+        <a class="brand" href="./">Games</a>
+        <div class="controls">
+          <button class="btn btn-outline install" type="button" data-install hidden>Install</button>
+          <button class="btn btn-outline icon-btn" type="button" data-sound-toggle aria-pressed="false" aria-label="Sound on (mute)" title="Sound on">
+            <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+            <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+          </button>
+          <button class="btn btn-outline icon-btn" type="button" data-theme-toggle aria-label="Theme: system (change theme)" title="Theme: system">
+            <svg class="i-system" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" /><path d="M12 4a8 8 0 0 1 0 16z" /></svg>
+            <svg class="i-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" fill="none" /></svg>
+            <svg class="i-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="intro">
+        <h1>Game explorations</h1>
+        <p class="muted">Small games made with beautiful art and sound that I didn't make (<a href="https://www.kenney.nl">thank you, Kenney</a>). I'm excited to be making them, and I hope each one gives you a few relaxing minutes.</p>
+      </section>
+
+      <ul class="tiles" aria-label="Games">
+        <li>
+          <article class="tile is-soon tone-sun" aria-label="Googly Faces, coming soon">
+            <div class="art"><img src="assets/tiles/googly-faces.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Googly Faces</h2>
+              <p class="muted">Tap the silly faces and watch their eyes wobble.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+        <li>
+          <article class="tile is-soon tone-meadow" aria-label="Pixel Leap, coming soon">
+            <div class="art"><img class="pixel" src="assets/tiles/pixel-leap.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Pixel Leap</h2>
+              <p class="muted">A platformer whose world changes as you go.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+        <li>
+          <article class="tile is-soon tone-rose" aria-label="Shooting Gallery, coming soon">
+            <div class="art"><img src="assets/tiles/shooting-gallery.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Shooting Gallery</h2>
+              <p class="muted">A fairground range, one tap per shot.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+        <li>
+          <article class="tile is-soon tone-sea" aria-label="High Seas, coming soon">
+            <div class="art"><img src="assets/tiles/high-seas.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>High Seas</h2>
+              <p class="muted">Sail an isometric sea of ships and islands.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+        <li>
+          <article class="tile is-soon tone-mint" aria-label="Runes, coming soon">
+            <div class="art"><img src="assets/tiles/runes.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Runes</h2>
+              <p class="muted">A quiet puzzle of stones and old symbols.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+        <li>
+          <article class="tile is-soon tone-night" aria-label="Orbit, coming soon">
+            <div class="art"><img src="assets/tiles/orbit.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Orbit</h2>
+              <p class="muted">Gravity, planets and the quiet dark of space.</p>
+              <span class="badge">Coming soon</span>
+            </div>
+          </article>
+        </li>
+      </ul>
+    </main>
+
+    <footer class="site-footer">
+      <p>Art and sound by <a href="https://www.kenney.nl">Kenney</a> (CC0). <a href="https://github.com/meirmsn/games">Source on GitHub</a>.</p>
+    </footer>
+  </body>
+</html>

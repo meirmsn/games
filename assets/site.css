@@ -1,0 +1,238 @@
+/* Landing page. Colours, radius and spacing come only from the tokens in base.css. */
+
+/* `hidden` must win over component display rules (e.g. the Install button's .btn). */
+[hidden] {
+  display: none !important;
+}
+
+body {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+.site-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+.site-header .brand {
+  font-size: 1.125rem;
+  letter-spacing: 0.01em;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.icon-btn {
+  width: var(--tap);
+  padding: 0;
+}
+
+.icon-btn svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Show the icon for the current state only. */
+[data-theme-toggle] svg,
+[data-sound-toggle] svg {
+  display: none;
+}
+[data-theme-toggle][data-choice='system'] .i-system,
+[data-theme-toggle][data-choice='light'] .i-light,
+[data-theme-toggle][data-choice='dark'] .i-dark,
+[data-sound-toggle][aria-pressed='false'] .i-on,
+[data-sound-toggle][aria-pressed='true'] .i-off {
+  display: block;
+}
+/* Before theme.js has run, show the system icon. */
+[data-theme-toggle]:not([data-choice]) .i-system {
+  display: block;
+}
+
+.page {
+  flex: 1;
+  width: 100%;
+}
+
+.intro {
+  margin: var(--space-4) 0 var(--space-8);
+  max-width: var(--measure);
+}
+
+.intro h1 {
+  font-size: clamp(1.75rem, 1.2rem + 2.4vw, 2.6rem);
+  letter-spacing: -0.015em;
+  font-weight: 650;
+}
+
+.intro p {
+  font-size: 1.0625rem;
+  margin: 0;
+  text-wrap: pretty;
+}
+
+/* ---- Tiles: one column on phones, two from 768 px, three from 1280 px ---- */
+
+.tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-6);
+}
+
+@media (min-width: 768px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.tile .art {
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.tile .art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 300ms ease;
+}
+
+.tile .art img.pixel {
+  image-rendering: pixelated;
+}
+
+.tone-sun .art {
+  background: var(--tile-sun);
+}
+.tone-meadow .art {
+  background: var(--tile-meadow);
+}
+.tone-rose .art {
+  background: var(--tile-rose);
+}
+.tone-sea .art {
+  background: var(--tile-sea);
+}
+.tone-mint .art {
+  background: var(--tile-mint);
+}
+.tone-night .art {
+  background: var(--tile-night);
+}
+
+.tile .body {
+  padding: var(--space-4) var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.tile h2 {
+  font-size: 1.1875rem;
+  margin: 0;
+}
+
+.tile .body p {
+  margin: 0 0 var(--space-2);
+  text-wrap: pretty;
+}
+
+.tile .badge {
+  margin-top: auto;
+}
+
+/* A playable tile lifts on hover and presses in on tap. */
+a.tile:active {
+  transform: scale(0.985);
+}
+@media (hover: hover) {
+  a.tile:hover {
+    transform: translateY(-2px);
+  }
+  a.tile:hover .art img {
+    transform: scale(1.03);
+  }
+}
+
+/* A coming-soon tile is greyed out, art and text, and nudges when tapped. Its badge keeps colour. */
+.tile.is-soon .art {
+  background: var(--muted);
+}
+.tile.is-soon .art img {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.tile.is-soon h2,
+.tile.is-soon .body p {
+  color: var(--muted-foreground);
+}
+.tile.is-soon.nudge .art img {
+  animation: nudge 360ms ease;
+}
+@keyframes nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px) rotate(-1deg);
+  }
+  60% {
+    transform: translateX(5px) rotate(0.8deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile .art img {
+    transition: none;
+  }
+  .tile.is-soon.nudge .art img {
+    animation: none;
+  }
+}
+
+.site-footer {
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+}
