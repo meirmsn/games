@@ -15,6 +15,8 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
+It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site, and every pull request gets its own preview link, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site.
+
 ## Adding a game
 
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.

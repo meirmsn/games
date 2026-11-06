@@ -1,0 +1,12 @@
+// Cloudflare deploy config: the site is static files served straight from the repo root.
+// Workers Builds runs `npx wrangler deploy` on main and uploads a preview version for other branches.
+// "name" must match the Worker's name in the Cloudflare dashboard.
+{
+  "name": "games",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "./"
+  },
+  "workers_dev": true,
+  "preview_urls": true
+}
