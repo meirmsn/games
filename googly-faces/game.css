@@ -1,0 +1,183 @@
+/* Googly Faces: a full-screen canvas, plus the sound and play-again buttons. */
+
+:root {
+  color-scheme: light;
+  /* The canvas reads these for its background, so the palette lives here with the theme. */
+  --gf-sky-top: #fdf7ee;
+  --gf-sky-bottom: #f5e7ee;
+  --gf-glow: rgb(255 255 255 / 55%);
+  --gf-pip-empty: rgb(61 70 93 / 14%);
+  --gf-ring: rgb(61 70 93 / 22%);
+  --gf-btn-bg: rgb(20 22 31 / 55%);
+  --gf-btn-bg-hover: rgb(20 22 31 / 72%);
+  --gf-again-bg: #ffffff;
+  --gf-again-fg: #3d465d;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --gf-sky-top: #2b2f45;
+  --gf-sky-bottom: #1d2030;
+  --gf-glow: rgb(160 170 230 / 12%);
+  --gf-pip-empty: rgb(255 255 255 / 16%);
+  --gf-ring: rgb(255 255 255 / 22%);
+  --gf-btn-bg: rgb(255 255 255 / 14%);
+  --gf-btn-bg-hover: rgb(255 255 255 / 24%);
+  --gf-again-bg: #3a3f5a;
+  --gf-again-fg: #f4f1ea;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --gf-sky-top: #2b2f45;
+    --gf-sky-bottom: #1d2030;
+    --gf-glow: rgb(160 170 230 / 12%);
+    --gf-pip-empty: rgb(255 255 255 / 16%);
+    --gf-ring: rgb(255 255 255 / 22%);
+    --gf-btn-bg: rgb(255 255 255 / 14%);
+    --gf-btn-bg-hover: rgb(255 255 255 / 24%);
+    --gf-again-bg: #3a3f5a;
+    --gf-again-fg: #f4f1ea;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  background: var(--gf-sky-bottom);
+}
+
+.gf-stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: pointer;
+}
+
+/* Matches the shared back button, in the opposite corner. */
+.gf-btn {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--gf-btn-bg);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.gf-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.gf-btn .line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.gf-sound .i-off,
+.gf-sound[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.gf-sound[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.gf-btn:active {
+  transform: scale(0.92);
+}
+
+@media (hover: hover) {
+  .gf-btn:hover {
+    background: var(--gf-btn-bg-hover);
+  }
+}
+
+.gf-btn:focus-visible,
+.gf-again:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.gf-again {
+  position: fixed;
+  z-index: 10;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + max(8vh, 28px));
+  width: 84px;
+  height: 84px;
+  margin-left: -42px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--gf-again-fg);
+  background: var(--gf-again-bg);
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 10%),
+    0 10px 28px rgb(61 70 93 / 22%);
+  cursor: pointer;
+  animation: gf-again-in 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.gf-again svg {
+  width: 40px;
+  height: 40px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.gf-again:active {
+  transform: scale(0.94);
+}
+
+@keyframes gf-again-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Read by the script to learn the safe-area insets. */
+.gf-safe {
+  position: fixed;
+  visibility: hidden;
+  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gf-again {
+    animation-duration: 1ms;
+  }
+}

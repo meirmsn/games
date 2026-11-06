@@ -15,6 +15,27 @@ import { createSound } from './sound.js';
 
 const BACK_SOUND = new URL('../assets/sounds/back.mp3', import.meta.url).href;
 const HOME = new URL('../', import.meta.url).href;
+const SERVICE_WORKER = new URL('../sw.js', import.meta.url).href;
+
+// A game opened straight from a link, without the landing page, has no service worker yet. It
+// registers it, then caches the files this page has already loaded, so the game works offline
+// after this one visit. (Opened from the landing page, the service worker caches them as they load.)
+function keepForOffline() {
+  if (!('serviceWorker' in navigator) || !window.caches || navigator.serviceWorker.controller) return;
+  navigator.serviceWorker
+    .register(SERVICE_WORKER)
+    .then(() => navigator.serviceWorker.ready)
+    .then(async () => {
+      const name = (await caches.keys()).find((k) => k.startsWith('games-'));
+      if (!name) return;
+      const cache = await caches.open(name);
+      const urls = [location.href.split('#')[0]];
+      for (const entry of performance.getEntriesByType('resource')) urls.push(entry.name);
+      const mine = new Set(urls.filter((u) => new URL(u).origin === location.origin));
+      await Promise.all([...mine].map((u) => cache.add(u).catch(() => {})));
+    })
+    .catch(() => {});
+}
 
 export function mountShell({ sounds = {}, home = HOME } = {}) {
   const sound = createSound({ back: BACK_SOUND, ...sounds });
@@ -50,5 +71,7 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
   });
 
   document.body.appendChild(back);
+  if (document.readyState === 'complete') keepForOffline();
+  else window.addEventListener('load', keepForOffline, { once: true });
   return { sound, back };
 }

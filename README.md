@@ -2,6 +2,8 @@
 
 Play at **https://games.meirmsn.dev**
 
+**Games:** [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
+
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
 - **[Discussion](discussion/README.md):** the direction, game ideas, asset galleries and decisions log behind the games.
@@ -12,7 +14,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 |---|---|
 | `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
 | `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, and offline play once a page has loaded |
-| `shared/` | Shared by every game: `sound.js` (sound that works on phones) and `game-shell.js`/`.css` (the back button and full-screen frame) |
+| `shared/` | Shared by every game: `sound.js` (sound that works on phones) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
