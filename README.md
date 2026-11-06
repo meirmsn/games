@@ -1,5 +1,7 @@
 # games
 
+Play at **https://games.meirmsn.dev**
+
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
 - **[Discussion](discussion/README.md):** the direction, game ideas, asset galleries and decisions log behind the games.
@@ -15,7 +17,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
-It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site, and every pull request gets its own preview link, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site.
+It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site at https://games.meirmsn.dev, and every pull request gets its own preview link at `<branch>.games.meirmsn.dev`, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site.
 
 ## Adding a game
 
