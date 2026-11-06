@@ -276,3 +276,17 @@ test('a game can keep Escape for itself', async () => {
   assert.equal(page.url(), BASE + 'tests/fixtures/game/');
   await context.close();
 });
+
+test('Escape in a text field does not leave the game', async () => {
+  const { context, page } = await open('tests/fixtures/game/');
+  await page.locator('.shell-back').waitFor();
+  await page.evaluate(() => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+  });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/');
+  await context.close();
+});

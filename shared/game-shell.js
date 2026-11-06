@@ -9,8 +9,8 @@
 //   </script>
 //
 // The back button sits in the top-left corner, clear of the notch, and plays a short sound before
-// going back. The game draws everywhere else. Escape also goes back on desktop, unless the game
-// calls event.preventDefault() on that keydown first.
+// going back. The game draws everywhere else. Escape also goes back on desktop, except while a text
+// field or an open dialog has focus, or when the game calls event.preventDefault() on that keydown.
 import { createSound } from './sound.js';
 
 const BACK_SOUND = new URL('../assets/sounds/back.mp3', import.meta.url).href;
@@ -38,7 +38,12 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
     goBack(e);
   });
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !e.defaultPrevented) goBack(e);
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    // Escape belongs to whatever has focus when that's a text field or an open dialog.
+    const t = e.target;
+    if (t instanceof Element && t.closest('input, textarea, select, [contenteditable], dialog[open]')) return;
+    if (document.querySelector('dialog[open]')) return;
+    goBack(e);
   });
 
   document.body.appendChild(back);
