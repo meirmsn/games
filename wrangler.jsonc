@@ -7,7 +7,9 @@
   "assets": {
     "directory": "./"
   },
-  "workers_dev": true,
+  // The live site is the custom domain games.meirmsn.dev (set in the dashboard), so the
+  // production workers.dev address stays off. Preview links still use workers.dev.
+  "workers_dev": false,
   "preview_urls": true,
   // Needed by `wrangler preview`, which builds the per-PR preview links; empty is enough.
   "previews": {}
