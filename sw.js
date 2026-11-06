@@ -67,9 +67,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) {
+          if (res.status === 200) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
+            caches
+              .open(CACHE)
+              .then((c) => c.put(req, copy))
+              .catch(() => {});
           }
           return res;
         })
@@ -83,9 +86,12 @@ self.addEventListener('fetch', (event) => {
     caches.match(req).then((hit) => {
       const fresh = fetch(req)
         .then((res) => {
-          if (res.ok) {
+          if (res.status === 200) {
             const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(req, copy));
+            caches
+              .open(CACHE)
+              .then((c) => c.put(req, copy))
+              .catch(() => {});
           }
           return res;
         })

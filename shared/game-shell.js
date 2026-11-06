@@ -26,8 +26,11 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
   back.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>';
 
+  let leaving = false;
   function goBack(e) {
     if (e) e.preventDefault();
+    if (leaving) return; // a held key or a double tap leaves once
+    leaving = true;
     sound.play('back');
     setTimeout(() => {
       window.location.href = home;
@@ -38,7 +41,7 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
     goBack(e);
   });
   window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    if (e.key !== 'Escape' || e.repeat || e.defaultPrevented) return;
     // Escape belongs to whatever has focus when that's a text field or an open dialog.
     const t = e.target;
     if (t instanceof Element && t.closest('input, textarea, select, [contenteditable], dialog[open]')) return;
