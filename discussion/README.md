@@ -167,8 +167,8 @@ Superseded by [the owner's direction](direction.md): start with 2D games, isomet
 
 ## How each game will be built
 
-- Each game is a self-contained folder in the public `games` repo, e.g. `games/sky-hopper/`, with only the assets it uses copied in.
-- Plain HTML/JS: a small library like Phaser for 2D games and three.js for 3D. No build step, so GitHub Pages can serve them as they are.
+- Each game is a self-contained folder in the `games` repo, e.g. `googly-faces/`, with only the assets it uses copied in.
+- Plain HTML/JS, with a small library only where a game needs one (e.g. Phaser for 2D, three.js for 3D). There's no build step: Cloudflare serves the repo's files as they are.
 - The landing page is a grid of game tiles. Each game has a back button to the landing page.
 - Touch first: phone, then tablet, then desktop with mouse and keyboard.
 - The site is a PWA with a manifest and a service worker, so it installs to the home screen and works offline once loaded.
@@ -179,5 +179,6 @@ Superseded by [the owner's direction](direction.md): start with 2D games, isomet
 - **2026-11-05:** touch first (phone, then tablet, then desktop); every game runs in the browser and the site installs as a PWA.
 - **2026-11-05:** the landing page shows 6 tiles (two rows of three on wide screens): Googly Faces, Pixel Leap, Shooting Gallery, High Seas, Runes and Orbit (Runes, a puzzle with the Rune Pack, replaced Marble Machine). Upcoming games are dimmed "Coming soon" tiles. The names are working titles.
 - **2026-11-05:** the first game is **Googly Faces**: tap-only and sound-led, to play with a child. The Shooting Gallery comes later.
-- **2026-11-06:** hosting is Cloudflare (Workers static assets, connected through the Cloudflare GitHub app), which the owner chose for its preview link on every PR. The site stays plain HTML, CSS and JS with no build step, and sounds are MP3 because Safari doesn't play OGG.
 - **2026-11-05:** start with 2D games. Isometric games use the same 2D engine for now; 3D comes later.
+- **2026-11-06:** hosting is Cloudflare (Workers static assets, connected through the Cloudflare GitHub app), which the owner chose for its preview link on every PR. The site stays plain HTML, CSS and JS with no build step, and sounds are MP3 because Safari doesn't play OGG.
+- **2026-11-06:** the site lives only at **https://games.meirmsn.dev**, a Cloudflare custom domain set for production and previews. Each PR's preview is at `<branch>.games.meirmsn.dev`. The workers.dev addresses are off, in the dashboard and in `wrangler.jsonc`, so there's one address and nobody installs a duplicate app.

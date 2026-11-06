@@ -10,8 +10,8 @@ package-lock.json
 wrangler.jsonc
 .assetsignore
 .gitignore
-.nojekyll
 README.md
+FINDINGS.md
 LICENSE
 test-results
 .wrangler
