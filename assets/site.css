@@ -195,10 +195,17 @@ a.tile:active {
   }
 }
 
-/* A coming-soon tile is quieter, and nudges when tapped. */
+/* A coming-soon tile is greyed out, art and text, and nudges when tapped. Its badge keeps colour. */
+.tile.is-soon .art {
+  background: var(--muted);
+}
 .tile.is-soon .art img {
-  filter: saturate(0.55);
-  opacity: 0.85;
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+.tile.is-soon h2,
+.tile.is-soon .body p {
+  color: var(--muted-foreground);
 }
 .tile.is-soon.nudge .art img {
   animation: nudge 360ms ease;
