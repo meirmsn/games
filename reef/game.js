@@ -1163,6 +1163,8 @@ function updateFar(dt) {
 
 function draw() {
   const d = depthDef();
+  drawn.hud = false;
+  drawn.wash = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
   let sx = 0, sy = 0;
@@ -1269,6 +1271,7 @@ function draw() {
   if (game.mode === 'dive') {
     const t = game.diveT;
     const a = t < 1.1 ? t / 1.1 : Math.max(0, 1 - (t - 1.1) / 1.1);
+    drawn.wash = a;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = rgb(depthDef(game.swapped ? game.depth : game.depth + 1).bottom, a * 0.92);
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1461,6 +1464,7 @@ function drawPopup(p) {
 
 function drawHud() {
   if (game.mode === 'title') return;
+  drawn.hud = true;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const top = 12 + safeTop();
   // Lives: fish, or skeletons for the ones lost.
@@ -1529,6 +1533,7 @@ const safeLeft = () => insets[2];
 let last = 0;
 let running = true;
 let manual = false; // tests drive the simulation themselves with step(); frames only draw
+const drawn = { hud: false, wash: 0 }; // what the last frame drew, for tests
 function frameLoop(now) {
   if (!running) return;
   const raw = Math.min(0.05, (now - last) / 1000 || 0);
@@ -1604,7 +1609,7 @@ atlas.decode().then(
     // For tests and balance runs: read the state, and step the simulation without drawing.
     window.__reef = {
       game, player, input, startGame, dive: beginDive, step: update, isFood, isThreat, makePuffer,
-      npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }),
+      npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }), drawn,
       set manual(v) { manual = v; },
     };
   },

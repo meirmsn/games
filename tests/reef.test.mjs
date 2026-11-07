@@ -346,18 +346,24 @@ test('AC-13: a new player starts with some help, and a hard run carries over', a
 
 test('AC-14: each state shows only its own card', async () => {
   const { context, page } = await open();
-  const cards = () =>
-    page.evaluate(() => ({
+  // What shows, read after the page has drawn a couple of frames of the current state.
+  const cards = async () => {
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    return page.evaluate(() => ({
       mode: window.__reef.game.mode,
       title: !document.querySelector('[data-screen="title"]').hidden,
       over: !document.querySelector('[data-screen="over"]').hidden,
+      hud: window.__reef.drawn.hud,
     }));
-  assert.deepEqual(await cards(), { mode: 'title', title: true, over: false });
+  };
+  assert.deepEqual(await cards(), { mode: 'title', title: true, over: false, hud: false });
   await startEmpty(page);
-  assert.deepEqual(await cards(), { mode: 'play', title: false, over: false });
+  assert.deepEqual(await cards(), { mode: 'play', title: false, over: false, hud: true });
   await page.evaluate(() => window.__reef.dive());
-  assert.deepEqual(await cards(), { mode: 'dive', title: false, over: false });
-  await steps(page, 160);
+  await steps(page, 50); // well into the dive
+  assert.deepEqual(await cards(), { mode: 'dive', title: false, over: false, hud: true });
+  assert.ok((await page.evaluate(() => window.__reef.drawn.wash)) > 0.5, 'a wash of the deeper colour');
+  await steps(page, 110);
   await page.evaluate(() => {
     const r = window.__reef;
     r.npcs().length = 0;
@@ -365,10 +371,12 @@ test('AC-14: each state shows only its own card', async () => {
     r.game.lives = 1;
     r.player.invul = 0;
   });
+  await page.evaluate(() => (window.__reef.game.score = 1234));
   await meet(page, 'red', 150, 5);
-  assert.deepEqual(await cards(), { mode: 'over', title: false, over: false }, 'the card waits a moment');
+  assert.deepEqual(await cards(), { mode: 'over', title: false, over: false, hud: true }, 'the card waits a moment');
   await steps(page, 120);
-  assert.deepEqual(await cards(), { mode: 'over', title: false, over: true });
+  assert.deepEqual(await cards(), { mode: 'over', title: false, over: true, hud: true });
+  assert.equal(await page.locator('[data-final-score]').textContent(), '1,234');
   assert.match(await page.locator('[data-final-detail]').textContent(), /Reached Coral Garden/);
   await context.close();
 });
