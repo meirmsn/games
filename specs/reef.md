@@ -1,6 +1,6 @@
 # Reef: a fish game on the Fish Pack
 
-**Go:** "Approve, open the PR" 2026-11-07
+**Go:** "Approve, open the PR" 2026-11-07; the changes after it approved in the chat the same day ("Approve as it stands", then the owner's playtest requests) 2026-11-07
 
 ## Intent
 
