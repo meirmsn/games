@@ -687,7 +687,7 @@ function safeSpot() {
     let d = 1e9;
     for (const n of npcs) if (isThreat(n) && n.state !== 'leave') d = Math.min(d, Math.hypot(n.x - x, n.y - y));
     for (const e of eels) d = Math.min(d, Math.abs(e.y - y) * 2);
-    d -= Math.hypot(x - player.x, y - player.y) * 0.15; // not too far across the screen
+    d -= Math.hypot(x - player.x, y - player.y) * 0.35; // not too far across the screen
     if (d > bestD) {
       bestD = d;
       best = { x, y };
@@ -725,9 +725,10 @@ function caught(by) {
     return;
   }
   game.xp = Math.max(0, game.xp - 1);
-  player.hurt = 1.2;
-  player.invul = 3;
   player.safe = safeSpot();
+  // Long enough to get there, however far: the flee ends when the fish arrives.
+  player.hurt = clamp(Math.hypot(player.safe.x - player.x, player.safe.y - player.y) / 280 + 0.5, 1, 2.5);
+  player.invul = player.hurt + 1.8;
   input.target = null;
   input.drag = null;
 }
@@ -944,6 +945,7 @@ function updatePlayer(dt) {
     const s = PLAYER_SPEED * 1.25 * Math.min(1, l / 50);
     tx = (ex / l) * s;
     ty = (ey / l) * s;
+    if (l < 6) player.hurt = Math.min(player.hurt, 0.001); // arrived
     if (player.hurt <= 0) input.target = null;
   } else if (dx || dy) {
     const l = Math.hypot(dx, dy);

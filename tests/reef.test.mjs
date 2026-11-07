@@ -53,6 +53,10 @@ async function startEmpty(page) {
     r.game.spawnIn = 999;
     r.player.waiting = false;
     r.player.invul = 0;
+    // The page ran on its own until now, and a passing fish may already have been eaten.
+    r.game.xp = 0;
+    r.game.score = 0;
+    r.game.chain = 0;
   });
 }
 
@@ -199,7 +203,7 @@ test('AC-17: a bite: the predator swims off, and the player flees to safety on i
     return { hurt: r.player.hurt > 0, safe: r.player.safe };
   });
   assert.ok(during.hurt, 'the player is fleeing');
-  await steps(page, 80);
+  await steps(page, 160); // up to 2.5 s of fleeing
   const after = await page.evaluate(() => {
     const r = window.__reef;
     const pred = r.npcs()[0];
