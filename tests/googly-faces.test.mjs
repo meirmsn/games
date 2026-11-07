@@ -142,11 +142,51 @@ test('tapping empty space is answered too', async () => {
   await readyFace(page);
   const { faces } = await state(page);
   const f = faces[0];
+  // Up in the sky, on the other side from the face: the eyes have to look up, against gravity.
   const x = f.x < 195 ? 340 : 50;
-  const y = f.y < 422 ? 760 : 200;
+  const y = 110;
   await page.touchscreen.tap(x, y);
   assert.equal((await page.evaluate(() => window.__played)).length, 1);
   assert.equal((await state(page)).taps, 0);
+
+  // Every eye looks at the spot for a moment...
+  await page.waitForTimeout(450);
+  for (const o of (await state(page)).faces.filter((g) => g.phase !== 'out')) {
+    const d = Math.hypot(x - o.x, y - o.y);
+    for (const p of o.pupils) {
+      const along = (p.x * (x - o.x) + p.y * (y - o.y)) / d;
+      assert.ok(along > 0.3, `the pupil looks at the tap (${along.toFixed(2)} eye radii towards it)`);
+    }
+  }
+  // ...then rolls loose again, back to the bottom.
+  await page.waitForTimeout(2200);
+  for (const o of (await state(page)).faces) for (const p of o.pupils) assert.ok(p.y > 0.15, `back down (y = ${p.y.toFixed(2)})`);
+  await context.close();
+});
+
+test('the dot a tap fills swells, pushing the others aside, then settles', async () => {
+  const { context, page } = await openGame({ fakeAudio: false });
+  const { pips: rest } = await state(page);
+  const face = await readyFace(page);
+  await page.touchscreen.tap(face.x, face.y);
+  let biggest = 0;
+  let pushed = 0;
+  for (let i = 0; i < 20; i++) {
+    const { pips } = await state(page);
+    biggest = Math.max(biggest, pips[0].r / rest[0].r);
+    pushed = Math.max(pushed, pips[1].x - rest[1].x);
+    await page.waitForTimeout(25);
+  }
+  assert.ok(biggest > 1.8, `the new dot swells (${biggest.toFixed(2)}x)`);
+  assert.ok(pushed > 4, `its neighbour moves aside (${pushed.toFixed(1)} px)`);
+  await page.waitForTimeout(1200);
+  const { pips } = await state(page);
+  assert.ok(pips[0].filled && Math.abs(pips[0].r - rest[0].r) < 0.5, 'then it settles back to size');
+  assert.ok(Math.abs(pips[1].x - rest[1].x) < 0.5, 'and the row closes up');
+  // The row stays clear of the back and sound buttons.
+  const back = await page.locator('.shell-back').boundingBox();
+  const snd = await page.locator('[data-sound-toggle]').boundingBox();
+  assert.ok(rest[0].x - rest[0].r > back.x + back.width && rest[11].x + rest[11].r < snd.x);
   await context.close();
 });
 

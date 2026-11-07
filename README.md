@@ -24,7 +24,7 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 ## Adding a game
 
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
-2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge.
+2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge. Draw its tile picture from the game itself where you can, so they look alike: `node scripts/make-tile.mjs` does this for Googly Faces.
 3. Nothing to do in `sw.js`: a game's files are cached the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list.
 4. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
 

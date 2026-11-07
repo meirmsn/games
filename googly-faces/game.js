@@ -2,8 +2,9 @@
 //
 // Tap only, no fail state, no reading. Faces pop up around the screen; a tap makes one jump with a
 // squash and stretch, change its expression and make a funny sound, then it ducks away and another
-// appears. Each round fills a row of dots at the top, one per face tapped, and ends with a small
-// party and a play-again button.
+// appears. Each round fills a row of dots at the top, one per face tapped (the new dot swells and
+// shoves the others aside for a moment, so a child sees the row answer), and ends with a small
+// party and a play-again button. A tap on the background makes every eye look at it for a moment.
 //
 // The hook is the pupils. Each one is a little disc rolling loose inside its eye, simulated in
 // screen space at 240 steps a second: it feels gravity (down, or the way the device tilts), the
@@ -128,6 +129,13 @@ const PUPIL_BOUNCE = 0.45; // restitution off the rim
 const MS2_TO_G = PUPIL_G / 9.81; // device acceleration (m/s²) into the same units
 
 const HOP_G = 18; // a face's own gravity, in body sizes per s²
+
+const PIP_GROW = 1.3; // a dot just filled swells to about 1 + this times its size, then settles
+
+const LOOK_HOLD = 0.9; // after a tap on the background, the eyes look at it this long, s
+const LOOK_FADE = 0.35; // then let go over this long, back to rolling loose
+const LOOK_K = 600; // how hard a pupil is pulled towards the look, per s²
+const LOOK_C = 30; // and its damping, per s (under critical, so it overshoots a little)
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -354,6 +362,7 @@ function spawnFace() {
 
 function tapFace(f) {
   if (f.phase === 'out') return;
+  look.t = Math.max(look.t, LOOK_HOLD); // the tapped face's eyes go loose again
   const first = !f.tapped;
   f.tapped = true;
   f.phase = f.party ? 'party' : 'react';
@@ -381,8 +390,11 @@ function tapFace(f) {
 
   if (first && !f.party && game.state === 'play') {
     game.taps++;
-    pips[game.taps - 1] = { color: COLORS[f.color], s: spring(0, 300, 12) };
-    pips[game.taps - 1].s.to = 1;
+    // The new dot swells, shoving its neighbours aside, then settles: the row visibly answers.
+    const pip = { color: COLORS[f.color], s: spring(0, 300, 12), pop: spring(0, 220, 13), t: 0 };
+    pip.s.to = 1;
+    pip.pop.to = 1;
+    pips[game.taps - 1] = pip;
     if (game.taps >= ROUND) endRound();
   }
 }
@@ -476,8 +488,22 @@ function stepFace(f, h) {
     e.wx = tmp.x;
     e.wy = tmp.y;
     // Forces in eye radii per s²: gravity, the eye's own acceleration felt backwards, a shake.
-    let fx = PUPIL_G * gravity.x + shake.x - ax / tmp.r;
-    let fy = PUPIL_G * gravity.y + shake.y - ay / tmp.r;
+    let fx = PUPIL_G * gravity.x + shake.x;
+    let fy = PUPIL_G * gravity.y + shake.y;
+    // While the eyes look at a tap, a spring towards the rim on that side takes gravity's place.
+    const w = look.t < LOOK_HOLD ? 1 : clamp(1 - (look.t - LOOK_HOLD) / LOOK_FADE, 0, 1);
+    if (w > 0) {
+      const dx = look.x - tmp.x;
+      const dy = look.y - tmp.y;
+      const dl = Math.hypot(dx, dy);
+      const reach = TRAVEL * clamp(dl / tmp.r, 0, 1); // a tap on the eye itself looks straight out
+      const tx = dl ? (dx / dl) * reach : 0;
+      const ty = dl ? (dy / dl) * reach : 0;
+      fx = fx * (1 - w) + w * (LOOK_K * (tx - e.px) - LOOK_C * e.pvx);
+      fy = fy * (1 - w) + w * (LOOK_K * (ty - e.py) - LOOK_C * e.pvy);
+    }
+    fx -= ax / tmp.r;
+    fy -= ay / tmp.r;
     const fm = Math.hypot(fx, fy);
     if (fm > 4000) {
       fx *= 4000 / fm;
@@ -556,6 +582,7 @@ function updateFace(f, dt) {
 // Gravity and shakes from the device, when it has motion sensors.
 
 const gravity = { x: 0, y: 1 };
+const look = { x: 0, y: 0, t: Infinity }; // where the eyes look after a tap on the background
 const tiltTarget = { x: 0, y: 1 };
 const shake = { x: 0, y: 0 };
 const shakeTarget = { x: 0, y: 0 };
@@ -684,6 +711,7 @@ function partyTime() {
 
 function updateGame(dt) {
   game.t += dt;
+  look.t += dt;
   const p = game.taps / ROUND;
 
   if (game.state === 'play') {
@@ -755,16 +783,16 @@ function tapAt(x, y) {
     tapFace(f);
     return;
   }
-  // An empty tap: a soft ring, and every pupil gives a little start.
+  // An empty tap: a soft ring, every face gives a little start, and every eye looks at the spot
+  // for a moment before rolling loose again.
   ripples.push({ x, y, t: 0 });
   play('boop', { rate: 1.15, gain: 0.35 });
+  look.x = x;
+  look.y = y;
+  look.t = 0;
   for (const o of faces) {
     const d = Math.hypot(o.x - x, o.y - o.s / 2 - y);
     const k = clamp(1 - d / (Math.max(W, H) * 0.7), 0.15, 1);
-    for (const e of o.eyes) {
-      e.pvx += ((o.x - x) / (d || 1)) * 4 * k;
-      e.pvy += ((o.y - o.s / 2 - y) / (d || 1)) * 4 * k - 1.5 * k;
-    }
     if (!o.airborne && o.phase !== 'out') o.tilt.v += clamp((o.x - x) / 200, -1, 1) * 2.5 * k;
   }
 }
@@ -875,17 +903,36 @@ function drawFace(f) {
   ctx.restore();
 }
 
-function drawPips() {
+// The row of dots at the top: where each sits and how big it is. A dot that has just filled is
+// wider, and the row spreads around it, so its neighbours move aside.
+function pipLayout() {
   const d = W < 360 ? 10 : 12;
-  const gap = W < 360 ? 6 : 8;
-  const total = ROUND * d + (ROUND - 1) * gap;
-  const x0 = W / 2 - total / 2 + d / 2;
-  const y = safe.t + 34;
+  const grow = reduceMotion ? PIP_GROW * 0.5 : PIP_GROW;
+  const sizes = [];
   for (let i = 0; i < ROUND; i++) {
-    const x = x0 + i * (d + gap);
+    const p = pips[i];
+    sizes.push(d * (1 + grow * (p ? Math.max(0, p.pop.x) : 0)));
+  }
+  const dots = sizes.reduce((a, b) => a + b, 0);
+  // Keep the row between the back and sound buttons: squeeze the gaps if a swell needs room.
+  const room = W - safe.l - safe.r - 2 * 76;
+  const gap = clamp((room - dots) / (ROUND - 1), 2, W < 360 ? 6 : 8);
+  let x = W / 2 - (dots + gap * (ROUND - 1)) / 2;
+  const y = safe.t + 34;
+  return sizes.map((size) => {
+    const c = { x: x + size / 2, y, r: size / 2 };
+    x += size + gap;
+    return c;
+  });
+}
+
+function drawPips() {
+  const row = pipLayout();
+  for (let i = 0; i < ROUND; i++) {
+    const { x, y, r } = row[i];
     ctx.fillStyle = palette['pip-empty'];
     ctx.beginPath();
-    ctx.arc(x, y, d / 2, 0, Math.PI * 2);
+    ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
     const p = pips[i];
     if (p) {
@@ -893,7 +940,7 @@ function drawPips() {
       if (game.state !== 'play') k *= 1 + 0.18 * Math.max(0, Math.sin(game.endT * 5 - i * 0.45));
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(0, (d / 2) * k), 0, Math.PI * 2);
+      ctx.arc(x, y, Math.max(0, r * k), 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -903,7 +950,9 @@ function draw() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  if (bg) ctx.drawImage(bg, 0, 0, W, H);
+  const posing = game.state === 'pose';
+  if (posing) ctx.clearRect(0, 0, W, H);
+  else if (bg) ctx.drawImage(bg, 0, 0, W, H);
 
   for (const r of ripples) {
     const k = r.t / 0.6;
@@ -918,7 +967,7 @@ function draw() {
 
   const order = faces.slice().sort((a, b) => a.y - b.y);
   for (const f of order) drawFace(f);
-  drawPips();
+  if (!posing) drawPips();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -929,8 +978,19 @@ let acc = 0;
 function frame(now) {
   const dt = last ? Math.min((now - last) / 1000, 1 / 20) : 1 / 60;
   last = now;
+  if (game.state === 'pose') {
+    draw();
+    requestAnimationFrame(frame);
+    return;
+  }
   updateGame(dt);
-  for (const p of pips) if (p) stepSpring(p.s, dt);
+  for (const p of pips) {
+    if (!p) continue;
+    stepSpring(p.s, dt);
+    stepSpring(p.pop, dt);
+    p.t += dt;
+    if (p.t > 0.3) p.pop.to = 0;
+  }
   acc += dt;
   while (acc >= STEP) {
     for (const f of faces) stepFace(f, STEP);
@@ -969,7 +1029,35 @@ window.googly = {
         squash: f.squash.x,
         pupils: f.eyes.map((e) => ({ x: e.px, y: e.py })),
       })),
+      pips: pipLayout().map((d, i) => ({ x: d.x, r: d.r, filled: !!pips[i] })),
     };
+  },
+  // For the landing tile (scripts/make-tile.mjs): stop the game and draw the given faces, still,
+  // on a clear background, so the tile shows exactly what the game draws.
+  pose(list) {
+    game.state = 'pose';
+    againBtn.hidden = true;
+    faces.length = 0;
+    ripples.length = 0;
+    pips = [];
+    for (const p of list) {
+      const f = createFace(p.x, p.y, p.size);
+      const L = LAYOUT[p.shape];
+      Object.assign(f, { color: p.color, shape: p.shape, mouth: p.mouth, flip: p.flip ?? 1, phase: 'pose' });
+      f.eyes = p.pupils.map((q, i) => ({
+        x: p.pupils.length === 1 ? 0 : i ? L.eyeX : -L.eyeX,
+        y: L.eyeY,
+        r: L.eyeR * (p.pupils.length === 1 ? 1.55 : 1),
+        px: q.x,
+        py: q.y,
+      }));
+      f.scale.x = 1;
+      f.hop = p.hop ?? 0;
+      f.tilt.x = p.tilt ?? 0;
+      f.open.x = p.mouth === 'o' ? 1 : 0;
+      f.browUp.x = p.brows ?? 0;
+      if (p.brow) f.brow = p.brow;
+    }
   },
 };
 
