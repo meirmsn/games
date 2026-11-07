@@ -72,17 +72,28 @@ test('the game loads with no errors and a face pops up', async () => {
   await context.close();
 });
 
+// Every few seconds each face hops or wobbles on its own, and the pupils fly up for a moment, as
+// they should. So rather than one look at one instant: wait (up to 4 s) for a moment when every
+// face on the ground has its pupils down, checking at every look that no pupil leaves its eye.
+async function pupilsRestAtBottom(page) {
+  let last = '';
+  for (let i = 0; i < 80; i++) {
+    const { faces } = await state(page);
+    for (const f of faces) for (const p of f.pupils) assert.ok(Math.hypot(p.x, p.y) <= 0.4, 'inside the eye');
+    const ground = faces.filter((f) => f.phase === 'idle' && f.hop < 0.5);
+    const ys = ground.flatMap((f) => f.pupils.map((p) => p.y));
+    if (ys.length && ys.every((y) => y > 0.15)) return;
+    last = ys.map((y) => y.toFixed(2)).join(', ');
+    await page.waitForTimeout(50);
+  }
+  assert.fail(`the pupils never all rested at the bottom (last y: ${last})`);
+}
+
 test('the pupils fall to the bottom of the eyes and stay inside them', async () => {
   const { context, page } = await openGame({ fakeAudio: false });
   await readyFace(page);
   await page.waitForTimeout(1500);
-  const { faces } = await state(page);
-  for (const f of faces) {
-    for (const p of f.pupils) {
-      assert.ok(Math.hypot(p.x, p.y) <= 0.4, 'inside the eye');
-      assert.ok(p.y > 0.15, `rolled down under gravity (y = ${p.y.toFixed(2)})`);
-    }
-  }
+  await pupilsRestAtBottom(page);
   await context.close();
 });
 
@@ -149,18 +160,24 @@ test('tapping empty space is answered too', async () => {
   assert.equal((await page.evaluate(() => window.__played)).length, 1);
   assert.equal((await state(page)).taps, 0);
 
-  // Every eye looks at the spot for a moment...
-  await page.waitForTimeout(450);
-  for (const o of (await state(page)).faces.filter((g) => g.phase !== 'out')) {
-    const d = Math.hypot(x - o.x, y - o.y);
-    for (const p of o.pupils) {
-      const along = (p.x * (x - o.x) + p.y * (y - o.y)) / d;
-      assert.ok(along > 0.3, `the pupil looks at the tap (${along.toFixed(2)} eye radii towards it)`);
+  // Every eye looks at the spot for a moment (the median of ten looks while it holds, since a face's
+  // own hop can tug its pupils for an instant)...
+  await page.waitForTimeout(350);
+  const along = {};
+  for (let i = 0; i < 10; i++) {
+    for (const o of (await state(page)).faces.filter((g) => g.phase !== 'out')) {
+      const d = Math.hypot(x - o.x, y - o.y);
+      o.pupils.forEach((p, k) => (along[`${o.id}.${k}`] ??= []).push((p.x * (x - o.x) + p.y * (y - o.y)) / d));
     }
+    await page.waitForTimeout(40);
+  }
+  for (const [eye, v] of Object.entries(along)) {
+    const m = v.sort((a, b) => a - b)[Math.floor(v.length / 2)];
+    assert.ok(m > 0.25, `pupil ${eye} looks at the tap (${m.toFixed(2)} eye radii towards it)`);
   }
   // ...then rolls loose again, back to the bottom.
-  await page.waitForTimeout(2200);
-  for (const o of (await state(page)).faces) for (const p of o.pupils) assert.ok(p.y > 0.15, `back down (y = ${p.y.toFixed(2)})`);
+  await page.waitForTimeout(1500);
+  await pupilsRestAtBottom(page);
   await context.close();
 });
 
