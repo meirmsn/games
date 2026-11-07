@@ -15,3 +15,8 @@ FINDINGS.md
 LICENSE
 test-results
 .wrangler
+CLAUDE.md
+specs
+.devshop-version
+.gitleaks.toml
+.nvmrc

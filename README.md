@@ -30,7 +30,9 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 
 ## Checks
 
-- `scripts/check-fast.sh`: links, offline file list and page references, and the theme tokens.
-- `scripts/check-slow.sh`: browser tests in `tests/`. Needs `npm ci && npx playwright install chromium`.
+CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
+
+- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the lockfile (npmjs only), the offline file list and page references, and the theme tokens. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
+- `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
 Art and sound by [Kenney](https://www.kenney.nl) (CC0). Code is under the [MIT License](LICENSE).
