@@ -21,7 +21,10 @@ keeps the site's tokens.
 - Core loop: eat fish smaller than you, avoid bigger ones, grow, then dive deeper. It reads at a glance, and its risk grows on its own as you grow. Rejected: a score-attack with a timer, which has no growth to reward you (owner, 2026-11-07).
 - A fish is worth (its size / yours)², in growth and in points. Small fish stop paying as you grow, so you have to take on fish near your own size (owner, 2026-11-07).
 - Five depths, each one darker and adding one thing: Sunlit Shallows, Coral Garden (pufferfish), Kelp Forest (eels, which warn with bubbles first), Twilight Reef (dimmer), The Deep (dark except for your glow). After that it carries on, slightly faster each time (owner, 2026-11-07).
-- A hidden assist rises by 0.3 when you're caught and fades while you do well. It makes predators slower, gives them shorter sight and spawns fewer of them. Rejected: difficulty settings, which ask the player to judge themselves (owner, 2026-11-07).
+- A hidden assist (0 to 1) eases the game off when you struggle. Rejected: difficulty settings, which ask the player to judge themselves (owner, 2026-11-07). In full, as built and approved:
+  - It rises by 0.3 when you're caught, and falls a little with each fish eaten and with every second without danger.
+  - New players (the first two runs) start at about 0.3. Each new run keeps 60% of the last run's assist, plus a small bonus.
+  - It makes predators slower, gives them shorter sight and spawns fewer of them. It also slows the eels, lengthens their warning, spaces them further apart, and lengthens the calm before a hunter comes in.
 - Pacing comes in waves: a hunter swims in after a long calm, and a school of small fish passes by as a feast about every half minute. Combos (up to ×4), close-call bonuses, a life back at each depth and a saved best score are the rewards (owner, 2026-11-07).
 - Touch steers by dragging anywhere (relative), so your finger never covers the fish; mouse follows the pointer; arrow keys and WASD also work (owner, 2026-11-07).
 - Three lives. A pufferfish bump costs some growth, not a life (owner, 2026-11-07).

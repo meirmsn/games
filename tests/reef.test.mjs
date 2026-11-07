@@ -80,7 +80,7 @@ async function meet(page, species, size, frames = 30) {
   );
 }
 
-test('the reef opens on its title card and starts with no errors', async () => {
+test('AC-1: the reef opens on its title card and starts with no errors', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('[data-screen="title"]').isVisible(), true);
   assert.ok((await page.evaluate(() => window.__reef.npcs().length)) > 5, 'fish are swimming behind the title');
@@ -92,7 +92,7 @@ test('the reef opens on its title card and starts with no errors', async () => {
   await context.close();
 });
 
-test('eating a smaller fish scores and grows you', async () => {
+test('AC-2: eating a smaller fish scores and grows you', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const after = await meet(page, 'pink', 22);
@@ -102,7 +102,7 @@ test('eating a smaller fish scores and grows you', async () => {
   await context.close();
 });
 
-test('a bigger fish costs a life, and the third ends the run', async () => {
+test('AC-3: a bigger fish costs a life, and the third ends the run', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   let s = await meet(page, 'red', 150, 5);
@@ -125,7 +125,7 @@ test('a bigger fish costs a life, and the third ends the run', async () => {
   await context.close();
 });
 
-test('getting caught makes the next stretch easier', async () => {
+test('AC-4: getting caught makes the next stretch easier', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const before = await page.evaluate(() => window.__reef.game.assist);
@@ -135,7 +135,7 @@ test('getting caught makes the next stretch easier', async () => {
   await context.close();
 });
 
-test('growing all the way dives to the next depth with an extra life back', async () => {
+test('AC-5: growing all the way dives to the next depth with an extra life back', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -157,7 +157,7 @@ test('growing all the way dives to the next depth with an extra life back', asyn
   await context.close();
 });
 
-test('dragging on a touch screen steers the fish', async () => {
+test('AC-9: dragging on a touch screen steers the fish', async () => {
   const { context, page } = await open({ hasTouch: true, viewport: { width: 390, height: 844 } });
   await startEmpty(page);
   const start = await page.evaluate(() => window.__reef.player.x);
@@ -175,7 +175,7 @@ test('dragging on a touch screen steers the fish', async () => {
   await context.close();
 });
 
-test('the reef works offline once it has been played', async () => {
+test('AC-10: the reef works offline once it has been played', async () => {
   const { context, page } = await open();
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
   await page.evaluate(
@@ -192,7 +192,7 @@ test('the reef works offline once it has been played', async () => {
   await context.close();
 });
 
-test('a fish is worth (its size / yours) squared', async () => {
+test('AC-2: a fish is worth (its size / yours) squared', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const gain = async (size) => {
@@ -209,7 +209,7 @@ test('a fish is worth (its size / yours) squared', async () => {
   await context.close();
 });
 
-test('the assist fades while you do well', async () => {
+test('AC-4: the assist fades while you do well', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.assist = 0.5));
@@ -219,7 +219,7 @@ test('the assist fades while you do well', async () => {
   await context.close();
 });
 
-test('an eel warns with bubbles first, then strikes across the reef', async () => {
+test('AC-6: an eel warns with bubbles first, then strikes across the reef', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -244,7 +244,7 @@ test('an eel warns with bubbles first, then strikes across the reef', async () =
   await context.close();
 });
 
-test('a pufferfish puffs up when you come close, and bumps you away', async () => {
+test('AC-7: a pufferfish puffs up when you come close, and bumps you away', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const s = await page.evaluate(() => {
@@ -268,7 +268,7 @@ test('a pufferfish puffs up when you come close, and bumps you away', async () =
   await context.close();
 });
 
-test('a long calm brings a hunter in', async () => {
+test('AC-8: a long calm brings a hunter in', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.calm = 30));
@@ -278,7 +278,7 @@ test('a long calm brings a hunter in', async () => {
   await context.close();
 });
 
-test('a passing school is a feast of fish you can eat', async () => {
+test('AC-8: a passing school is a feast of fish you can eat', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.feastIn = 0));
