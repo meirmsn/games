@@ -1,12 +1,15 @@
-// Reef: eat smaller fish, dodge bigger ones, grow big enough to dive deeper.
+// Reef: eat the orange, green and pink fish, dodge everything with teeth, dive deeper.
 //
 // How the challenge is kept "just right" (flow), in one place so it can be tuned:
-//  - Risk pays more: a fish's growth and points go with (its size / yours)^2, so as you grow the
-//    little fish stop being worth much and you have to go after fish close to your own size.
-//  - Each depth adds one new idea (pufferfish, eels, the dark) and a little more pressure.
-//  - A hidden "assist" level rises when you get caught and fades while you do well. It slows and
-//    blinds predators a little and spawns fewer of them, so a struggling player gets breathing room
-//    and a strong one isn't held back.
+//  - Food is told by colour, not by reading sizes: orange, green and pink fish are food; the rest
+//    have teeth and bite. You learn it in the first seconds, by doing.
+//  - Depths get longer as you go: 4 fish to clear the first, then 7, 11, 15, 20 and 5 more each
+//    after that, so the first win comes fast and the challenge builds from there.
+//  - Each depth looks clearly different and brings new fish: pufferfish, then red fish and eels,
+//    then grey darters, then the dark.
+//  - Risk pays more: points go with (its size / yours)^2, so the bigger food is worth chasing.
+//  - A hidden "assist" level rises when you get bitten and fades while you do well. It slows and
+//    blinds predators a little and spawns fewer of them.
 //  - Tension comes in waves: a long calm brings a hunter in; every half minute a school of small fish
 //    passes by, a feast. Combos, close calls and an extra life at each new depth are the rewards.
 import { mountShell } from '../shared/game-shell.js';
@@ -30,65 +33,64 @@ const { sound } = mountShell({
 
 // ---------- Tuning ----------
 
+// Food is always pink, green or orange, and always smaller than you. Everything else is a
+// predator: drawn with teeth, always bigger than you. Sizes are relative to the player's size
+// when the fish appears.
+const FOOD = ['pink', 'green', 'orange'];
 const SPECIES = {
-  pink: { min: 20, max: 34, speed: 78, school: [4, 7], skel: true },
-  green: { min: 30, max: 52, speed: 64, school: [3, 5], skel: true },
-  orange: { min: 40, max: 66, speed: 60, skel: true },
-  grey: { min: 54, max: 86, speed: 72 },
-  blue: { min: 62, max: 106, speed: 70, school: [3, 5], skel: true },
-  red: { min: 96, max: 170, speed: 58, skel: true },
+  pink: { rel: [0.42, 0.58], speed: 78, school: [4, 7], skel: true },
+  green: { rel: [0.55, 0.72], speed: 64, school: [3, 5], skel: true },
+  orange: { rel: [0.68, 0.86], speed: 60, skel: true },
+  // Each predator has its own mark: the blue one jaws, the red one a glowing lure, the grey one
+  // electric sparks. (The pufferfish's mark is puffing up.)
+  blue: { rel: [1.25, 1.6], speed: 66, skel: true, mark: 'jaws', mouth: [0.79, 0.985, 0.58] },
+  red: { rel: [1.6, 2.2], speed: 56, skel: true, mark: 'lure' },
+  grey: { rel: [1.15, 1.4], speed: 100, mark: 'spark' },
 };
 const PUFFER = { min: 40, max: 58, speed: 32, puffed: 1.5 };
 
 const DEPTHS = [
   {
-    name: 'Sunlit Shallows',
-    tip: 'Eat fish smaller than you. Stay clear of bigger ones.',
-    top: [134, 216, 240], bottom: [53, 147, 204],
-    species: ['pink', 'green', 'orange', 'blue'],
-    threat: 0.12, puffers: 0, eel: null, dark: 0, rays: 1, surface: true,
-    ground: 'sand', weeds: ['green', 'grass', 'orange'], weedDensity: 1,
+    name: 'Sunlit Shallows', goal: 4,
+    top: [140, 224, 242], bottom: [58, 162, 212],
+    food: ['pink', 'green'], danger: ['blue'],
+    threat: 0.14, puffers: 0, eel: null, dark: 0, rays: 1, surface: true,
+    ground: 'sand', weeds: ['green', 'grass', 'orange'], weedDensity: 0.9, rockCount: 1,
   },
   {
-    name: 'Coral Garden',
-    tip: 'Pufferfish puff up when you come close. Don’t touch them puffed.',
-    top: [98, 192, 230], bottom: [36, 121, 182],
-    species: ['pink', 'green', 'orange', 'grey', 'blue', 'red'],
-    threat: 0.2, puffers: 1, eel: null, dark: 0, rays: 0.8,
-    ground: 'sand', weeds: ['pink', 'orange', 'pink', 'green'], weedDensity: 1.3,
+    name: 'Coral Garden', goal: 7,
+    top: [128, 222, 214], bottom: [34, 128, 168],
+    food: ['pink', 'green', 'orange'], danger: ['blue'],
+    threat: 0.18, puffers: 1, eel: null, dark: 0, rays: 0.8,
+    ground: 'sand', weeds: ['pink', 'orange', 'pink', 'orange', 'green'], weedDensity: 2.2, rockCount: 3,
   },
   {
-    name: 'Kelp Forest',
-    tip: 'Bubbles streaming from the edge? An eel is about to dart across.',
-    top: [61, 156, 204], bottom: [25, 94, 151],
-    species: ['pink', 'green', 'orange', 'grey', 'blue', 'red'],
-    threat: 0.23, puffers: 2, eel: [22, 30], dark: 0.06, rays: 0.55,
-    ground: 'sand', weeds: ['green', 'grass', 'green'], weedDensity: 2,
+    name: 'Kelp Forest', goal: 11,
+    top: [104, 186, 150], bottom: [20, 82, 78],
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
+    threat: 0.22, puffers: 1, eel: [20, 28], dark: 0.06, rays: 0.6, kelp: true,
+    ground: 'sand', weeds: ['green', 'green', 'grass'], weedDensity: 2.4, rockCount: 1,
   },
   {
-    name: 'Twilight Reef',
-    tip: 'It’s getting dark. Keep an eye on the gloom.',
-    top: [40, 104, 156], bottom: [14, 57, 100],
-    species: ['pink', 'green', 'orange', 'grey', 'blue', 'red'],
-    threat: 0.26, puffers: 2, eel: [16, 24], dark: 0.38, rays: 0.3,
-    ground: 'dirt', weeds: ['pink', 'grass'], weedDensity: 1.2,
+    name: 'Twilight Reef', goal: 15,
+    top: [92, 88, 168], bottom: [26, 20, 70],
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
+    threat: 0.25, puffers: 2, eel: [16, 24], dark: 0.3, rays: 0.2,
+    ground: 'dirt', weeds: ['pink', 'grass', 'pink'], weedDensity: 1.4, rockCount: 5,
   },
   {
-    name: 'The Deep',
-    tip: 'Only your own glow lights the way now.',
-    top: [22, 58, 99], bottom: [6, 23, 46],
-    species: ['pink', 'green', 'orange', 'grey', 'blue', 'red'],
-    threat: 0.29, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0,
-    ground: 'dirt', weeds: ['grass', 'pink'], weedDensity: 0.8,
+    name: 'The Deep', goal: 20,
+    top: [20, 32, 64], bottom: [4, 8, 22],
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
+    threat: 0.28, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0,
+    ground: 'dirt', weeds: ['grass'], weedDensity: 0.6, rockCount: 2,
   },
 ];
 
 const PLAYER_BASE = 44; // length at the start of each depth
-const PLAYER_GROWTH = 1.2; // ...and it grows to (1 + this) times that before diving deeper
-const XP_TO_DIVE = 10;
+const PLAYER_GROWTH = 1.0; // ...and it grows to (1 + this) times that before diving deeper
 const PLAYER_SPEED = 250;
 const MAX_LIVES = 3;
-const EDGE = 1.08; // you eat, or are eaten by, fish at least this much smaller or bigger
 
 // ---------- Setup ----------
 
@@ -99,12 +101,8 @@ atlas.src = 'img/atlas.png';
 
 const $ = (sel) => document.querySelector(sel);
 const ui = {
-  title: $('[data-screen="title"]'),
   over: $('[data-screen="over"]'),
-  play: $('[data-play]'),
   again: $('[data-again]'),
-  best: $('[data-best]'),
-  how: $('[data-how]'),
   overTitle: $('[data-over-title]'),
   finalScore: $('[data-final-score]'),
   finalDetail: $('[data-final-detail]'),
@@ -229,7 +227,7 @@ let shade = null;
 
 const player = {
   x: 0, y: 0, vx: 0, vy: 0, size: PLAYER_BASE, face: 1, faceT: 1, angle: 0,
-  invul: 0, stun: 0, gulp: 0, alive: false, trail: 0,
+  invul: 0, stun: 0, gulp: 0, alive: false, trail: 0, hurt: 0, safe: null, waiting: false,
 };
 
 const depthDef = (n = game.depth) => DEPTHS[Math.min(n, DEPTHS.length - 1)];
@@ -338,7 +336,9 @@ function buildScenery() {
   weedsMid = [];
   const nMid = Math.round((W / 70) * d.weedDensity);
   for (let i = 0; i < nMid; i++) {
-    weedsMid.push({ name: weedName(pickR(d.weeds, r), r), x: rr(0, W), y: groundY + rr(2, 22), k: rr(0.45, 0.8) * (d.weedDensity > 1.5 ? 1.35 : 1), ph: rr(0, 6) });
+    // Kelp towers halfway up the water; elsewhere seaweed stays low.
+    const k = d.kelp ? rr(1.2, 2.3) : rr(0.45, 0.85);
+    weedsMid.push({ name: weedName(pickR(d.weeds, r), r), x: rr(0, W), y: groundY + rr(2, 22), k, ph: rr(0, 6) });
   }
   weedsMid.sort((a, b) => a.y - b.y);
   weedsFront = [];
@@ -349,7 +349,7 @@ function buildScenery() {
   }
   rocks = [];
   vents = [];
-  const nR = Math.max(1, Math.round(W / 380));
+  const nR = Math.max(1, Math.round(d.rockCount * Math.max(1, W / 700)));
   for (let i = 0; i < nR; i++) {
     const rock = { name: r() < 0.5 ? 'rock_a' : 'rock_b', x: rr(W * 0.1, W * 0.9), y: groundY + rr(10, 24), k: rr(0.45, 0.7) };
     rocks.push(rock);
@@ -413,36 +413,24 @@ function makePuffer(side) {
 
 const effSize = (n) => (n.kind === 'puffer' ? n.size * lerp(0.72, PUFFER.puffed, n.puff) : n.size);
 const radius = (n) => (n.kind === 'puffer' ? effSize(n) * 0.42 : n.size * 0.27);
-const isThreat = (n) => effSize(n) > player.size * EDGE;
-const isFood = (n) => player.size > effSize(n) * EDGE && !(n.kind === 'puffer' && n.puff > 0.25);
+const isFood = (n) => n.kind === 'fish' && FOOD.includes(n.species);
+const isThreat = (n) => n.kind === 'fish' && !FOOD.includes(n.species);
+// Fish to eat before diving deeper: 4, 7, 11, 15, 20, then 5 more at each depth after that.
+const goal = () => depthDef().goal + 5 * extraDepth();
 
-// Choose a species and size: food is smaller than the player, threats are bigger.
+// Choose a species from this depth's food or predators, sized against the player.
 function chooseFish(threat) {
-  const p = player.alive ? player.size : PLAYER_BASE * 1.4;
-  const target = threat ? p * rand(1.18, 1.95) : p * rand(0.42, 0.88);
-  const allowed = depthDef().species;
-  const fits = allowed.filter((k) => SPECIES[k].min <= target && SPECIES[k].max >= target);
-  let species;
-  if (fits.length) species = pick(fits);
-  else {
-    // Nothing fits exactly: the nearest species, at the edge of its range.
-    species = allowed.reduce((best, k) => {
-      const dist = (s) => Math.max(SPECIES[s].min - target, target - SPECIES[s].max, 0);
-      return dist(k) < dist(best) ? k : best;
-    }, allowed[0]);
-  }
-  const sp = SPECIES[species];
-  let size = clamp(target, sp.min, sp.max);
-  // Keep the promise: a threat stays a threat, food stays food.
-  if (threat && size <= p * EDGE * 1.04) size = p * rand(1.2, 1.5);
-  if (!threat && size >= p / EDGE) size = (p / EDGE) * rand(0.75, 0.95);
-  return { species, size };
+  const p = player.alive ? player.size : PLAYER_BASE * 1.3;
+  const d = depthDef();
+  const species = pick(threat ? d.danger : d.food);
+  const rel = SPECIES[species].rel;
+  return { species, size: p * rand(rel[0], rel[1]) };
 }
 
 function spawnOne(forceThreat = null, aimAtPlayer = false) {
   const fishes = npcs.filter((n) => n.kind === 'fish');
-  const threats = player.alive ? fishes.filter(isThreat).length : 0;
-  const share = player.alive ? threatBase() * (1 - 0.5 * game.assist) : 0.22;
+  const threats = fishes.filter(isThreat).length;
+  const share = player.alive ? threatBase() * (1 - 0.5 * game.assist) : 0.18;
   const threat = forceThreat ?? threats < Math.round(targetPop() * share + 0.35);
   const { species, size } = chooseFish(threat);
   let side = Math.random() < 0.5 ? -1 : 1;
@@ -454,10 +442,10 @@ function spawnOne(forceThreat = null, aimAtPlayer = false) {
   const sp = SPECIES[species];
   const lead = makeFish(species, size, side, y);
   npcs.push(lead);
-  if (sp.school && !threat && Math.random() < 0.55) {
+  if (sp.school && Math.random() < 0.55) {
     const n = randi(sp.school[0], sp.school[1]) - 1;
     for (let i = 0; i < n; i++) {
-      const m = makeFish(species, clamp(size * rand(0.85, 1.12), sp.min, sp.max), side, y);
+      const m = makeFish(species, size * rand(0.88, 1.1), side, y);
       m.leader = lead;
       m.ox = (side < 0 ? -1 : 1) * rand(18, 40 + i * 14);
       m.oy = rand(-40, 40);
@@ -473,14 +461,14 @@ function spawnOne(forceThreat = null, aimAtPlayer = false) {
 // A passing school of small fish: a feast that rewards being in the right place.
 function spawnFeast() {
   const p = player.size;
-  const species = ['pink', 'green', 'orange'].filter((k) => depthDef().species.includes(k)).find((k) => SPECIES[k].max < p / EDGE) || 'pink';
+  const species = pick(depthDef().food);
   const sp = SPECIES[species];
   const side = Math.random() < 0.5 ? -1 : 1;
   const y = rand(yMin + 80, groundY - 80);
   const n = randi(8, 12);
   let lead = null;
   for (let i = 0; i < n; i++) {
-    const size = Math.min(rand(sp.min, sp.max), (p / EDGE) * 0.95);
+    const size = p * rand(sp.rel[0], sp.rel[1]);
     const f = makeFish(species, size, side, y);
     if (!lead) lead = f;
     else {
@@ -546,6 +534,7 @@ function toWorld(e) {
 }
 
 canvas.addEventListener('pointerdown', (e) => {
+  wake();
   if (e.pointerType === 'mouse') {
     input.target = toWorld(e);
     return;
@@ -561,6 +550,7 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = toWorld(e);
   if (e.pointerType === 'mouse') {
+    wake();
     input.target = p;
     return;
   }
@@ -587,7 +577,8 @@ window.addEventListener('keydown', (e) => {
     input.keys.add(e.key);
     input.target = null;
     e.preventDefault();
-  } else if ((e.key === 'Enter' || e.key === ' ') && (game.mode === 'title' || (game.mode === 'over' && game.overIn <= 0))) {
+    wake();
+  } else if ((e.key === 'Enter' || e.key === ' ') && game.mode === 'over' && game.overIn <= 0) {
     if (document.activeElement?.tagName !== 'BUTTON') {
       e.preventDefault();
       startGame();
@@ -602,7 +593,6 @@ window.addEventListener('blur', () => input.keys.clear());
 let stopMusic = null;
 
 function startGame() {
-  ui.title.hidden = true;
   ui.over.hidden = true;
   game.mode = 'play';
   game.depth = 0;
@@ -622,36 +612,47 @@ function startGame() {
   eels = [];
   skeletons = [];
   popups = [];
+  tintCache.clear();
   buildScenery();
-  resetPlayer(true);
-  input.target = null;
-  sound.play('start', { gain: 0.8 });
+  resetPlayer();
+  // No instructions: the fish waits, glowing softly, until you first move it. Nothing hunts it
+  // until then.
+  player.waiting = true;
+  player.invul = Infinity;
   if (!stopMusic) stopMusic = sound.loop('music', { gain: 0.32 });
-  toast(depthDef().name, depthDef().tip, 4);
-  // Start among food only; the first big fish arrive from the edges, where you can see them coming.
+  // Start among food only; the first predators arrive from the edges, where you can see them coming.
   npcs = npcs.filter((n) => !isThreat(n) || Math.hypot(n.x - player.x, n.y - player.y) > 320);
   for (let i = 0; i < targetPop() * 0.4; i++) spawnOne(false).x = rand(W * 0.05, W * 0.95);
 }
 
-function resetPlayer(fresh) {
+// The player's first move starts the game proper.
+function wake() {
+  if (!player.waiting || game.mode !== 'play') return;
+  player.waiting = false;
+  player.invul = 1;
+  sound.play('start', { gain: 0.8 });
+}
+
+function resetPlayer() {
   player.alive = true;
   player.x = W / 2;
   player.y = Math.max(yMin + 60, H * 0.35);
   player.vx = 0;
   player.vy = 0;
-  player.invul = fresh ? 1.5 : 2.4;
+  player.invul = 1.5;
   player.stun = 0;
+  player.hurt = 0;
   player.size = sizeFromXp();
   input.target = null;
 }
 
 function sizeFromXp() {
-  return PLAYER_BASE * (1 + PLAYER_GROWTH * Math.min(game.xp / XP_TO_DIVE, 1));
+  return PLAYER_BASE * (1 + PLAYER_GROWTH * Math.min(game.xp / goal(), 1));
 }
 
 function eat(n) {
   const value = (effSize(n) / player.size) ** 2;
-  game.xp += value;
+  game.xp += 1; // one fish, one notch on the bar
   game.chain = time - game.lastEat < 2.2 ? game.chain + 1 : 1;
   game.lastEat = time;
   const mult = Math.min(1 + (game.chain - 1) * 0.5, 4);
@@ -663,7 +664,7 @@ function eat(n) {
   player.gulp = 1;
   game.assist = Math.max(0, game.assist - 0.012);
   removeFish(n, true);
-  if (game.xp >= XP_TO_DIVE) beginDive();
+  if (game.xp >= goal()) beginDive();
 }
 
 function removeFish(n, eaten) {
@@ -678,10 +679,28 @@ function removeFish(n, eaten) {
   }
 }
 
+// The furthest point from every predator and eel, for the player to flee to after a bite.
+function safeSpot() {
+  let best = { x: W / 2, y: H * 0.35 }, bestD = -1;
+  for (let i = 0; i < 40; i++) {
+    const x = rand(W * 0.1, W * 0.9), y = rand(yMin + 40, yMax - 40);
+    let d = 1e9;
+    for (const n of npcs) if (isThreat(n) && n.state !== 'leave') d = Math.min(d, Math.hypot(n.x - x, n.y - y));
+    for (const e of eels) d = Math.min(d, Math.abs(e.y - y) * 2);
+    d -= Math.hypot(x - player.x, y - player.y) * 0.15; // not too far across the screen
+    if (d > bestD) {
+      bestD = d;
+      best = { x, y };
+    }
+  }
+  return best;
+}
+
+// A bite: the predator lunges and snaps, then swims away; the player tumbles and swims to safety.
 function caught(by) {
-  if (player.invul > 0 || !player.alive) return;
+  if (player.invul > 0 || !player.alive || player.hurt > 0) return;
   game.lives -= 1;
-  game.slowmo = 0.45;
+  game.slowmo = 0.3;
   game.shake = 0.35;
   game.chain = 0;
   game.assist = Math.min(1, game.assist + 0.3);
@@ -689,9 +708,12 @@ function caught(by) {
   sound.play('caught');
   burst(player.x, player.y, 12, 18);
   if (by) {
-    by.sated = 7;
-    by.state = 'wander';
+    by.state = 'bite';
+    by.t = 0.3;
     by.gulp = 1;
+    by.biteX = player.x;
+    by.biteY = player.y;
+    by.leader = null;
   }
   if (game.lives <= 0) {
     player.alive = false;
@@ -702,11 +724,12 @@ function caught(by) {
     finishRun();
     return;
   }
-  game.xp *= 0.7;
-  popup(player.x, player.y - 30, 'ouch');
-  resetPlayer(false);
-  // Clear the respawn point: big fish near the middle move off.
-  for (const n of npcs) if (isThreat(n) && Math.hypot(n.x - player.x, n.y - player.y) < 220) n.sated = Math.max(n.sated, 4);
+  game.xp = Math.max(0, game.xp - 1);
+  player.hurt = 1.2;
+  player.invul = 3;
+  player.safe = safeSpot();
+  input.target = null;
+  input.drag = null;
 }
 
 function finishRun() {
@@ -753,9 +776,8 @@ function finishDiveSwap() {
     f.x = rand(W * 0.05, W * 0.95);
   }
   const d = depthDef();
-  const title = game.depth < DEPTHS.length ? d.name : `${d.name} · ${game.depth + 1}`;
-  const text = game.depth < DEPTHS.length ? d.tip : 'Deeper still. Faster fish, more of them.';
-  setTimeout(() => toast(title, text, 4.2), 300);
+  const title = game.depth < DEPTHS.length ? d.name : `${d.name} \u00b7 ${game.depth + 1}`;
+  setTimeout(() => toast(title, '', 2.6), 300);
 }
 
 // ---------- Update ----------
@@ -780,7 +802,7 @@ function update(dt) {
     if (puffers < (game.mode === 'title' ? 1 : d.puffers) && Math.random() < dt * 0.15) npcs.push(makePuffer(Math.random() < 0.5 ? -1 : 1));
   }
 
-  if (game.mode === 'play') {
+  if (game.mode === 'play' && !player.waiting) {
     // Pacing: a feast every so often; a hunter when it has been too calm; eels in deeper water.
     game.feastIn -= dt;
     if (game.feastIn <= 0) {
@@ -819,7 +841,7 @@ function update(dt) {
         if (dist < pr + nr * 0.75) eat(n);
       } else if (n.kind === 'puffer' && n.puff > 0.25) {
         if (dist < nr * 0.9 + pr * 0.55 && player.invul <= 0 && player.stun <= 0) bonk(n, dx, dy, dist);
-      } else if (isThreat(n)) {
+      } else if (isThreat(n) && n.state !== 'bite' && n.state !== 'leave') {
         if (dist < nr * 0.72 + pr * 0.45) {
           caught(n);
           break;
@@ -914,6 +936,15 @@ function updatePlayer(dt) {
   if (game.mode === 'dive') {
     tx = 0;
     ty = 0;
+  } else if (player.hurt > 0) {
+    // Bitten: the fish swims off to safety on its own, then hands control back.
+    player.hurt -= dt;
+    const ex = player.safe.x - player.x, ey = player.safe.y - player.y;
+    const l = Math.hypot(ex, ey) || 1;
+    const s = PLAYER_SPEED * 1.25 * Math.min(1, l / 50);
+    tx = (ex / l) * s;
+    ty = (ey / l) * s;
+    if (player.hurt <= 0) input.target = null;
   } else if (dx || dy) {
     const l = Math.hypot(dx, dy);
     tx = (dx / l) * speed;
@@ -945,7 +976,9 @@ function updatePlayer(dt) {
   const sp = Math.hypot(player.vx, player.vy);
   const ang = clamp(Math.atan2(player.vy, Math.abs(player.vx) + 30), -0.6, 0.6);
   player.angle = lerp(player.angle, ang, Math.min(1, dt * 8));
-  player.invul = Math.max(0, player.invul - dt);
+  // A tumble while it flees from a bite.
+  player.spin = player.hurt > 0.5 ? (player.spin || 0) + dt * 14 : 0;
+  if (!player.waiting) player.invul = Math.max(0, player.invul - dt);
   player.stun = Math.max(0, player.stun - dt);
   player.gulp = Math.max(0, player.gulp - dt * 4);
   player.trail -= dt * (sp / 60);
@@ -961,7 +994,7 @@ function bonk(n, dx, dy, dist) {
   player.vy = (-dy / l) * 420;
   player.stun = 0.6;
   player.invul = 1;
-  game.xp = Math.max(0, game.xp - XP_TO_DIVE * 0.1);
+  game.xp = Math.max(0, game.xp - 1);
   game.chain = 0;
   game.shake = 0.2;
   input.target = { x: player.x + (-dx / l) * 90, y: player.y + (-dy / l) * 90 };
@@ -994,7 +1027,22 @@ function updateNpc(n, dt) {
   } else {
     const food = playing && isFood(n);
     const threat = playing && isThreat(n) && n.sated <= 0;
-    if (n.state === 'flee') {
+    if (n.state === 'bite') {
+      // The lunge and snap, then away.
+      const bx = n.biteX - n.x, by = n.biteY - n.y, bl = Math.hypot(bx, by) || 1;
+      tvx = (bx / bl) * 320;
+      tvy = (by / bl) * 320;
+      resp = 10;
+      n.t -= dt;
+      if (n.t <= 0) {
+        n.state = 'leave';
+        n.dir = Math.sign(n.x - player.x) || 1;
+      }
+    } else if (n.state === 'leave') {
+      tvx = n.dir * Math.max(n.speed, 90) * 2;
+      tvy = -10;
+      resp = 3;
+    } else if (n.state === 'flee') {
       const l = dist || 1;
       tvx = (-dx / l) * n.speed * 2.1 * (1 - 0.3 * a);
       tvy = (-dy / l) * n.speed * 2.1 * (1 - 0.3 * a);
@@ -1065,10 +1113,10 @@ function updateNpc(n, dt) {
         n.leader = null;
         n.huntPlayer = false;
         burst(n.x + n.face * n.size * 0.4, n.y, 3, 4);
-      } else if (n.sated <= 0 && n.cool <= 0 && onScreen(n) && Math.random() < dt * 0.6) {
-        // Big fish eat small fish too: the reef goes on without you.
+      } else if (isThreat(n) && n.sated <= 0 && n.cool <= 0 && onScreen(n) && Math.random() < dt * 0.6) {
+        // Predators eat the food fish too: the reef goes on without you.
         for (const m of npcs) {
-          if (m === n || m.dead || m.kind !== 'fish' || m.size > n.size / 1.3) continue;
+          if (m === n || m.dead || !isFood(m) || m.size > n.size / 1.2) continue;
           const hx = m.x - n.x, hy = m.y - n.y;
           if (Math.abs(hy) < 90 && Math.abs(hx) < 170 && Math.sign(hx) === n.dir) {
             n.state = 'hunt';
@@ -1103,7 +1151,7 @@ function updateNpc(n, dt) {
   // Leave by the far side (a fish still swimming in, like the tail of a school, stays).
   const m = n.size + 40;
   if ((n.x < -m && n.vx < 0) || (n.x > W + m && n.vx > 0)) {
-    if (n.state === 'wander' || n.state === 'flee' || n.state === 'tired') removeFish(n, false);
+    if (n.state === 'wander' || n.state === 'flee' || n.state === 'tired' || n.state === 'leave') removeFish(n, false);
     else n.x = clamp(n.x, -m, W + m);
   }
   if (Math.random() < dt * 0.08 && onScreen(n)) bubble(n.x + n.face * n.size * 0.45, n.y - 3, rand(1.5, 3));
@@ -1144,7 +1192,8 @@ function updateFar(dt) {
     farIn = rand(5, 11);
     const dir = Math.random() < 0.5 ? 1 : -1;
     const y = rand(H * 0.15, groundY - 120);
-    const name = pick(['fish_blue', 'fish_green', 'fish_pink', 'fish_grey', 'fish_orange']);
+    const d = depthDef();
+    const name = 'fish_' + pick([...d.food, ...d.danger]);
     const n = randi(3, 8);
     const sp = rand(18, 34);
     const size = rand(16, 30);
@@ -1330,6 +1379,115 @@ function fishTransform(x, y, faceT, angle, size, ph, speedFrac, gulp) {
   void size;
 }
 
+// The blue predator gets a small open mouth with a few teeth, painted onto a copy of its sprite in the
+// pack's own flat style (the mouth is the fish's colour, darkened; the teeth are the pack's bone
+// colour), so food and danger read at a glance.
+const teethCache = new Map();
+function withTeeth(species) {
+  let c = teethCache.get(species);
+  if (c) return c;
+  const f = FRAMES['fish_' + species];
+  const [m0, m1, my] = SPECIES[species].mouth;
+  const w = f[2], h = f[3];
+  c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(atlas, f[0], f[1], w, h, 0, 0, w, h);
+  g.globalCompositeOperation = 'source-atop';
+  const x0 = lerp(m0, m1, 0.25) * w, x1 = m1 * w, y = my * h, gap = h * 0.085;
+  // The open mouth: a wedge from the nose back, in the fish's own colour, darkened.
+  const mouth = new Path2D();
+  mouth.moveTo(x1 + 2, y - gap * 0.1);
+  mouth.lineTo(x0, y - gap);
+  mouth.quadraticCurveTo(x0 - gap * 0.6, y + gap * 0.1, x0 + gap * 0.3, y + gap * 0.9);
+  mouth.closePath();
+  g.fillStyle = 'rgba(30,10,30,0.55)';
+  g.fill(mouth);
+  // Two teeth on top, one below, in the skeletons' bone colour.
+  g.save();
+  g.clip(mouth);
+  g.fillStyle = '#f3ead2';
+  const L = x1 - x0;
+  const tooth = (ax, ay, bx, by, tx, ty) => {
+    g.beginPath();
+    g.moveTo(ax, ay);
+    g.lineTo(bx, by);
+    g.lineTo(tx, ty);
+    g.closePath();
+    g.fill();
+  };
+  const topY = (x) => lerp(y - gap, y - gap * 0.1, (x - x0) / L);
+  for (const t of [0.22, 0.55]) {
+    const ax = x0 + L * t, bx = x0 + L * (t + 0.22);
+    tooth(ax, topY(ax) - 2, bx, topY(bx) - 2, (ax + bx) / 2, (topY(ax) + topY(bx)) / 2 + gap * 0.85);
+  }
+  const ax = x0 + L * 0.3, bx = x0 + L * 0.52;
+  const botY = (x) => lerp(y + gap * 0.9, y - gap * 0.1, (x - x0) / L);
+  tooth(ax, botY(ax) + 2, bx, botY(bx) + 2, (ax + bx) / 2, (botY(ax) + botY(bx)) / 2 - gap * 0.75);
+  g.restore();
+  teethCache.set(species, c);
+  return c;
+}
+
+// The red predator's mark: an anglerfish lure, a glowing bulb on a stalk that bobs over its head.
+function drawLure(n) {
+  const f = FRAMES['fish_' + n.species];
+  const L = n.size, H = (f[7] / f[6]) * L;
+  const bob = Math.sin(time * 3 + n.ph) * H * 0.06;
+  const sx = L * 0.3, sy = -H * 0.36; // the stalk's root, on the forehead
+  const bx = L * 0.62, by = -H * 0.72 + bob; // the bulb, out in front
+  ctx.strokeStyle = '#a8352b';
+  ctx.lineWidth = Math.max(2, L * 0.03);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.quadraticCurveTo(sx + L * 0.12, by - H * 0.25, bx, by);
+  ctx.stroke();
+  const r = L * 0.055 * (1 + Math.sin(time * 5 + n.ph) * 0.12);
+  const g = ctx.createRadialGradient(bx, by, 0, bx, by, r * 4);
+  g.addColorStop(0, 'rgba(255,240,150,0.85)');
+  g.addColorStop(1, 'rgba(255,240,150,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(bx, by, r * 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff6c2';
+  ctx.beginPath();
+  ctx.arc(bx, by, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// The grey predator's mark: green electric bolts crackling around its body, redrawn in a new
+// place a dozen times a second.
+function drawSparks(n) {
+  const f = FRAMES['fish_' + n.species];
+  const a = n.size * 0.5, b = (f[7] / f[6]) * n.size * 0.5;
+  const tick = Math.floor(time * 12);
+  let seed = (tick * 9301 + Math.floor(n.ph * 1000) * 49297) % 233280;
+  const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let k = 0; k < 3; k++) {
+    const start = rnd() * Math.PI * 2, span = 0.5 + rnd() * 0.6, steps = 5;
+    const pts = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = start + (span * i) / steps;
+      const out = 1.04 + (i % 2 ? 0.14 : 0) + (rnd() - 0.5) * 0.08;
+      pts.push([Math.cos(t) * a * out, Math.sin(t) * b * out * 1.25]);
+    }
+    for (const [w, col] of [[6, 'rgba(90,230,40,0.45)'], [2.5, '#c8ff4a']]) {
+      ctx.lineWidth = w;
+      ctx.strokeStyle = col;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function drawNpc(n) {
   const sp = Math.hypot(n.vx, n.vy) / 200;
   ctx.save();
@@ -1342,13 +1500,31 @@ function drawNpc(n) {
     drawCentered('fish_brown', len);
   } else {
     fishTransform(n.x, n.y, n.faceT, n.angle, n.size, n.ph, Math.min(1, sp), n.gulp);
-    drawCentered('fish_' + n.species, n.size);
+    const mark = SPECIES[n.species].mark;
+    if (mark === 'jaws') {
+      const c = withTeeth(n.species);
+      const f = FRAMES['fish_' + n.species];
+      const h = (f[7] / f[6]) * n.size;
+      ctx.drawImage(c, -n.size / 2, -h / 2, n.size, h);
+    } else drawCentered('fish_' + n.species, n.size);
+    if (mark === 'lure') drawLure(n);
+    else if (mark === 'spark') drawSparks(n);
   }
   ctx.restore();
 }
 
 function drawPlayer() {
-  if (player.invul > 0 && game.mode === 'play' && Math.floor(player.invul * 8) % 2 === 0) return;
+  if (player.waiting) {
+    // A soft pulse that says "this is you, move me".
+    const t = (time % 1.6) / 1.6;
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,236,150,${0.7 * (1 - t)})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.size * (0.6 + t * 0.9), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  } else if (player.invul > 0 && game.mode === 'play' && player.hurt <= 0 && Math.floor(player.invul * 8) % 2 === 0) return;
   const sp = Math.hypot(player.vx, player.vy) / PLAYER_SPEED;
   ctx.save();
   // A soft halo so the player always stands out.
@@ -1362,6 +1538,7 @@ function drawPlayer() {
   ctx.fill();
   fishTransform(player.x, player.y, player.faceT, player.angle, player.size, 0, Math.min(1, sp), player.gulp);
   if (player.stun > 0) ctx.rotate(Math.sin(time * 30) * 0.15);
+  if (player.spin) ctx.rotate(player.spin);
   drawCentered('fish_orange_outline', player.size * 1.04);
   ctx.restore();
 }
@@ -1462,48 +1639,80 @@ function drawPopup(p) {
   drawDigits(p.text, p.x, y - h / 2, h, 'center', a);
 }
 
+function digitsWidth(text, h) {
+  let w = 0;
+  for (const c of text) {
+    const f = FRAMES[c === '+' ? 'hud_plus' : 'hud_number_' + c];
+    if (f) w += (f[6] / f[7]) * h * 0.92 - h * 0.1;
+  }
+  return w + h * 0.1;
+}
+
 function drawHud() {
   if (game.mode === 'title') return;
   drawn.hud = true;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const narrow = cssW < 560;
   const top = 12 + safeTop();
-  // Lives: fish, or skeletons for the ones lost.
+  // Lives: big fish, or skeletons for the ones lost.
+  const lw = narrow ? 46 : 58;
   let x = 68 + safeLeft();
   for (let i = 0; i < MAX_LIVES; i++) {
     const name = i < game.lives ? 'fish_orange_outline' : 'fish_orange_skeleton';
     const f = FRAMES[name];
-    const w = 34, h = (f[7] / f[6]) * w;
-    ctx.globalAlpha = i < game.lives ? 1 : 0.75;
-    ctx.drawImage(atlas, f[0], f[1], f[2], f[3], x, top + 22 - h / 2, w, h);
-    x += 38;
+    const h = (f[7] / f[6]) * lw;
+    ctx.globalAlpha = i < game.lives ? 1 : 0.7;
+    ctx.drawImage(atlas, f[0], f[1], f[2], f[3], x, top + 22 - h / 2, lw, h);
+    x += lw + 6;
   }
   ctx.globalAlpha = 1;
-  // Score, left of the mute button.
-  const right = cssW - 68 - safeRight();
-  drawDigits(String(game.score), right, top + 4, 36, 'right');
+  // Score: beside the mute button on wide screens, on the second row on narrow ones.
+  const text = String(game.score);
+  const sh = narrow ? 40 : 50;
+  const right = narrow ? cssW - 16 - safeRight() : cssW - 68 - safeRight();
+  const sy = narrow ? top + 52 : top - 3;
+  drawDigits(text, right, sy, sh, 'right');
   if (game.comboShow > 0 && game.chain > 1) {
     const mult = Math.min(1 + (game.chain - 1) * 0.5, 4);
-    drawText('combo ×' + mult, right, top + 46, 20, 'right', Math.min(1, game.comboShow * 2));
+    drawText('combo \u00d7' + mult, right, sy + sh + 4, 22, 'right', Math.min(1, game.comboShow * 2));
   }
-  // Growth: how close you are to diving deeper.
-  const bw = Math.min(260, cssW - 48);
-  const bx = (cssW - bw) / 2;
-  const by = top + 64 + (cssW < 520 ? 10 : 0);
-  const prog = Math.min(1, game.xp / XP_TO_DIVE);
-  ctx.fillStyle = 'rgba(255,255,255,0.22)';
-  roundRect(bx, by, bw, 10, 5);
+  // Progress: a thick bar with a notch for each fish still to eat before diving deeper.
+  const bh = 24;
+  let bx, bw, by;
+  if (narrow) {
+    bx = 16 + safeLeft();
+    bw = Math.max(80, right - digitsWidth(text, sh) - 18 - bx);
+    by = sy + (sh - bh) / 2;
+  } else {
+    bw = Math.min(440, cssW * 0.42);
+    bx = (cssW - bw) / 2;
+    by = top + 64;
+  }
+  const n = goal();
+  const prog = Math.min(1, game.xp / n);
+  ctx.fillStyle = 'rgba(10,30,60,0.35)';
+  roundRect(bx - 3, by - 3, bw + 6, bh + 6, (bh + 6) / 2);
   ctx.fill();
-  ctx.fillStyle = '#ffd23f';
-  roundRect(bx, by, Math.max(10, bw * prog), 10, 5);
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  roundRect(bx, by, bw, bh, bh / 2);
   ctx.fill();
+  if (prog > 0) {
+    ctx.fillStyle = '#ffd23f';
+    roundRect(bx, by, Math.max(bh, bw * prog), bh, bh / 2);
+    ctx.fill();
+  }
+  if (n <= 40) {
+    ctx.fillStyle = 'rgba(10,30,60,0.28)';
+    for (let i = 1; i < n; i++) ctx.fillRect(bx + (bw * i) / n - 1, by + 4, 2, bh - 8);
+  }
   const f = FRAMES.fish_orange_outline;
-  const iw = 26, ih = (f[7] / f[6]) * iw;
-  ctx.drawImage(atlas, f[0], f[1], f[2], f[3], bx + bw * prog - iw / 2, by + 5 - ih / 2, iw, ih);
-  ctx.font = '700 12px system-ui, -apple-system, sans-serif';
+  const iw = 42, ih = (f[7] / f[6]) * iw;
+  ctx.drawImage(atlas, f[0], f[1], f[2], f[3], bx + bw * prog - iw / 2, by + bh / 2 - ih / 2, iw, ih);
+  ctx.font = '700 13px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillText(game.depth < DEPTHS.length ? depthDef().name : `${depthDef().name} · ${game.depth + 1}`, cssW / 2, by + 16);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText(game.depth < DEPTHS.length ? depthDef().name : `${depthDef().name} \u00b7 ${game.depth + 1}`, bx + bw / 2, by + bh + 8);
 }
 
 function roundRect(x, y, w, h, r) {
@@ -1564,16 +1773,6 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- UI ----------
 
-function showTitle() {
-  if (saved.best) {
-    ui.best.hidden = false;
-    ui.best.textContent = `Best: ${saved.best.toLocaleString('en-US')} points`;
-  }
-  const touch = window.matchMedia('(pointer: coarse)').matches;
-  ui.how.textContent = touch ? 'Drag anywhere on the screen to swim.' : 'Move the mouse, or use the arrow keys, to swim.';
-}
-
-ui.play.addEventListener('click', startGame);
 ui.again.addEventListener('click', startGame);
 
 function syncMute() {
@@ -1595,22 +1794,22 @@ atlas.decode().then(
   () => {
     resize();
     readInsets();
-    // The title screen: the reef going about its day.
-    for (let i = 0; i < targetPop(); i++) {
-      const f = spawnOne(Math.random() < 0.2);
+    // Straight into the game: no title card, you learn by doing.
+    startGame();
+    for (let i = 0; i < targetPop() * 0.4; i++) {
+      const f = spawnOne(false);
       f.x = rand(0, W);
       f.fade = 1;
     }
-    npcs.push(Object.assign(makePuffer(-1), { x: W * 0.7 }));
     farIn = 0.5;
-    showTitle();
     last = performance.now();
     requestAnimationFrame(frameLoop);
     // For tests and balance runs: read the state, and step the simulation without drawing.
     window.__reef = {
-      game, player, input, startGame, dive: beginDive, step: update, isFood, isThreat, makePuffer,
+      game, player, input, startGame, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
       npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }), drawn,
       set manual(v) { manual = v; },
+      marks: () => Object.fromEntries(Object.entries(SPECIES).map(([k, v]) => [k, v.mark || null])),
     };
   },
   () => {}

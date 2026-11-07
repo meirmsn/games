@@ -88,18 +88,13 @@ body {
   display: none;
 }
 
-.card h1,
 .card h2 {
   margin: 0 0 10px;
-  font-size: 44px;
+  font-size: 36px;
   line-height: 1;
   letter-spacing: -0.02em;
   color: #ffd23f;
   text-shadow: 0 2px 0 rgb(0 0 0 / 18%);
-}
-
-.card h2 {
-  font-size: 36px;
 }
 
 .card p {
@@ -107,12 +102,6 @@ body {
   line-height: 1.4;
 }
 
-.lead {
-  font-size: 17px;
-}
-
-.how,
-.best,
 .detail {
   font-size: 14px;
   opacity: 0.8;
@@ -143,10 +132,6 @@ body {
 .play:active {
   transform: translateY(3px);
   box-shadow: 0 1px 0 #d9a800;
-}
-
-.best {
-  margin: 12px 0 0;
 }
 
 .toast {
