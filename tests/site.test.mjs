@@ -49,10 +49,10 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('landing page lists six games with no errors', async () => {
+test('landing page lists seven games with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 6);
-  assert.equal(await page.locator('.tile h2').first().textContent(), 'Googly Faces');
+  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   await page.waitForLoadState('networkidle');
   assert.deepEqual(errors, []);
   await context.close();
@@ -109,7 +109,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 6);
+  assert.equal(await page.locator('.tiles > li').count(), 7);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
@@ -245,7 +245,7 @@ test('a playable tile plays its sound and opens its game', async () => {
   });
   await page.goto(BASE);
   await page.waitForFunction(() => window.__decoded >= 3);
-  await page.locator('a.tile').click();
+  await page.locator('a.tile[href="tests/fixtures/game/"]').click();
   await page.waitForURL(BASE + 'tests/fixtures/game/');
   await context.close();
 });

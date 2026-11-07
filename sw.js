@@ -7,7 +7,7 @@
 // load after (they refresh in the background). Bump VERSION when SHELL itself changes (a file added,
 // removed or renamed) so the new list is cached and the old cache is cleared.
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `games-${VERSION}`;
 const SHELL = [
   './',
@@ -26,6 +26,7 @@ const SHELL = [
   'assets/sounds/toggle.mp3',
   'assets/icons/favicon.png',
   'assets/icons/icon-192.png',
+  'assets/tiles/reef.png',
   'assets/tiles/googly-faces.png',
   'assets/tiles/pixel-leap.png',
   'assets/tiles/shooting-gallery.png',
