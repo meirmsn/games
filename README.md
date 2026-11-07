@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
+**Games:** [Reef](reef/), eat the orange, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
