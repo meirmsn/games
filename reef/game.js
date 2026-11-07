@@ -827,7 +827,6 @@ function finishRun() {
   const best = saved.best || 0;
   const newBest = game.score > best;
   if (newBest) saved.best = game.score;
-  saved.bestDepth = Math.max(saved.bestDepth || 0, game.depth + 1);
   store.write(saved);
   ui.overTitle.textContent = newBest && game.score > 0 ? 'New best!' : 'Eaten!';
   ui.finalScore.textContent = game.score.toLocaleString('en-US');
