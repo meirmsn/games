@@ -62,7 +62,7 @@ keeps the site's tokens.
 - **AC-18** Each depth brings its fish as listed in the decisions: blue, pink and green first; orange next; red at the Kelp Forest; grey at the Twilight Slope — `tests/reef.test.mjs`.
 - **AC-19** The blue predator has jaws, the red one a lure (with needle teeth), the grey one lightning; they are drawn, and food fish draw no mark — `tests/reef.test.mjs`.
 - **AC-20** Each level from L2 has its code (PEARL, SQUID, MANTA, ABYSS, then DEEP6 …); the game-over card shows the code for the level reached; typing a code on the start card, in any case, starts a run at that level, and a wrong code is refused with a message — `tests/reef.test.mjs`.
-- **AC-21** Losing a life sets off the HUD's show for that life, which settles within 1.5 s — `tests/reef.test.mjs`.
+- **AC-21** Losing a life sets off the HUD's show for that life: the icon pops out about three times its size and settles within 1.5 s — `tests/reef.test.mjs`.
 - **AC-22** Each world's water colour differs clearly from its neighbours'; the Twilight Slope's floor rises across the screen and has no plants; the Coral Garden and Kelp Forest are overgrown; only The Deep has bones — `tests/reef.test.mjs`.
 
 ## Core flow

@@ -1001,7 +1001,7 @@ function update(dt) {
     }
   }
   if (game.comboShow > 0) game.comboShow -= dt;
-  if (game.lifeLost && (game.lifeLost.t += dt) > 1.5) game.lifeLost = null;
+  if (game.lifeLost && (game.lifeLost.t += dt) >= 1.45) game.lifeLost = null;
   if (game.shake > 0) game.shake -= dt;
 }
 
@@ -1297,6 +1297,7 @@ function draw() {
   drawn.hud = false;
   drawn.wash = 0;
   drawn.marks = [];
+  drawn.lifePop = 1;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
   let sx = 0, sy = 0;
@@ -1838,6 +1839,7 @@ function drawHud() {
       }
       if (t < 0.45) name = 'fish_orange_outline';
       glow = ease;
+      drawn.lifePop = scale;
     }
     const f = FRAMES[name];
     const w = lw * scale, h = (f[7] / f[6]) * w;
@@ -1952,7 +1954,7 @@ const safeLeft = () => insets[2];
 let last = 0;
 let running = true;
 let manual = false; // tests drive the simulation themselves with step(); frames only draw
-const drawn = { hud: false, wash: 0, marks: [] }; // what the last frame drew, for tests
+const drawn = { hud: false, wash: 0, marks: [], lifePop: 1 }; // what the last frame drew, for tests
 function frameLoop(now) {
   if (!running) return;
   const raw = Math.min(0.05, (now - last) / 1000 || 0);

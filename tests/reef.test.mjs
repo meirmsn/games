@@ -550,8 +550,12 @@ test('AC-21: losing a life makes a show of it in the HUD', async () => {
   await startEmpty(page);
   await meet(page, 'blue', 70, 3);
   assert.deepEqual(await page.evaluate(() => window.__reef.game.lifeLost && window.__reef.game.lifeLost.slot), 2);
-  await steps(page, 100);
-  assert.equal(await page.evaluate(() => window.__reef.game.lifeLost), null, 'and settles after a moment');
+  await steps(page, 27); // half a second in: the icon is out, about three times its size
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  const pop = await page.evaluate(() => window.__reef.drawn.lifePop);
+  assert.ok(pop > 2.8, `the lost life pops out (${pop}×)`);
+  await steps(page, 60); // 90 frames in all: 1.5 s
+  assert.equal(await page.evaluate(() => window.__reef.game.lifeLost), null, 'settled within 1.5 s');
   await context.close();
 });
 
