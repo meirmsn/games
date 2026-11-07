@@ -42,10 +42,12 @@ async function open(opts = {}) {
 }
 
 // Start a game with the reef emptied, so a test controls exactly which fish are near the player.
+// The test then owns the clock: the page's frames only draw, and step() moves the simulation.
 async function startEmpty(page) {
   await page.click('[data-play]');
   await page.evaluate(() => {
     const r = window.__reef;
+    r.manual = true;
     r.npcs().length = 0;
     r.game.feastIn = 999;
     r.game.calm = -999;
@@ -53,6 +55,11 @@ async function startEmpty(page) {
     r.player.invul = 0;
   });
 }
+
+const steps = (page, n) =>
+  page.evaluate((n) => {
+    for (let i = 0; i < n; i++) window.__reef.step(1 / 60);
+  }, n);
 
 // Put a fish of the given size next to the player and run the simulation for a moment.
 async function meet(page, species, size, frames = 30) {
@@ -138,9 +145,13 @@ test('growing all the way dives to the next depth with an extra life back', asyn
   });
   await meet(page, 'pink', 30, 5);
   assert.equal(await page.evaluate(() => window.__reef.game.mode), 'dive');
+  await steps(page, 75); // past the swap to the new depth
   await page.evaluate(() => {
-    for (let i = 0; i < 160; i++) window.__reef.step(1 / 60);
+    const r = window.__reef;
+    r.npcs().length = 0; // nothing to eat on the way out, so xp stays at its reset value
+    r.game.spawnIn = 999;
   });
+  await steps(page, 85);
   const s = await page.evaluate(() => ({ mode: window.__reef.game.mode, depth: window.__reef.game.depth, lives: window.__reef.game.lives, xp: window.__reef.game.xp }));
   assert.deepEqual(s, { mode: 'play', depth: 1, lives: 3, xp: 0 });
   await context.close();
@@ -178,5 +189,102 @@ test('the reef works offline once it has been played', async () => {
   await page.waitForFunction(() => window.__reef);
   await page.click('[data-play]');
   assert.equal(await page.evaluate(() => window.__reef.game.mode), 'play');
+  await context.close();
+});
+
+test('a fish is worth (its size / yours) squared', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  const gain = async (size) => {
+    const before = await page.evaluate(() => window.__reef.game.xp);
+    const p = await page.evaluate(() => window.__reef.player.size);
+    const after = await meet(page, 'pink', size, 3);
+    return { gain: after.xp - before, ratio: size / p };
+  };
+  const small = await gain(20);
+  const big = await gain(30);
+  assert.ok(Math.abs(small.gain - small.ratio ** 2) < 0.01, `small fish: ${small.gain} vs ${small.ratio ** 2}`);
+  assert.ok(Math.abs(big.gain - big.ratio ** 2) < 0.01, `bigger fish: ${big.gain} vs ${big.ratio ** 2}`);
+  assert.ok(big.gain > small.gain * 1.8, 'the bigger fish is worth much more');
+  await context.close();
+});
+
+test('the assist fades while you do well', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => (window.__reef.game.assist = 0.5));
+  await steps(page, 600); // 10 s with no danger
+  const a = await page.evaluate(() => window.__reef.game.assist);
+  assert.ok(a < 0.47 && a > 0.4, `assist went from 0.5 to ${a}`);
+  await context.close();
+});
+
+test('an eel warns with bubbles first, then strikes across the reef', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.game.depth = 2; // Kelp Forest: eels
+    r.game.eelIn = 0;
+  });
+  await steps(page, 1);
+  const warn = await page.evaluate(() => {
+    const r = window.__reef;
+    const e = r.eels()[0];
+    e.y = r.player.y;
+    r.game.eelIn = 999;
+    return { state: e.state, t: e.t };
+  });
+  assert.equal(warn.state, 'warn');
+  assert.ok(warn.t >= 1.3, `warned ${warn.t} s ahead`);
+  await steps(page, 60);
+  assert.equal(await page.evaluate(() => window.__reef.game.lives), 3, 'no harm during the warning');
+  await steps(page, 180);
+  assert.equal(await page.evaluate(() => window.__reef.game.lives), 2, 'the eel caught the fish in its path');
+  await context.close();
+});
+
+test('a pufferfish puffs up when you come close, and bumps you away', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  const s = await page.evaluate(() => {
+    const r = window.__reef;
+    const p = r.player;
+    const f = r.makePuffer(-1);
+    Object.assign(f, { x: p.x + 70, y: p.y, vx: 0, fade: 1 });
+    r.npcs().push(f);
+    for (let i = 0; i < 20; i++) r.step(1 / 60);
+    const puff = f.puff;
+    const xp = (r.game.xp = 3);
+    f.x = p.x + 10;
+    f.y = p.y;
+    for (let i = 0; i < 3; i++) r.step(1 / 60);
+    return { puff, lives: r.game.lives, stun: p.stun, xpLost: xp - r.game.xp };
+  });
+  assert.ok(s.puff > 0.9, `puffed ${s.puff}`);
+  assert.equal(s.lives, 3, 'a bump is not a lost life');
+  assert.ok(s.stun > 0, 'stunned');
+  assert.ok(s.xpLost > 0, 'lost some growth');
+  await context.close();
+});
+
+test('a long calm brings a hunter in', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => (window.__reef.game.calm = 30));
+  await steps(page, 1);
+  const hunters = await page.evaluate(() => window.__reef.npcs().filter((n) => n.huntPlayer && window.__reef.isThreat(n)).length);
+  assert.equal(hunters, 1);
+  await context.close();
+});
+
+test('a passing school is a feast of fish you can eat', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => (window.__reef.game.feastIn = 0));
+  await steps(page, 1);
+  const school = await page.evaluate(() => window.__reef.npcs().map((n) => window.__reef.isFood(n)));
+  assert.ok(school.length >= 8, `${school.length} fish`);
+  assert.ok(school.every(Boolean), 'all of them edible');
   await context.close();
 });

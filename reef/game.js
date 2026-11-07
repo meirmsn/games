@@ -1100,9 +1100,9 @@ function updateNpc(n, dt) {
   if (Math.abs(n.vx) > 4) n.face = Math.sign(n.vx);
   n.faceT = lerp(n.faceT, n.face, Math.min(1, dt * 8));
   n.angle = lerp(n.angle, clamp(Math.atan2(n.vy, Math.abs(n.vx) + 20), -0.5, 0.5), Math.min(1, dt * 5));
-  // Leave by the far side.
+  // Leave by the far side (a fish still swimming in, like the tail of a school, stays).
   const m = n.size + 40;
-  if (n.x < -m || n.x > W + m) {
+  if ((n.x < -m && n.vx < 0) || (n.x > W + m && n.vx > 0)) {
     if (n.state === 'wander' || n.state === 'flee' || n.state === 'tired') removeFish(n, false);
     else n.x = clamp(n.x, -m, W + m);
   }
@@ -1528,6 +1528,7 @@ const safeLeft = () => insets[2];
 
 let last = 0;
 let running = true;
+let manual = false; // tests drive the simulation themselves with step(); frames only draw
 function frameLoop(now) {
   if (!running) return;
   const raw = Math.min(0.05, (now - last) / 1000 || 0);
@@ -1538,7 +1539,7 @@ function frameLoop(now) {
     dt = raw * 0.3;
   }
   if (atlas.complete && atlas.naturalWidth && bgCanvas) {
-    update(dt);
+    if (!manual) update(dt);
     draw();
   }
   requestAnimationFrame(frameLoop);
@@ -1601,7 +1602,11 @@ atlas.decode().then(
     last = performance.now();
     requestAnimationFrame(frameLoop);
     // For tests and balance runs: read the state, and step the simulation without drawing.
-    window.__reef = { game, player, npcs: () => npcs, eels: () => eels, input, startGame, dive: beginDive, step: update, isFood, isThreat, world: () => ({ W, H, yMin, yMax }) };
+    window.__reef = {
+      game, player, input, startGame, dive: beginDive, step: update, isFood, isThreat, makePuffer,
+      npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }),
+      set manual(v) { manual = v; },
+    };
   },
   () => {}
 );
