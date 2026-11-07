@@ -51,6 +51,14 @@ fi
 # This repo's own checks, from before the devshop: relative links in the docs, the service worker's
 # precache list and each page's local references, and the theme tokens the stylesheets use.
 part python3 scripts/check-links.py
+# Stricter than the secret scan's registry check: this repo's lockfile resolves only from npmjs.
+lockfile_npmjs_only() {
+  if grep -o '"resolved": "[^"]*"' package-lock.json | grep -v '"https://registry.npmjs.org/'; then
+    echo "package-lock.json: packages must resolve from https://registry.npmjs.org/"
+    return 1
+  fi
+}
+part lockfile_npmjs_only
 part python3 scripts/check-shell.py
 part node scripts/ui/tokens-check.mjs --theme assets/base.css assets/base.css assets/site.css shared/game-shell.css
 exit "$worst"
