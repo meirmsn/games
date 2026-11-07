@@ -288,3 +288,58 @@ test('AC-8: a passing school is a feast of fish you can eat', async () => {
   assert.ok(school.every(Boolean), 'all of them edible');
   await context.close();
 });
+
+test('AC-12: The Deep is dark, with a glow around the player', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.game.depth = 3;
+    r.dive();
+  });
+  await steps(page, 150); // through the dive into The Deep
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.npcs().length = 0;
+    r.game.spawnIn = 999;
+    r.player.x = r.world().W * 0.7;
+    r.player.y = r.world().H * 0.4;
+    r.player.invul = 0;
+  });
+  await page.waitForTimeout(300); // let frames draw
+  const lum = await page.evaluate(() => {
+    const r = window.__reef;
+    const c = document.getElementById('sea');
+    const g = c.getContext('2d');
+    const k = c.width / r.world().W;
+    const at = (x, y) => {
+      const d = g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data;
+      return d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11;
+    };
+    const y = r.player.y;
+    return { depth: r.game.depth, near: at(r.player.x - 70, y), far: at(r.player.x - 420, y) };
+  });
+  assert.equal(lum.depth, 4, 'in The Deep');
+  assert.ok(lum.near > lum.far * 1.5, `near the player ${lum.near}, far away ${lum.far}`);
+  await context.close();
+});
+
+test('AC-13: a new player starts with some help, and a hard run carries over', async () => {
+  const { context, page } = await open();
+  await page.click('[data-play]');
+  const first = await page.evaluate(() => window.__reef.game.assist);
+  assert.ok(first >= 0.4 && first <= 0.5, `first run starts at ${first}`);
+  const next = await page.evaluate(() => {
+    const r = window.__reef;
+    r.game.assist = 0.5;
+    r.startGame(); // 0.5 x 0.6 + 0.25
+    const second = r.game.assist;
+    r.game.assist = 1;
+    r.startGame(); // the third run: 1 x 0.6 + 0.05, no longer a new player
+    if (Math.abs(second - 0.55) > 0.001) return 'second run started at ' + second; // the second run: still a new player's bonus
+    return r.game.assist;
+  });
+  assert.equal(typeof next, 'number', String(next));
+  assert.ok(Math.abs(next - 0.65) < 0.001, `after a hard run: ${next}`);
+  await context.close();
+});

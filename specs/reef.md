@@ -23,7 +23,7 @@ keeps the site's tokens.
 - Five depths, each one darker and adding one thing: Sunlit Shallows, Coral Garden (pufferfish), Kelp Forest (eels, which warn with bubbles first), Twilight Reef (dimmer), The Deep (dark except for your glow). After that it carries on, slightly faster each time (owner, 2026-11-07).
 - A hidden assist (0 to 1) eases the game off when you struggle. Rejected: difficulty settings, which ask the player to judge themselves (owner, 2026-11-07). In full, as built and approved:
   - It rises by 0.3 when you're caught, and falls a little with each fish eaten and with every second without danger.
-  - New players (the first two runs) start at about 0.3. Each new run keeps 60% of the last run's assist, plus a small bonus.
+  - Each new run keeps 60% of the last run's assist, plus a bonus: 0.25 for a new player's first two runs, 0.05 after that. A run never starts above 0.7. A first run starts at about 0.43.
   - It makes predators slower, gives them shorter sight and spawns fewer of them. It also slows the eels, lengthens their warning, spaces them further apart, and lengthens the calm before a hunter comes in.
 - Pacing comes in waves: a hunter swims in after a long calm, and a school of small fish passes by as a feast about every half minute. Combos (up to ×4), close-call bonuses, a life back at each depth and a saved best score are the rewards (owner, 2026-11-07).
 - Touch steers by dragging anywhere (relative), so your finger never covers the fish; mouse follows the pointer; arrow keys and WASD also work (owner, 2026-11-07).
@@ -44,7 +44,8 @@ keeps the site's tokens.
 - **AC-9** Dragging on a touch screen steers the fish — `tests/reef.test.mjs`.
 - **AC-10** The reef plays offline once it has been played — `tests/reef.test.mjs`.
 - **AC-11** The landing page shows 7 tiles, Reef first and playable — `tests/site.test.mjs`.
-- **AC-12** The darkness of The Deep, with a glow around the player — verified by review: the screenshot "The Deep" on the PR.
+- **AC-12** The Deep is dark, with a glow around the player: the water near the player is clearly lighter than the water far from it at the same height — `tests/reef.test.mjs`.
+- **AC-13** A new player's first run starts with the assist at 0.4–0.5, and a run after a hard one (assist 1) starts with 60% of it plus the bonus, capped at 0.7 — `tests/reef.test.mjs`.
 
 ## Core flow
 
