@@ -1,7 +1,7 @@
-// Reef: eat the orange, green and pink fish, dodge everything with teeth, dive deeper.
+// Reef: eat the golden, green and pink fish, dodge everything with teeth, dive deeper.
 //
 // How the challenge is kept "just right" (flow), in one place so it can be tuned:
-//  - Food is told by colour, not by reading sizes: orange, green and pink fish are food; the rest
+//  - Food is told by colour, not by reading sizes: golden, green and pink fish are food; the rest
 //    have teeth and bite. You learn it in the first seconds, by doing.
 //  - Depths get longer as you go: 4 fish to clear the first, then 7, 11, 15, 20 and 5 more each
 //    after that, so the first win comes fast and the challenge builds from there.
@@ -62,28 +62,30 @@ const DEPTHS = [
     ground: 'sand', weeds: ['green', 'grass', 'orange'], weedDensity: 0.9, rockCount: 1,
   },
   {
-    name: 'Coral Garden', goal: 7, code: 'PEARL',
+    name: 'Coral Garden', goal: 7, code: 'PERCH',
     top: [255, 204, 178], bottom: [196, 88, 112], farTint: 0.8,
     food: ['pink', 'green', 'orange'], danger: ['blue'],
     threat: 0.18, puffers: 1, eel: null, dark: 0, rays: 0.9,
     ground: 'sand', weeds: ['pink', 'orange', 'pink', 'orange'], weedDensity: 3, rockCount: 3,
   },
   {
-    name: 'Kelp Forest', goal: 11, code: 'SQUID',
+    name: 'Kelp Forest', goal: 11, code: 'KRILL',
     top: [104, 186, 150], bottom: [20, 82, 78],
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
     threat: 0.22, puffers: 1, eel: [20, 28], dark: 0.06, rays: 0.6, kelp: true,
+    current: { dir: 1, speed: 150, from: 0, to: 0.36 }, // a rip current across the top third
     ground: 'sand', weeds: ['green', 'green', 'grass'], weedDensity: 2.4, rockCount: 1,
   },
   {
-    name: 'Twilight Slope', goal: 15, code: 'MANTA',
+    name: 'Twilight Slope', goal: 15, code: 'TROUT',
     top: [110, 96, 176], bottom: [30, 20, 74], farTint: 0.7,
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
     threat: 0.25, puffers: 2, eel: [16, 24], dark: 0.25, rays: 0.25, slope: 0.34,
+    current: { dir: -1, speed: 70, from: 0, to: 1 }, // the whole sea flows left, against you
     ground: 'dirt', weeds: [], weedDensity: 0, rockCount: 6,
   },
   {
-    name: 'The Deep', goal: 20, code: 'ABYSS',
+    name: 'The Deep', goal: 20, code: 'GLOOM',
     top: [16, 24, 40], bottom: [2, 4, 10],
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
     threat: 0.28, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0, bones: true,
@@ -91,14 +93,15 @@ const DEPTHS = [
   },
 ];
 
-// The code for a depth (0-based); past the fifth, DEEP and its level number.
-const codeFor = (n) => (n < DEPTHS.length ? DEPTHS[n].code : 'DEEP' + (n + 1));
+// The code for a depth (0-based); past the fifth, REEF and its level number. Codes never use W,
+// A, S or D, the keys that also steer the fish.
+const codeFor = (n) => (n < DEPTHS.length ? DEPTHS[n].code : 'REEF' + (n + 1));
 function depthForCode(text) {
   const c = String(text || '').trim().toUpperCase();
   if (!c) return -1;
   const i = DEPTHS.findIndex((d) => d.code === c);
   if (i > 0) return i;
-  const m = /^DEEP(\d{1,2})$/.exec(c);
+  const m = /^REEF(\d{1,2})$/.exec(c);
   if (m && Number(m[1]) > DEPTHS.length) return Number(m[1]) - 1;
   return -1;
 }
@@ -235,6 +238,7 @@ let bubbles = [];
 let skeletons = [];
 let popups = [];
 let snow = [];
+let streaks = []; // faint lines that show where a current flows
 let farFish = [];
 let eels = [];
 let weedsFar = [];
@@ -252,6 +256,17 @@ const player = {
   x: 0, y: 0, vx: 0, vy: 0, size: PLAYER_BASE, face: 1, faceT: 1, angle: 0,
   invul: 0, stun: 0, gulp: 0, alive: false, trail: 0, hurt: 0, safe: null, waiting: false,
 };
+
+// The water's flow at height y, in units a second (positive is to the right). A current fills a
+// band of the screen, fades out at its edges, and surges a little.
+function currentAt(y) {
+  const c = depthDef().current;
+  if (!c) return 0;
+  const f = y / H, edge = 0.06;
+  const inBand = f < c.from ? 1 - (c.from - f) / edge : f > c.to ? 1 - (f - c.to) / edge : 1;
+  if (inBand <= 0) return 0;
+  return c.dir * c.speed * Math.min(1, inBand) * (1 + 0.25 * Math.sin(time * 0.6));
+}
 
 // The sea floor's height at x: flat, except on a sloped depth, where it rises to the right.
 const groundAt = (x) => groundY - (depthDef().slope || 0) * H * clamp(x / W, 0, 1);
@@ -408,6 +423,14 @@ function buildScenery() {
   const nRays = Math.round(W / 220) + 2;
   for (let i = 0; i < nRays; i++) rays.push({ x: rr(-0.1, 1) * W, w: rr(30, 90), ph: rr(0, 6), sp: rr(0.1, 0.25) });
 
+  // A current shows as faint streaks moving through its band.
+  streaks = [];
+  if (d.current) {
+    const n = Math.round((W * H * (d.current.to - d.current.from)) / 9000);
+    for (let i = 0; i < n; i++) {
+      streaks.push({ x: rand(0, W), y: rand(d.current.from, d.current.to) * H, len: rand(30, 90), k: rand(1.1, 1.8), a: rand(0.12, 0.3) });
+    }
+  }
   snow = [];
   for (let i = 0; i < Math.round((W * H) / 9000); i++) snow.push({ x: rand(0, W), y: rand(0, H), r: rand(0.6, 1.8), vy: rand(3, 10), ph: rand(0, 6) });
 
@@ -621,6 +644,8 @@ canvas.addEventListener('pointercancel', endDrag);
 
 const KEYS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1], a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1], A: [-1, 0], D: [1, 0], W: [0, -1], S: [0, 1] };
 window.addEventListener('keydown', (e) => {
+  // Typing a level code is typing, not steering.
+  if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   if (KEYS[e.key]) {
     input.keys.add(e.key);
     input.target = null;
@@ -652,7 +677,7 @@ function showStart() {
   ui.start.hidden = false;
   ui.codeForm.classList.remove('wrong');
   ui.code.value = '';
-  ui.codeMsg.textContent = saved.code ? `Your last code: ${saved.code}` : '';
+  ui.codeMsg.textContent = ''; // no reminder of past codes: remembering them is part of the game
 }
 
 function startGame(depth = 0) {
@@ -685,7 +710,7 @@ function startGame(depth = 0) {
   player.invul = Infinity;
   if (!stopMusic) stopMusic = sound.loop('music', { gain: 0.32 });
   // Start among food only; the first predators arrive from the edges, where you can see them coming.
-  npcs = npcs.filter((n) => !isThreat(n) || Math.hypot(n.x - player.x, n.y - player.y) > 320);
+  npcs = npcs.filter((n) => (!isThreat(n) || Math.hypot(n.x - player.x, n.y - player.y) > 320) && (n.kind !== 'puffer' || depthDef().puffers > 0));
   for (let i = 0; i < targetPop() * 0.4; i++) spawnOne(false).x = rand(W * 0.05, W * 0.95);
 }
 
@@ -832,11 +857,6 @@ function beginDive() {
 
 function finishDiveSwap() {
   game.depth += 1;
-  if (game.depth > (saved.maxDepth || 0)) {
-    saved.maxDepth = game.depth;
-    saved.code = codeFor(game.depth);
-    store.write(saved);
-  }
   game.xp = 0;
   game.lives = Math.min(MAX_LIVES, game.lives + 1);
   game.calm = 0;
@@ -878,7 +898,7 @@ function update(dt) {
       game.spawnIn = rand(0.5, 1.4);
     }
     const puffers = npcs.filter((n) => n.kind === 'puffer').length;
-    if (puffers < (game.mode === 'title' ? 1 : d.puffers) && Math.random() < dt * 0.15) npcs.push(makePuffer(Math.random() < 0.5 ? -1 : 1));
+    if (puffers < d.puffers && Math.random() < dt * 0.15) npcs.push(makePuffer(Math.random() < 0.5 ? -1 : 1));
   }
 
   if (game.mode === 'play' && !player.waiting) {
@@ -951,21 +971,29 @@ function update(dt) {
   for (const b of bubbles) {
     b.life += dt;
     b.y -= b.vy * dt;
-    b.x += Math.sin(b.life * 3 + b.ph) * 12 * dt;
+    b.x += (Math.sin(b.life * 3 + b.ph) * 12 + currentAt(b.y) * 0.7) * dt;
   }
   bubbles = bubbles.filter((b) => b.y > -10);
   for (const s of snow) {
     s.y += s.vy * dt;
-    s.x += Math.sin(time * 0.4 + s.ph) * 4 * dt;
+    s.x += (Math.sin(time * 0.4 + s.ph) * 4 + currentAt(s.y) * 0.8) * dt;
+    if (s.x < -10) s.x += W + 20;
+    else if (s.x > W + 10) s.x -= W + 20;
     if (s.y > H) {
       s.y = -4;
       s.x = rand(0, W);
     }
   }
   updateFar(dt);
+  for (const st of streaks) {
+    st.x += currentAt(st.y) * st.k * dt;
+    if (st.x < -100) st.x += W + 200;
+    else if (st.x > W + 100) st.x -= W + 200;
+  }
   for (const sk of skeletons) {
     if (sk.y < groundAt(sk.x) + 6) {
       sk.y += sk.vy * dt;
+      sk.x += currentAt(sk.y) * 0.5 * dt;
       sk.rot += sk.vr * dt;
       sk.vr *= 1 - dt * 0.8;
     } else {
@@ -1042,7 +1070,9 @@ function updatePlayer(dt) {
   const k = Math.min(1, dt * 7);
   player.vx += (tx - player.vx) * k;
   if (game.mode !== 'dive') player.vy += (ty - player.vy) * k;
-  player.x = clamp(player.x + player.vx * dt, 12, W - 12);
+  // A current carries the fish along with it; swimming against it is slow going.
+  const flow = game.mode === 'play' && !player.waiting ? currentAt(player.y) : 0;
+  player.x = clamp(player.x + (player.vx + flow) * dt, 12, W - 12);
   player.y = clamp(player.y + player.vy * dt, yMin, game.mode === 'dive' ? H + 80 : groundAt(player.x) + 4);
   // Keep a touch target from drifting off when the fish is pinned against a wall.
   if (input.target && !input.drag) {
@@ -1215,7 +1245,9 @@ function updateNpc(n, dt) {
   const k = Math.min(1, dt * resp);
   n.vx += (tvx - n.vx) * k;
   n.vy += (tvy - n.vy) * k;
-  n.x += n.vx * dt;
+  const flow = currentAt(n.y) * 0.5;
+  const cap = Math.max(10, n.speed * 0.6); // drifted, but never swept off backwards
+  n.x += (n.vx + clamp(flow, -cap, cap)) * dt;
   n.y += n.vy * dt;
   const r = radius(n);
   if (n.y < yMin + r * 0.5) {
@@ -1392,6 +1424,21 @@ function draw() {
     ctx.restore();
   }
 
+  // The current's streaks
+  if (streaks.length) {
+    ctx.lineCap = 'round';
+    ctx.lineWidth = 2;
+    for (const st of streaks) {
+      if (st.y > groundAt(st.x) - 6) continue; // water only, not the sea floor
+      const dir = Math.sign(currentAt(st.y)) || 1;
+      ctx.strokeStyle = `rgba(255,255,255,${st.a})`;
+      ctx.beginPath();
+      ctx.moveTo(st.x, st.y);
+      ctx.lineTo(st.x - dir * st.len, st.y + Math.sin(st.x * 0.02) * 3);
+      ctx.stroke();
+    }
+  }
+
   // Front seaweed sways in front of everything
   for (const w of weedsFront) drawWeed(w, 0.1);
 
@@ -1435,7 +1482,10 @@ function drawSurface() {
 }
 
 function drawWeed(w, amp, color) {
-  const shear = Math.sin(time * 0.9 + w.ph) * amp + Math.sin(time * 2.1 + w.ph * 2) * amp * 0.25;
+  // Plants lean with a current flowing past their tips.
+  const tipY = w.y - FRAMES[w.name][7] * w.k * 0.8;
+  const lean = -currentAt(tipY) / 600;
+  const shear = Math.sin(time * 0.9 + w.ph) * amp + Math.sin(time * 2.1 + w.ph * 2) * amp * 0.25 + lean;
   ctx.save();
   ctx.transform(1, 0, shear, 1, w.x, w.y);
   if (color) {
@@ -1627,6 +1677,51 @@ function withNeedles(species) {
   return c;
 }
 
+// The orange food fish, recoloured golden yellow so it can't be mistaken for the player's orange
+// fish: a hue shift toward yellow and a little lighter, done once on the sprite's pixels.
+const recolourCache = new Map();
+function golden(name) {
+  let c = recolourCache.get(name);
+  if (c) return c;
+  const f = FRAMES[name];
+  c = document.createElement('canvas');
+  c.width = f[2];
+  c.height = f[3];
+  const g = c.getContext('2d');
+  g.drawImage(atlas, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    let r = d[i] / 255, gr = d[i + 1] / 255, b = d[i + 2] / 255;
+    const max = Math.max(r, gr, b), min = Math.min(r, gr, b), l = (max + min) / 2;
+    let h = 0, sat = 0;
+    if (max !== min) {
+      const dd = max - min;
+      sat = l > 0.5 ? dd / (2 - max - min) : dd / (max + min);
+      h = max === r ? (gr - b) / dd + (gr < b ? 6 : 0) : max === gr ? (b - r) / dd + 2 : (r - gr) / dd + 4;
+      h /= 6;
+    }
+    h = (h + 13 / 360) % 1; // orange to golden yellow
+    const L = Math.min(1, l * 1.05);
+    const hue = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = L < 0.5 ? L * (1 + sat) : L + sat - L * sat, p2 = 2 * L - q;
+    d[i] = hue(p2, q, h + 1 / 3) * 255;
+    d[i + 1] = hue(p2, q, h) * 255;
+    d[i + 2] = hue(p2, q, h - 1 / 3) * 255;
+  }
+  g.putImageData(img, 0, 0);
+  recolourCache.set(name, c);
+  return c;
+}
+
 function drawNpc(n) {
   const sp = Math.hypot(n.vx, n.vy) / 200;
   ctx.save();
@@ -1646,6 +1741,10 @@ function drawNpc(n) {
       const f = FRAMES['fish_' + n.species];
       const h = (f[7] / f[6]) * n.size;
       ctx.drawImage(c, -n.size / 2, -h / 2, n.size, h);
+    } else if (n.species === 'orange') {
+      const f = FRAMES.fish_orange;
+      const h = (f[7] / f[6]) * n.size;
+      ctx.drawImage(golden('fish_orange'), -n.size / 2, -h / 2, n.size, h);
     } else drawCentered('fish_' + n.species, n.size);
     if (mark === 'lure') drawLure(n);
     else if (mark === 'zap') drawZap(n);
@@ -2037,7 +2136,7 @@ atlas.decode().then(
     requestAnimationFrame(frameLoop);
     // For tests and balance runs: read the state, and step the simulation without drawing.
     window.__reef = {
-      game, player, input, startGame, showStart, codeFor, depthForCode, depths: DEPTHS, groundAt, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
+      game, player, input, startGame, showStart, codeFor, depthForCode, depths: DEPTHS, groundAt, currentAt, golden, frame, atlas, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
       npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }), drawn,
       set manual(v) { manual = v; },
       marks: () => Object.fromEntries(Object.entries(SPECIES).map(([k, v]) => [k, v.mark || null])),

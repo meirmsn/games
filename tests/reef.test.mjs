@@ -526,14 +526,20 @@ test('AC-19: each predator has its own mark, and food has none', async () => {
 test('AC-20: level codes: the game-over card shows one, and entering it starts at that level', async () => {
   const { context, page } = await open();
   const codes = await page.evaluate(() => [1, 2, 3, 4, 5, 6].map((d) => window.__reef.codeFor(d)));
-  assert.deepEqual(codes, ['PEARL', 'SQUID', 'MANTA', 'ABYSS', 'DEEP6', 'DEEP7']);
+  assert.deepEqual(codes, ['PERCH', 'KRILL', 'TROUT', 'GLOOM', 'REEF6', 'REEF7']);
+  assert.ok(codes.every((c) => !/[WASD]/.test(c)), 'no code uses the keys that steer');
+  // Typing in the code box types, even the steering keys, and doesn't steer the fish.
+  await page.click('[data-code]');
+  await page.keyboard.type('wasd');
+  assert.equal(await page.inputValue('[data-code]'), 'WASD');
+  assert.equal(await page.evaluate(() => window.__reef.input.keys.size), 0, 'no steering keys held');
   // A wrong code is refused, and the card stays.
   await page.fill('[data-code]', 'tuna');
   await page.click('.go');
   assert.equal(await page.evaluate(() => window.__reef.game.mode), 'title');
   assert.match(await page.locator('[data-code-msg]').textContent(), /doesn.t open/);
   // A right one (any case) starts at its level.
-  await page.fill('[data-code]', 'squid');
+  await page.fill('[data-code]', 'krill');
   await page.click('.go');
   assert.deepEqual(await page.evaluate(() => ({ mode: window.__reef.game.mode, depth: window.__reef.game.depth })), { mode: 'play', depth: 2 });
   // Losing there shows that level's code.
@@ -541,8 +547,13 @@ test('AC-20: level codes: the game-over card shows one, and entering it starts a
   await page.evaluate(() => (window.__reef.game.lives = 1));
   await meet(page, 'red', 150, 5);
   await steps(page, 120);
-  assert.equal(await page.locator('[data-level-code-value]').textContent(), 'SQUID');
+  assert.equal(await page.locator('[data-level-code-value]').textContent(), 'KRILL');
   assert.match(await page.locator('[data-level-code-label]').textContent(), /L3/);
+  // The start card doesn't remind you of it: you have to remember it.
+  await page.click('[data-again]');
+  await page.locator('[data-screen="start"]').waitFor();
+  assert.equal(await page.locator('[data-code-msg]').textContent(), '');
+  assert.equal(await page.inputValue('[data-code]'), '');
   await context.close();
 });
 
@@ -578,5 +589,66 @@ test('AC-22: each world looks different from the one before', async () => {
   assert.equal(w.plants[3], 0, 'the slope is bare');
   assert.ok(w.plants[1] >= 3 && w.plants[2] >= 2, 'the coral and the kelp are overgrown');
   assert.deepEqual(w.bones, [false, false, false, false, true]);
+  await context.close();
+});
+
+test('AC-23: currents: a rip across the top third of L3, the whole sea flowing at L4', async () => {
+  const { context, page } = await open();
+  const flows = await page.evaluate(() => {
+    const r = window.__reef;
+    const { H } = r.world();
+    const at = (d, f) => {
+      r.game.depth = d;
+      return Math.round(r.currentAt(H * f));
+    };
+    const out = { l1: at(0, 0.5), l3top: at(2, 0.15), l3low: at(2, 0.7), l4top: at(3, 0.15), l4low: at(3, 0.7) };
+    r.game.depth = 0;
+    return out;
+  });
+  assert.equal(flows.l1, 0, 'no current in L1');
+  assert.ok(flows.l3top > 100 && flows.l3low === 0, `L3: ${flows.l3top} at the top, ${flows.l3low} below`);
+  assert.ok(flows.l4top < -40 && flows.l4low < -40, `L4: ${flows.l4top} and ${flows.l4low}, both flowing left`);
+  // A fish left alone at L4 is carried along with it.
+  await page.evaluate(() => window.__reef.startGame(3));
+  await startEmpty(page);
+  const before = await page.evaluate(() => {
+    const r = window.__reef;
+    r.player.x = r.world().W * 0.7;
+    return r.player.x;
+  });
+  await steps(page, 120);
+  const after = await page.evaluate(() => window.__reef.player.x);
+  assert.ok(before - after > 60, `carried left from ${before} to ${after}`);
+  await context.close();
+});
+
+test('AC-24: L1 has no pufferfish, even behind the start card', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => (window.__reef.manual = true));
+  await steps(page, 1800); // 30 s of the start card
+  assert.equal(await page.evaluate(() => window.__reef.npcs().filter((n) => n.kind === 'puffer').length), 0);
+  assert.equal(await page.evaluate(() => window.__reef.depths[0].puffers), 0);
+  await context.close();
+});
+
+test('AC-25: orange food fish are golden, clearly unlike the player\'s orange', async () => {
+  const { context, page } = await open();
+  const tone = await page.evaluate(() => {
+    const avg = (c) => {
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let r = 0, g = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { r += d[i]; g += d[i + 1]; n++; }
+      return g / r;
+    };
+    const gold = avg(window.__reef.golden('fish_orange'));
+    // The player's sprite, straight from the atlas.
+    const f = window.__reef.frame('fish_orange_outline');
+    const c = document.createElement('canvas');
+    c.width = f[2];
+    c.height = f[3];
+    c.getContext('2d').drawImage(window.__reef.atlas, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+    return { gold, player: avg(c) };
+  });
+  assert.ok(tone.gold - tone.player > 0.15, `green-to-red: golden ${tone.gold.toFixed(2)}, player ${tone.player.toFixed(2)}`);
   await context.close();
 });
