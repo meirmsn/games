@@ -29,6 +29,7 @@ keeps the site's tokens.
 - Touch steers by dragging anywhere (relative), so your finger never covers the fish; mouse follows the pointer; arrow keys and WASD also work (owner, 2026-11-07).
 - Three lives. A pufferfish bump costs some growth, not a life (owner, 2026-11-07).
 - Reef's tile goes first on the landing page, which now shows 7 tiles. This supersedes the six-tile layout in the decisions log (owner, 2026-11-07).
+- Changed after the go, approved by the owner in the chat on 2026-11-07 ("Approve as it stands"): the assist decision spelled out in full (starting level, carry-over between runs, cap, effect on eels and hunters), AC-12 changed from a screenshot review to a test, and AC-13 and AC-14 added. No gameplay changed with them (owner, 2026-11-07).
 - The game's palette is its own: sea gradients per depth and the pack's yellow (#ffd23f) for buttons and highlights. The game has no dark theme, because the sea is its background (owner, 2026-11-07).
 
 ## Acceptance items
@@ -46,6 +47,7 @@ keeps the site's tokens.
 - **AC-11** The landing page shows 7 tiles, Reef first and playable — `tests/site.test.mjs`.
 - **AC-12** The Deep is dark, with a glow around the player: the water near the player is clearly lighter than the water far from it at the same height — `tests/reef.test.mjs`.
 - **AC-13** A new player's first run starts with the assist at 0.4–0.5, and a run after a hard one (assist 1) starts with 60% of it plus the bonus, capped at 0.7 — `tests/reef.test.mjs`.
+- **AC-14** Each state shows only its own card, as in the state table — `tests/reef.test.mjs`.
 
 ## Core flow
 
@@ -53,6 +55,15 @@ keeps the site's tokens.
 2. Swim: eat smaller fish, dodge bigger ones, grow.
 3. Grow full: dive to the next depth.
 4. Lose the last life: see the score and swim again.
+
+## States
+
+| State | Title card | Game-over card | Lives, score and growth bar |
+| ----- | ---------- | -------------- | --------------------------- |
+| Title (the reef swims on behind) | shown | hidden | hidden |
+| Playing | hidden | hidden | shown |
+| Diving to the next depth | hidden | hidden | shown, under a wash of the deeper colour |
+| Game over (a moment after the last life) | hidden | shown, with the score and depth reached | shown |
 
 ## Out of scope
 

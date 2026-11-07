@@ -343,3 +343,32 @@ test('AC-13: a new player starts with some help, and a hard run carries over', a
   assert.ok(Math.abs(next - 0.65) < 0.001, `after a hard run: ${next}`);
   await context.close();
 });
+
+test('AC-14: each state shows only its own card', async () => {
+  const { context, page } = await open();
+  const cards = () =>
+    page.evaluate(() => ({
+      mode: window.__reef.game.mode,
+      title: !document.querySelector('[data-screen="title"]').hidden,
+      over: !document.querySelector('[data-screen="over"]').hidden,
+    }));
+  assert.deepEqual(await cards(), { mode: 'title', title: true, over: false });
+  await startEmpty(page);
+  assert.deepEqual(await cards(), { mode: 'play', title: false, over: false });
+  await page.evaluate(() => window.__reef.dive());
+  assert.deepEqual(await cards(), { mode: 'dive', title: false, over: false });
+  await steps(page, 160);
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.npcs().length = 0;
+    r.game.spawnIn = 999;
+    r.game.lives = 1;
+    r.player.invul = 0;
+  });
+  await meet(page, 'red', 150, 5);
+  assert.deepEqual(await cards(), { mode: 'over', title: false, over: false }, 'the card waits a moment');
+  await steps(page, 120);
+  assert.deepEqual(await cards(), { mode: 'over', title: false, over: true });
+  assert.match(await page.locator('[data-final-detail]').textContent(), /Reached Coral Garden/);
+  await context.close();
+});
