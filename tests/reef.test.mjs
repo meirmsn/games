@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
-const PORT = 8900 + Math.floor(Math.random() * 90);
+// Its own port range: the test files run in parallel, and a shared range can collide.
+const PORT = 9100 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}/`;
 let server;
 let browser;
