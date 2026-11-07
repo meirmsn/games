@@ -154,6 +154,12 @@ test('AC-5: growing all the way dives to the next depth with an extra life back'
   await steps(page, 85);
   const s = await page.evaluate(() => ({ mode: window.__reef.game.mode, depth: window.__reef.game.depth, lives: window.__reef.game.lives, xp: window.__reef.game.xp }));
   assert.deepEqual(s, { mode: 'play', depth: 1, lives: 3, xp: 0 });
+  // A second dive with all 3 lives still leaves 3: the life back is capped.
+  await page.evaluate(() => (window.__reef.game.xp = 9.99));
+  await meet(page, 'pink', 30, 5);
+  await steps(page, 160);
+  const again = await page.evaluate(() => ({ depth: window.__reef.game.depth, lives: window.__reef.game.lives }));
+  assert.deepEqual(again, { depth: 2, lives: 3 });
   await context.close();
 });
 
@@ -326,21 +332,20 @@ test('AC-12: The Deep is dark, with a glow around the player', async () => {
 
 test('AC-13: a new player starts with some help, and a hard run carries over', async () => {
   const { context, page } = await open();
-  await page.click('[data-play]');
+  await page.click('[data-play]'); // first run
   const first = await page.evaluate(() => window.__reef.game.assist);
   assert.ok(first >= 0.4 && first <= 0.5, `first run starts at ${first}`);
-  const next = await page.evaluate(() => {
+  const runs = await page.evaluate(() => {
     const r = window.__reef;
-    r.game.assist = 0.5;
-    r.startGame(); // 0.5 x 0.6 + 0.25
+    r.game.assist = 1;
+    r.startGame(); // second run, still a new player: 1 x 0.6 + 0.25 = 0.85, capped at 0.7
     const second = r.game.assist;
     r.game.assist = 1;
-    r.startGame(); // the third run: 1 x 0.6 + 0.05, no longer a new player
-    if (Math.abs(second - 0.55) > 0.001) return 'second run started at ' + second; // the second run: still a new player's bonus
-    return r.game.assist;
+    r.startGame(); // third run: 1 x 0.6 + 0.05
+    return { second, third: r.game.assist };
   });
-  assert.equal(typeof next, 'number', String(next));
-  assert.ok(Math.abs(next - 0.65) < 0.001, `after a hard run: ${next}`);
+  assert.ok(Math.abs(runs.second - 0.7) < 0.001, `capped at 0.7: ${runs.second}`);
+  assert.ok(Math.abs(runs.third - 0.65) < 0.001, `after a hard run: ${runs.third}`);
   await context.close();
 });
 
