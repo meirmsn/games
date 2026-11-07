@@ -2,6 +2,8 @@
 
 Play at **https://games.meirmsn.dev**
 
+**Games:** [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
+
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
 - **[Discussion](discussion/README.md):** the direction, game ideas, asset galleries and decisions log behind the games.
@@ -12,7 +14,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 |---|---|
 | `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
 | `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, and offline play once a page has loaded |
-| `shared/` | Shared by every game: `sound.js` (sound that works on phones) and `game-shell.js`/`.css` (the back button and full-screen frame) |
+| `shared/` | Shared by every game: `sound.js` (sound that works on phones) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
@@ -22,7 +24,7 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 ## Adding a game
 
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
-2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge.
+2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge. Draw its tile picture from the game itself where you can, so they look alike: `node scripts/make-tile.mjs` does this for Googly Faces.
 3. Nothing to do in `sw.js`: a game's files are cached the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list.
 4. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
 
