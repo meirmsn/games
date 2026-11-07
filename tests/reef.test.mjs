@@ -484,5 +484,20 @@ test('AC-19: each predator has its own mark, and food has none', async () => {
   const { context, page } = await open();
   const marks = await page.evaluate(() => window.__reef.marks());
   assert.deepEqual(marks, { pink: null, green: null, orange: null, blue: 'jaws', red: 'lure', grey: 'spark' });
+  // ...and they are drawn: one of each predator and each food fish on screen.
+  await startEmpty(page);
+  const drawn = await page.evaluate(async () => {
+    const r = window.__reef;
+    const { W, H } = r.world();
+    const mk = (species, x) => ({ kind: 'fish', species, size: 60, x, y: H * 0.5, vx: 0, vy: 0, dir: 1, speed: 0, face: 1, faceT: 1, angle: 0, ph: 0, state: 'tired', t: 99, cool: 99, stamina: 0, leader: null, ox: 0, oy: 0, near: false, sated: 99, fade: 1, huntT: 0, prey: null });
+    r.player.x = -999;
+    ['pink', 'green', 'orange'].forEach((k, i) => r.npcs().push(mk(k, W * (0.1 + i * 0.1))));
+    const foodOnly = await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res([...r.drawn.marks]))));
+    ['blue', 'red', 'grey'].forEach((k, i) => r.npcs().push(mk(k, W * (0.5 + i * 0.15))));
+    const all = await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => res([...r.drawn.marks]))));
+    return { foodOnly, all: all.sort() };
+  });
+  assert.deepEqual(drawn.foodOnly, [], 'food fish draw no mark');
+  assert.deepEqual(drawn.all, ['jaws', 'lure', 'spark']);
   await context.close();
 });

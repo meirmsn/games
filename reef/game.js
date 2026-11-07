@@ -1214,6 +1214,7 @@ function draw() {
   const d = depthDef();
   drawn.hud = false;
   drawn.wash = 0;
+  drawn.marks = [];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
   let sx = 0, sy = 0;
@@ -1501,6 +1502,7 @@ function drawNpc(n) {
   } else {
     fishTransform(n.x, n.y, n.faceT, n.angle, n.size, n.ph, Math.min(1, sp), n.gulp);
     const mark = SPECIES[n.species].mark;
+    if (mark && !drawn.marks.includes(mark)) drawn.marks.push(mark);
     if (mark === 'jaws') {
       const c = withTeeth(n.species);
       const f = FRAMES['fish_' + n.species];
@@ -1742,7 +1744,7 @@ const safeLeft = () => insets[2];
 let last = 0;
 let running = true;
 let manual = false; // tests drive the simulation themselves with step(); frames only draw
-const drawn = { hud: false, wash: 0 }; // what the last frame drew, for tests
+const drawn = { hud: false, wash: 0, marks: [] }; // what the last frame drew, for tests
 function frameLoop(now) {
   if (!running) return;
   const raw = Math.min(0.05, (now - last) / 1000 || 0);
