@@ -233,14 +233,24 @@ test('the landing tile opens the game', async () => {
 });
 
 // Wait until the service worker's cache holds a URL, or fail after 10 s instead of hanging.
-const cached = (page, url) =>
-  page.waitForFunction(async (u) => !!(await caches.match(u)), url, { timeout: 10000 });
+// (Not waitForFunction: it takes the promise an async predicate returns as true at once.)
+async function cached(page, url) {
+  const found = await page.evaluate(async (u) => {
+    for (let i = 0; i < 100; i++) {
+      if (await caches.match(u)) return true;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return false;
+  }, url);
+  assert.ok(found, `${url} is cached`);
+}
 
 test('it works offline after one visit straight from a link', async () => {
   const { context, page } = await openGame({ fakeAudio: false });
   await cached(page, GAME);
   await cached(page, GAME + 'sounds/giggle-3.mp3');
   await cached(page, GAME + 'art/eye-pupil.png');
+  await cached(page, GAME + 'art/yellow_body_rhombus.png'); // the last body the game loads
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 });
   await context.setOffline(true);
   await page.reload();
