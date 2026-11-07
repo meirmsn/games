@@ -46,6 +46,7 @@ async function open(opts = {}) {
 async function startEmpty(page) {
   await page.evaluate(() => {
     const r = window.__reef;
+    if (r.game.mode !== 'play') r.startGame(0);
     r.manual = true;
     r.npcs().length = 0;
     r.game.feastIn = 999;
@@ -94,16 +95,23 @@ async function meet(page, species, size, frames = 30) {
   );
 }
 
-test('AC-1: the reef starts straight away, with no card, and nothing bites until you move', async () => {
+test('AC-1: the reef opens behind a start card; Start begins L1, and nothing bites until you move', async () => {
   const { context, page, errors } = await open();
   const s = await page.evaluate(() => ({
     mode: window.__reef.game.mode,
-    waiting: window.__reef.player.waiting,
-    cards: document.querySelectorAll('.card:not([hidden])').length,
+    start: !document.querySelector('[data-screen="start"]').hidden,
     fish: window.__reef.npcs().length,
   }));
-  assert.deepEqual({ mode: s.mode, waiting: s.waiting, cards: s.cards }, { mode: 'play', waiting: true, cards: 0 });
-  assert.ok(s.fish > 5, 'fish are swimming');
+  assert.deepEqual({ mode: s.mode, start: s.start }, { mode: 'title', start: true });
+  assert.ok(s.fish > 5, 'fish are swimming behind the card');
+  await page.click('[data-play]');
+  const after = await page.evaluate(() => ({
+    mode: window.__reef.game.mode,
+    depth: window.__reef.game.depth,
+    waiting: window.__reef.player.waiting,
+    start: !document.querySelector('[data-screen="start"]').hidden,
+  }));
+  assert.deepEqual(after, { mode: 'play', depth: 0, waiting: true, start: false });
   // A predator touching the waiting fish does nothing.
   await page.evaluate(() => {
     const r = window.__reef;
@@ -189,6 +197,8 @@ test('AC-3: a predator costs a life, and the third ends the run', async () => {
   await steps(page, 150);
   await page.locator('[data-screen="over"]').waitFor();
   await page.click('[data-again]');
+  await page.locator('[data-screen="start"]').waitFor();
+  await page.click('[data-play]');
   assert.equal(await page.evaluate(() => window.__reef.game.lives), 3);
   await context.close();
 });
@@ -389,6 +399,7 @@ test('AC-10: the reef works offline once it has been played', async () => {
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__reef);
+  await page.click('[data-play]');
   assert.equal(await page.evaluate(() => window.__reef.game.mode), 'play');
   await context.close();
 });
@@ -430,8 +441,10 @@ test('AC-12: The Deep is dark, with a glow around the player', async () => {
 
 test('AC-13: a new player starts with some help, and a hard run carries over', async () => {
   const { context, page } = await open();
-  // The page load started the first run.
-  const first = await page.evaluate(() => window.__reef.game.assist);
+  const first = await page.evaluate(() => {
+    window.__reef.startGame(0); // the first run
+    return window.__reef.game.assist;
+  });
   assert.ok(first >= 0.4 && first <= 0.5, `first run starts at ${first}`);
   const runs = await page.evaluate(() => {
     const r = window.__reef;
@@ -454,16 +467,19 @@ test('AC-14: each state shows only its own card and HUD', async () => {
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
     return page.evaluate(() => ({
       mode: window.__reef.game.mode,
+      start: !document.querySelector('[data-screen="start"]').hidden,
       over: !document.querySelector('[data-screen="over"]').hidden,
       hud: window.__reef.drawn.hud,
     }));
   };
-  assert.deepEqual(await cards(), { mode: 'play', over: false, hud: true }, 'waiting for the first move');
+  assert.deepEqual(await cards(), { mode: 'title', start: true, over: false, hud: false }, 'the start card');
+  await page.click('[data-play]');
+  assert.deepEqual(await cards(), { mode: 'play', start: false, over: false, hud: true }, 'waiting for the first move');
   await startEmpty(page);
-  assert.deepEqual(await cards(), { mode: 'play', over: false, hud: true });
+  assert.deepEqual(await cards(), { mode: 'play', start: false, over: false, hud: true });
   await page.evaluate(() => window.__reef.dive());
   await steps(page, 50); // well into the dive
-  assert.deepEqual(await cards(), { mode: 'dive', over: false, hud: true });
+  assert.deepEqual(await cards(), { mode: 'dive', start: false, over: false, hud: true });
   assert.ok((await page.evaluate(() => window.__reef.drawn.wash)) > 0.5, 'a wash of the deeper colour');
   await steps(page, 110);
   await page.evaluate(() => {
@@ -476,9 +492,9 @@ test('AC-14: each state shows only its own card and HUD', async () => {
     r.game.score = 1234;
   });
   await meet(page, 'red', 150, 5);
-  assert.deepEqual(await cards(), { mode: 'over', over: false, hud: true }, 'the card waits a moment');
+  assert.deepEqual(await cards(), { mode: 'over', start: false, over: false, hud: true }, 'the card waits a moment');
   await steps(page, 120);
-  assert.deepEqual(await cards(), { mode: 'over', over: true, hud: true });
+  assert.deepEqual(await cards(), { mode: 'over', start: false, over: true, hud: true });
   assert.equal(await page.locator('[data-final-score]').textContent(), '1,234');
   assert.match(await page.locator('[data-final-detail]').textContent(), /Reached Coral Garden/);
   await context.close();
@@ -487,7 +503,7 @@ test('AC-14: each state shows only its own card and HUD', async () => {
 test('AC-19: each predator has its own mark, and food has none', async () => {
   const { context, page } = await open();
   const marks = await page.evaluate(() => window.__reef.marks());
-  assert.deepEqual(marks, { pink: null, green: null, orange: null, blue: 'jaws', red: 'lure', grey: 'spark' });
+  assert.deepEqual(marks, { pink: null, green: null, orange: null, blue: 'jaws', red: 'lure', grey: 'zap' });
   // ...and they are drawn: one of each predator and each food fish on screen.
   await startEmpty(page);
   const drawn = await page.evaluate(async () => {
@@ -502,6 +518,60 @@ test('AC-19: each predator has its own mark, and food has none', async () => {
     return { foodOnly, all: all.sort() };
   });
   assert.deepEqual(drawn.foodOnly, [], 'food fish draw no mark');
-  assert.deepEqual(drawn.all, ['jaws', 'lure', 'spark']);
+  assert.deepEqual(drawn.all, ['jaws', 'lure', 'zap']);
+  await context.close();
+});
+
+test('AC-20: level codes: the game-over card shows one, and entering it starts at that level', async () => {
+  const { context, page } = await open();
+  const codes = await page.evaluate(() => [1, 2, 3, 4, 5, 6].map((d) => window.__reef.codeFor(d)));
+  assert.deepEqual(codes, ['PEARL', 'SQUID', 'MANTA', 'ABYSS', 'DEEP6', 'DEEP7']);
+  // A wrong code is refused, and the card stays.
+  await page.fill('[data-code]', 'tuna');
+  await page.click('.go');
+  assert.equal(await page.evaluate(() => window.__reef.game.mode), 'title');
+  assert.match(await page.locator('[data-code-msg]').textContent(), /doesn.t open/);
+  // A right one (any case) starts at its level.
+  await page.fill('[data-code]', 'squid');
+  await page.click('.go');
+  assert.deepEqual(await page.evaluate(() => ({ mode: window.__reef.game.mode, depth: window.__reef.game.depth })), { mode: 'play', depth: 2 });
+  // Losing there shows that level's code.
+  await startEmpty(page);
+  await page.evaluate(() => (window.__reef.game.lives = 1));
+  await meet(page, 'red', 150, 5);
+  await steps(page, 120);
+  assert.equal(await page.locator('[data-level-code-value]').textContent(), 'SQUID');
+  assert.match(await page.locator('[data-level-code-label]').textContent(), /L3/);
+  await context.close();
+});
+
+test('AC-21: losing a life makes a show of it in the HUD', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await meet(page, 'blue', 70, 3);
+  assert.deepEqual(await page.evaluate(() => window.__reef.game.lifeLost && window.__reef.game.lifeLost.slot), 2);
+  await steps(page, 100);
+  assert.equal(await page.evaluate(() => window.__reef.game.lifeLost), null, 'and settles after a moment');
+  await context.close();
+});
+
+test('AC-22: each world looks different from the one before', async () => {
+  const { context, page } = await open();
+  const w = await page.evaluate(() => {
+    const r = window.__reef;
+    const d = r.depths;
+    const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    const gaps = d.slice(1).map((x, i) => Math.round(dist(x.top, d[i].top) + dist(x.bottom, d[i].bottom)));
+    r.game.depth = 3;
+    const { W } = r.world();
+    const slope = r.groundAt(0) - r.groundAt(W);
+    r.game.depth = 0;
+    return { gaps, slope, plants: d.map((x) => x.weedDensity), bones: d.map((x) => !!x.bones) };
+  });
+  assert.ok(w.gaps.every((g) => g > 120), `water colours differ between neighbours: ${w.gaps}`);
+  assert.ok(w.slope > 100, `the Twilight Slope's floor rises (${w.slope})`);
+  assert.equal(w.plants[3], 0, 'the slope is bare');
+  assert.ok(w.plants[1] >= 3 && w.plants[2] >= 2, 'the coral and the kelp are overgrown');
+  assert.deepEqual(w.bones, [false, false, false, false, true]);
   await context.close();
 });

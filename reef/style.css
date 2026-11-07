@@ -60,7 +60,9 @@ body {
 }
 
 .mute:focus-visible,
-.play:focus-visible {
+.play:focus-visible,
+.go:focus-visible,
+.code input:focus-visible {
   outline: 3px solid #fff;
   outline-offset: 2px;
 }
@@ -162,7 +164,7 @@ body {
 }
 
 .toast-title {
-  font-size: 20px;
+  font-size: 28px;
   font-weight: 800;
   color: #ffd23f;
 }
@@ -192,4 +194,118 @@ body {
   .toast {
     animation: none;
   }
+}
+
+/* The start card sits low, so the reef stays in view above it. */
+.card.start {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  padding: 20px 20px 16px;
+  animation-name: rise-low;
+}
+
+.card.start .play {
+  width: 100%;
+  min-height: 60px;
+  font-size: 24px;
+  margin: 0 0 14px;
+}
+
+.code label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.code input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgb(0 20 40 / 35%);
+}
+
+.code input::placeholder {
+  color: rgb(255 255 255 / 40%);
+}
+
+.go {
+  min-width: 64px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  background: rgb(255 255 255 / 22%);
+  cursor: pointer;
+}
+
+.code-msg {
+  min-height: 1.4em;
+  margin: 8px 0 0 !important;
+  font-size: 14px;
+}
+
+.code.wrong .code-row {
+  animation: shake 360ms ease;
+}
+
+.level-code {
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgb(0 20 40 / 35%);
+}
+
+.level-code-label {
+  display: block;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.level-code-value {
+  display: block;
+  font-size: 34px;
+  letter-spacing: 0.18em;
+  color: #ffd23f;
+}
+
+@keyframes rise-low {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+.level-code-value[hidden] {
+  display: none;
 }

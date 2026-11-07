@@ -22,11 +22,27 @@
       <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
     </button>
 
+    <section class="card start" data-screen="start" hidden>
+      <button class="play" type="button" data-play>Start</button>
+      <form class="code" data-code-form autocomplete="off">
+        <label for="level-code">or enter a level code</label>
+        <div class="code-row">
+          <input id="level-code" data-code maxlength="6" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="CODE" />
+          <button class="go" type="submit">Go</button>
+        </div>
+        <p class="code-msg" data-code-msg aria-live="polite"></p>
+      </form>
+    </section>
+
     <section class="card" data-screen="over" hidden>
       <h2 data-over-title>Eaten!</h2>
       <p class="score-line"><span data-final-score>0</span> points</p>
       <p class="detail" data-final-detail></p>
-      <button class="play" type="button" data-again>Swim again</button>
+      <div class="level-code" data-level-code>
+        <span class="level-code-label" data-level-code-label>Level code</span>
+        <strong class="level-code-value" data-level-code-value></strong>
+      </div>
+      <button class="play" type="button" data-again>Play again</button>
     </section>
 
     <div class="toast" data-toast aria-live="polite" hidden>

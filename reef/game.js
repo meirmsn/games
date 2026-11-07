@@ -41,51 +41,67 @@ const SPECIES = {
   pink: { rel: [0.42, 0.58], speed: 78, school: [4, 7], skel: true },
   green: { rel: [0.55, 0.72], speed: 64, school: [3, 5], skel: true },
   orange: { rel: [0.68, 0.86], speed: 60, skel: true },
-  // Each predator has its own mark: the blue one jaws, the red one a glowing lure, the grey one
-  // electric sparks. (The pufferfish's mark is puffing up.)
+  // Each predator has its own mark: the blue one shark's jaws, the red one an anglerfish's glowing
+  // lure and needle teeth, the grey one lightning crackling through its body. (The pufferfish's
+  // mark is puffing up.)
   blue: { rel: [1.25, 1.6], speed: 66, skel: true, mark: 'jaws', mouth: [0.79, 0.985, 0.58] },
-  red: { rel: [1.6, 2.2], speed: 56, skel: true, mark: 'lure' },
-  grey: { rel: [1.15, 1.4], speed: 100, mark: 'spark' },
+  red: { rel: [1.6, 2.2], speed: 56, skel: true, mark: 'lure', mouth: [0.8, 0.995, 0.66] },
+  grey: { rel: [1.15, 1.4], speed: 100, mark: 'zap' },
 };
 const PUFFER = { min: 40, max: 58, speed: 32, puffed: 1.5 };
 
+// Each depth looks clearly different from the one before: its water colour, its floor (flat,
+// sloped, bare, overgrown, strewn with bones) and its plants. Level codes let a player start
+// again from the furthest depth they reached, as on old arcade machines.
 const DEPTHS = [
   {
-    name: 'Sunlit Shallows', goal: 4,
+    name: 'Sunlit Shallows', goal: 4, code: '',
     top: [140, 224, 242], bottom: [58, 162, 212],
     food: ['pink', 'green'], danger: ['blue'],
     threat: 0.14, puffers: 0, eel: null, dark: 0, rays: 1, surface: true,
     ground: 'sand', weeds: ['green', 'grass', 'orange'], weedDensity: 0.9, rockCount: 1,
   },
   {
-    name: 'Coral Garden', goal: 7,
-    top: [128, 222, 214], bottom: [34, 128, 168],
+    name: 'Coral Garden', goal: 7, code: 'PEARL',
+    top: [255, 204, 178], bottom: [196, 88, 112], farTint: 0.8,
     food: ['pink', 'green', 'orange'], danger: ['blue'],
-    threat: 0.18, puffers: 1, eel: null, dark: 0, rays: 0.8,
-    ground: 'sand', weeds: ['pink', 'orange', 'pink', 'orange', 'green'], weedDensity: 2.2, rockCount: 3,
+    threat: 0.18, puffers: 1, eel: null, dark: 0, rays: 0.9,
+    ground: 'sand', weeds: ['pink', 'orange', 'pink', 'orange'], weedDensity: 3, rockCount: 3,
   },
   {
-    name: 'Kelp Forest', goal: 11,
+    name: 'Kelp Forest', goal: 11, code: 'SQUID',
     top: [104, 186, 150], bottom: [20, 82, 78],
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
     threat: 0.22, puffers: 1, eel: [20, 28], dark: 0.06, rays: 0.6, kelp: true,
     ground: 'sand', weeds: ['green', 'green', 'grass'], weedDensity: 2.4, rockCount: 1,
   },
   {
-    name: 'Twilight Reef', goal: 15,
-    top: [92, 88, 168], bottom: [26, 20, 70],
+    name: 'Twilight Slope', goal: 15, code: 'MANTA',
+    top: [110, 96, 176], bottom: [30, 20, 74], farTint: 0.7,
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
-    threat: 0.25, puffers: 2, eel: [16, 24], dark: 0.3, rays: 0.2,
-    ground: 'dirt', weeds: ['pink', 'grass', 'pink'], weedDensity: 1.4, rockCount: 5,
+    threat: 0.25, puffers: 2, eel: [16, 24], dark: 0.25, rays: 0.25, slope: 0.34,
+    ground: 'dirt', weeds: [], weedDensity: 0, rockCount: 6,
   },
   {
-    name: 'The Deep', goal: 20,
-    top: [20, 32, 64], bottom: [4, 8, 22],
+    name: 'The Deep', goal: 20, code: 'ABYSS',
+    top: [16, 24, 40], bottom: [2, 4, 10],
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
-    threat: 0.28, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0,
-    ground: 'dirt', weeds: ['grass'], weedDensity: 0.6, rockCount: 2,
+    threat: 0.28, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0, bones: true,
+    ground: 'dirt', weeds: ['grass'], weedDensity: 0.4, rockCount: 2,
   },
 ];
+
+// The code for a depth (0-based); past the fifth, DEEP and its level number.
+const codeFor = (n) => (n < DEPTHS.length ? DEPTHS[n].code : 'DEEP' + (n + 1));
+function depthForCode(text) {
+  const c = String(text || '').trim().toUpperCase();
+  if (!c) return -1;
+  const i = DEPTHS.findIndex((d) => d.code === c);
+  if (i > 0) return i;
+  const m = /^DEEP(\d{1,2})$/.exec(c);
+  if (m && Number(m[1]) > DEPTHS.length) return Number(m[1]) - 1;
+  return -1;
+}
 
 const PLAYER_BASE = 44; // length at the start of each depth
 const PLAYER_GROWTH = 1.0; // ...and it grows to (1 + this) times that before diving deeper
@@ -103,6 +119,13 @@ const $ = (sel) => document.querySelector(sel);
 const ui = {
   over: $('[data-screen="over"]'),
   again: $('[data-again]'),
+  start: $('[data-screen="start"]'),
+  play: $('[data-play]'),
+  codeForm: $('[data-code-form]'),
+  code: $('[data-code]'),
+  codeMsg: $('[data-code-msg]'),
+  levelCodeLabel: $('[data-level-code-label]'),
+  levelCodeValue: $('[data-level-code-value]'),
   overTitle: $('[data-over-title]'),
   finalScore: $('[data-final-score]'),
   finalDetail: $('[data-final-detail]'),
@@ -230,6 +253,8 @@ const player = {
   invul: 0, stun: 0, gulp: 0, alive: false, trail: 0, hurt: 0, safe: null, waiting: false,
 };
 
+// The sea floor's height at x: flat, except on a sloped depth, where it rises to the right.
+const groundAt = (x) => groundY - (depthDef().slope || 0) * H * clamp(x / W, 0, 1);
 const depthDef = (n = game.depth) => DEPTHS[Math.min(n, DEPTHS.length - 1)];
 const extraDepth = () => Math.max(0, game.depth - (DEPTHS.length - 1));
 const threatBase = () => Math.min(0.38, depthDef().threat + 0.02 * extraDepth());
@@ -292,7 +317,7 @@ function buildScenery() {
     fg2.drawImage(atlas, f[0], f[1], f[2], f[3], rr(0, W) - (f[6] * k) / 2, hillTop + 30 - f[7] * k + 20, f[6] * k, f[7] * k);
   }
   fg2.globalCompositeOperation = 'source-atop';
-  fg2.fillStyle = rgb(mix(d.top, d.bottom, 0.55), 0.35 + Math.min(game.depth, 4) * 0.1);
+  fg2.fillStyle = rgb(mix(d.top, d.bottom, 0.55), d.farTint || 0.35 + Math.min(game.depth, 4) * 0.1);
   fg2.fillRect(0, 0, W, H);
   g.setTransform(1, 0, 0, 1, 0, 0);
   g.globalAlpha = 0.85;
@@ -309,9 +334,30 @@ function buildScenery() {
   const G = 64;
   const mat = d.ground;
   const top = 'abcdefgh';
+  // A sloped floor is drawn flat and sheared, so it rises smoothly rather than in steps.
+  const rise = (d.slope || 0) * H;
+  f.save();
+  f.transform(1, -rise / W, 0, 1, 0, 0);
   for (let x = 0, i = 0; x < W + G; x += G - 0.5, i++) {
     tile(f, `terrain_${mat}_top_${top[Math.floor(r() * 8)]}`, x, groundY - 14, G);
-    for (let y = groundY - 14 + G - 0.5; y < H + 2; y += G - 0.5) tile(f, `terrain_${mat}_${'abcd'[Math.floor(r() * 4)]}`, x, y, G);
+    for (let y = groundY - 14 + G - 0.5; y < H + rise + 2; y += G - 0.5) tile(f, `terrain_${mat}_${'abcd'[Math.floor(r() * 4)]}`, x, y, G);
+  }
+  f.restore();
+  if (d.bones) {
+    // The floor of The Deep is strewn with bones.
+    const kinds = ['pink', 'green', 'orange', 'blue', 'red'];
+    const n = Math.round(W / 22);
+    for (let i = 0; i < n; i++) {
+      const fr = FRAMES[`fish_${kinds[Math.floor(r() * 5)]}_skeleton`];
+      const x = rr(-10, W + 10), y = groundAt(x) + rr(4, 40), len = rr(26, 70), h = (fr[7] / fr[6]) * len;
+      f.save();
+      f.translate(x, y);
+      f.rotate(rr(-0.7, 0.7));
+      if (r() < 0.5) f.scale(-1, 1);
+      f.globalAlpha = rr(0.65, 0.95);
+      f.drawImage(atlas, fr[0], fr[1], fr[2], fr[3], -len / 2, -h / 2, len, h);
+      f.restore();
+    }
   }
   // A darker front band of the other ground type, for depth.
   const front = mat === 'sand' ? 'dirt' : 'sand';
@@ -329,7 +375,7 @@ function buildScenery() {
 
   // Animated scenery: seaweed in three layers, rocks with bubble vents, light rays.
   weedsFar = [];
-  const nFar = Math.round((W / 55) * Math.min(1.5, d.weedDensity));
+  const nFar = Math.round((W / 55) * Math.min(1.5, d.weedDensity || 0.2));
   for (let i = 0; i < nFar; i++) {
     weedsFar.push({ name: 'background_seaweed_' + 'abcdefgh'[Math.floor(r() * 8)], x: rr(0, W), y: hillTop + rr(30, 70), k: rr(0.5, 0.8), ph: rr(0, 6) });
   }
@@ -338,11 +384,12 @@ function buildScenery() {
   for (let i = 0; i < nMid; i++) {
     // Kelp towers halfway up the water; elsewhere seaweed stays low.
     const k = d.kelp ? rr(1.2, 2.3) : rr(0.45, 0.85);
-    weedsMid.push({ name: weedName(pickR(d.weeds, r), r), x: rr(0, W), y: groundY + rr(2, 22), k, ph: rr(0, 6) });
+    const x = rr(0, W);
+    weedsMid.push({ name: weedName(pickR(d.weeds, r), r), x, y: groundAt(x) + rr(2, 22), k, ph: rr(0, 6) });
   }
   weedsMid.sort((a, b) => a.y - b.y);
   weedsFront = [];
-  const nFront = Math.max(2, Math.round(W / 320));
+  const nFront = d.weeds.length ? Math.max(2, Math.round(W / 320)) : 0;
   for (let i = 0; i < nFront; i++) {
     const side = i % 2 === 0 ? rr(0, W * 0.16) : rr(W * 0.84, W);
     weedsFront.push({ name: weedName(pickR(d.weeds, r), r), x: side, y: H + 6, k: rr(0.8, 1.1), ph: rr(0, 6) });
@@ -351,7 +398,8 @@ function buildScenery() {
   vents = [];
   const nR = Math.max(1, Math.round(d.rockCount * Math.max(1, W / 700)));
   for (let i = 0; i < nR; i++) {
-    const rock = { name: r() < 0.5 ? 'rock_a' : 'rock_b', x: rr(W * 0.1, W * 0.9), y: groundY + rr(10, 24), k: rr(0.45, 0.7) };
+    const rx = rr(W * 0.05, W * 0.95);
+    const rock = { name: r() < 0.5 ? 'rock_a' : 'rock_b', x: rx, y: groundAt(rx) + rr(10, 24), k: rr(0.45, 0.8) };
     rocks.push(rock);
     vents.push({ x: rock.x + rr(-10, 10), y: rock.y - 22, t: rr(0, 3) });
   }
@@ -578,10 +626,13 @@ window.addEventListener('keydown', (e) => {
     input.target = null;
     e.preventDefault();
     wake();
-  } else if ((e.key === 'Enter' || e.key === ' ') && game.mode === 'over' && game.overIn <= 0) {
-    if (document.activeElement?.tagName !== 'BUTTON') {
+  } else if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest?.('input, button')) {
+    if (game.mode === 'over' && game.overIn <= 0) {
       e.preventDefault();
-      startGame();
+      showStart();
+    } else if (game.mode === 'title') {
+      e.preventDefault();
+      startGame(0);
     }
   }
 });
@@ -592,10 +643,23 @@ window.addEventListener('blur', () => input.keys.clear());
 
 let stopMusic = null;
 
-function startGame() {
+// The start card: Start, or a level code to jump to a depth reached before. The reef swims on
+// behind it.
+function showStart() {
+  game.mode = 'title';
+  player.alive = false;
   ui.over.hidden = true;
+  ui.start.hidden = false;
+  ui.codeForm.classList.remove('wrong');
+  ui.code.value = '';
+  ui.codeMsg.textContent = saved.code ? `Your last code: ${saved.code}` : '';
+}
+
+function startGame(depth = 0) {
+  ui.over.hidden = true;
+  ui.start.hidden = true;
   game.mode = 'play';
-  game.depth = 0;
+  game.depth = depth;
   game.score = 0;
   game.lives = MAX_LIVES;
   game.xp = 0;
@@ -603,7 +667,7 @@ function startGame() {
   game.calm = 0;
   game.closeCalls = 0;
   game.feastIn = rand(22, 30);
-  game.eelIn = 20;
+  game.eelIn = depthDef().eel ? rand(depthDef().eel[0], depthDef().eel[1]) * 0.6 : 20;
   game.spawnIn = 0;
   // A fresh run keeps some of the last run's assist, so a hard time eases the next one.
   game.assist = clamp(game.assist * 0.6 + ((saved.runs || 0) < 2 ? 0.25 : 0.05), 0, 0.7);
@@ -700,6 +764,7 @@ function safeSpot() {
 function caught(by) {
   if (player.invul > 0 || !player.alive || player.hurt > 0) return;
   game.lives -= 1;
+  game.lifeLost = { slot: game.lives, t: 0 }; // the HUD makes a show of the life going
   game.slowmo = 0.3;
   game.shake = 0.35;
   game.chain = 0;
@@ -744,7 +809,16 @@ function finishRun() {
   const parts = [`Reached ${depthDef().name}`];
   if (!newBest && best) parts.push(`best ${best.toLocaleString('en-US')}`);
   if (game.closeCalls) parts.push(`${game.closeCalls} close call${game.closeCalls > 1 ? 's' : ''}`);
-  ui.finalDetail.textContent = parts.join(' · ');
+  ui.finalDetail.textContent = parts.join(' \u00b7 ');
+  // The level code for the depth reached, to start there next time.
+  if (game.depth > 0) {
+    ui.levelCodeLabel.textContent = `Level code for L${game.depth + 1} \u00b7 ${depthDef().name}`;
+    ui.levelCodeValue.textContent = codeFor(game.depth);
+    ui.levelCodeValue.hidden = false;
+  } else {
+    ui.levelCodeLabel.textContent = 'Reach L2 to earn a level code';
+    ui.levelCodeValue.hidden = true;
+  }
 }
 
 function beginDive() {
@@ -758,6 +832,11 @@ function beginDive() {
 
 function finishDiveSwap() {
   game.depth += 1;
+  if (game.depth > (saved.maxDepth || 0)) {
+    saved.maxDepth = game.depth;
+    saved.code = codeFor(game.depth);
+    store.write(saved);
+  }
   game.xp = 0;
   game.lives = Math.min(MAX_LIVES, game.lives + 1);
   game.calm = 0;
@@ -777,8 +856,7 @@ function finishDiveSwap() {
     f.x = rand(W * 0.05, W * 0.95);
   }
   const d = depthDef();
-  const title = game.depth < DEPTHS.length ? d.name : `${d.name} \u00b7 ${game.depth + 1}`;
-  setTimeout(() => toast(title, '', 2.6), 300);
+  setTimeout(() => toast(`L${game.depth + 1} \u00b7 ${d.name}`, '', 2.6), 300);
 }
 
 // ---------- Update ----------
@@ -886,7 +964,7 @@ function update(dt) {
   }
   updateFar(dt);
   for (const sk of skeletons) {
-    if (sk.y < groundY + 6) {
+    if (sk.y < groundAt(sk.x) + 6) {
       sk.y += sk.vy * dt;
       sk.rot += sk.vr * dt;
       sk.vr *= 1 - dt * 0.8;
@@ -923,6 +1001,7 @@ function update(dt) {
     }
   }
   if (game.comboShow > 0) game.comboShow -= dt;
+  if (game.lifeLost && (game.lifeLost.t += dt) > 1.5) game.lifeLost = null;
   if (game.shake > 0) game.shake -= dt;
 }
 
@@ -964,7 +1043,7 @@ function updatePlayer(dt) {
   player.vx += (tx - player.vx) * k;
   if (game.mode !== 'dive') player.vy += (ty - player.vy) * k;
   player.x = clamp(player.x + player.vx * dt, 12, W - 12);
-  player.y = clamp(player.y + player.vy * dt, yMin, game.mode === 'dive' ? H + 80 : yMax);
+  player.y = clamp(player.y + player.vy * dt, yMin, game.mode === 'dive' ? H + 80 : groundAt(player.x) + 4);
   // Keep a touch target from drifting off when the fish is pinned against a wall.
   if (input.target && !input.drag) {
     input.target.x = clamp(input.target.x, 12, W - 12);
@@ -1143,8 +1222,9 @@ function updateNpc(n, dt) {
     n.y = yMin + r * 0.5;
     n.vy = Math.abs(n.vy) * 0.5;
   }
-  if (n.y > groundY - r * 0.4) {
-    n.y = groundY - r * 0.4;
+  const floor = groundAt(n.x);
+  if (n.y > floor - r * 0.4) {
+    n.y = floor - r * 0.4;
     n.vy = -Math.abs(n.vy) * 0.5;
   }
   if (Math.abs(n.vx) > 4) n.face = Math.sign(n.vx);
@@ -1259,8 +1339,10 @@ function draw() {
     ctx.drawImage(c, -w / 2, -h / 2, w, h);
     ctx.restore();
   }
-  ctx.globalAlpha = Math.max(0.3, 0.75 - game.depth * 0.12);
-  for (const w of weedsFar) drawWeed(w, 0.08);
+  // Far seaweed: silhouettes in a lighter shade of this depth's water.
+  const weedColor = rgb(mix(d.top, [255, 255, 255], 0.18), 1);
+  ctx.globalAlpha = 0.5;
+  for (const w of weedsFar) drawWeed(w, 0.08, weedColor);
   ctx.globalAlpha = 1;
 
   // Marine snow behind
@@ -1351,11 +1433,15 @@ function drawSurface() {
   ctx.stroke();
 }
 
-function drawWeed(w, amp) {
+function drawWeed(w, amp, color) {
   const shear = Math.sin(time * 0.9 + w.ph) * amp + Math.sin(time * 2.1 + w.ph * 2) * amp * 0.25;
   ctx.save();
   ctx.transform(1, 0, shear, 1, w.x, w.y);
-  drawStanding(w.name, w.k);
+  if (color) {
+    const f = FRAMES[w.name];
+    const wd = f[6] * w.k, h = f[7] * w.k;
+    ctx.drawImage(tinted(w.name, color), -wd / 2, -h, wd, h);
+  } else drawStanding(w.name, w.k);
   ctx.restore();
 }
 
@@ -1461,34 +1547,83 @@ function drawLure(n) {
   ctx.fill();
 }
 
-// The grey predator's mark: green electric bolts crackling around its body, redrawn in a new
-// place a dozen times a second.
-function drawSparks(n) {
+// The grey predator's mark: every second or so, yellow lightning crackles through its body for a
+// moment and the fish flashes, like an electric eel.
+function drawZap(n) {
+  const cycle = 1.3, on = 0.35;
+  const t = (time + n.ph) % cycle;
+  if (t > on || Math.floor(time * 24) % 3 === 0) return; // between bursts, and flickering within one
   const f = FRAMES['fish_' + n.species];
   const a = n.size * 0.5, b = (f[7] / f[6]) * n.size * 0.5;
-  const tick = Math.floor(time * 12);
-  let seed = (tick * 9301 + Math.floor(n.ph * 1000) * 49297) % 233280;
+  let seed = (Math.floor(time * 24) * 9301 + Math.floor(n.ph * 1000) * 49297) % 233280;
   const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
   ctx.save();
+  // The body lights up.
+  ctx.globalAlpha = 0.15;
+  ctx.globalCompositeOperation = 'lighter';
+  drawCentered('fish_' + n.species, n.size);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  for (let k = 0; k < 3; k++) {
-    const start = rnd() * Math.PI * 2, span = 0.5 + rnd() * 0.6, steps = 5;
+  ctx.lineJoin = 'miter';
+  const bolt = (x0, x1, amp, steps) => {
     const pts = [];
     for (let i = 0; i <= steps; i++) {
-      const t = start + (span * i) / steps;
-      const out = 1.04 + (i % 2 ? 0.14 : 0) + (rnd() - 0.5) * 0.08;
-      pts.push([Math.cos(t) * a * out, Math.sin(t) * b * out * 1.25]);
+      const x = lerp(x0, x1, i / steps);
+      const y = i === 0 || i === steps ? 0 : (i % 2 ? 1 : -1) * amp * (0.2 + rnd() * 0.9);
+      pts.push([x, y]);
     }
-    for (const [w, col] of [[6, 'rgba(90,230,40,0.45)'], [2.5, '#c8ff4a']]) {
+    for (const [w, col] of [[Math.max(4, n.size * 0.05), 'rgba(255,190,0,0.6)'], [Math.max(1.5, n.size * 0.02), '#fff6a0']]) {
       ctx.lineWidth = w;
       ctx.strokeStyle = col;
       ctx.beginPath();
       pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
       ctx.stroke();
     }
-  }
+  };
+  bolt(-a * 0.85, a * 0.75, b * 0.55, 9); // tail to head through the body
+  if (rnd() < 0.6) bolt(-a * 0.2, a * 0.35, b * 0.4, 4);
   ctx.restore();
+}
+
+// The red predator's teeth: an anglerfish's wide gape with long, thin needle teeth that cross it.
+function withNeedles(species) {
+  const key = species + ':needles';
+  let c = teethCache.get(key);
+  if (c) return c;
+  const f = FRAMES['fish_' + species];
+  const [m0, m1, my] = SPECIES[species].mouth;
+  const w = f[2], h = f[3];
+  c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(atlas, f[0], f[1], w, h, 0, 0, w, h);
+  g.globalCompositeOperation = 'source-atop';
+  const x0 = m0 * w, x1 = m1 * w, y = my * h, gap = h * 0.13;
+  const mouth = new Path2D();
+  mouth.moveTo(x1 + 2, y - gap * 0.8);
+  mouth.quadraticCurveTo(x0 + (x1 - x0) * 0.2, y - gap * 1.05, x0, y);
+  mouth.quadraticCurveTo(x0 + (x1 - x0) * 0.2, y + gap * 1.05, x1 + 2, y + gap * 0.8);
+  mouth.closePath();
+  g.fillStyle = 'rgba(40,6,14,0.8)';
+  g.fill(mouth);
+  // Needles: long and narrow, upper ones reaching down past the lower jaw line and the other way.
+  g.fillStyle = '#f6eed8';
+  const L = x1 - x0;
+  const needle = (x, yBase, dir, len) => {
+    const half = Math.max(1.2, L * 0.035);
+    g.beginPath();
+    g.moveTo(x - half, yBase);
+    g.lineTo(x + half, yBase);
+    g.lineTo(x + dir * 0 + half * 0.3, yBase + dir * len);
+    g.closePath();
+    g.fill();
+  };
+  for (const [t, k] of [[0.3, 1], [0.48, 1.25], [0.66, 1.1], [0.84, 0.9]]) needle(x0 + L * t, y - gap * 0.92, 1, gap * 1.35 * k);
+  for (const [t, k] of [[0.39, 1.05], [0.57, 1.2], [0.75, 1]]) needle(x0 + L * t, y + gap * 0.92, -1, gap * 1.3 * k);
+  teethCache.set(key, c);
+  return c;
 }
 
 function drawNpc(n) {
@@ -1505,14 +1640,14 @@ function drawNpc(n) {
     fishTransform(n.x, n.y, n.faceT, n.angle, n.size, n.ph, Math.min(1, sp), n.gulp);
     const mark = SPECIES[n.species].mark;
     if (mark && !drawn.marks.includes(mark)) drawn.marks.push(mark);
-    if (mark === 'jaws') {
-      const c = withTeeth(n.species);
+    if (mark === 'jaws' || mark === 'lure') {
+      const c = mark === 'jaws' ? withTeeth(n.species) : withNeedles(n.species);
       const f = FRAMES['fish_' + n.species];
       const h = (f[7] / f[6]) * n.size;
       ctx.drawImage(c, -n.size / 2, -h / 2, n.size, h);
     } else drawCentered('fish_' + n.species, n.size);
     if (mark === 'lure') drawLure(n);
-    else if (mark === 'spark') drawSparks(n);
+    else if (mark === 'zap') drawZap(n);
   }
   ctx.restore();
 }
@@ -1601,6 +1736,20 @@ function drawDark(amount) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(shade, 0, 0);
   ctx.restore();
+  // In dark water the player's fish gives off its own soft light.
+  if (amount > 0.4 && player.alive && game.mode !== 'title') {
+    const r = 120 + player.size * 1.4;
+    const g = ctx.createRadialGradient(player.x, player.y, 0, player.x, player.y, r);
+    g.addColorStop(0, 'rgba(120,200,255,0.22)');
+    g.addColorStop(1, 'rgba(120,200,255,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 // Digits from the pack's HUD numbers; anything else falls back to text.
@@ -1658,15 +1807,51 @@ function drawHud() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const narrow = cssW < 560;
   const top = 12 + safeTop();
+  // Losing a life: the screen's edges flash red...
+  const lost = game.lifeLost;
+  if (lost && lost.t < 0.8) {
+    const a = 0.55 * (1 - lost.t / 0.8);
+    const g = ctx.createRadialGradient(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.3, cssW / 2, cssH / 2, Math.max(cssW, cssH) * 0.75);
+    g.addColorStop(0, 'rgba(230,30,40,0)');
+    g.addColorStop(1, `rgba(230,30,40,${a})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
   // Lives: big fish, or skeletons for the ones lost.
   const lw = narrow ? 46 : 58;
   let x = 68 + safeLeft();
   for (let i = 0; i < MAX_LIVES; i++) {
-    const name = i < game.lives ? 'fish_orange_outline' : 'fish_orange_skeleton';
+    const alive = i < game.lives;
+    let name = alive ? 'fish_orange_outline' : 'fish_orange_skeleton';
+    let cx = x + lw / 2, cy = top + 22, scale = 1, glow = 0;
+    if (lost && lost.slot === i) {
+      // ...and the life that went pops out big, shakes as it turns to bones, and settles back.
+      const t = lost.t;
+      const pop = t < 0.2 ? t / 0.2 : t < 0.95 ? 1 : Math.max(0, 1 - (t - 0.95) / 0.5);
+      const ease = pop * pop * (3 - 2 * pop);
+      scale = 1 + 2.2 * ease;
+      cx += ease * 40;
+      cy += ease * 52;
+      if (t > 0.2 && t < 0.95) {
+        cx += Math.sin(t * 70) * 5;
+        cy += Math.cos(t * 55) * 3;
+      }
+      if (t < 0.45) name = 'fish_orange_outline';
+      glow = ease;
+    }
     const f = FRAMES[name];
-    const h = (f[7] / f[6]) * lw;
-    ctx.globalAlpha = i < game.lives ? 1 : 0.7;
-    ctx.drawImage(atlas, f[0], f[1], f[2], f[3], x, top + 22 - h / 2, lw, h);
+    const w = lw * scale, h = (f[7] / f[6]) * w;
+    if (glow > 0) {
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.75);
+      g.addColorStop(0, `rgba(255,60,60,${0.6 * glow})`);
+      g.addColorStop(1, 'rgba(255,60,60,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, w * 0.75, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = alive || glow > 0 ? 1 : 0.7;
+    ctx.drawImage(atlas, f[0], f[1], f[2], f[3], cx - w / 2, cy - h / 2, w, h);
     x += lw + 6;
   }
   ctx.globalAlpha = 1;
@@ -1712,11 +1897,32 @@ function drawHud() {
   const f = FRAMES.fish_orange_outline;
   const iw = 42, ih = (f[7] / f[6]) * iw;
   ctx.drawImage(atlas, f[0], f[1], f[2], f[3], bx + bw * prog - iw / 2, by + bh / 2 - ih / 2, iw, ih);
-  ctx.font = '700 13px system-ui, -apple-system, sans-serif';
+  // The level: a number badge, then its name, large.
+  const label = depthDef().name;
+  const badge = 'L' + (game.depth + 1);
+  const fs = narrow ? 20 : 24;
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 ${fs}px system-ui, -apple-system, sans-serif`;
+  const nameW = ctx.measureText(label).width;
+  ctx.font = `800 ${fs * 0.72}px system-ui, -apple-system, sans-serif`;
+  const badgeW = ctx.measureText(badge).width + fs * 0.6;
+  const total = badgeW + 8 + nameW;
+  const lx = narrow ? bx : bx + bw / 2 - total / 2;
+  const ly = by + bh + 10 + fs * 0.6;
+  ctx.fillStyle = '#ffd23f';
+  roundRect(lx, ly - fs * 0.5, badgeW, fs, fs * 0.3);
+  ctx.fill();
+  ctx.fillStyle = '#3b2a00';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText(game.depth < DEPTHS.length ? depthDef().name : `${depthDef().name} \u00b7 ${game.depth + 1}`, bx + bw / 2, by + bh + 8);
+  ctx.fillText(badge, lx + badgeW / 2, ly + 1);
+  ctx.font = `800 ${fs}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.lineWidth = 4;
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(10,30,60,0.35)';
+  ctx.strokeText(label, lx + badgeW + 8, ly + 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, lx + badgeW + 8, ly + 1);
 }
 
 function roundRect(x, y, w, h, r) {
@@ -1777,7 +1983,26 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- UI ----------
 
-ui.again.addEventListener('click', startGame);
+ui.again.addEventListener('click', showStart);
+ui.play.addEventListener('click', () => startGame(0));
+ui.code.addEventListener('input', () => {
+  ui.code.value = ui.code.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  ui.codeForm.classList.remove('wrong');
+});
+ui.codeForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const depth = depthForCode(ui.code.value);
+  if (depth > 0) {
+    ui.code.blur();
+    startGame(depth);
+    return;
+  }
+  ui.codeForm.classList.remove('wrong');
+  void ui.codeForm.offsetWidth; // restart the shake
+  ui.codeForm.classList.add('wrong');
+  ui.codeMsg.textContent = ui.code.value ? 'That code doesn\u2019t open a level.' : 'Type a level code first.';
+  sound.play('bonk', { gain: 0.6 });
+});
 
 function syncMute() {
   ui.mute.setAttribute('aria-pressed', String(sound.muted));
@@ -1798,19 +2023,19 @@ atlas.decode().then(
   () => {
     resize();
     readInsets();
-    // Straight into the game: no title card, you learn by doing.
-    startGame();
-    for (let i = 0; i < targetPop() * 0.4; i++) {
-      const f = spawnOne(false);
+    // The reef is already alive behind the start card.
+    for (let i = 0; i < targetPop(); i++) {
+      const f = spawnOne(Math.random() < 0.15);
       f.x = rand(0, W);
       f.fade = 1;
     }
+    showStart();
     farIn = 0.5;
     last = performance.now();
     requestAnimationFrame(frameLoop);
     // For tests and balance runs: read the state, and step the simulation without drawing.
     window.__reef = {
-      game, player, input, startGame, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
+      game, player, input, startGame, showStart, codeFor, depthForCode, depths: DEPTHS, groundAt, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
       npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }), drawn,
       set manual(v) { manual = v; },
       marks: () => Object.fromEntries(Object.entries(SPECIES).map(([k, v]) => [k, v.mark || null])),
