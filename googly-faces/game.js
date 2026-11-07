@@ -4,7 +4,8 @@
 // squash and stretch, change its expression and make a funny sound, then it ducks away and another
 // appears. Each round fills a row of dots at the top, one per face tapped (the new dot swells and
 // shoves the others aside for a moment, so a child sees the row answer), and ends with a small
-// party and a play-again button. A tap on the background makes every eye look at it for a moment.
+// party and a play-again button. A tap on the background makes every eye look at it, and follow the
+// pointer, for a couple of seconds.
 //
 // The hook is the pupils. Each one is a little disc rolling loose inside its eye, simulated in
 // screen space at 240 steps a second: it feels gravity (down, or the way the device tilts), the
@@ -132,7 +133,7 @@ const HOP_G = 18; // a face's own gravity, in body sizes per s²
 
 const PIP_GROW = 1.3; // a dot just filled swells to about 1 + this times its size, then settles
 
-const LOOK_HOLD = 0.9; // after a tap on the background, the eyes look at it this long, s
+const LOOK_HOLD = 2; // after a tap on the background, the eyes look at it, and follow the pointer, this long, s
 const LOOK_FADE = 0.35; // then let go over this long, back to rolling loose
 const LOOK_K = 600; // how hard a pupil is pulled towards the look, per s²
 const LOOK_C = 30; // and its damping, per s (under critical, so it overshoots a little)
@@ -797,6 +798,12 @@ function tapAt(x, y) {
   }
 }
 
+// While the eyes are looking, they follow the pointer: a mouse as it moves, a finger as it slides.
+canvas.addEventListener('pointermove', (e) => {
+  if (look.t >= LOOK_HOLD) return;
+  look.x = e.clientX;
+  look.y = e.clientY;
+});
 canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault();
   tapAt(e.clientX, e.clientY);

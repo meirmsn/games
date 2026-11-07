@@ -148,7 +148,24 @@ test('mute is respected, and the sound button changes it for the whole site', as
   await context.close();
 });
 
-test('tapping empty space is answered too', async () => {
+// Every pupil looks towards a point: the median of six reads, since a face's own hop can tug its
+// pupils for an instant.
+async function eyesLookAt(page, x, y, what) {
+  const along = {};
+  for (let i = 0; i < 6; i++) {
+    for (const o of (await state(page)).faces.filter((g) => g.phase !== 'out')) {
+      const d = Math.hypot(x - o.x, y - o.y);
+      o.pupils.forEach((p, k) => (along[`${o.id}.${k}`] ??= []).push((p.x * (x - o.x) + p.y * (y - o.y)) / d));
+    }
+    await page.waitForTimeout(30);
+  }
+  for (const [eye, v] of Object.entries(along)) {
+    const m = v.sort((a, b) => a - b)[Math.floor(v.length / 2)];
+    assert.ok(m > 0.25, `pupil ${eye} looks at ${what} (${m.toFixed(2)} eye radii towards it)`);
+  }
+}
+
+test('tapping empty space is answered too, and the eyes follow the pointer for a moment', async () => {
   const { context, page } = await openGame();
   await readyFace(page);
   const { faces } = await state(page);
@@ -160,23 +177,16 @@ test('tapping empty space is answered too', async () => {
   assert.equal((await page.evaluate(() => window.__played)).length, 1);
   assert.equal((await state(page)).taps, 0);
 
-  // Every eye looks at the spot for a moment (the median of ten looks while it holds, since a face's
-  // own hop can tug its pupils for an instant)...
-  await page.waitForTimeout(350);
-  const along = {};
-  for (let i = 0; i < 10; i++) {
-    for (const o of (await state(page)).faces.filter((g) => g.phase !== 'out')) {
-      const d = Math.hypot(x - o.x, y - o.y);
-      o.pupils.forEach((p, k) => (along[`${o.id}.${k}`] ??= []).push((p.x * (x - o.x) + p.y * (y - o.y)) / d));
-    }
-    await page.waitForTimeout(40);
-  }
-  for (const [eye, v] of Object.entries(along)) {
-    const m = v.sort((a, b) => a - b)[Math.floor(v.length / 2)];
-    assert.ok(m > 0.25, `pupil ${eye} looks at the tap (${m.toFixed(2)} eye radii towards it)`);
-  }
-  // ...then rolls loose again, back to the bottom.
-  await page.waitForTimeout(1500);
+  // Every eye looks at the spot...
+  await page.waitForTimeout(300);
+  await eyesLookAt(page, x, y, 'the tap');
+  // ...and follows the pointer as it moves, here level with the face on its far side...
+  const x2 = f.x < 195 ? 5 : 385;
+  await page.mouse.move(x2, f.y);
+  await page.waitForTimeout(300);
+  await eyesLookAt(page, x2, f.y, 'the pointer');
+  // ...then, a couple of seconds after the tap, rolls loose again, back to the bottom.
+  await page.waitForTimeout(1200);
   await pupilsRestAtBottom(page);
   await context.close();
 });
