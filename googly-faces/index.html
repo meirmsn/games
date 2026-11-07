@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Googly Faces</title>
+    <meta name="description" content="Tap the silly faces and watch their eyes wobble. A tap-only game to share with a young child." />
+    <meta name="theme-color" content="#fbf3e8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#232638" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <script src="../assets/theme.js"></script>
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="game.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas class="gf-stage" aria-label="Googly faces. Tap a face to make it bounce." role="img"></canvas>
+    <button class="gf-btn gf-sound" type="button" data-sound-toggle aria-pressed="false" aria-label="Sound on (mute)" title="Sound on">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path class="line" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path class="line" d="M16.5 9.5l5 5M21.5 9.5l-5 5" /></svg>
+    </button>
+    <button class="gf-again" type="button" data-play-again aria-label="Play again" title="Play again" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19.5 4.5v4h-4" /></svg>
+    </button>
+    <div class="gf-safe" aria-hidden="true"></div>
+  </body>
+</html>

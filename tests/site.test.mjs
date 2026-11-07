@@ -4,6 +4,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { FAKE_AUDIO } from './fake-audio.mjs';
 
 const PORT = 8790 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}/`;
@@ -140,41 +141,6 @@ test('Escape in a game goes back to the landing page', async () => {
   await context.close();
 });
 
-// A stand-in AudioContext that counts the sounds started, so tests can check what was played.
-const FAKE_AUDIO = () => {
-  window.__played = [];
-  window.__decoded = 0;
-  class FakeContext {
-    constructor() {
-      this.state = 'suspended';
-      this.destination = {};
-    }
-    resume() {
-      this.state = 'running';
-      return Promise.resolve();
-    }
-    createGain() {
-      return { gain: { value: 1 }, connect: (n) => n };
-    }
-    decodeAudioData(data, ok) {
-      window.__decoded++;
-      ok({ bytes: data.byteLength });
-    }
-    createBufferSource() {
-      const ctx = this;
-      return {
-        buffer: null,
-        playbackRate: { value: 1 },
-        connect: (n) => n,
-        start() {
-          window.__played.push({ state: ctx.state, bytes: this.buffer.bytes });
-        },
-      };
-    }
-  }
-  window.AudioContext = FakeContext;
-};
-
 async function openWithFakeAudio(path = '') {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
@@ -238,12 +204,12 @@ test('a playable tile plays its sound and opens its game', async () => {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
-  // Serve the landing page with its first tile made playable, pointing at the test game.
+  // Serve the landing page with its first coming-soon tile made playable, pointing at the test game.
   await page.route(BASE, async (route) => {
     const res = await route.fetch();
     const html = (await res.text()).replace(
-      /<article class="tile is-soon tone-sun"([^>]*)>([\s\S]*?)<\/article>/,
-      '<a class="tile tone-sun" href="tests/fixtures/game/">$2</a>'
+      /<article class="tile is-soon ([^"]*)"([^>]*)>([\s\S]*?)<\/article>/,
+      '<a class="tile $1" href="tests/fixtures/game/">$3</a>'
     );
     await route.fulfill({ response: res, body: html });
   });
