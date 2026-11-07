@@ -1486,7 +1486,7 @@ function drawHud() {
   const bx = (cssW - bw) / 2;
   const by = top + 64 + (cssW < 520 ? 10 : 0);
   const prog = Math.min(1, game.xp / XP_TO_DIVE);
-  ctx.fillStyle = 'rgba(10,40,70,0.35)';
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
   roundRect(bx, by, bw, 10, 5);
   ctx.fill();
   ctx.fillStyle = '#ffd23f';
