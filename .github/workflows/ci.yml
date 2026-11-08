@@ -184,6 +184,8 @@ jobs:
         env:
           BUILD_SHA: ${{ github.sha }}
           # --- The project's deploy settings and secrets, e.g. API_TOKEN: ${{ secrets.API_TOKEN }} ---
+          SITE_URL: https://games.meirmsn.dev
+          PREVIOUS_SHA: ${{ github.event.before }}
         run: |
           if [ -x scripts/deploy.sh ]; then
             scripts/deploy.sh
