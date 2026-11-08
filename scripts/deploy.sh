@@ -57,10 +57,12 @@ url_of() {
   esac
 }
 
-# One file: "ok", or "differs <path>" / "gone? <path>" on stdout. Args: commit, mode (same|gone), path.
+# One file: "ok", or what is wrong with it, on stdout. Arg: one line "<commit> <same|gone> <path>"
+# (the path may hold spaces).
 check_one() {
-  local sha=$1 mode=$2 f=$3 u code want got
-  u=$(url_of "$f")
+  local sha mode f u code want got
+  read -r sha mode f <<<"$1"
+  u=$(url_of "$f"); u=${u// /%20}
   if [ "$mode" = gone ]; then
     code=$(curl -s -o /dev/null -w '%{http_code}' -L --max-time 20 -H 'Cache-Control: no-cache' "$u")
     [ "$code" = 404 ] && echo ok || echo "still served (HTTP $code): $f"
@@ -80,7 +82,7 @@ serves() {
   local sha=$1 gone=${2:-}
   { site_files "$sha" | sed "s|^|$sha same |"
     [ -z "$gone" ] || sed "s|^|$sha gone |" "$gone"; } >"$tmp/todo" || return 2
-  xargs -a "$tmp/todo" -P "$jobs" -L 1 bash -c 'check_one "$@"' _ >"$tmp/result" 2>/dev/null
+  xargs -a "$tmp/todo" -d '\n' -n 1 -P "$jobs" bash -c 'check_one "$1"' _ >"$tmp/result" 2>/dev/null
   if grep -v -m 1 -x ok "$tmp/result" >"$tmp/why"; then return 1; fi
   return 0
 }
