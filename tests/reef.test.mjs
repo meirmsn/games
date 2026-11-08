@@ -649,6 +649,15 @@ test('AC-24: L1 has no pufferfish, even behind the start card', async () => {
   await steps(page, 1800); // 30 s of the start card
   assert.equal(await page.evaluate(() => window.__reef.npcs().filter((n) => n.kind === 'puffer').length), 0);
   assert.equal(await page.evaluate(() => window.__reef.depths[0].puffers), 0);
+  // ...and 30 s of play at L1, the fish awake and safe, still brings none.
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.startGame(0);
+    r.player.waiting = false;
+    r.player.invul = 999;
+  });
+  await steps(page, 1800);
+  assert.equal(await page.evaluate(() => window.__reef.npcs().filter((n) => n.kind === 'puffer').length), 0, 'none in play');
   await context.close();
 });
 
