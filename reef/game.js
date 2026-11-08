@@ -831,7 +831,8 @@ function caught(by) {
   game.chain = 0;
   game.assist = Math.min(1, game.assist + 0.3);
   game.calm = 0;
-  // A clear "oh no" without being harsh: the soft thud of the bite, then a short falling phrase.
+  // A clear "oh no" without being harsh: the soft thud of the bite, then a falling diminished
+  // figure on the steel drum (E, C#, Bb), tense rather than cheerful.
   sfx('caught');
   if (game.lives > 0) setTimeout(() => sfx('hurt', { gain: 0.75 }), 90); // the last bite gets the game-over jingle instead
   burst(player.x, player.y, 12, 18);
