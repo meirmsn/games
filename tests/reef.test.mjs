@@ -168,19 +168,19 @@ test('AC-15: food is told by colour: orange, green and pink are food, the rest b
   await context.close();
 });
 
-test('AC-16: depths take 4, 7, 11, 15 and 20 fish, then 5 more each', async () => {
+test('AC-16: levels take 4, 7, 9, 11, 13, 15, 17 and 20 fish, then 5 more each', async () => {
   const { context, page } = await open();
   const goals = await page.evaluate(() => {
     const r = window.__reef;
     const out = [];
-    for (let d = 0; d < 7; d++) {
+    for (let d = 0; d < 10; d++) {
       r.game.depth = d;
       out.push(r.goal());
     }
     r.game.depth = 0;
     return out;
   });
-  assert.deepEqual(goals, [4, 7, 11, 15, 20, 25, 30]);
+  assert.deepEqual(goals, [4, 7, 9, 11, 13, 15, 17, 20, 25, 30]);
   await context.close();
 });
 
@@ -280,7 +280,7 @@ test('AC-6: an eel warns with bubbles first, then strikes across the reef', asyn
   await startEmpty(page);
   await page.evaluate(() => {
     const r = window.__reef;
-    r.game.depth = 2; // Kelp Forest: eels
+    r.game.depth = 5; // Sunset Reef: the first eels
     r.game.eelIn = 0;
   });
   await steps(page, 1);
@@ -345,30 +345,37 @@ test('AC-8: a passing school is a feast of fish you can eat', async () => {
   await context.close();
 });
 
-test('AC-18: each depth brings its own fish', async () => {
+test('AC-18: new dangers come in slowly, level by level', async () => {
   const { context, page } = await open();
-  const kinds = await page.evaluate(() => {
+  const levels = await page.evaluate(() => {
     const r = window.__reef;
     const out = [];
-    for (let d = 0; d < 5; d++) {
+    for (let d = 0; d < 8; d++) {
       r.game.depth = d;
       const seen = new Set();
       for (let i = 0; i < 200; i++) {
         seen.add(r.chooseFish(true).species);
         seen.add(r.chooseFish(false).species);
       }
-      out.push([...seen].sort().join(' '));
+      const def = r.depths[d];
+      out.push({ fish: [...seen].sort().join(' '), puffers: def.puffers, eels: !!def.eel, current: !!def.current });
     }
     r.game.depth = 0;
     return out;
   });
-  assert.deepEqual(kinds, [
+  assert.deepEqual(levels.map((l) => l.fish), [
     'blue green pink',
     'blue green orange pink',
+    'blue green orange pink',
+    'blue green orange pink',
+    'blue green orange pink red',
     'blue green orange pink red',
     'blue green grey orange pink red',
     'blue green grey orange pink red',
   ]);
+  assert.deepEqual(levels.map((l) => l.puffers), [0, 1, 1, 1, 1, 2, 2, 2], 'pufferfish from L2');
+  assert.deepEqual(levels.map((l) => l.current), [false, false, false, true, false, true, true, false], 'currents from L4');
+  assert.deepEqual(levels.map((l) => l.eels), [false, false, false, false, false, true, true, true], 'eels from L6');
   await context.close();
 });
 
@@ -410,7 +417,7 @@ test('AC-12: The Deep is dark, with a glow around the player', async () => {
   await startEmpty(page);
   await page.evaluate(() => {
     const r = window.__reef;
-    r.game.depth = 3;
+    r.game.depth = 6;
     r.dive();
   });
   await steps(page, 150); // through the dive into The Deep
@@ -435,7 +442,7 @@ test('AC-12: The Deep is dark, with a glow around the player', async () => {
     const y = r.player.y;
     return { depth: r.game.depth, near: at(r.player.x - 70, y), far: at(r.player.x - 420, y) };
   });
-  assert.equal(lum.depth, 4, 'in The Deep');
+  assert.equal(lum.depth, 7, 'in The Deep');
   assert.ok(lum.near > lum.far * 1.5, `near the player ${lum.near}, far away ${lum.far}`);
   await context.close();
 });
@@ -525,8 +532,14 @@ test('AC-19: each predator has its own mark, and food has none', async () => {
 
 test('AC-20: level codes: the game-over card shows one, and entering it starts at that level', async () => {
   const { context, page } = await open();
-  const codes = await page.evaluate(() => [1, 2, 3, 4, 5, 6].map((d) => window.__reef.codeFor(d)));
-  assert.deepEqual(codes, ['PERCH', 'KRILL', 'TROUT', 'GLOOM', 'REEF6', 'REEF7']);
+  // The codes are pinned: a code names a level number and never changes from one version to the
+  // next, and the codes of earlier versions keep working. Only add to this list.
+  const codes = await page.evaluate(() => [1, 2, 3, 4, 5, 6, 7, 8, 9].map((d) => window.__reef.codeFor(d)));
+  assert.deepEqual(codes, ['PERCH', 'KRILL', 'TROUT', 'GLOOM', 'BLENNY', 'GOBY', 'MOREL', 'REEF9', 'REEF10']);
+  const levels = await page.evaluate(() =>
+    ['PERCH', 'KRILL', 'TROUT', 'GLOOM', 'BLENNY', 'GOBY', 'MOREL', 'REEF9', 'PEARL', 'SQUID', 'MANTA', 'ABYSS', 'DEEP6', 'abyss'].map((c) => window.__reef.depthForCode(c) + 1)
+  );
+  assert.deepEqual(levels, [2, 3, 4, 5, 6, 7, 8, 9, 2, 3, 4, 5, 6, 5], 'each code opens its level number');
   assert.ok(codes.every((c) => !/[WASD]/.test(c)), 'no code uses the keys that steer');
   // Typing in the code box types, even the steering keys, and doesn't steer the fish.
   await page.click('[data-code]');
@@ -578,7 +591,7 @@ test('AC-22: each world looks different from the one before', async () => {
     const d = r.depths;
     const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
     const gaps = d.slice(1).map((x, i) => Math.round(dist(x.top, d[i].top) + dist(x.bottom, d[i].bottom)));
-    r.game.depth = 3;
+    r.game.depth = 4;
     const { W } = r.world();
     const slope = r.groundAt(0) - r.groundAt(W);
     r.game.depth = 0;
@@ -586,13 +599,13 @@ test('AC-22: each world looks different from the one before', async () => {
   });
   assert.ok(w.gaps.every((g) => g > 120), `water colours differ between neighbours: ${w.gaps}`);
   assert.ok(w.slope > 100, `the Twilight Slope's floor rises (${w.slope})`);
-  assert.equal(w.plants[3], 0, 'the slope is bare');
-  assert.ok(w.plants[1] >= 3 && w.plants[2] >= 2, 'the coral and the kelp are overgrown');
-  assert.deepEqual(w.bones, [false, false, false, false, true]);
+  assert.equal(w.plants[4], 0, 'the slope is bare');
+  assert.ok(w.plants[1] >= 3 && w.plants[2] >= 2 && w.plants[3] >= 3, 'the coral, the kelp and the seagrass are overgrown');
+  assert.deepEqual(w.bones, [false, false, false, false, false, false, false, true]);
   await context.close();
 });
 
-test('AC-23: currents: a rip across the top third of L3, the whole sea flowing at L4', async () => {
+test('AC-23: currents: a gentle drift at L4, a rip across the top third at L6, the whole sea at L7', async () => {
   const { context, page } = await open();
   const flows = await page.evaluate(() => {
     const r = window.__reef;
@@ -601,15 +614,23 @@ test('AC-23: currents: a rip across the top third of L3, the whole sea flowing a
       r.game.depth = d;
       return Math.round(r.currentAt(H * f));
     };
-    const out = { l1: at(0, 0.5), l3top: at(2, 0.15), l3low: at(2, 0.7), l4top: at(3, 0.15), l4low: at(3, 0.7) };
+    const out = {
+      calm: [0, 1, 2, 4, 7].map((d) => at(d, 0.5)),
+      l4: at(3, 0.5),
+      l6top: at(5, 0.15),
+      l6low: at(5, 0.7),
+      l7top: at(6, 0.15),
+      l7low: at(6, 0.7),
+    };
     r.game.depth = 0;
     return out;
   });
-  assert.equal(flows.l1, 0, 'no current in L1');
-  assert.ok(flows.l3top > 100 && flows.l3low === 0, `L3: ${flows.l3top} at the top, ${flows.l3low} below`);
-  assert.ok(flows.l4top < -40 && flows.l4low < -40, `L4: ${flows.l4top} and ${flows.l4low}, both flowing left`);
-  // A fish left alone at L4 is carried along with it.
-  await page.evaluate(() => window.__reef.startGame(3));
+  assert.deepEqual(flows.calm, [0, 0, 0, 0, 0], 'no current at L1, L2, L3, L5 or L8');
+  assert.ok(flows.l4 > 20 && flows.l4 < 50, `L4 drifts gently: ${flows.l4}`);
+  assert.ok(flows.l6top > 90 && flows.l6low === 0, `L6: ${flows.l6top} at the top, ${flows.l6low} below`);
+  assert.ok(flows.l7top < -40 && flows.l7low < -40, `L7: ${flows.l7top} and ${flows.l7low}, both flowing left`);
+  // A fish left alone at L7 is carried along with it.
+  await page.evaluate(() => window.__reef.startGame(6));
   await startEmpty(page);
   const before = await page.evaluate(() => {
     const r = window.__reef;
@@ -650,5 +671,24 @@ test('AC-25: orange food fish are golden, clearly unlike the player\'s orange', 
     return { gold, player: avg(c) };
   });
   assert.ok(tone.gold - tone.player > 0.15, `green-to-red: golden ${tone.gold.toFixed(2)}, player ${tone.player.toFixed(2)}`);
+  await context.close();
+});
+
+test('AC-26: a bite sounds clearly: the thud, then a short falling phrase, but not on the last life', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  await page.evaluate(() => (window.__reef.heard.length = 0));
+  await meet(page, 'blue', 70, 3);
+  await page.waitForTimeout(250); // the phrase follows the thud
+  assert.deepEqual(await page.evaluate(() => window.__reef.heard.filter((n) => n === 'caught' || n === 'hurt')), ['caught', 'hurt']);
+  await ready(page);
+  await page.evaluate(() => {
+    window.__reef.game.lives = 1;
+    window.__reef.heard.length = 0;
+  });
+  await meet(page, 'blue', 70, 3);
+  await page.waitForTimeout(700);
+  const last = await page.evaluate(() => window.__reef.heard.slice());
+  assert.ok(!last.includes('hurt') && last.includes('gameover'), `the last bite: ${last}`);
   await context.close();
 });

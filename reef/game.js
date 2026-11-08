@@ -3,10 +3,11 @@
 // How the challenge is kept "just right" (flow), in one place so it can be tuned:
 //  - Food is told by colour, not by reading sizes: golden, green and pink fish are food; the rest
 //    have teeth and bite. You learn it in the first seconds, by doing.
-//  - Depths get longer as you go: 4 fish to clear the first, then 7, 11, 15, 20 and 5 more each
-//    after that, so the first win comes fast and the challenge builds from there.
-//  - Each depth looks clearly different and brings new fish: pufferfish, then red fish and eels,
-//    then grey darters, then the dark.
+//  - Levels get longer as you go: 4 fish to clear the first, then 7, 9, 11, 13, 15, 17, 20 and 5
+//    more each after that, so the first win comes fast and the challenge builds from there.
+//  - Each level is a new world, and new dangers come in slowly: pufferfish at L2, a gentle current
+//    at L4, the anglerfish at L5, the rip current and eels at L6, the lightning fish and the
+//    against-you current at L7, then the dark.
 //  - Risk pays more: points go with (its size / yours)^2, so the bigger food is worth chasing.
 //  - A hidden "assist" level rises when you get bitten and fades while you do well. It slows and
 //    blinds predators a little and spawns fewer of them.
@@ -23,6 +24,7 @@ const { sound } = mountShell({
     warn: 'sounds/warn.mp3',
     drip: 'sounds/drip.mp3',
     caught: 'sounds/caught.mp3',
+    hurt: 'sounds/hurt.mp3',
     bonk: 'sounds/bonk.mp3',
     dive: 'sounds/dive.mp3',
     gameover: 'sounds/gameover.mp3',
@@ -30,6 +32,14 @@ const { sound } = mountShell({
     music: 'sounds/music.mp3',
   },
 });
+
+// Every game sound goes through here, which also keeps the last few names for the tests.
+const heard = [];
+function sfx(name, opts) {
+  heard.push(name);
+  if (heard.length > 20) heard.shift();
+  sound.play(name, opts);
+}
 
 // ---------- Tuning ----------
 
@@ -45,64 +55,90 @@ const SPECIES = {
   // lure and needle teeth, the grey one lightning crackling through its body. (The pufferfish's
   // mark is puffing up.)
   blue: { rel: [1.25, 1.6], speed: 66, skel: true, mark: 'jaws', mouth: [0.79, 0.985, 0.58] },
-  red: { rel: [1.6, 2.2], speed: 56, skel: true, mark: 'lure', mouth: [0.8, 0.995, 0.66] },
+  red: { rel: [1.4, 1.8], speed: 56, skel: true, mark: 'lure', mouth: [0.8, 0.995, 0.66] },
   grey: { rel: [1.15, 1.4], speed: 100, mark: 'zap' },
 };
 const PUFFER = { min: 40, max: 58, speed: 32, puffed: 1.5 };
 
 // Each depth looks clearly different from the one before: its water colour, its floor (flat,
-// sloped, bare, overgrown, strewn with bones) and its plants. Level codes let a player start
-// again from the furthest depth they reached, as on old arcade machines.
+// sloped, bare, overgrown, strewn with bones) and its plants. New dangers come in slowly, one or
+// two at a time, so a new world on its own keeps things fresh.
 const DEPTHS = [
   {
-    name: 'Sunlit Shallows', goal: 4, code: '',
+    name: 'Sunlit Shallows', goal: 4,
     top: [140, 224, 242], bottom: [58, 162, 212],
     food: ['pink', 'green'], danger: ['blue'],
-    threat: 0.14, puffers: 0, eel: null, dark: 0, rays: 1, surface: true,
+    threat: 0.12, puffers: 0, eel: null, dark: 0, rays: 1, surface: true,
     ground: 'sand', weeds: ['green', 'grass', 'orange'], weedDensity: 0.9, rockCount: 1,
   },
   {
-    name: 'Coral Garden', goal: 7, code: 'PERCH',
+    name: 'Coral Garden', goal: 7,
     top: [255, 204, 178], bottom: [196, 88, 112], farTint: 0.8,
     food: ['pink', 'green', 'orange'], danger: ['blue'],
-    threat: 0.18, puffers: 1, eel: null, dark: 0, rays: 0.9,
+    threat: 0.13, puffers: 1, eel: null, dark: 0, rays: 0.9,
     ground: 'sand', weeds: ['pink', 'orange', 'pink', 'orange'], weedDensity: 3, rockCount: 3,
   },
   {
-    name: 'Kelp Forest', goal: 11, code: 'KRILL',
+    name: 'Kelp Forest', goal: 9,
     top: [104, 186, 150], bottom: [20, 82, 78],
-    food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
-    threat: 0.22, puffers: 1, eel: [20, 28], dark: 0.06, rays: 0.6, kelp: true,
-    current: { dir: 1, speed: 150, from: 0, to: 0.36 }, // a rip current across the top third
+    food: ['pink', 'green', 'orange'], danger: ['blue'],
+    threat: 0.15, puffers: 1, eel: null, dark: 0.06, rays: 0.6, kelp: true,
     ground: 'sand', weeds: ['green', 'green', 'grass'], weedDensity: 2.4, rockCount: 1,
   },
   {
-    name: 'Twilight Slope', goal: 15, code: 'TROUT',
+    name: 'Seagrass Meadow', goal: 11,
+    top: [240, 226, 160], bottom: [120, 152, 104], farTint: 0.75,
+    food: ['pink', 'green', 'orange'], danger: ['blue'],
+    threat: 0.16, puffers: 1, eel: null, dark: 0, rays: 1,
+    current: { dir: 1, speed: 35, from: 0, to: 1 }, // a gentle drift across the whole meadow
+    ground: 'sand', weeds: ['grass', 'grass', 'green'], weedDensity: 3.2, rockCount: 0,
+  },
+  {
+    name: 'Twilight Slope', goal: 13,
     top: [110, 96, 176], bottom: [30, 20, 74], farTint: 0.7,
-    food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
-    threat: 0.25, puffers: 2, eel: [16, 24], dark: 0.25, rays: 0.25, slope: 0.34,
-    current: { dir: -1, speed: 70, from: 0, to: 1 }, // the whole sea flows left, against you
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
+    threat: 0.18, puffers: 1, eel: null, dark: 0.2, rays: 0.25, slope: 0.34,
     ground: 'dirt', weeds: [], weedDensity: 0, rockCount: 6,
   },
   {
-    name: 'The Deep', goal: 20, code: 'GLOOM',
+    name: 'Sunset Reef', goal: 15,
+    top: [252, 172, 118], bottom: [122, 46, 92], farTint: 0.75,
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red'],
+    threat: 0.2, puffers: 2, eel: [22, 30], dark: 0, rays: 0.7,
+    current: { dir: 1, speed: 120, from: 0, to: 0.36 }, // a rip current across the top third
+    ground: 'sand', weeds: ['orange', 'pink', 'orange'], weedDensity: 1.4, rockCount: 4,
+  },
+  {
+    name: 'Grey Caves', goal: 17,
+    top: [128, 146, 152], bottom: [28, 38, 46], farTint: 0.8,
+    food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
+    threat: 0.22, puffers: 2, eel: [18, 26], dark: 0.3, rays: 0.15,
+    current: { dir: -1, speed: 60, from: 0, to: 1 }, // the whole sea flows left, against you
+    ground: 'dirt', weeds: ['grass'], weedDensity: 0.5, rockCount: 9,
+  },
+  {
+    name: 'The Deep', goal: 20,
     top: [16, 24, 40], bottom: [2, 4, 10],
     food: ['pink', 'green', 'orange'], danger: ['blue', 'red', 'grey'],
-    threat: 0.28, puffers: 2, eel: [12, 20], dark: 0.66, rays: 0, bones: true,
+    threat: 0.25, puffers: 2, eel: [14, 22], dark: 0.66, rays: 0, bones: true,
     ground: 'dirt', weeds: ['grass'], weedDensity: 0.4, rockCount: 2,
   },
 ];
 
-// The code for a depth (0-based); past the fifth, REEF and its level number. Codes never use W,
-// A, S or D, the keys that also steer the fish.
-const codeFor = (n) => (n < DEPTHS.length ? DEPTHS[n].code : 'REEF' + (n + 1));
+// Level codes, as on old arcade machines. A code names a level number, not a world, and the list
+// only ever grows: never change or remove a code, or players' written-down codes stop working.
+// LEVEL_CODES[n] opens level n + 1 (L1 needs none). Codes from earlier versions stay as aliases.
+const LEVEL_CODES = ['', 'PERCH', 'KRILL', 'TROUT', 'GLOOM', 'BLENNY', 'GOBY', 'MOREL'];
+const OLD_CODES = { PEARL: 2, SQUID: 3, MANTA: 4, ABYSS: 5 }; // level numbers
+const codeFor = (n) => (n < LEVEL_CODES.length ? LEVEL_CODES[n] : 'REEF' + (n + 1));
 function depthForCode(text) {
   const c = String(text || '').trim().toUpperCase();
   if (!c) return -1;
-  const i = DEPTHS.findIndex((d) => d.code === c);
+  const i = LEVEL_CODES.indexOf(c);
   if (i > 0) return i;
-  const m = /^REEF(\d{1,2})$/.exec(c);
-  if (m && Number(m[1]) > DEPTHS.length) return Number(m[1]) - 1;
+  if (OLD_CODES[c]) return OLD_CODES[c] - 1;
+  const m = /^(?:REEF|DEEP)(\d{1,2})$/.exec(c); // DEEP6 and on, from an earlier version
+  if (m && Number(m[1]) > 1) return Number(m[1]) - 1;
   return -1;
 }
 
@@ -273,7 +309,7 @@ const groundAt = (x) => groundY - (depthDef().slope || 0) * H * clamp(x / W, 0, 
 const depthDef = (n = game.depth) => DEPTHS[Math.min(n, DEPTHS.length - 1)];
 const extraDepth = () => Math.max(0, game.depth - (DEPTHS.length - 1));
 const threatBase = () => Math.min(0.38, depthDef().threat + 0.02 * extraDepth());
-const speedMul = () => Math.min(1.3, 1 + 0.045 * game.depth);
+const speedMul = () => Math.min(1.3, 1 + 0.03 * game.depth);
 
 // ---------- Layout and scenery ----------
 
@@ -719,7 +755,7 @@ function wake() {
   if (!player.waiting || game.mode !== 'play') return;
   player.waiting = false;
   player.invul = 1;
-  sound.play('start', { gain: 0.8 });
+  sfx('start', { gain: 0.8 });
 }
 
 function resetPlayer() {
@@ -749,7 +785,7 @@ function eat(n) {
   game.score += pts;
   if (game.chain > 1) game.comboShow = 1.6;
   popup(n.x, n.y - 10, '+' + pts, mult > 1);
-  sound.play('eat', { rate: 0.92 + 0.07 * Math.min(game.chain, 8) + rand(-0.03, 0.03) });
+  sfx('eat', { rate: 0.92 + 0.07 * Math.min(game.chain, 8) + rand(-0.03, 0.03) });
   player.gulp = 1;
   game.assist = Math.max(0, game.assist - 0.012);
   removeFish(n, true);
@@ -795,7 +831,9 @@ function caught(by) {
   game.chain = 0;
   game.assist = Math.min(1, game.assist + 0.3);
   game.calm = 0;
-  sound.play('caught');
+  // A clear "oh no" without being harsh: the soft thud of the bite, then a short falling phrase.
+  sfx('caught');
+  if (game.lives > 0) setTimeout(() => sfx('hurt', { gain: 0.75 }), 90); // the last bite gets the game-over jingle instead
   burst(player.x, player.y, 12, 18);
   if (by) {
     by.state = 'bite';
@@ -810,7 +848,7 @@ function caught(by) {
     skeletons.push({ name: 'fish_orange_skeleton', x: player.x, y: player.y, size: player.size * 0.85, face: player.face, rot: 0, vr: 0.5, vy: 26, rest: 0, alpha: 1, keep: true });
     game.mode = 'over';
     game.overIn = 1.8;
-    setTimeout(() => sound.play('gameover'), 500);
+    setTimeout(() => sfx('gameover'), 500);
     finishRun();
     return;
   }
@@ -850,7 +888,7 @@ function beginDive() {
   game.mode = 'dive';
   game.diveT = 0;
   game.swapped = false;
-  sound.play('dive');
+  sfx('dive');
   player.invul = 4;
 }
 
@@ -951,7 +989,7 @@ function update(dt) {
           game.closeCalls += 1;
           game.score += 50;
           popup(player.x, player.y - player.size * 0.5, 'close!');
-          sound.play('close', { gain: 0.8 });
+          sfx('close', { gain: 0.8 });
         }
       }
     }
@@ -964,7 +1002,7 @@ function update(dt) {
       v.t = rand(2.5, 6);
       const n = randi(3, 7);
       for (let i = 0; i < n; i++) setTimeout(() => bubble(v.x + rand(-4, 4), v.y, rand(2, 5), rand(35, 60)), i * 110);
-      if (game.mode === 'play' && Math.random() < 0.3) sound.play('drip', { gain: 0.25, rate: rand(0.8, 1.2) });
+      if (game.mode === 'play' && Math.random() < 0.3) sfx('drip', { gain: 0.25, rate: rand(0.8, 1.2) });
     }
   }
   for (const b of bubbles) {
@@ -1108,7 +1146,7 @@ function bonk(n, dx, dy, dist) {
   game.chain = 0;
   game.shake = 0.2;
   input.target = { x: player.x + (-dx / l) * 90, y: player.y + (-dy / l) * 90 };
-  sound.play('bonk');
+  sfx('bonk');
   popup(player.x, player.y - 30, 'ouch');
 }
 
@@ -1130,7 +1168,7 @@ function updateNpc(n, dt) {
     if (close) n.puffHold = 2.2;
     else n.puffHold = Math.max(0, n.puffHold - dt);
     const want = n.puffHold > 0 ? 1 : 0;
-    if (want && n.puff < 0.05 && onScreen(n)) sound.play('puff', { gain: 0.7 });
+    if (want && n.puff < 0.05 && onScreen(n)) sfx('puff', { gain: 0.7 });
     n.puff = clamp(n.puff + (want ? dt * 6 : -dt * 0.9), 0, 1);
     tvx *= 1 - n.puff * 0.8;
     tvy *= 0.5;
@@ -1196,7 +1234,7 @@ function updateNpc(n, dt) {
           n.sated = 5;
           n.state = 'wander';
           n.dir = Math.sign(n.vx) || n.dir;
-          if (onScreen(n) && game.mode !== 'title') sound.play('eat', { gain: 0.25, rate: 0.7 });
+          if (onScreen(n) && game.mode !== 'title') sfx('eat', { gain: 0.25, rate: 0.7 });
         } else if (n.huntT <= 0) {
           n.state = 'wander';
           n.dir = Math.sign(n.vx) || n.dir;
@@ -1274,7 +1312,7 @@ function spawnEel() {
   const dir = Math.random() < 0.5 ? 1 : -1;
   const y = player.alive ? clamp(player.y + rand(-60, 60), yMin + 30, groundY - 30) : rand(yMin + 40, groundY - 40);
   eels.push({ dir, y, x: dir > 0 ? -260 : W + 260, t: 1.4 + game.assist * 0.6, state: 'warn', len: 230 });
-  sound.play('warn', { gain: 0.9 });
+  sfx('warn', { gain: 0.9 });
 }
 
 function updateEels(dt) {
@@ -2101,7 +2139,7 @@ ui.codeForm.addEventListener('submit', (e) => {
   void ui.codeForm.offsetWidth; // restart the shake
   ui.codeForm.classList.add('wrong');
   ui.codeMsg.textContent = ui.code.value ? 'That code doesn\u2019t open a level.' : 'Type a level code first.';
-  sound.play('bonk', { gain: 0.6 });
+  sfx('bonk', { gain: 0.6 });
 });
 
 function syncMute() {
@@ -2135,7 +2173,7 @@ atlas.decode().then(
     requestAnimationFrame(frameLoop);
     // For tests and balance runs: read the state, and step the simulation without drawing.
     window.__reef = {
-      game, player, input, startGame, showStart, codeFor, depthForCode, depths: DEPTHS, groundAt, currentAt, golden, frame, atlas, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
+      game, player, input, startGame, showStart, codeFor, depthForCode, depths: DEPTHS, groundAt, currentAt, golden, frame, atlas, heard, dive: beginDive, step: update, isFood, isThreat, makePuffer, goal, chooseFish,
       npcs: () => npcs, eels: () => eels, world: () => ({ W, H, yMin, yMax }), drawn,
       set manual(v) { manual = v; },
       marks: () => Object.fromEntries(Object.entries(SPECIES).map(([k, v]) => [k, v.mark || null])),
