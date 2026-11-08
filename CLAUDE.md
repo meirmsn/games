@@ -29,3 +29,16 @@ What this project is, in a few lines, and where its docs start: written with its
   identical to their source and replaced whole on an upgrade: don't edit them here, and keep the
   formatter off them. A change that needs to move away from an item (rename it, drop it, do it
   another way) doesn't change or skip the check: tell the owner what it needs and propose a path.
+
+## Builds, previews and deploys
+
+builds_previews_deploys: all-cloudflare
+
+Cloudflare's GitHub app builds every PR's preview (`<branch>.games.meirmsn.dev`) and deploys `main`
+to https://games.meirmsn.dev, in one Cloudflare account; GitHub holds no Cloudflare token. `main`
+requires `fast` and `slow`, up to date with `main`, so a merge is code that just passed. CI's
+`scripts/deploy.sh` deploys nothing: it waits until the site serves the merged commit's files and
+feeds the merged PR's deploy comment (`specs/all-cloudflare-deploys.md`). Previews never use
+production data: every binding in `wrangler.jsonc` has its own preview resource in the `previews`
+block, which `scripts/preview-bindings-check.mjs` checks. Never run `wrangler deploy` or
+`wrangler rollback` from a session; rollback is the owner's.

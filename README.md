@@ -19,7 +19,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
-It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site at https://games.meirmsn.dev, and every pull request gets its own preview link at `<branch>.games.meirmsn.dev`, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site.
+It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site at https://games.meirmsn.dev, and every pull request gets its own preview link at `<branch>.games.meirmsn.dev`, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site. After a merge, CI's `scripts/deploy.sh` waits until the live site serves the merged files and updates the merged PR's deploy comment; it deploys nothing itself (`specs/all-cloudflare-deploys.md`).
 
 ## Adding a game
 
@@ -32,7 +32,7 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 
 CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 
-- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the lockfile (npmjs only), the offline file list and page references, and the theme tokens. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
+- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
 Art and sound by [Kenney](https://www.kenney.nl) (CC0). Code is under the [MIT License](LICENSE).

@@ -61,4 +61,9 @@ lockfile_npmjs_only() {
 part lockfile_npmjs_only
 part python3 scripts/check-shell.py
 part node scripts/ui/tokens-check.mjs --theme assets/base.css assets/base.css assets/site.css shared/game-shell.css
+# builds_previews_deploys: all-cloudflare (specs/all-cloudflare-deploys.md): previews never bind
+# production data, and the deploy step's own tests (no network).
+part node scripts/preview-bindings-check.mjs
+part tests/preview-bindings-check.test.sh
+part tests/deploy.test.sh
 exit "$worst"
