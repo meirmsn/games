@@ -49,7 +49,7 @@ printf 'x\nbuilds_previews_deploys: all-cloudflare\n' >"$r/CLAUDE.md"
 printf '{\n  // the Worker\n  "name": "games"\n}\n' >"$r/wrangler.jsonc"
 printf '.git\nscripts\nui\nCLAUDE.md\nwrangler.jsonc\n.assetsignore\n' >"$r/.assetsignore"
 echo v1 >"$r/index.html"; echo page-a >"$r/a/index.html"; echo js >"$r/a/ui/x.js"
-printf 'bin\0ary\0' >"$r/img.bin"; echo old >"$r/old.txt"
+printf 'bin\0ary\0' >"$r/img.bin"; echo old >"$r/old.txt"; : >"$r/empty.txt"
 git -C "$r" add -A && git -C "$r" commit -qm c1 && c1=$(git -C "$r" rev-parse HEAD)
 echo v2 >"$r/index.html"; git -C "$r" rm -q old.txt
 git -C "$r" commit -qam c2 && c2=$(git -C "$r" rev-parse HEAD)
@@ -92,6 +92,12 @@ newcase stale; site "$FAKE/site.1" "$c2"; echo old >"$FAKE/site.1/old.txt"; run 
 if [ "$(rc stale)" = 1 ] && log stale "still served (HTTP 200): old.txt"; then
   pass "all-cloudflare-deploys AC-1: a removed file still served is not live"
 else fail "all-cloudflare-deploys AC-1 removed file (rc $(rc stale))"; cat "$work/stale.log"; fi
+
+# AC-1, an empty site file the site doesn't serve: a failed fetch never matches
+newcase empty; site "$FAKE/site.1" "$c2"; rm "$FAKE/site.1/empty.txt"; run empty
+if [ "$(rc empty)" = 1 ] && log empty "differs: empty.txt"; then
+  pass "all-cloudflare-deploys AC-1: a file that fails to fetch never matches, even an empty one"
+else fail "all-cloudflare-deploys AC-1 empty file (rc $(rc empty))"; cat "$work/empty.log"; fi
 
 # AC-2: previous commit first, then this one
 newcase wait; site "$FAKE/site.1" "$c1"; site "$FAKE/site.2" "$c1"; site "$FAKE/site.3" "$c2"; run wait

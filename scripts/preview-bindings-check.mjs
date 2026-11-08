@@ -58,9 +58,13 @@ for (const [kind, fields] of Object.entries(KINDS)) {
       problems.push(`${kind} "${name}" has no preview binding in "previews"`);
       continue;
     }
-    for (const f of fields)
-      if (b[f] !== undefined && b[f] === p[f])
+    for (const f of fields) {
+      if (b[f] === undefined) continue;
+      if (p[f] === undefined)
+        problems.push(`${kind} "${name}": the preview names no ${f}, so it may use production's`);
+      else if (b[f] === p[f])
         problems.push(`${kind} "${name}": the preview uses the production ${f} (${b[f]})`);
+    }
   }
 }
 if (problems.length) {

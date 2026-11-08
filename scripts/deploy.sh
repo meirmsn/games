@@ -67,7 +67,8 @@ check_one() {
     return
   fi
   want=$(git cat-file blob "$sha:$f" | sha256sum | cut -c1-64)
-  got=$(curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$u" | sha256sum | cut -c1-64)
+  # A failed fetch adds a marker, so it never hashes like the file (an empty file included).
+  got=$({ curl -fsSL --max-time 20 -H 'Cache-Control: no-cache' "$u" || printf '\nfetch failed: %s' "$f"; } | sha256sum | cut -c1-64)
   [ "$want" = "$got" ] && echo ok || echo "differs: $f"
 }
 export -f check_one url_of

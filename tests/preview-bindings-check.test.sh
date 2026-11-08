@@ -46,6 +46,14 @@ expect 1 "all-cloudflare-deploys AC-8: a binding with no preview counterpart fai
   "kv_namespaces": [{ "binding": "KV", "id": "k1" }],
   "previews": {}
 }'
+expect 1 "all-cloudflare-deploys AC-8: a preview KV with the production id fails" '{
+  "kv_namespaces": [{ "binding": "KV", "id": "k1" }],
+  "previews": { "kv_namespaces": [{ "binding": "KV", "id": "k1" }] }
+}'
+expect 1 "all-cloudflare-deploys AC-8: a preview D1 that names no database_id fails" '{
+  "d1_databases": [{ "binding": "DB", "database_name": "prod", "database_id": "aaa" }],
+  "previews": { "d1_databases": [{ "binding": "DB", "database_name": "preview" }] }
+}'
 expect 2 "all-cloudflare-deploys AC-8: an unreadable config can't run" '{ "name": '
 
 if node "$check" "$repo_root/wrangler.jsonc" >"$work/log" 2>&1; then
