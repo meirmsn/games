@@ -1,6 +1,6 @@
 # Deploys reported from Cloudflare's own build (builds_previews_deploys: all-cloudflare)
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-08)
 
 ## Intent
 
