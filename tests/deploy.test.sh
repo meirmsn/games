@@ -49,7 +49,7 @@ printf 'x\nbuilds_previews_deploys: all-cloudflare\n' >"$r/CLAUDE.md"
 printf '{\n  // the Worker\n  "name": "games"\n}\n' >"$r/wrangler.jsonc"
 printf '.git\nscripts\nui\nCLAUDE.md\nwrangler.jsonc\n.assetsignore\n' >"$r/.assetsignore"
 echo v1 >"$r/index.html"; echo page-a >"$r/a/index.html"; echo js >"$r/a/ui/x.js"
-printf 'bin\0ary\0' >"$r/img.bin"; echo old >"$r/old.txt"; : >"$r/empty.txt"; echo spaced >"$r/a file.txt"
+printf 'bin\0ary\0' >"$r/img.bin"; echo old >"$r/old.txt"; : >"$r/empty.txt"; echo spaced >"$r/a file.txt"; echo accent >"$r/café.txt"
 git -C "$r" add -A && git -C "$r" commit -qm c1 && c1=$(git -C "$r" rev-parse HEAD)
 echo v2 >"$r/index.html"; git -C "$r" rm -q old.txt
 git -C "$r" commit -qam c2 && c2=$(git -C "$r" rev-parse HEAD)
@@ -83,7 +83,7 @@ if [ "$(rc live)" = 0 ] && has live "deployed=yes" && has live "site_smoke=passe
   && has live "version=${c2:0:12}" && has live "previous_version=${c1:0:12}" \
   && has live "url=https://site.test/" && has live "site_url=https://site.test" \
   && grep -q '^rollback=Cloudflare dashboard: Workers & Pages → games → Deployments' "$work/live.out" \
-  && grep -qx '/old.txt' "$FAKE/requests" && grep -qx '/a file.txt' "$FAKE/requests"; then
+  && grep -qx '/old.txt' "$FAKE/requests" && grep -qx '/a file.txt' "$FAKE/requests" && grep -qx '/café.txt' "$FAKE/requests"; then
   pass "all-cloudflare-deploys AC-1: live when every site file matches and the removed file is gone"
 else fail "all-cloudflare-deploys AC-1 (rc $(rc live))"; cat "$work/live.log"; fi
 
@@ -104,6 +104,14 @@ newcase flap; site "$FAKE/site.1" "$c2"; site "$FAKE/site.2" "$c1"; site "$FAKE/
 if [ "$(rc flap)" = 0 ] && log flap "try 1/4: serves ${c2:0:12}, once" && [ "$(cat "$FAKE/round")" -ge 4 ]; then
   pass "all-cloudflare-deploys AC-1: one match isn't enough; it passes on two in a row"
 else fail "all-cloudflare-deploys AC-1 two in a row (rc $(rc flap), round $(cat "$FAKE/round"))"; cat "$work/flap.log"; fi
+
+# AC-1, a checker that dies without a word is not a match
+newcase silent; site "$FAKE/site.1" "$c2"
+printf '#!/usr/bin/env bash\nexit 255\n' >"$work/bin/xargs"; chmod +x "$work/bin/xargs"
+run silent; rm "$work/bin/xargs"
+if [ "$(rc silent)" = 1 ] && log silent "not every file was checked" && ! grep -q '^site_smoke=passed' "$work/silent.out"; then
+  pass "all-cloudflare-deploys AC-1: no result from the checkers is never a match"
+else fail "all-cloudflare-deploys AC-1 silent checker (rc $(rc silent))"; cat "$work/silent.log"; fi
 
 # AC-2: previous commit first, then this one
 newcase wait; site "$FAKE/site.1" "$c1"; site "$FAKE/site.2" "$c1"; site "$FAKE/site.3" "$c2"; run wait

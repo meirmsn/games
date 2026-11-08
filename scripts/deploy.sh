@@ -46,8 +46,8 @@ site_files() {
   local idx="$tmp/index.$1" ign="$tmp/ignore.$1"
   git show "$1:.assetsignore" >"$ign" 2>/dev/null || : >"$ign"
   GIT_INDEX_FILE=$idx git read-tree "$1" || return 2
-  comm -23 <(GIT_INDEX_FILE=$idx git ls-files -c | sort) \
-    <(GIT_INDEX_FILE=$idx git ls-files -ci --exclude-from="$ign" | sort)
+  comm -23 <(GIT_INDEX_FILE=$idx git -c core.quotePath=false ls-files -c | sort) \
+    <(GIT_INDEX_FILE=$idx git -c core.quotePath=false ls-files -ci --exclude-from="$ign" | sort)
 }
 url_of() {
   case "$1" in
@@ -82,8 +82,14 @@ serves() {
   local sha=$1 gone=${2:-}
   { site_files "$sha" | sed "s|^|$sha same |"
     [ -z "$gone" ] || sed "s|^|$sha gone |" "$gone"; } >"$tmp/todo" || return 2
-  xargs -a "$tmp/todo" -d '\n' -n 1 -P "$jobs" bash -c 'check_one "$1"' _ >"$tmp/result" 2>/dev/null
+  local rc=0
+  xargs -a "$tmp/todo" -d '\n' -n 1 -P "$jobs" bash -c 'check_one "$1"' _ >"$tmp/result" 2>/dev/null || rc=$?
   if grep -v -m 1 -x ok "$tmp/result" >"$tmp/why"; then return 1; fi
+  # Every file must have answered "ok": a checker that died without a word is not a match.
+  if [ "$rc" != 0 ] || [ "$(grep -c -x ok "$tmp/result")" != "$(wc -l <"$tmp/todo")" ]; then
+    echo "not every file was checked (xargs exit $rc)" >"$tmp/why"
+    return 1
+  fi
   return 0
 }
 
