@@ -67,7 +67,13 @@ game, and you earn points or not according to that. Lastly, I don't think we sho
 and the right of the crosswalk … The game should be only on the crosswalk. So maybe to keep it
 simple, we can do it portrait, and if it's on desktop, you only see the portrait … Maybe you can
 show just a tiny sliver of regular street on both sides so that it makes sense that the light is the
-light of those cars coming in." This spec is the game after those changes.
+light of those cars coming in." After playing that, the owner said (2026-11-09): "don't show the
+little slivers of street on the left and the right. I think you can show only … the sidewalk and the
+lights. It's clear that those are the cars['] lights … we need a better sound for the flushing. It
+should [sound] like actual flushing … the fast forward looks great. But once you're done with the
+fast forward, you don't have to make all of them cross when it gets green … Or you can, but that
+should also be part of the fast forward, and that should give you 0 points, like the ones that pass
+while it's green should give you [0]." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -91,8 +97,8 @@ goes now, and the people waiting start copying him.
 - **Tenth play vs first:** the stars you're missing, and crossing fast enough that your copiers make
   it.
 - **Form:** short-form: a run is eight levels, about 5 minutes, because it's an arcade crossing game.
-- **Orientation:** portrait, everywhere: the view is the zebra crossing and a sliver of road either
-  side, the same shape on a phone, a phone held sideways and a desktop.
+- **Orientation:** portrait, everywhere: the view is the zebra crossing, edge to edge, the same
+  shape on a phone, a phone held sideways and a desktop.
 - **What a failure costs:** a hit costs a few seconds; a copier hit costs their share of the points;
   too slow costs the level's points and a replay of that level (about 30 s). No lives.
 - **Save-game stand-in:** the best total, the best stars per level and the hidden assist, in
@@ -111,45 +117,51 @@ goes now, and the people waiting start copying him.
   the time … Maybe it can be even a porta potty"). Rejected: anything with a frog, logs, turtles or
   homes, and Crossy Road's endless forward scroll and look.
 - **View:** side-on at a slight angle: the far kerb at the top, the near kerb at the bottom, lanes
-  and medians between, the pack's side-view vehicles driving left and right. A zebra crossing six
-  columns wide runs up the middle, with a stop line on each lane before it. Columns are 12 art pixels
+  and medians between, the pack's side-view vehicles driving left and right. A zebra crossing nine
+  columns wide runs up the middle, with a stop line on each lane just before it. Columns are 12 art pixels
   and rows 22; rows are drawn from the top, vehicles then people in each row, with a strip of sky
-  above for the porta-potty. Only the crossing is shown: its six columns and a sliver of road either
-  side, 12 to 24 art pixels wide (as much as the screen's width allows at the scale its height
-  allows), enough to see each lane's car light and the front of a car waiting at its stop line. The
-  same view on every screen: on a wide one it stands centred with plain background either side; it
+  above for the porta-potty. Only the crossing is shown, edge to edge, with the sidewalks above and
+  below it: no road either side; each lane's car light stands on the crossing's edge the cars come
+  from, so it reads as theirs, and the walk lights stand on the sidewalks inside the view. The same
+  view on every screen: on a wide one it stands centred with plain background either side; it
   doesn't change with the device turned, only rescales. Every street and every state uses one scale
   (as if each street had 8 rows), so the width never changes, Start included. The street is
   simulated in fixed world coordinates, 12 columns wide (vehicles enter 80 art pixels beyond them),
   and the view is cut from its middle; the landing page's tile picture shows it wider (owner,
   2026-11-09: "The game should be only on the crosswalk … if it's on desktop, you only see the
-  portrait"; this replaces the earlier screen-shaped street and its turn-back card).
+  portrait"; then "don't show the little slivers of street on the left and the right"; this replaces
+  the earlier screen-shaped street and its turn-back card).
 - **The player:** hops one cell at a time: a tap anywhere (or Up, W or Space) hops forward, a swipe
   down (or Down or S) back, a swipe left or right (or Left/A, Right/D) sideways; the street's sides
   and kerbs stop him. One hop can be queued during a hop. A second finger is ignored (owner,
   2026-11-09: "we should allow to move left and right"). He stays on the zebra: its edges stop him.
 - **The lights, which the cars obey:** the walk light on each kerb shows a red man with the seconds
-  left in a pixel countdown (the same number as the clock at the top). Each lane has a car light at
-  its stop line. It's green while the walk light counts down, turns yellow at 4.5 s and red at 2 s.
+  left in a pixel countdown (the same number as the clock at the top). Each lane has a car light on
+  the crossing's edge, by its stop line. It's green while the walk light counts down, turns yellow at 4.5 s and red at 2 s.
   On red a car stops at its stop line; on yellow it stops if it is still well short of the line; a
   car already past its line when the light changes hurries across. When the walk light reaches 0 and
-  no vehicle is on the crossing (at most 6 s later), it turns green and everyone still waiting walks
-  across on the zebra; nobody walks while a car is on it. Within a lane, traffic still comes in
+  no vehicle is on the crossing (at most 10 s later, run fast), it turns green and everyone still
+  waiting walks across on the zebra; nobody walks while a car is on it. Within a lane, traffic still comes in
   platoons and lulls, now without lights of its own (owner, 2026-11-09, as quoted in the intent).
 - **Score:** reaching the far kerb before the walk light turns green fixes the seconds left (at least
   1); the level scores those seconds × (1 + copiers across by the time the light turns green). If
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
   on. While playing, what the level is worth right now ("14 s × 3 = 42") shows above the far kerb.
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
-  the celebrating chime, about 1.6 s in all, while the walk light holds its seconds and the street
+  the celebrating chime, about 2.2 s in all (the flush a lever's clunk, rushing, swirling water and
+  a few gurgles), while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 8 times
   speed under its own rules until the walk light turns green: the walk light's seconds drain, the car
   lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
   way carry on as they would, so they can make it, or be hit. The points count up big over the far
   sidewalk as the seconds drain ("+42", "× 3 a second", the multiplier growing as copiers arrive),
   with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
-  once the crossing is clear the walk light turns green at normal speed (owner, 2026-11-09: "it
-  should run the actual rules of the game, and you earn points or not according to that").
+  once the crossing is clear the walk light turns green. The green light's crossing is part of the
+  fast-forward too, and earns nothing: each copier who crosses on green shows "+0". Then the tally
+  (owner, 2026-11-09: "it should run the actual rules of the game, and you earn points or not
+  according to that"; then "that should also be part of the fast forward, and that should give you 0
+  points"). When he was too slow, the wait for the crossing to clear and the green light's crossing
+  run fast in the same way.
 - **Copiers walk on their own:** from level 3, people at the kerb beside his column copy him. Each sets
   off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
   crossing, a row every 0.42 s. They never go past him (they may share the island or the far kerb
@@ -223,13 +235,13 @@ goes now, and the people waiting start copying him.
   2 s; on red, cars short of their stop line stop at it, and none crosses it —
   `tests/walk-on-red.test.mjs`.
 - **AC-4** When the walk light reaches 0 it turns green only once no vehicle is on the crossing; then
-  everyone still waiting crosses, no vehicle enters the crossing, and the next level (or the same
-  one) starts after the tally — `tests/walk-on-red.test.mjs`.
+  everyone still waiting crosses, at 8 times speed, no vehicle enters the crossing, a copier crossing
+  on green shows "+0" and adds nothing, and the next level (or the same one) starts after the tally — `tests/walk-on-red.test.mjs`.
 - **AC-5** Reaching the far kerb fixes the seconds left; he goes in, the door closes and the flush
   plays, then the chime; then the game runs at 8 times speed with its own rules (the car lights
   change, cars stop at their lines, copiers on the way carry on and can be hit) while the points
   count up as the seconds drain; the level scores the seconds × (1 + copiers across by the green
-  light); from across to green takes under 8 s — `tests/walk-on-red.test.mjs`.
+  light); from across to the tally takes under 8 s — `tests/walk-on-red.test.mjs`.
 - **AC-6** If the walk light turns green before the player is across, the level scores 0 and starts
   again — `tests/walk-on-red.test.mjs`.
 - **AC-7** Copiers set off once the player is two rows out, one after another, hop up their own
@@ -256,7 +268,7 @@ goes now, and the people waiting start copying him.
 - **AC-16** Each state shows only its own card, HUD and banner, as in the state table —
   `tests/walk-on-red.test.mjs`.
 - **AC-17** The game plays offline once it has been played — `tests/walk-on-red.test.mjs`.
-- **AC-18** The view is the zebra crossing and 12 to 24 art px of road either side, on every screen;
+- **AC-18** The view is the zebra crossing edge to edge, with no road either side, on every screen;
   on a wide screen it is centred with plain background either side; its width doesn't change on Start
   or between levels; at 390×844 and 360×640 it fits with no scrolling and a person is at least 36 CSS
   px tall, and in landscape (844×390, 1280×720) it fits; turning the device mid-level only rescales

@@ -257,21 +257,25 @@ test('walk-on-red AC-4: the walk light turns green only once the crossing is cle
     const mode = t.game.mode;
     // During green, no vehicle enters the crossing.
     const inside = () => t.vehicles().filter((u) => { const x = t.xOf(u); return x < (t.CROSS_C1 + 1) * 12 && x + u.w > t.CROSS_C0 * 12; }).length;
-    let entered = 0;
-    for (let i = 0; i < 60 * 3; i++) {
+    const t1 = t.game.time;
+    t.step(1 / 60);
+    const rate = (t.game.time - t1) * 60;
+    let entered = inside();
+    for (let i = 0; i < 25 && t.game.mode === 'green'; i++) {
       t.step(1 / 60);
       entered += inside();
     }
     const everyone = t.people().every((p) => p.state === 'walk' || p.state === 'across');
     const crossedRow0 = t.people().filter((p) => p.state === 'walk').every((p) => p.walkRow === 0);
     for (let i = 0; i < 60 * 3; i++) t.step(1 / 60);
-    return { waited, mode, clearAtGreen, entered, everyone, crossedRow0, after: t.game.mode };
+    return { waited, mode, clearAtGreen, entered, everyone, crossedRow0, rate, after: t.game.mode };
   });
   assert.ok(r.waited, 'waited for the crossing to clear');
   assert.equal(r.mode, 'green');
   assert.ok(r.clearAtGreen, 'green only once the crossing is clear');
   assert.equal(r.entered, 0, 'no car enters the crossing on green');
   assert.ok(r.everyone && r.crossedRow0, 'everyone crossed');
+  assert.ok(Math.abs(r.rate - 8) < 0.01, `green runs fast too: ${r.rate}`);
   assert.ok(['tally', 'play'].includes(r.after));
   await context.close();
 });
@@ -310,17 +314,17 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, then the game fas
         counts.push(t.game.levelScore);
         lights.add(t.carLight());
       }
-      if (t.game.mode === 'finish' || t.game.mode === 'wait') took += 1 / 60;
+      if (['finish', 'wait', 'green'].includes(t.game.mode)) took += 1 / 60;
     }
     const across = t.copiers().filter((p) => p.state === 'across').length;
     const rising = counts.length > 5 && counts.every((c, i) => i === 0 || c >= counts[i - 1]) && counts[counts.length - 1] > counts[0];
-    return { mode, secs, door, ff, rate, lights: [...lights], across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent, rising, took };
+    return { doorT: t.DOOR_T, mode, secs, door, ff, rate, lights: [...lights], across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent, rising, took };
   });
   assert.equal(r.mode, 'finish');
   assert.ok(r.secs > 20, `seconds fixed on arrival: ${r.secs}`);
   assert.equal(r.door.stage, 'door');
   assert.equal(r.door.red, r.secs, 'the walk light holds his seconds in the loo');
-  assert.ok(Math.abs(r.door.took - 1.55) < 0.05, 'real time in the loo');
+  assert.ok(Math.abs(r.door.took - (r.doorT - 0.05)) < 0.05, 'real time in the loo');
   const flush = r.door.sounds.indexOf('flush');
   assert.ok(flush >= 0 && r.door.sounds.indexOf('cheer') > flush, `the flush, then the chime: ${r.door.sounds}`);
   assert.equal(r.ff, 'ff');
@@ -330,7 +334,7 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, then the game fas
   assert.equal(r.score, r.secs * 3);
   assert.equal(r.banner, `+${r.score}`);
   assert.ok(r.rising, 'the points count up as the seconds drain');
-  assert.ok(r.took < 8, `no waiting out the seconds in real time: ${r.took.toFixed(1)} s from across to green`);
+  assert.ok(r.took < 8, `no waiting out the seconds in real time: ${r.took.toFixed(1)} s from across to the tally`);
   // A copier still in the road during the fast-forward can be hit, and their share goes with them.
   const h = await page.evaluate(() => {
     const t = window.__walkOnRed;
@@ -351,14 +355,19 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, then the game fas
     v.v = 0;
     t.step(1 / 60);
     const hit = p.state;
-    for (let i = 0; i < 60 * 15 && t.game.mode !== 'tally'; i++) t.step(1 / 60);
+    let zero = false;
+    for (let i = 0; i < 60 * 15 && t.game.mode !== 'tally'; i++) {
+      t.step(1 / 60);
+      zero = zero || t.popups().some((pp) => pp.text === '+0');
+    }
     const across = t.copiers().filter((q) => q.state === 'across').length;
-    return { hit, across, score: t.game.levelScore, secs: t.game.closedSecs };
+    return { hit, across, zero, score: t.game.levelScore, secs: t.game.closedSecs };
   });
   assert.ok(!h.none, 'a copier was still in the road');
   assert.equal(h.hit, 'down', 'hit during the fast-forward');
   assert.equal(h.across, 1);
   assert.equal(h.score, h.secs * 2, 'the hit copier’s share is gone');
+  assert.ok(h.zero, 'crossing on green afterwards shows +0 and adds nothing');
   await context.close();
 });
 
@@ -660,7 +669,7 @@ test('walk-on-red AC-14: hiding the page pauses; the resuming tap doesn’t hop 
     t.manual = true;
     t.clearTraffic();
     t.game.red = 0.01;
-    for (let i = 0; i < 40; i++) t.step(1 / 60);
+    for (let i = 0; i < 60 * 5 && t.game.mode !== 'green'; i++) t.step(1 / 60);
     const mode = t.game.mode;
     t.pause();
     const paused = t.game.paused;
@@ -769,7 +778,7 @@ test('walk-on-red AC-17: the game works offline once it has been played', async 
   await context.close();
 });
 
-test('walk-on-red AC-18: the view is the crossing and a sliver of road on every screen, one width, it fits, and a turn only rescales', async () => {
+test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, one width, it fits, and a turn only rescales', async () => {
   for (const [w, h, minPerson] of [
     [390, 844, 36],
     [360, 640, 36],
@@ -782,10 +791,10 @@ test('walk-on-red AC-18: the view is the crossing and a sliver of road on every 
       const v = await page.evaluate((level) => {
         const t = window.__walkOnRed;
         t.startGame(level);
-        const sliver = [t.CROSS_C0 * 12 - t.view.x0, t.view.x0 + t.view.lw - (t.CROSS_C1 + 1) * 12];
-        return { ...t.view, sliver, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight };
+        const edges = [t.view.x0, t.view.x0 + t.view.lw];
+        return { ...t.view, edges, crossing: [t.CROSS_C0 * 12, (t.CROSS_C1 + 1) * 12], scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight };
       }, level);
-      assert.ok(v.sliver.every((s) => s >= 12 && s <= 24) && v.sliver[0] === v.sliver[1], `${w}×${h}: road either side ${v.sliver}`);
+      assert.deepEqual(v.edges, v.crossing, `${w}×${h}: the view is the crossing, edge to edge`);
       assert.ok(Math.abs(v.width - before) < 0.5, `${w}×${h}: the width stays ${before} (now ${v.width})`);
       assert.ok(v.top >= 0 && v.bottom <= h + 0.5, `${w}×${h} level ${level}: ${v.top}–${v.bottom}`);
       assert.ok(v.person >= minPerson, `${w}×${h}: a person is ${v.person} px`);

@@ -54,16 +54,14 @@ function sfx(name, opts) {
 const CW = 12; // a cell's width in art px
 const ROW = 22; // a row's height in art px
 const MAX_ROWS = 8; // the tallest street: every street is scaled as if it were this tall
-// The street is simulated 12 columns wide; only the zebra crossing in its middle, and a sliver of
-// road either side, is shown, the same on every screen.
+// The street is simulated 12 columns wide; only the zebra crossing in its middle is shown (with the
+// sidewalks, and each lane's car light on the crossing's edge), the same on every screen.
 const COLS = 12;
 const PLAY_W = COLS * CW;
 const PCOL = 5; // the player's starting column, and the porta-potty's
-const CROSS_C0 = 3; // the zebra crossing's columns
-const CROSS_C1 = 8;
+const CROSS_C0 = 1; // the zebra crossing's columns: nine, the view's whole width
+const CROSS_C1 = 9;
 const CROSS_W = (CROSS_C1 - CROSS_C0 + 1) * CW;
-const SLIVER_MIN = 12; // art px of road shown either side of the crossing
-const SLIVER_MAX = 24;
 const ENTRY = 80; // vehicles enter this far beyond the play area's edge
 const WAIT_H = 12; // the strip behind each kerb where people wait
 const HOP_TWEEN = 0.12;
@@ -75,7 +73,7 @@ const COP_START = 2; // a copier sets off once the player is this many rows out
 const COP_STAGGER = 0.9; // … each one this much after the one before
 const COP_HOP = 0.42; // a copier's pace, one row
 const FF = 8; // once he's in the loo, the game runs this many times faster until the walk light is green
-const DOOR_T = 1.6; // in the loo: the door shuts, a flush, a chime, then the fast-forward
+const DOOR_T = 2.2; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
 const COP_LOOK = 0.9; // on safe ground, a copier waits while a car would reach the next cell this soon
 const COP_DARE = 1.2; // in the road, a copier waits at most this long for the next lane
@@ -286,7 +284,7 @@ function walkTo(p, x, y, dur) {
 
 // Copiers stand beside his starting column; the crowd waits on the rest of the crossing.
 const copierCols = () => [PCOL - 1, PCOL + 1, PCOL + 2];
-const crowdCols = () => [CROSS_C0, CROSS_C1, PCOL - 1, PCOL + 1, PCOL + 2];
+const crowdCols = () => [CROSS_C0, CROSS_C1 - 1, PCOL - 1, PCOL + 1, PCOL + 2]; // clear of the walk light
 
 // ---------- Level set-up ----------
 
@@ -614,7 +612,9 @@ function scoreLevel() {
   game.levelScore = game.closedSecs * (1 + acrossCount());
 }
 
-const fastForward = () => game.mode === 'finish' && (game.stage === 'ff' || game.stage === 'clear');
+// From the fast-forward to the tally, nobody waits in real time: the green light's crossing (and,
+// when he was too slow, the wait for the crossing to clear) runs fast too.
+const fastForward = () => (game.mode === 'finish' && (game.stage === 'ff' || game.stage === 'clear')) || game.mode === 'wait' || game.mode === 'green';
 
 function updateFinish(dt) {
   game.phaseT += dt;
@@ -628,9 +628,9 @@ function updateFinish(dt) {
     }
     if (!game.flushed && game.phaseT >= 0.45) {
       game.flushed = true;
-      sfx('flush', { gain: 0.8 });
+      sfx('flush', { gain: 0.6 });
     }
-    if (!game.cheered && game.phaseT >= DOOR_T - 0.25) {
+    if (!game.cheered && game.phaseT >= DOOR_T - 0.3) {
       game.cheered = true;
       sfx('cheer', { rate: 1.3, gain: 0.8 });
     }
@@ -657,8 +657,8 @@ function updateFinish(dt) {
     }
     return;
   }
-  // The walk light is at 0: once no vehicle is on the crossing (at most 6 s), green.
-  if (game.stage === 'clear' && (crossingClear() || game.phaseT > 6)) beginGreen();
+  // The walk light is at 0: once no vehicle is on the crossing (at most 10 s, run fast), green.
+  if (game.stage === 'clear' && (crossingClear() || game.phaseT > 10)) beginGreen();
 }
 
 // The walk light has run out: the cars stop before the crossing, and once it is clear, green.
@@ -712,6 +712,8 @@ function updateGreen(dt) {
         walkTo(p, g.x, g.y, 0.25);
       } else if (!p.gone) {
         p.gone = true;
+        // Crossing on green earns nothing.
+        if (p.kind === 'copier') popups.push({ x: colX(p.col), y: rowY(0) - 12, text: '+0', t: 0, color: '#c9ccd6', big: false });
         const g = stripFeet(p.col, 0);
         walkTo(p, g.x, g.y, 0.3);
       }
@@ -851,7 +853,7 @@ function tick(dt) {
   if (game.mode === 'wait') {
     // Wait for the crossing to clear, at most a few seconds.
     game.phaseT += dt;
-    if (crossingClear() || game.phaseT > 6) beginGreen();
+    if (crossingClear() || game.phaseT > 10) beginGreen();
     return;
   }
   if (game.mode === 'finish') return updateFinish(dt);
@@ -1242,11 +1244,10 @@ function resize() {
     offX = 0;
   } else {
     // One scale for every street and every state, so the width never jumps; the view is the
-    // crossing and as much road either side as the width allows, within the sliver's range.
-    scale = Math.max(1, Math.min(vw / (CROSS_W + 2 * SLIVER_MIN), fitH));
-    const sliver = Math.max(SLIVER_MIN, Math.min(SLIVER_MAX, Math.floor((vw / scale - CROSS_W) / 2)));
-    LW = CROSS_W + 2 * sliver;
-    originX = sliver - CROSS_C0 * CW;
+    // crossing, edge to edge.
+    scale = Math.max(1, Math.min(vw / CROSS_W, fitH));
+    LW = CROSS_W;
+    originX = -CROSS_C0 * CW;
     offX = Math.max(0, Math.round(((vw - LW * scale) / 2) * dpr));
   }
   LH = Math.ceil(vh / scale);
@@ -1528,7 +1529,7 @@ function drawLights() {
   const light = carLight();
   for (const ln of layout.lanes) {
     const y = py(rowY(ln.row)) + 1;
-    const x = ln.dir === 1 ? px(CROSS_C0 * CW) - 8 : px((CROSS_C1 + 1) * CW) + 4;
+    const x = ln.dir === 1 ? px(CROSS_C0 * CW) + 1 : px((CROSS_C1 + 1) * CW) - 5; // on the crossing's edge the cars come from
     lctx.fillStyle = '#20232b';
     lctx.fillRect(x, y, 4, 10);
     lctx.fillStyle = light === 'red' ? '#ff4b4b' : '#3a1515';
@@ -1549,7 +1550,7 @@ function drawLights() {
   const green = game.mode === 'green' || game.mode === 'tally';
   const secs = Math.max(0, Math.ceil(game.red));
   for (const r of [0, layout.bottom]) {
-    const x = px((CROSS_C1 + 1) * CW) + 2;
+    const x = px((CROSS_C1 + 1) * CW) - 11;
     const y = r === 0 ? py(rowY(0)) - 16 : py(rowY(r) + ROW) + 1;
     lctx.fillStyle = '#c8e0ff';
     lctx.fillRect(x + 4, y + 14, 1, 6);
@@ -1891,6 +1892,7 @@ sheet.decode().then(
       people: () => people,
       copiers: () => people.filter((p) => p.kind !== 'crowd'),
       vehicles: () => vehicles,
+      popups: () => popups,
       carLight,
       crossingClear,
       laneBusy,
