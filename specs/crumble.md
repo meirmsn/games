@@ -74,6 +74,7 @@ the stars were undefined.
 - `shared/explosion.js` is the site's shared explosion: a flash, a shock ring, fire puffs from the Explosion Pack's clouds, smoke that drifts with the wind, sparks and debris, pooled and driven by delta time. Crumble is its first user, and Reef and Googly Faces are not changed. Its art is in `shared/explosion/` (owner's request; kept against attack round 1's advice to keep it inside the game).
 - Sound: a cannon thump, explosions sized to the blast, the tide's wash, a splash when a tank sinks, jingles for winning and losing, a click for the weapon buttons, and a quiet music loop, all under the site-wide mute.
 - The landing page gets a new asset, `assets/tiles/crumble.png`, drawn from the game, so `sw.js`'s SHELL list gains it and its VERSION goes from v3 to v4; the landing page then shows 8 tiles.
+- The acceptance items were sharpened, and AC-20 added, by the adversarial spec review and the build that the owner's process includes, before any code was merged: numbers for the CPU's spread test and the sky colours, the tide's cap and the draw, shots that leave the world, fall damage, portrait pausing, the 640×360 HUD, Q instead of Tab, the offline shot and the state table. They come under the owner's standing go for this process ("don't consult with me, just start building after following this process", owner, 2026-11-09).
 
 ## Acceptance items
 
@@ -96,6 +97,7 @@ the stars were undefined.
 - **AC-17** Crumble plays offline once it has been played, a shot and its explosion included — `tests/crumble.test.mjs`.
 - **AC-18** The keyboard alone plays a turn: ←/→ and ↑/↓ change the aim, Q switches weapon (from Battlefield 2), and Space fires — `tests/crumble.test.mjs`.
 - **AC-19** Firing, an explosion and a tide rise each play their sound — `tests/crumble.test.mjs`.
+- **AC-20** Each state shows only its own cards and HUD, as in the state table: the start card only at the start, the result card only when a battle is won or lost (with the HUD hidden), the pause card only while paused, and the weapon buttons enabled only on the player's turn — `tests/crumble.test.mjs`.
 
 ## Core flow
 

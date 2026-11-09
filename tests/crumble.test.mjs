@@ -101,8 +101,16 @@ test('crumble AC-1: the shore moves behind the start card; Start begins on the p
   assert.equal(await page.isVisible('[data-screen="start"]'), true);
   assert.equal(await page.isVisible('[data-hud-top]'), false);
   const t0 = await page.evaluate(() => window.__crumble.game.time);
-  await page.waitForFunction(() => window.__crumble.terrain.carves > 0, null, { timeout: 6000 });
-  assert.ok((await page.evaluate(() => window.__crumble.game.time)) > t0, 'the water and the demo move');
+  await page.waitForFunction((t0) => window.__crumble.game.time > t0 + 0.2, t0);
+  // The demo tanks trade shots: step it (no waiting on the clock) until one lands.
+  const landed = await page.evaluate(() => {
+    const c = window.__crumble;
+    c.manual = true;
+    for (let i = 0; i < 60 * 8 && c.terrain.carves === 0; i++) c.step(1 / 60);
+    c.manual = false;
+    return c.terrain.carves;
+  });
+  assert.ok(landed > 0, 'the demo fires before the first touch');
   await page.click('[data-play]');
   const s = await page.evaluate(() => ({ mode: window.__crumble.game.mode, phase: window.__crumble.game.phase, turn: window.__crumble.game.turn, taught: window.__crumble.store.taught }));
   assert.deepEqual(s, { mode: 'battle', phase: 'aim', turn: 0, taught: false }, 'the ghost hand shows until the first aiming touch');
@@ -855,5 +863,65 @@ test('crumble AC-19: firing, an explosion and a tide rise each play their sound'
   });
   assert.equal(await page.evaluate(() => window.__crumble.game.phase), 'tide');
   assert.ok((await played()).includes(size('tide')), 'tide');
+  await context.close();
+});
+
+test('crumble AC-20: each state shows only its own cards and HUD, and the weapons work only on your turn', async () => {
+  const { context, page } = await open();
+  const view = () =>
+    page.evaluate(() => {
+      const vis = (s) => {
+        const el = document.querySelector(s);
+        return !!el && !el.hidden && getComputedStyle(el).display !== 'none';
+      };
+      return {
+        start: vis('[data-screen="start"]'),
+        result: vis('[data-screen="result"]'),
+        paused: vis('[data-paused]'),
+        rotate: vis('[data-rotate]'),
+        hud: vis('[data-hud-top]') && vis('[data-hud-bottom]'),
+        weapons: !document.querySelector('[data-weapon="shell"]').disabled,
+      };
+    });
+  const none = { start: false, result: false, paused: false, rotate: false };
+  assert.deepEqual(await view(), { ...none, start: true, hud: false, weapons: true }, 'start');
+  await battle(page, 0);
+  assert.deepEqual(await view(), { ...none, hud: true, weapons: true }, "the player's turn");
+  await page.evaluate(() => window.__crumble.fire(0, 'shell', 1.2, 0.9));
+  assert.deepEqual(await view(), { ...none, hud: true, weapons: false }, 'a shell in flight');
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    for (let i = 0; i < 600 && c.game.phase !== 'cpu'; i++) c.step(1 / 60);
+  });
+  assert.equal(await page.evaluate(() => window.__crumble.game.phase), 'cpu');
+  assert.deepEqual(await view(), { ...none, hud: true, weapons: false }, "the CPU's turn");
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.deepEqual(await view(), { ...none, paused: true, hud: true, weapons: false }, 'paused');
+  await page.evaluate(() => Object.defineProperty(document, 'hidden', { value: false, configurable: true }));
+  await page.mouse.click(400, 200);
+  for (const [mine, theirs, label] of [
+    [80, 0, 'won'],
+    [0, 80, 'lost'],
+  ]) {
+    await battle(page, 0);
+    await page.evaluate(
+      ({ mine, theirs }) => {
+        const c = window.__crumble;
+        c.tanks[0].armour = mine;
+        c.tanks[1].armour = theirs;
+        c.game.phase = 'settle';
+        c.game.timer = 1;
+        for (let i = 0; i < 180; i++) c.step(1 / 60);
+      },
+      { mine, theirs }
+    );
+    const v = await view();
+    assert.deepEqual({ ...v, weapons: undefined }, { ...none, result: true, hud: false, weapons: undefined }, label);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal((await view()).rotate, true, 'portrait: the turn card on top');
   await context.close();
 });
