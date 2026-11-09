@@ -613,37 +613,47 @@ test('walk-on-red AC-14: the best total and the best stars per level are kept an
   await context.close();
 });
 
-test('walk-on-red AC-15: each state shows only its own card and HUD', async () => {
+test('walk-on-red AC-15: each state shows only its own card, HUD and banner', async () => {
   const { context, page } = await open();
   const shown = () =>
     page.evaluate(() => {
       const vis = (sel) => !document.querySelector(sel).hidden;
-      return { start: vis('[data-screen="start"]'), paused: vis('[data-screen="paused"]'), over: vis('[data-screen="over"]'), hud: vis('[data-hud]') };
+      return {
+        start: vis('[data-screen="start"]'),
+        paused: vis('[data-screen="paused"]'),
+        over: vis('[data-screen="over"]'),
+        hud: vis('[data-hud]'),
+        banner: vis('[data-banner]') ? document.querySelector('[data-banner-name]').textContent : null,
+      };
     });
-  assert.deepEqual(await shown(), { start: true, paused: false, over: false, hud: false });
+  assert.deepEqual(await shown(), { start: true, paused: false, over: false, hud: false, banner: null });
   await startEmpty(page, 0);
-  assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true });
+  assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true, banner: 'Quiet Street' }, 'the level’s name just after Start');
+  await page.waitForTimeout(1800);
+  assert.equal((await shown()).banner, null, 'then it goes');
   await page.evaluate(() => window.__walkOnRed.put(0));
   await run(page, 0.8);
   assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'green');
   await page.waitForTimeout(100);
-  assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true });
+  assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true, banner: null });
   assert.equal(await page.evaluate(() => document.querySelector('[data-clock]').textContent), 'GO');
   await run(page, 3.8);
   assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'tally');
-  assert.ok(await page.evaluate(() => !document.querySelector('[data-banner]').hidden), 'the tally');
-  await run(page, 2.4);
+  const tally = await shown();
+  assert.match(tally.banner, /^\+\d+$/, 'the tally');
+  // Paused during the tally: the paused card, the banner as it was.
   await page.evaluate(() => window.__walkOnRed.pause());
-  assert.deepEqual(await shown(), { start: false, paused: true, over: false, hud: true });
+  assert.deepEqual(await shown(), { ...tally, paused: true });
+  await page.evaluate(() => window.__walkOnRed.resume());
+  await run(page, 2.4);
   await page.evaluate(() => {
     const t = window.__walkOnRed;
-    t.resume();
     t.startGame(7);
     t.manual = true;
     t.game.red = 0.01;
     for (let i = 0; i < 60 * 6.2; i++) t.step(1 / 60);
   });
-  assert.deepEqual(await shown(), { start: false, paused: false, over: true, hud: false });
+  assert.deepEqual(await shown(), { start: false, paused: false, over: true, hud: false, banner: null });
   await context.close();
 });
 
