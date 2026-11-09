@@ -1326,6 +1326,7 @@ const KEYS = {
   ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
   Space: 'jump', ArrowUp: 'jump', KeyW: 'jump', KeyZ: 'jump',
 };
+// On the capture phase, so a pause can take Escape before the shell's back handler sees it.
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
   if (game.mode === 'paused' && !e.repeat && e.code !== 'Escape') {
@@ -1361,7 +1362,7 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   input.keys.add(k);
   sync();
-});
+}, { capture: true });
 window.addEventListener('keyup', (e) => {
   const k = KEYS[e.code];
   if (!k) return;

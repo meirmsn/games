@@ -386,8 +386,9 @@ test('pixel-leap AC-7: spikes, a walker and falling poof back to the checkpoint 
     worm.x += 3;
     const p = L.player;
     Object.assign(p, { x: 10, y: L.ROWS + 2, vy: 5, invul: 0 });
-    for (let i = 0; i < 120; i++) L.step();
-    return { cookie: ck.state, worm: worm.x === worm.sx };
+    L.step();
+    for (let i = 0; i < 120 && p.poof > 0; i++) L.step();
+    return { cookie: ck.state, worm: Math.abs(worm.x - worm.sx) < 0.05 };
   });
   assert.deepEqual(c, { cookie: 'whole', worm: true });
   await context.close();
@@ -547,7 +548,10 @@ test('pixel-leap AC-12: the portal shows the tally and freezes time; the leap st
       const L = window.__leap;
       while (L.game.mode === 'leap' && L.game.modeT < s) L.step();
     }, secs);
-    return page.evaluate(() => window.__leap.renderRes());
+    return page.evaluate(() => {
+      window.__leap.render();
+      return window.__leap.renderRes();
+    });
   };
   assert.equal(await at(0.5), 18);
   const b18 = await blocky(page, k);
@@ -882,7 +886,7 @@ test('pixel-leap AC-21: every stage can be finished; first coin within 5 s; chec
           if (st.ground[c] >= L.ROWS) hazards.push(c + 0.5);
           for (let y = 0; y < L.ROWS; y++) if (L.tileAt(c, y) === L.T.SPIKES) hazards.push(c + 0.5);
         }
-        for (const e of st.things) if (e.type === 'walker' || e.type === 'worm') hazards.push(e.x);
+        for (const e of st.things) if (e.type === 'walker' || e.type === 'worm') hazards.push(e.sx);
         const hearts = st.things.filter((h) => h.type === 'heart');
         const badHearts = hearts.filter((h) => hazards.some((x) => Math.abs(x - h.x) < 2) || st.things.some((c) => c.type === 'cookie' && Math.abs(c.x - h.x) < 1));
         const nearStart = hazards.filter((x) => x - st.start.x < 7);

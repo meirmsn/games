@@ -164,8 +164,8 @@ export const POSES = {
 // pack's own characters are drawn. Returns { frames, w, h, footX, footY }.
 export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, faceBoost = 1.4 } = {}) {
   const s = scaleFor(m, pxPerTile);
-  const w = Math.ceil(pxPerTile * 2.6);
-  const h = Math.ceil(pxPerTile * 2.4);
+  const w = Math.ceil(pxPerTile * 4);
+  const h = Math.ceil(pxPerTile * 3.6);
   const footX = Math.floor(w / 2);
   const footY = h - 2;
   const [or, og, ob] = hex(outline);
@@ -176,7 +176,7 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
-    drawVector(g, img, m, footX, footY + 1, s, { ...pose, ears }, faceBoost);
+    drawVector(g, img, m, footX, footY, s, { ...pose, ears }, faceBoost);
     const data = g.getImageData(0, 0, w, h);
     const d = data.data;
     const solid = new Uint8Array(w * h);

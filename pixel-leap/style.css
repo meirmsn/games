@@ -306,6 +306,10 @@ body.building .deck {
   transform: translateY(2px);
 }
 
+.starts[hidden] {
+  display: none;
+}
+
 .starts {
   display: grid;
   gap: 6px;
