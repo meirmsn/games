@@ -459,7 +459,8 @@ function launchPop(i, upFor = 1.8) {
 }
 // The frenzy target: easy in round 1 (big, rising in one of the two nearest lanes for 3.5 s, anywhere
 // along it), harder in round 2 (crossing one of the middle lanes), hard from round 3 (crossing one of
-// the two farthest lanes at 1.8× its speed). Which lane, where and which way are drawn each time.
+// the two farthest lanes at 1.8× its speed). Which lane and where are drawn each time; it runs its
+// lane's way, which each round draws afresh, so it never meets the lane's targets head-on.
 function launchFrenzyTarget() {
   const n = L.n;
   const cfg = game.cfg;
@@ -474,7 +475,7 @@ function launchFrenzyTarget() {
   const middle = L.lanes.map((l) => l.i).filter((i) => i > 0 && i < n - 1);
   const far = n > 3 ? [0, 1] : [0];
   const i = game.round === 2 ? pick(middle.length ? middle : [0]) : pick(far);
-  const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, dir: rng() < 0.5 ? 1 : -1, speed: laneSpeed(cfg, i) * (game.round === 2 ? 1 : 1.8) });
+  const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, speed: laneSpeed(cfg, i) * (game.round === 2 ? 1 : 1.8) });
   t.motion = 'mover';
   const [w] = dims(t);
   t.x = t.dir > 0 ? -w / 2 - 4 : SW + w / 2 + 4;

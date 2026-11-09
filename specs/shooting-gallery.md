@@ -31,7 +31,7 @@ Where they differ from the playtests below, these win.
   keeps one way within a round, so its targets never pass through each other), the first targets'
   delays spread wider (0.2–2.6 s), and the frenzy target comes 4–10 s in (again at 16–22 s): in round
   1 rising in one of the two nearest lanes, in round 2 crossing any middle lane, from round 3 crossing
-  one of the two farthest lanes, each time from a side drawn afresh. Round 1's first big target
+  one of the two farthest lanes, running that lane's way for the round (so from either side, and never head-on into the lane's other targets; from round 3 it is faster than them, so it may still overtake one). Round 1's first big target
   starts a little off the middle, on a side drawn too.
 
 ### The owner's eleventh playtest (owner, 2026-11-09)
@@ -274,8 +274,8 @@ for these changes. Where they differ from the decisions further down, these win.
   round from round 1; hitting it starts the frenzy, at most one a round. Round 1: a big one rises in
   the nearest lane and stays 3.5 s. Round 2: it crosses a middle lane at the lane's speed. Round 3
   on: it crosses the farthest lane at 1.8× the speed. It comes about 5–9 s into a round and, if
-  missed, again at 17–22 s. (Since the twelfth playtest: 4–10 s and 16–22 s, in a lane and from a
-  side drawn each time; since the ninth, bulbs instead of the pink glow.)
+  missed, again at 17–22 s. (Since the twelfth playtest: 4–10 s and 16–22 s, in a lane drawn each
+  time and running that lane's way for the round; since the ninth, bulbs instead of the pink glow.)
 - **Fixes:** the tile was squeezed (its picture is now cropped at the tile's own 16:10 before
   scaling); the gun's sprite carried a speck of its neighbour (the gun is gone); the trees floated
   (their trunks now go down behind the far lane's water).
@@ -507,7 +507,7 @@ moment 8–18 s into rounds 2 to 6.
   yellow and dark, never pink — `tests/shooting-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 4–10 s into every round and again at 16–22 s if no frenzy has
   come: in round 1 a big one rising in one of the two nearest lanes for 3.5 s, in round 2 one
-  crossing a middle lane, from round 3 one crossing one of the two farthest lanes at 1.8× its speed —
+  crossing a middle lane, from round 3 one crossing one of the two farthest lanes at 1.8× its speed, a crossing one running its lane's way —
   `tests/shooting-gallery.test.mjs`.
 
 - **AC-25** Every target stands on a stick down behind its strip (a drop-down hangs on its rope)

@@ -1687,11 +1687,13 @@ test('shooting-gallery AC-38: no two games run alike: each round draws which way
       g.startRun({ seed: 1000 + k * 7919 });
       const round = (n) => {
         if (n > 1) g.startRound(n);
+        const first = n === 1 ? g.targets().find((x) => x.state === 'live' && x.big) : null;
+        const delays = g.game.spawn.movers.slice();
         const dirs = g.L.lanes.map((l) => g.laneDir(l.i)).join('');
         const time = g.game.frenzyTimes[0];
         g.clear();
         const t = g.launchFrenzyTarget();
-        return { dirs, time, lane: t.lane, side: t.motion === 'mover' ? t.dir : Math.sign(t.x - g.stage().SW / 2) };
+        return { firstX: first ? first.x - g.stage().SW / 2 : null, delays, dirs, time, lane: t.lane, side: t.motion === 'mover' ? t.dir : Math.sign(t.x - g.stage().SW / 2), withLane: t.motion !== 'mover' || t.dir === g.laneDir(t.lane) };
       };
       runs.push({ r1: round(1), r2: round(2), r3: round(3) });
     }
@@ -1710,6 +1712,14 @@ test('shooting-gallery AC-38: no two games run alike: each round draws which way
     assert.equal(new Set(r.runs.map((x) => x[key].side)).size, 2, `${key}: it comes on both sides`);
   }
   assert.ok(distinct((x) => x.r1.lane) >= 2 && distinct((x) => x.r3.lane) >= 2, 'and in more than one lane');
+  assert.ok(r.runs.every((x) => x.r2.withLane && x.r3.withLane), 'a crossing frenzy target runs its lane’s way, never against it');
+  // The first targets' delays spread across 0.2–2.6 s, and round 1's big first target starts off
+  // the middle, on either side.
+  const delays = r.runs.flatMap((x) => x.r2.delays);
+  assert.ok(Math.min(...delays) < 0.6 && Math.max(...delays) > 2.2, `the delays spread: ${Math.min(...delays).toFixed(2)}–${Math.max(...delays).toFixed(2)} s`);
+  const offs = r.runs.map((x) => x.r1.firstX);
+  assert.ok(offs.every((o) => Math.abs(o) >= 30 && Math.abs(o) <= 90), `round 1's first target starts 30–90 units off the middle: ${offs.map((o) => o.toFixed(0))}`);
+  assert.equal(new Set(offs.map(Math.sign)).size, 2, 'on either side');
   if (r.n === 5) assert.ok(distinct((x) => x.r2.lane) >= 2, 'round 2: more than one middle lane');
   await context.close();
 });
