@@ -196,7 +196,7 @@ let offX = 0; // field origin, CSS px
 let offY = 0;
 let hudBottom = 68;
 let ground = null; // pre-drawn grass and runways
-const GEXT = 160; // grass drawn this far beyond the field, art px
+const GEXT = 360; // grass drawn this far beyond the field, art px
 
 function resize() {
   cssW = window.innerWidth;
@@ -430,6 +430,10 @@ function extendLine(plane, head) {
 // ---------- Simulation ----------
 
 function update(dt) {
+  if (mode === 'crash') {
+    updateAmbient(dt); // the sky holds still behind the collision card
+    return;
+  }
   if (mode === 'play') updateShift(dt);
   updatePlanes(dt, mode === 'play');
   updateAmbient(dt);
@@ -522,7 +526,7 @@ function doSwing() {
 function updatePlanes(dt, live) {
   const blow = blowVec(st ? st.wind : 0);
   for (const p of st.planes) {
-    if (p.gone) continue;
+    if (p.gone || p.crashed) continue;
     const T = TYPES[p.type];
     if (p.state === 'roll') {
       updateRoll(p, dt);
@@ -1085,7 +1089,7 @@ function makeCloud(rng) {
 function seedClouds() {
   const rng = mulberry32(99);
   clouds.length = 0;
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 16; i++) {
     const shape = makeCloud(rng);
     clouds.push({ ...shape, x: -GEXT + rng() * (FW + GEXT * 2), y: -GEXT + rng() * (FH + GEXT * 2) });
   }
@@ -1312,6 +1316,7 @@ function draw() {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(ang);
+      ctx.scale(1.4, 1.4);
       ctx.globalAlpha = pulse;
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#3e4255';
