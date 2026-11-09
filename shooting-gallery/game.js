@@ -910,8 +910,9 @@ function spawnStep(dt, cfg) {
   }
 }
 
-// The timer's cues: a chime and a swell at half time; at 10 s an alarm bell rattles; at 5 s a big
-// bell strikes three falling notes; at 3, 2 and 1 s a klaxon blares. Each later cue swells the board.
+// The timer's cues: a chime and a swell at half time; at 10 s a hand bell is rung fast; at 5 s a
+// heavy bell strikes three falling notes; at 3, 2 and 1 s a ring bell sounds. All three are real
+// recorded bells, kept about as loud as the chime. Each cue swells the board.
 function timerCues(before, now) {
   const half = ROUND_TIME / 2;
   if (before > half && now <= half) {
@@ -919,16 +920,16 @@ function timerCues(before, now) {
     game.pulse = 1;
   }
   if (before > 10 && now <= 10) {
-    sfx('alert10', { gain: 1.6 });
+    sfx('alert10', { gain: 1.15 });
     game.pulse = 1;
   }
   if (before > 5 && now <= 5) {
-    sfx('alert5', { gain: 1.5 });
+    sfx('alert5', { gain: 1.05 });
     game.pulse = 1;
   }
   for (const s of [3, 2, 1]) {
     if (before > s && now <= s) {
-      sfx('alarm', { gain: 1.3 });
+      sfx('alarm', { gain: 1.05 });
       game.pulse = 1;
     }
   }
@@ -1102,13 +1103,71 @@ function groove(x, y, w, h) {
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
   ctx.fillRect(x, y, w, 2);
 }
+// A brass bar: brushed along its length, worn darker in places, with a bright bevel on top, a dark
+// one below and a rivet at the end, so it reads as metal rather than a smooth fill.
+let brushed = null;
+function brushedPattern() {
+  if (brushed) return brushed;
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 32;
+  const g = c.getContext('2d');
+  let seed = 3;
+  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 90; i++) {
+    const y = r() * 32;
+    g.strokeStyle = r() < 0.5 ? `rgba(255, 245, 210, ${0.15 + r() * 0.3})` : `rgba(60, 35, 0, ${0.15 + r() * 0.35})`;
+    g.lineWidth = 0.5 + r() * 0.8;
+    g.beginPath();
+    const x = r() * 128;
+    g.moveTo(x, y);
+    g.lineTo(x + 20 + r() * 70, y + (r() - 0.5) * 0.8);
+    g.stroke();
+  }
+  // A few dull patches where hands have worn it.
+  for (let i = 0; i < 5; i++) {
+    g.fillStyle = `rgba(70, 40, 0, ${0.1 + r() * 0.12})`;
+    g.beginPath();
+    g.ellipse(r() * 128, r() * 32, 6 + r() * 10, 2 + r() * 4, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  brushed = c;
+  return c;
+}
+let brassDrawn = 0; // for the tests
 function brass(x, y, w, h, gold = false) {
+  brassDrawn++;
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   g.addColorStop(0, gold ? '#fff0a8' : '#f2d37a');
   g.addColorStop(0.5, gold ? '#ffd23f' : '#c99a3a');
   g.addColorStop(1, gold ? '#b8860b' : '#7a5a1c');
   ctx.fillStyle = g;
   ctx.fillRect(x, y, w, h);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = ctx.createPattern(brushedPattern(), 'repeat');
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255, 250, 220, 0.55)';
+  ctx.fillRect(x, y, w, 1);
+  ctx.fillStyle = 'rgba(50, 28, 0, 0.6)';
+  ctx.fillRect(x, y + h - 1, w, 1);
+  if (w > h * 1.4) {
+    // The rivet holding its end.
+    const rx = x + w - h * 0.5;
+    const ry = y + h / 2;
+    const rr = h * 0.2;
+    ctx.fillStyle = 'rgba(50, 28, 0, 0.7)';
+    ctx.beginPath();
+    ctx.arc(rx + 0.4, ry + 0.5, rr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = gold ? '#ffe37a' : '#e0bd62';
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 // The timer: a wooden marquee board with two digits of light bulbs, lit in the time's colour, with a
@@ -1607,14 +1666,7 @@ function drawHud() {
     ctx.arc(x, H.hopper.y, H.hopper.r, 0, Math.PI * 2);
     const ready = game.frenzy > 0 || i < game.hopper;
     if (!ready) continue;
-    ctx.fillStyle = PALETTE[(game.colour + i) % PALETTE.length];
-    ctx.fill();
-    if (ready) {
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
-      ctx.beginPath();
-      ctx.arc(x - H.hopper.r * 0.3, H.hopper.y - H.hopper.r * 0.3, H.hopper.r * 0.3, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    paintball(x, H.hopper.y, H.hopper.r, PALETTE[(game.colour + i) % PALETTE.length], i * 1.7);
   }
 }
 
@@ -1755,14 +1807,7 @@ function drawSlingshot() {
   roundRect(p.x - 14, p.y - 6, 28, 14, 6);
   ctx.fill();
   if (ready && inPlay) {
-    ctx.fillStyle = ball;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y - 4, 8.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.beginPath();
-    ctx.arc(p.x - 3, p.y - 7, 2.8, 0, Math.PI * 2);
-    ctx.fill();
+    paintball(p.x, p.y - 4, 8.5, ball);
   }
   if (showPull && pullLen() >= PULL_MIN && game.mode === 'play') drawArc(p);
   // Until the run's first shot, an arrow under the pouch shows the pull.
@@ -1874,15 +1919,54 @@ function drawBalls() {
     }
     const [x, y] = at(p);
     ctx.globalAlpha = 1;
-    ctx.fillStyle = b.colour;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-    ctx.beginPath();
-    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
-    ctx.fill();
+    paintball(x, y, r, b.colour, p * 9);
   }
+}
+
+// A paintball: a gelatin shell, shaded round with a darker rim, its seam running round the middle,
+// a soft gloss and a few faint specks, so it looks like a real ball rather than a flat dot.
+let paintballsDrawn = 0; // for the tests
+function shade(hex, f) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v) => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f);
+  return `rgb(${ch(n >> 16)}, ${ch((n >> 8) & 255)}, ${ch(n & 255)})`;
+}
+function paintball(x, y, r, colour, spin = 0.5) {
+  paintballsDrawn++;
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
+  g.addColorStop(0, shade(colour, 0.35));
+  g.addColorStop(0.55, colour);
+  g.addColorStop(1, shade(colour, -0.45));
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.clip();
+  // The seam: a thin dark ring seen at a slant, turning as the ball flies.
+  ctx.strokeStyle = shade(colour, -0.55);
+  ctx.globalAlpha = 0.3;
+  ctx.lineWidth = Math.max(0.5, r * 0.07);
+  ctx.beginPath();
+  ctx.ellipse(x, y, r * 1.02, r * (0.28 + 0.12 * Math.sin(spin)), 0.5 + spin, 0, Math.PI * 2);
+  ctx.stroke();
+  // Faint specks in the shell.
+  if (r >= 4) {
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = ctx.createPattern(wearPattern(), 'repeat');
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.restore();
+  // A soft gloss, not a flat white dot.
+  const hl = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, 0, x - r * 0.38, y - r * 0.42, r * 0.45);
+  hl.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+  hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = hl;
+  ctx.beginPath();
+  ctx.arc(x - r * 0.38, y - r * 0.42, r * 0.45, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 function label(text, x, y, px, align = 'center', color = '#fff') {
@@ -1954,7 +2038,7 @@ function drawBanner() {
     ctx.translate(pill.x + w / 2, pill.y + pill.h / 2);
     ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
     plank(-w / 2, -18, w, 36, { tone: frenzy ? 0 : 0.05 });
-    painted(b.text, 0, 1, Math.min(20, w / 5), 'center', frenzy ? '#ff9ad2' : '#ffd23f');
+    painted(b.text, 0, 1, Math.min(20, w / 5), 'center', '#ffd23f');
     ctx.restore();
     ctx.globalAlpha = 1;
     return;
@@ -1976,7 +2060,7 @@ function drawBanner() {
 // right edges, about 3.3 times the timer's bulbs, chasing as on a carnival sign. They fade in and
 // out with the frenzy.
 const MARQUEE_R = 12;
-const MARQUEE_COLOURS = ['#fff1c1', '#ffd23f', '#ff6ec7'];
+const MARQUEE_COLOURS = ['#fff1c1', '#ffd23f', '#ff8c1a'];
 function marqueeBulbs() {
   const out = [];
   const gap = MARQUEE_R * 2.9;
@@ -2045,6 +2129,8 @@ function draw() {
   polesDrawn = 0;
   paintClipped = 0;
   signsWorn = 0;
+  paintballsDrawn = 0;
+  brassDrawn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2070,10 +2156,10 @@ function draw() {
   drawFx();
   drawBanner();
   if (game.frenzy > 0) {
-    // A frenzy tints the edges pink, never the middle of the booth.
+    // A frenzy warms the edges with the bulbs' amber glow, never the middle of the booth.
     const g = ctx.createRadialGradient(SW / 2, SH / 2, Math.min(SW, SH) * 0.45, SW / 2, SH / 2, Math.max(SW, SH) * 0.75);
-    g.addColorStop(0, 'rgba(255, 80, 160, 0)');
-    g.addColorStop(1, `rgba(255, 80, 160, ${0.18 + 0.06 * Math.sin(game.T * 10)})`);
+    g.addColorStop(0, 'rgba(255, 170, 40, 0)');
+    g.addColorStop(1, `rgba(255, 170, 40, ${0.16 + 0.05 * Math.sin(game.T * 10)})`);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, SW, SH);
   }
@@ -2317,7 +2403,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

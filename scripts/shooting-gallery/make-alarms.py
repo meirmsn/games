@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
-"""Synthesises Shooting Gallery's three end-of-round alarms into shooting-gallery/sounds/:
+"""Builds Shooting Gallery's three end-of-round alarms into shooting-gallery/sounds/ from real
+recordings: Kenney's Impact Sounds (CC0), a heavy bell and heavy metal struck by hand.
 
-  alert10.mp3  at 10 s: an electric alarm bell, its hammer rattling on the gong for a second
-  alert5.mp3   at 5 s: three quick, falling strikes on a big tubular bell
-  alarm.mp3    at 3, 2 and 1 s: a short two-tone klaxon blare
+  alert10.mp3  at 10 s: a hand bell rung hard and fast for a second, like a fairground barker's
+  alert5.mp3   at 5 s: the heavy bell struck three times, each lower than the last
+  alarm.mp3    at 3, 2 and 1 s: one low strike of the bell with a metal clang, like a boxing-ring bell
 
-All three are original, built from inharmonic bell partials, a little grit and noise, so they sound
-mechanical rather than electronic, and nothing like the half-time chime.
-Run: python3 scripts/shooting-gallery/make-alarms.py   (needs numpy and ffmpeg)
+Nothing is synthesised: the recordings are only cut, re-pitched (by playing them slower) and
+layered, so they stay analog. Each is mastered quietly, about as loud as the half-time chime.
+Run: python3 scripts/shooting-gallery/make-alarms.py <Kenney "Impact Sounds/Audio" folder>
+     (needs numpy and ffmpeg)
 """
 import os
 import subprocess
+import sys
 import tempfile
 import wave
 
@@ -21,75 +24,66 @@ OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'shooting-gallery', 's
 rng = np.random.default_rng(11)
 
 
-def t_of(dur):
-    return np.arange(int(dur * SR)) / SR
+def load(folder, name):
+    raw = subprocess.run(
+        ['ffmpeg', '-v', 'error', '-i', os.path.join(folder, name), '-ac', '1', '-ar', str(SR), '-f', 'f32le', '-'],
+        check=True,
+        capture_output=True,
+    ).stdout
+    x = np.frombuffer(raw, dtype=np.float32).astype(np.float64)
+    return x / np.max(np.abs(x))
 
 
-def bell(f, dur, decay=2.2, partials=((1, 1.0), (2.76, 0.55), (5.40, 0.3), (8.93, 0.15))):
-    """A struck metal bell: inharmonic partials, each dying away faster the higher it is."""
-    t = t_of(dur)
-    out = np.zeros_like(t)
-    for ratio, amp in partials:
-        out += amp * np.sin(2 * np.pi * f * ratio * t) * np.exp(-t * decay * (0.6 + ratio * 0.4))
-    click = rng.standard_normal(len(t)) * np.exp(-t * 300) * 0.4
-    return out + click
+def pitched(x, factor):
+    """Plays a recording `factor` times as fast: higher and shorter above 1, lower and longer below."""
+    idx = np.arange(0, len(x) - 1, factor)
+    return np.interp(idx, np.arange(len(x)), x)
 
 
-def grit(x, bits=7):
-    """A little bit-crushing, for the rough, analog edge the other chimes have."""
-    q = 2 ** (bits - 1)
-    return np.round(x * q) / q
-
-
-def norm(x, peak=0.92):
-    return x / np.max(np.abs(x)) * peak
-
-
-def alert10():
-    # An electric bell: the hammer strikes the gong 24 times a second for 1.1 s, then it rings out.
-    dur = 1.6
+def mix(parts, dur):
     out = np.zeros(int(dur * SR))
-    strike = bell(1180, 0.5, decay=9)
-    for i in range(int(1.1 * 24)):
-        at = int(i * SR / 24)
-        seg = strike * (0.75 + 0.25 * rng.random())
-        end = min(len(out), at + len(seg))
-        out[at:end] += seg[: end - at]
-    ring = bell(1180, dur, decay=3.5)
-    out += 0.6 * np.concatenate([np.zeros(int(1.1 * SR)), ring])[: len(out)]
-    # The rattle of the hammer itself.
-    t = t_of(dur)
-    out += 0.25 * rng.standard_normal(len(t)) * (np.sin(2 * np.pi * 24 * t) > 0.6) * (t < 1.1)
-    return norm(grit(np.tanh(out * 0.6)))
+    for sig, at, gain in parts:
+        a = int(at * SR)
+        n = min(len(sig), len(out) - a)
+        if n > 0:
+            out[a : a + n] += sig[:n] * gain
+    return out
 
 
-def alert5():
-    # Three falling strikes on a big tubular bell: G5, E5, C5, an eighth of a second apart.
-    dur = 1.5
-    out = np.zeros(int(dur * SR))
-    for i, f in enumerate((784, 659, 523)):
-        seg = bell(f, dur - i * 0.14, decay=2.6, partials=((1, 1.0), (2.0, 0.35), (3.0, 0.3), (4.2, 0.2), (5.4, 0.12)))
-        at = int(i * 0.14 * SR)
-        out[at : at + len(seg)] += seg
-    return norm(grit(np.tanh(out * 0.8)))
+def master(x, mean_db):
+    """Scales a sound so its average loudness is `mean_db` dBFS, never clipping."""
+    rms = np.sqrt(np.mean(x[np.abs(x) > 1e-4] ** 2))
+    x = x * (10 ** (mean_db / 20) / rms)
+    peak = np.max(np.abs(x))
+    return x / peak * 0.89 if peak > 0.89 else x
 
 
-def alarm():
-    # A klaxon: a buzzy, slightly detuned sawtooth leaping from a low to a high pitch, 0.42 s.
-    dur = 0.42
-    t = t_of(dur)
-    f = np.where(t < 0.12, 330, 494) * (1 + 0.004 * np.sin(2 * np.pi * 7 * t))
-    phase = np.cumsum(f) / SR
-    saw = 2 * (phase % 1) - 1
-    saw2 = 2 * ((phase * 1.007) % 1) - 1
-    env = np.minimum(1, t / 0.01) * np.minimum(1, (dur - t) / 0.05)
-    x = (saw + saw2) * env
-    x = np.tanh(x * 2.5)
-    x += 0.08 * rng.standard_normal(len(t)) * env
-    return norm(grit(x, bits=6), 0.9)
+def alert10(bells):
+    # A hand bell rung fast: 11 strikes over a second, alternating two recordings, each a touch
+    # different in pitch and force, as a hand would ring it; the last rings out.
+    parts = []
+    for i in range(11):
+        b = bells[2 + i % 2]
+        parts.append((pitched(b, 1.5 + rng.uniform(-0.03, 0.03)), i * 0.09, rng.uniform(0.6, 0.9)))
+    parts.append((pitched(bells[1], 1.5), 11 * 0.09, 0.8))
+    return master(mix(parts, 2.1), -19)
+
+
+def alert5(bells):
+    # The heavy bell struck three times, falling: a fifth, a third, then the root.
+    parts = [(pitched(bells[0], f), i * 0.2, 1.0) for i, f in enumerate((1.5, 1.26, 1.0))]
+    return master(mix(parts, 1.9), -20)
+
+
+def alarm(bells, metal):
+    # One low, heavy strike with a metal clang under it: the round bell of a boxing ring.
+    parts = [(pitched(bells[1], 0.85), 0, 1.0), (pitched(metal, 0.8), 0, 0.45)]
+    return master(mix(parts, 0.9), -19)
 
 
 def write_mp3(name, samples):
+    fade = np.minimum(1, (len(samples) - np.arange(len(samples))) / (0.05 * SR))
+    samples = samples * fade
     with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
         path = tmp.name
     with wave.open(path, 'wb') as w:
@@ -104,6 +98,11 @@ def write_mp3(name, samples):
 
 
 if __name__ == '__main__':
-    write_mp3('alert10.mp3', alert10())
-    write_mp3('alert5.mp3', alert5())
-    write_mp3('alarm.mp3', alarm())
+    if len(sys.argv) != 2:
+        sys.exit('usage: make-alarms.py <Kenney "Impact Sounds/Audio" folder>')
+    folder = sys.argv[1]
+    bells = [load(folder, f'impactBell_heavy_00{i}.ogg') for i in range(5)]
+    metal = load(folder, 'impactMetal_heavy_002.ogg')
+    write_mp3('alert10.mp3', alert10(bells))
+    write_mp3('alert5.mp3', alert5(bells))
+    write_mp3('alarm.mp3', alarm(bells, metal))

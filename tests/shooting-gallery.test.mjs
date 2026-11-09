@@ -844,7 +844,7 @@ test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits
   }
 });
 
-test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, an alarm bell at 10 s, a bell at 5 s and a klaxon at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
+test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, a rung hand bell at 10 s, a falling bell at 5 s and a ring bell at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
   const { context, page } = await open();
   await ready(page);
   const ui = () => page.evaluate(() => window.__gallery.ui());
@@ -884,8 +884,8 @@ test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime a
   await steps(page, 2.1);
   u = await ui();
   assert.equal(u.timerColour, 'red');
-  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'alarm')), ['alarm', 'alarm', 'alarm'], 'a klaxon at 3, 2 and 1 s');
-  // The half-time chime, the 10 s bell, the 5 s bell and the klaxon are four different sounds.
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'alarm')), ['alarm', 'alarm', 'alarm'], 'a ring bell at 3, 2 and 1 s');
+  // The half-time chime, the 10 s bell, the 5 s bell and the ring bell are four different sounds.
   const files = await page.evaluate(async () => {
     const names = ['chime', 'alert10', 'alert5', 'alarm'];
     const sizes = await Promise.all(names.map((n) => fetch(`sounds/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => b.byteLength)));
@@ -1334,5 +1334,60 @@ test('shooting-gallery AC-33: the score, the signs and the cards are lettered in
   assert.match(r.font, /^"Rye"/);
   assert.ok(r.worn >= 3, `the score, the round and the quota are painted: ${r.worn}`);
   assert.ok(r.chipped > 0.02 && r.chipped < 0.4, `the lettering is worn in specks: ${r.chipped}`);
+  await context.close();
+});
+
+test('shooting-gallery AC-34: no pink lights in a frenzy; the alarms are quiet recordings; the quota’s brass and the paintballs are textured', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(async () => {
+    const g = window.__gallery;
+    g.game.pips = 3;
+    g.game.hopper = 4;
+    g.game.lastFire = -1;
+    g.fire();
+    g.step(0.05);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const drawn = { paintballs: g.paintballsDrawn(), brass: g.brassDrawn() };
+    // The marquee's colours: warm white, yellow and orange, none of them pink.
+    const hues = g.MARQUEE_COLOURS.map((c) => {
+      const n = parseInt(c.slice(1), 16);
+      const [R, G, B] = [n >> 16, (n >> 8) & 255, n & 255];
+      return { c, pinkish: R > 200 && B > 120 && G < 160 };
+    });
+    // The alarms: how loud each file is, against the half-time chime.
+    const ac = new OfflineAudioContext(1, 44100, 44100);
+    const loud = {};
+    for (const n of ['chime', 'alert10', 'alert5', 'alarm']) {
+      const buf = await fetch(`sounds/${n}.mp3`).then((x) => x.arrayBuffer());
+      const d = (await ac.decodeAudioData(buf)).getChannelData(0);
+      let sum = 0;
+      let count = 0;
+      for (const v of d) {
+        if (Math.abs(v) > 1e-3) {
+          sum += v * v;
+          count++;
+        }
+      }
+      loud[n] = Math.sqrt(sum / count);
+    }
+    return { drawn, hues, loud };
+  });
+  assert.ok(r.drawn.paintballs >= 5, `the hopper's balls, the pouch's and the flying one are drawn as paintballs: ${r.drawn.paintballs}`);
+  assert.ok(r.drawn.brass >= 1, 'the quota is a textured brass bar');
+  assert.deepEqual(r.hues.filter((h) => h.pinkish), [], 'no pink in the marquee');
+  for (const n of ['alert10', 'alert5', 'alarm']) assert.ok(r.loud[n] < r.loud.chime * 1.6, `${n} is about as loud as the half-time chime: ${r.loud[n].toFixed(3)} vs ${r.loud.chime.toFixed(3)}`);
+  // The alarm gains stay modest: the 10 s bell only a little above the rest.
+  const gains = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 10.02;
+    g.step(0.05);
+    g.game.time = 5.02;
+    g.step(0.05);
+    g.game.time = 3.02;
+    g.step(0.05);
+    return { alert10: g.heardOpts.alert10.gain, alert5: g.heardOpts.alert5.gain, alarm: g.heardOpts.alarm.gain };
+  });
+  for (const [n, v] of Object.entries(gains)) assert.ok(v <= 1.2, `${n} is played quietly: ${v}`);
   await context.close();
 });
