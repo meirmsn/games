@@ -72,15 +72,29 @@ const flyGold = (page) =>
     const o = window.__orbit;
     const g = o.game;
     const gold = g.level.legs[g.leg].gold;
-    g.clock = g.legStart; // the routes are timed from the leg's start
-    o.fire(gold.angle, 0.06 + gold.power * 0.94);
+    g.clock = gold.t0 ?? g.legStart; // where the moons are (static systems don't mind)
+    g.park.dir = gold.dir;
+    o.fire(gold.power, gold.at);
     for (let i = 0; i < 240 * 12 && g.mode === 'fly'; i++) {
       if (gold.brakeAt !== undefined && g.flight && g.flight.brakeLeft && g.flight.age >= gold.brakeAt) o.tap();
       o.update(1 / 240);
     }
-    for (let i = 0; i < 120 && g.mode === 'capture'; i++) o.update(1 / 60);
+    for (let i = 0; i < 180 && g.mode === 'capture'; i++) o.update(1 / 60);
     return g.lastResult;
   });
+// A pointer event on the booster bar, at `share` of the way along its track.
+const barPointer = (page, type, share, id = 1) =>
+  page.evaluate(
+    ([type, share, id]) => {
+      const track = document.querySelector('[data-boost-track]').getBoundingClientRect();
+      const x = track.left + share * track.width;
+      const y = track.top + track.height / 2;
+      document.querySelector('[data-boost]').dispatchEvent(
+        new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, isPrimary: id === 1, pointerType: 'touch' })
+      );
+    },
+    [type, share, id]
+  );
 // A canvas pointer event at CSS px (x, y).
 const pointer = (page, type, x, y, id = 1) =>
   page.evaluate(
@@ -123,52 +137,50 @@ test('orbit AC-1: System 1 is alive before any touch: planets turn, the probe ci
   await context.close();
 });
 
-test('orbit AC-2: drag back and release launches opposite the drag, from the point facing the aim, with power from the drag length', async () => {
+test('orbit AC-2: the bar sets the power, and a tap anywhere fires from where the probe is, along its orbit', async () => {
   const { context, page } = await open();
   await manual(page);
-  const full = await page.evaluate(() => 0.35 * 1000 * window.__orbit.view.s);
-  // drag down (and a little left) by half of full power: the probe goes up (and a little right)
+  const power = () => page.evaluate(() => window.__orbit.input.power);
+  // a tap on the bar sets the power at that point; a drag along it moves it
+  await barPointer(page, 'pointerdown', 0.7);
+  await barPointer(page, 'pointerup', 0.7);
+  assert.ok(Math.abs((await power()) - 0.7) < 0.01, 'a tap on the bar');
+  await barPointer(page, 'pointerdown', 0.7);
+  await barPointer(page, 'pointermove', 0.5);
+  await barPointer(page, 'pointermove', 0.3);
+  await barPointer(page, 'pointerup', 0.3);
+  assert.ok(Math.abs((await power()) - 0.3) < 0.01, 'a drag along the bar');
+  // a second finger on the bar doesn't move it
+  await barPointer(page, 'pointerdown', 0.3, 1);
+  await barPointer(page, 'pointerdown', 0.9, 2);
+  await barPointer(page, 'pointermove', 0.9, 2);
+  await barPointer(page, 'pointerup', 0.3, 1);
+  assert.ok(Math.abs((await power()) - 0.3) < 0.01, 'a second finger is ignored');
+  let s = await state(page);
+  assert.deepEqual([s.mode, s.launches], ['idle', 0], 'the bar launches nothing');
+  // a touch in the bottom edge strip is the phone's, not a launch
+  await pointer(page, 'pointerdown', 200, 844 - 10);
+  assert.equal((await state(page)).mode, 'idle');
+  // a tap anywhere else fires: from where the probe is now, the way it's moving, at the bar's power
+  const before = await page.evaluate(() => {
+    const o = window.__orbit;
+    return { at: o.orbitAngle(), p: o.probeWorld(), dir: o.game.park.dir };
+  });
   await pointer(page, 'pointerdown', 200, 400);
-  await pointer(page, 'pointermove', 200 - full * 0.1, 400 + full * 0.5);
-  assert.equal((await state(page)).mode, 'aim');
-  await pointer(page, 'pointerup', 200 - full * 0.1, 400 + full * 0.5);
+  await pointer(page, 'pointerup', 200, 400);
   const l = await page.evaluate(() => {
     const o = window.__orbit;
     const b = o.game.level.bodies[o.game.level.legs[0].from];
-    return { ...o.game.lastLaunch, bx: b.x, by: b.y, ring: b.ring, mode: o.game.mode };
+    return { ...o.game.lastLaunch, bx: b.x, by: b.y, ring: b.ring, mu: b.mu, mode: o.game.mode };
   });
   assert.equal(l.mode, 'fly');
-  assert.ok(Math.abs(l.angle - Math.atan2(-0.5, 0.1)) < 0.01, 'opposite the drag');
-  assert.ok(Math.abs(Math.hypot(0.1, 0.5) - l.power) < 0.02, 'power is the drag over full power');
-  const ux = Math.cos(l.angle);
-  const uy = Math.sin(l.angle);
-  assert.ok(Math.hypot(l.x - (l.bx + ux * l.ring), l.y - (l.by + uy * l.ring)) < 1, 'from the point facing the aim');
-  assert.ok((l.vx * ux + l.vy * uy) > 0, 'flying along the aim');
-  await settle(page);
-
-  const before = (await state(page)).launches;
-  // inside the dead zone: nothing
-  await pointer(page, 'pointerdown', 200, 400);
-  await pointer(page, 'pointermove', 203, 402);
-  await pointer(page, 'pointerup', 203, 402);
-  // dragged out, then back to the start: nothing
-  await pointer(page, 'pointerdown', 200, 400);
-  await pointer(page, 'pointermove', 200, 400 + full * 0.6);
-  await pointer(page, 'pointermove', 201, 401);
-  await pointer(page, 'pointerup', 201, 401);
-  // starting in the bottom edge strip: ignored
-  await pointer(page, 'pointerdown', 200, 844 - 10);
-  assert.equal((await state(page)).mode, 'idle');
-  await pointer(page, 'pointermove', 200, 600);
-  await pointer(page, 'pointerup', 200, 600);
-  assert.equal((await state(page)).launches, before, 'nothing launched');
-  // a second finger doesn't change the aim
-  await pointer(page, 'pointerdown', 200, 400, 1);
-  await pointer(page, 'pointermove', 200, 400 + full * 0.5, 1);
-  const aim1 = await page.evaluate(() => window.__orbit.input.angle);
-  await pointer(page, 'pointerdown', 300, 300, 2);
-  await pointer(page, 'pointermove', 100, 100, 2);
-  assert.equal(await page.evaluate(() => window.__orbit.input.angle), aim1);
+  assert.ok(Math.abs(l.at - before.at) < 1e-9 && Math.hypot(l.x - before.p.x, l.y - before.p.y) < 1e-6, 'from where the probe was');
+  const tx = -Math.sin(l.at) * before.dir;
+  const ty = Math.cos(l.at) * before.dir;
+  const speed = Math.hypot(l.vx, l.vy);
+  assert.ok((l.vx * tx + l.vy * ty) / speed > 0.9999, 'along the orbit, the way it was going');
+  const escape = Math.sqrt((2 * l.mu) / l.ring);
+  assert.ok(Math.abs(speed - (escape * 1.02 + 420 * 0.3)) < 1e-6, 'escape speed plus the bar');
   await context.close();
 });
 
@@ -216,8 +228,9 @@ test('orbit AC-4: a capture parks the probe on the ring and the next leg begins'
     const o = window.__orbit;
     const g = o.game;
     const gd = g.level.legs[g.leg].gold;
-    g.clock = g.legStart;
-    o.fire(gd.angle, 0.06 + gd.power * 0.94);
+    g.clock = gd.t0 ?? g.legStart;
+    g.park.dir = gd.dir;
+    o.fire(gd.power, gd.at);
     const pts = [];
     for (let i = 0; i < 60 * 20 && (g.mode === 'fly' || g.mode === 'capture'); i++) {
       o.update(1 / 60);
@@ -243,8 +256,8 @@ test('orbit AC-4: a capture parks the probe on the ring and the next leg begins'
 test('orbit AC-5: a failed flight rewinds within 1 s, with a ghost, and no lives lost; R in flight counts as a failure', async () => {
   const { context, page } = await open();
   await manual(page);
-  // straight down into the bottom of the field: lost
-  await page.evaluate(() => window.__orbit.fire(Math.PI / 2, 0.9));
+  // from the left of the first planet, circling as it starts, the probe heads down out of the field
+  await page.evaluate(() => window.__orbit.fire(1, Math.PI));
   const timing = await page.evaluate(() => {
     const o = window.__orbit;
     let t = 0;
@@ -263,7 +276,7 @@ test('orbit AC-5: a failed flight rewinds within 1 s, with a ghost, and no lives
   assert.equal(s.fails, 1);
   assert.ok(await page.evaluate(() => window.__orbit.game.ghost && window.__orbit.game.ghost.pts.length > 4), 'a ghost trail');
   // R in flight
-  await page.evaluate(() => window.__orbit.fire(-1.5, 0.5));
+  await page.evaluate(() => window.__orbit.fire(0.5));
   await frames(page, 10);
   await page.keyboard.press('r');
   await frames(page, 60);
@@ -279,7 +292,7 @@ test('orbit AC-5: on a moon system, a rewind puts the moons back where they were
   await frames(page, 90); // the moon moves while the probe waits
   const moon = () => page.evaluate(() => window.__orbit.game.clock);
   const t0 = await moon();
-  await page.evaluate(() => window.__orbit.fire(Math.PI / 2, 0.9));
+  await page.evaluate(() => window.__orbit.fire(1, Math.PI));
   await settle(page);
   const s = await state(page);
   assert.equal(s.fails, 1);
@@ -294,7 +307,7 @@ test('orbit AC-6: motes caught on a failed flight stay caught; skims are counted
   const r = await page.evaluate(() => {
     const o = window.__orbit;
     const g = o.game;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     o.update(1 / 60);
     // put the probe on a mote of this leg, then fly it into a planet
     const m = g.level.motes.find((x) => x.leg === 0);
@@ -322,7 +335,7 @@ test('orbit AC-7: from System 2 a touch in flight brakes once, by 35%; System 1 
       const o = window.__orbit;
       o.startSystem(sys);
       o.game.braked = true;
-      o.fire(-1.4, 0.6);
+      o.fire(0.6);
       o.update(1 / 60);
       const f = o.game.flight;
       const sp = () => Math.hypot(f.vx, f.vy); // the targets here sit still
@@ -341,41 +354,39 @@ test('orbit AC-7: from System 2 a touch in flight brakes once, by 35%; System 1 
   await context.close();
 });
 
-test('orbit AC-8: the aim shows direction and power only, with no preview of the path', async () => {
+test('orbit AC-8: the circling probe shows only a short line the way it would leave, longer with more power; no path is previewed', async () => {
   const { context, page } = await open();
   await manual(page);
   const r = await page.evaluate(() => {
     const o = window.__orbit;
+    const g = o.game;
     document.querySelector('[data-screen="intro"]').hidden = true;
-    o.game.mode = 'aim';
-    o.input.active = true;
-    o.input.angle = -Math.PI / 2; // straight up, where the field is empty above the aim line
+    // put the probe on the left of its planet: circling as it starts, it would leave straight down
+    g.park.phase = Math.PI - (g.park.dir * 2 * Math.PI * (g.clock - g.legStart)) / g.park.period;
     const c = document.querySelector('#space');
     const ctx = c.getContext('2d');
     const dpr = c.width / innerWidth;
     const lit = (len, power) => {
-      o.input.power = power;
+      o.setPower(power);
       o.draw();
-      const p = o.launchPoint(o.input.angle);
+      const p = o.launchPoint();
       const x = o.view.x + p.x * o.view.s;
-      const y = o.view.y + p.y * o.view.s - len;
+      const y = o.view.y + p.y * o.view.s + len;
       const d = ctx.getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data;
       return d[0] + d[1] + d[2];
     };
     return {
-      // the line reaches further with more power
-      shortNear: lit(10, 0.3),
-      shortFar: lit(50, 0.3),
-      longFar: lit(50, 0.9),
-      // nothing is drawn beyond the line's end, however far gravity would carry the probe
-      beyond: lit(100, 0.9),
+      shortNear: lit(10, 0.1),
+      shortFar: lit(40, 0.1),
+      longFar: lit(40, 1),
+      beyond: lit(70, 1),
       hasPreview: typeof o.previewFor === 'function' || typeof o.previewColours === 'function',
     };
   });
-  assert.ok(r.shortNear > 300, `the aim line is drawn (${r.shortNear})`);
-  assert.ok(r.shortFar < 100, `a weak throw draws a short line (${r.shortFar})`);
-  assert.ok(r.longFar > 300, `a strong throw draws a long line (${r.longFar})`);
-  assert.ok(r.beyond < 100, `nothing past the line (${r.beyond})`);
+  assert.ok(r.shortNear > 200, `the heading line is drawn (${r.shortNear})`);
+  assert.ok(r.shortFar < 100, `low power draws a short line (${r.shortFar})`);
+  assert.ok(r.longFar > 200, `full power draws a longer one (${r.longFar})`);
+  assert.ok(r.beyond < 100, `nothing past its end (${r.beyond})`);
   assert.equal(r.hasPreview, false);
   await context.close();
 });
@@ -398,7 +409,7 @@ test('orbit AC-9: the hidden assist grows with misses, never changes the drawn r
       const g = o.game;
       o.startSystem(0);
       g.legFails = n;
-      o.fire(-1.5, 0.5);
+      o.fire(0.5);
       const b = g.level.bodies[g.level.legs[0].to];
       const ringBefore = b.ring;
       Object.assign(g.flight, { x: b.x + b.ring * 1.04 + 26, y: b.y, vx: 0, vy: -60 }); // along the ring
@@ -481,23 +492,15 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
   // System intro: the intro card, the probe circling
   assert.deepEqual(await cards(), { mode: 'idle', intro: true, done: false, resume: false });
   assert.ok((await moved(0.3)) > 5, 'the probe circles');
-  // Aiming: the first touch fades the intro
-  await pointer(page, 'pointerdown', 200, 400);
-  await pointer(page, 'pointermove', 200, 480);
-  assert.deepEqual(await cards(), { mode: 'aim', intro: false, done: false, resume: false });
-  const aim = await page.evaluate(() => {
-    const o = window.__orbit;
-    const c0 = o.game.clock;
-    for (let i = 0; i < 30; i++) o.update(1 / 60);
-    const p = o.probeWorld();
-    const l = o.launchPoint(o.input.angle);
-    return { paused: o.game.clock === c0, off: Math.hypot(p.x - l.x, p.y - l.y) };
-  });
-  assert.ok(aim.paused, 'the clock waits while you aim');
-  assert.ok(aim.off < 1e-9, "the probe sits at the aim's launch point");
+  // Setting the power on the bar: the first touch fades the intro, and the probe keeps circling
+  await barPointer(page, 'pointerdown', 0.4);
+  await barPointer(page, 'pointermove', 0.45);
+  assert.deepEqual(await cards(), { mode: 'idle', intro: false, done: false, resume: false });
+  assert.ok((await moved(0.3)) > 5, 'still circling while the power is set');
+  await barPointer(page, 'pointerup', 0.45);
   await page.waitForFunction(() => document.querySelector('[data-screen="intro"]').hidden);
-  // Flying
-  await pointer(page, 'pointerup', 200, 480);
+  // Flying: a tap fires
+  await pointer(page, 'pointerdown', 200, 480);
   assert.deepEqual(await cards(), { mode: 'fly', intro: false, done: false, resume: false });
   assert.ok((await moved(0.1)) > 5, 'the probe flies');
   assert.ok(await page.evaluate(() => window.__orbit.game.trail.length > 0), 'with its trail');
@@ -518,7 +521,7 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
   await page.evaluate(() => {
     const o = window.__orbit;
     const g = o.game;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const b = g.level.bodies[g.level.legs[g.leg].to];
     Object.assign(g.flight, { x: b.x + b.ring + 15, y: b.y, vx: 0, vy: -150 }); // along the ring
     o.update(1 / 240);
@@ -580,7 +583,7 @@ test('orbit AC-13: hiding the page in flight undoes the flight; a capture in pro
     });
   await page.evaluate(() => {
     const o = window.__orbit;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     o.update(1 / 60);
     const m = o.game.level.motes.find((x) => x.leg === 0);
     Object.assign(o.game.flight, { x: m.x, y: m.y, vx: 0, vy: -10 });
@@ -600,7 +603,7 @@ test('orbit AC-13: hiding the page in flight undoes the flight; a capture in pro
   await page.evaluate(() => {
     const o = window.__orbit;
     const g = o.game;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const b = g.level.bodies[g.level.legs[0].to];
     Object.assign(g.flight, { x: b.x + b.ring, y: b.y, vx: 0, vy: -10 });
     o.update(1 / 240);
@@ -612,56 +615,45 @@ test('orbit AC-13: hiding the page in flight undoes the flight; a capture in pro
   await context.close();
 });
 
-test('orbit AC-14: arrows aim, Space launches and brakes, R rewinds; a cancelled pointer or a resize launches nothing', async () => {
+test('orbit AC-14: arrow keys set the power, Space fires and brakes, R rewinds; a cancelled drag on the bar stops it', async () => {
   const { context, page } = await open({ hash: '#s2', hasTouch: false });
   await manual(page);
-  await page.evaluate(() => (window.__orbit.game.braked = true));
+  await page.evaluate(() => {
+    window.__orbit.game.braked = true;
+    window.__orbit.setPower(0.5);
+  });
+  const power = () => page.evaluate(() => window.__orbit.input.power);
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowLeft');
-  let r = await page.evaluate(() => ({ mode: window.__orbit.game.mode, kb: window.__orbit.input.keyboard, a: window.__orbit.input.angle, p: window.__orbit.input.power }));
-  assert.deepEqual([r.mode, r.kb], ['aim', true]);
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('ArrowRight');
+  assert.ok(Math.abs((await power()) - 0.52) < 1e-9, 'a tap nudges the power by 2%');
   await page.keyboard.press('ArrowUp');
-  const r2 = await page.evaluate(() => ({ a: window.__orbit.input.angle, p: window.__orbit.input.power }));
-  assert.ok(Math.abs(r2.a - r.a - (1 * Math.PI) / 180) < 1e-9, 'right turns the aim, half a degree a press');
-  assert.ok(Math.abs(r2.p - r.p - 0.01) < 1e-9, 'up adds power');
-  // holding a key turns and powers up smoothly, fast enough to cross the range in about a second
+  await page.keyboard.press('ArrowDown');
+  assert.ok(Math.abs((await power()) - 0.52) < 1e-9, 'up and down do the same');
+  assert.equal((await state(page)).mode, 'idle', 'setting the power fires nothing');
+  // holding a key slides the power smoothly, across most of the bar in about a second
   const held = await page.evaluate(() => {
     const o = window.__orbit;
     const p0 = o.input.power;
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
-    for (let i = 0; i < 60; i++) o.update(1 / 60);
-    const down = p0 - o.input.power;
-    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' }));
-    const a0 = o.input.angle;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
     for (let i = 0; i < 60; i++) o.update(1 / 60);
-    const turned = ((a0 - o.input.angle) * 180) / Math.PI;
     window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft' }));
-    o.input.power = 0.5;
-    return { down, turned };
+    return p0 - o.input.power;
   });
-  assert.ok(held.down > 0.35, `a one-second hold takes off a good share of the power (${held.down})`);
-  assert.ok(held.turned > 45, `a one-second hold turns the aim a long way (${held.turned} degrees)`);
+  assert.ok(held > 0.35, `a one-second hold slides the power a long way (${held})`);
   await page.keyboard.press(' ');
-  assert.equal((await state(page)).mode, 'fly');
+  assert.equal((await state(page)).mode, 'fly', 'Space fires');
   await page.keyboard.press(' ');
   assert.equal(await page.evaluate(() => window.__orbit.game.flight.brakeLeft), 0, 'Space brakes in flight');
   await page.keyboard.press('r');
   await frames(page, 60);
-  r = await state(page);
+  const r = await state(page);
   assert.deepEqual([r.mode, r.launches, r.fails], ['idle', 1, 1]);
-  // a cancelled pointer
-  await pointer(page, 'pointerdown', 200, 400);
-  await pointer(page, 'pointermove', 200, 500);
-  await pointer(page, 'pointercancel', 200, 500);
-  assert.equal((await state(page)).mode, 'idle');
-  // a resize mid-drag
-  await pointer(page, 'pointerdown', 200, 400, 3);
-  await pointer(page, 'pointermove', 200, 500, 3);
-  await page.setViewportSize({ width: 844, height: 390 });
-  await page.waitForFunction(() => window.__orbit.game.mode === 'idle');
-  await pointer(page, 'pointerup', 200, 500, 3);
+  // a cancelled drag on the bar: later moves don't change the power, and nothing launches
+  await barPointer(page, 'pointerdown', 0.2);
+  await barPointer(page, 'pointercancel', 0.2);
+  await barPointer(page, 'pointermove', 0.9);
+  assert.ok(Math.abs((await power()) - 0.2) < 0.01);
   assert.equal((await state(page)).launches, 1, 'nothing launched');
   await context.close();
 });
@@ -712,7 +704,7 @@ test('orbit AC-18: each event plays its sound, and nothing plays while muted', a
     await page.evaluate(() => (window.__orbit.game.braked = true));
     await page.evaluate(() => {
       const o = window.__orbit;
-      o.fire(-1.5, 0.5);
+      o.fire(0.5);
       o.tap(); // brake
     });
     await settle(page); // a crash or a loss
@@ -737,12 +729,12 @@ test('orbit AC-18: a crash plays the thud and a loss the falling blip', async ()
   await manual(page);
   await page.evaluate(() => {
     const o = window.__orbit;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const b = o.game.level.bodies[2];
     Object.assign(o.game.flight, { x: b.x + b.r + 1, y: b.y, vx: -200, vy: 0 });
   });
   await settle(page);
-  await page.evaluate(() => window.__orbit.fire(Math.PI / 2, 0.9));
+  await page.evaluate(() => window.__orbit.fire(1, Math.PI));
   await settle(page);
   const heard = await page.evaluate(() => window.__orbit.heard);
   assert.ok(heard.includes('crash') && heard.includes('lost'));
@@ -756,7 +748,7 @@ test('orbit AC-19: on System 2 leg 1, until the first brake, a fast approach slo
     const o = window.__orbit;
     const g = o.game;
     g.braked = false;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const b = g.level.bodies[g.level.legs[0].to];
     Object.assign(g.flight, { x: b.x - b.ring * 1.8, y: b.y - 40, vx: 900, vy: 0 });
     o.update(1 / 240);
@@ -774,7 +766,7 @@ test('orbit AC-19: on System 2 leg 1, until the first brake, a fast approach slo
     const g = o.game;
     for (let i = 0; i < 200 && g.mode !== 'idle'; i++) o.update(1 / 60);
     g.braked = true;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const b = g.level.bodies[g.level.legs[0].to];
     Object.assign(g.flight, { x: b.x - b.ring * 1.8, y: b.y - 40, vx: 900, vy: 0 });
     g.slowmo = 0;
@@ -790,7 +782,7 @@ test('orbit AC-20: the probe dims over the last 2 s before its time runs out', a
   await manual(page);
   const r = await page.evaluate(() => {
     const o = window.__orbit;
-    o.fire(-1.5, 0.5);
+    o.fire(0.5);
     const f = o.game.flight;
     const at = (age) => {
       f.age = age;
@@ -805,6 +797,29 @@ test('orbit AC-20: the probe dims over the last 2 s before its time runs out', a
   await context.close();
 });
 
+test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
+  const { context, page } = await open();
+  await manual(page);
+  const hint = () => page.evaluate(() => !document.querySelector('[data-hint]').hidden);
+  await frames(page, 60 * 3);
+  assert.equal(await hint(), false, 'not before 4 s');
+  await frames(page, 75);
+  assert.equal(await hint(), true, 'after 4 s untouched');
+  assert.match(await page.locator('[data-hint]').textContent(), /fire the boosters/);
+  await pointer(page, 'pointerdown', 200, 400);
+  assert.equal(await hint(), false, 'firing hides it');
+  await settle(page);
+  await frames(page, 60 * 6);
+  assert.equal(await hint(), false, 'not back on this leg');
+  // a new visit in the same browser: it's gone for good
+  await page.reload();
+  await page.waitForFunction(() => window.__orbit && 'ready' in document.body.dataset);
+  await manual(page);
+  await frames(page, 60 * 6);
+  assert.equal(await hint(), false, 'not on a later visit');
+  await context.close();
+});
+
 test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolling, clear of the buttons', async () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const { context, page } = await open({ viewport });
@@ -812,6 +827,7 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
       const v = window.__orbit.view;
       const back = document.querySelector('.shell-back').getBoundingClientRect();
       const mute = document.querySelector('.mute').getBoundingClientRect();
+      const bar = document.querySelector('[data-boost]').getBoundingClientRect();
       return {
         top: v.y,
         left: v.x,
@@ -819,6 +835,7 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
         bottom: v.y + 1800 * v.s,
         backBottom: back.bottom,
         muteBottom: mute.bottom,
+        bar: { top: bar.top, bottom: bar.bottom, left: bar.left, right: bar.right, height: bar.height },
         buttons: [back.width, back.height, mute.width, mute.height],
         scroll: document.scrollingElement.scrollHeight - innerHeight + (document.scrollingElement.scrollWidth - innerWidth),
         w: innerWidth,
@@ -828,6 +845,9 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
     assert.ok(r.top >= Math.max(r.backBottom, r.muteBottom), `${viewport.width}: below the buttons`);
     assert.ok(r.left >= 0 && r.right <= r.w && r.bottom <= r.h, `${viewport.width}: on screen`);
     assert.ok(r.buttons.every((x) => x >= 44));
+    assert.ok(r.bar.top >= r.bottom, `${viewport.width}: the booster bar sits below the field`);
+    assert.ok(r.bar.bottom <= r.h - 24 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, above the edge strip`);
+    assert.ok(r.bar.height >= 44, 'the bar is easy to hit');
     assert.equal(r.scroll, 0);
     await context.close();
   }

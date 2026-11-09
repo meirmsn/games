@@ -54,6 +54,11 @@ const ui = {
   retry: $('[data-retry]'),
   next: $('[data-next]'),
   resume: $('[data-resume]'),
+  boost: $('[data-boost]'),
+  boostTrack: $('[data-boost-track]'),
+  boostValue: $('[data-boost-value]'),
+  boostGhost: $('[data-boost-ghost]'),
+  hint: $('[data-hint]'),
 };
 
 // ---------- Images ----------
@@ -100,6 +105,7 @@ let dpr = 1;
 const view = { x: 0, y: 0, s: 1 }; // field → CSS px: px = view.x + wx * view.s
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const EDGE = 24; // touches starting this close to the bottom (plus the safe area) are the phone's
+const BAR_SPACE = 64; // room under the field for the booster bar
 
 function readInsets() {
   const probe = document.createElement('div');
@@ -123,7 +129,7 @@ function resize() {
   canvas.height = Math.round(H * dpr);
   // The field sits below the buttons (12 + 44 + 10 px) and above the bottom edge strip.
   const top = insets.top + 66;
-  const bottom = insets.bottom + EDGE;
+  const bottom = insets.bottom + EDGE + BAR_SPACE; // the booster bar sits below the field
   const side = 8;
   const aw = W - insets.left - insets.right - 2 * side;
   const ah = H - top - bottom;
@@ -131,7 +137,6 @@ function resize() {
   view.x = insets.left + side + (aw - FIELD.w * view.s) / 2;
   view.y = top + (ah - FIELD.h * view.s) / 2;
   makeStars();
-  if (input.active) cancelAim(); // a rotation mid-drag launches nothing
 }
 
 const sx = (x) => view.x + x * view.s;
@@ -199,7 +204,8 @@ const game = {
   intro: false,
   acc: 0, // fixed steps owed to the flight
 };
-const input = { active: false, id: null, x0: 0, y0: 0, angle: -Math.PI / 2, power: 0, keyboard: false, lastTick: 0 };
+// The booster power on the bar, kept between visits (a convenience; losing it costs nothing).
+const input = { power: Math.min(1, Math.max(0, Number(store.get('orbit.power', 0.25)) || 0)), lastTick: -1 };
 let manual = false; // tests own the clock
 
 function assistNow() {
@@ -262,79 +268,43 @@ function systemFromHash() {
   return n >= 1 && n <= SYSTEMS.length ? n - 1 : 0;
 }
 
-// ---------- Aim and launch ----------
+// ---------- Booster power and release ----------
 
-function aimAngleToTarget() {
-  const a = bodyPos(legOf().from);
-  const b = bodyPos(legOf().to);
-  return Math.atan2(b.y - a.y, b.x - a.x);
+// Where the probe is on its parking orbit now (its angle round the planet) and which way it moves.
+function orbitAngle(t = game.clock) {
+  return game.park.phase + game.park.dir * ((2 * Math.PI * (t - game.legStart)) / game.park.period);
 }
 
-function launchPoint(angle) {
-  const b = bodyPos(legOf().from);
-  return { x: b.x + Math.cos(angle) * game.park.r, y: b.y + Math.sin(angle) * game.park.r };
+// The release point: where the probe is now on its orbit.
+function launchPoint() {
+  return probeParked();
 }
 
-function startAim(px, py, id) {
-  input.active = true;
-  input.keyboard = false;
-  input.id = id;
-  input.x0 = px;
-  input.y0 = py;
-  input.power = 0;
-  input.lastTick = 0;
-  game.mode = 'aim';
-  fadeIntro();
-}
-
-function fullDrag() {
-  return Math.max(60, 0.35 * FIELD.w * view.s);
-}
-const DEAD = 0.06; // a drag shorter than this share of full power launches nothing
-
-function moveAim(px, py) {
-  const dx = input.x0 - px;
-  const dy = input.y0 - py;
-  const len = Math.hypot(dx, dy);
-  input.power = Math.min(1, len / fullDrag());
-  if (len > 2) input.angle = Math.atan2(dy, dx);
-  tickPower();
-}
-
-function tickPower() {
-  const step = Math.floor(input.power * 5);
-  if (step !== input.lastTick && input.power > DEAD) {
-    if (step > input.lastTick) sfx('tick', { rate: 0.8 + step * 0.12 });
+// The booster power on the bar (0..1). Ticks softly as it crosses each tenth.
+function setPower(p) {
+  const v = Math.min(1, Math.max(0, p));
+  const step = Math.round(v * 10);
+  if (step !== input.lastTick) {
+    if (game.mode === 'idle') sfx('tick', { rate: 0.8 + step * 0.06 });
     input.lastTick = step;
   }
+  input.power = v;
+  store.set('orbit.power', Math.round(v * 100) / 100);
+  syncBoost();
 }
 
-function cancelAim() {
-  input.active = false;
-  input.keyboard = false;
-  input.id = null;
-  if (game.mode === 'aim') game.mode = 'idle';
-}
-
-function releaseAim() {
-  const power = input.power;
-  input.active = false;
-  input.id = null;
-  input.keyboard = false;
-  if (power <= DEAD) {
-    if (game.mode === 'aim') game.mode = 'idle';
-    return;
+// Fire the boosters: the probe leaves along its orbit, the way it's moving, at this power. Tests
+// can pass `at` (an angle on the orbit) to release from a chosen point.
+function fire(power = input.power, at) {
+  if (at !== undefined) {
+    // put the probe at `at` now
+    game.park.phase = at - game.park.dir * ((2 * Math.PI * (game.clock - game.legStart)) / game.park.period);
   }
-  fire(input.angle, power);
-}
-
-// Launch at the aim; the power scales between the dead zone and full.
-function fire(angle, power) {
-  const pw = (power - DEAD) / (1 - DEAD);
-  game.flight = launch(game.level, game.leg, angle, pw, game.clock, assistNow());
-  game.flight.angle = angle;
+  const a = orbitAngle();
+  game.flight = launch(game.level, game.leg, a, power, game.clock, assistNow(), game.park.dir);
+  game.flight.at = a;
   game.flight.power = power;
-  game.lastLaunch = { angle, power, x: game.flight.x, y: game.flight.y, vx: game.flight.vx, vy: game.flight.vy, t: game.clock };
+  game.lastLaunch = { at: a, power, dir: game.park.dir, x: game.flight.x, y: game.flight.y, vx: game.flight.vx, vy: game.flight.vy, t: game.clock };
   game.flight.slowmoDone = false;
   game.trail = [];
   game.acc = 0;
@@ -342,7 +312,9 @@ function fire(angle, power) {
   game.mode = 'fly';
   game.skimFlash.clear();
   fadeIntro();
-  sfx('launch', { rate: 0.9 + pw * 0.25 });
+  hideHint(true);
+  syncBoost();
+  sfx('launch', { rate: 0.9 + power * 0.25 });
 }
 
 // ---------- Flight ----------
@@ -407,7 +379,10 @@ function endFlight() {
     const vr0 = (dx * (f.vx - v.x) + dy * (f.vy - v.y)) / r0; // speed in or out
     const dir = w0 >= 0 ? 1 : -1;
     const p = park(game.level, f.to);
-    game.capture = { t: 0, r0, vr0, a: Math.atan2(dy, dx), w0, wc: (dir * 2 * Math.PI) / p.period, dir };
+    const wc = (dir * 2 * Math.PI) / p.period;
+    // a fast arrival takes longer to settle, so it slows into the ring rather than swerving
+    const T = Math.min(2.2, Math.max(SETTLE, 0.35 * Math.abs(w0 / wc)));
+    game.capture = { t: 0, T, r0, vr0, a: Math.atan2(dy, dx), w0, wc, dir };
     game.mode = 'capture';
     return;
   }
@@ -426,7 +401,7 @@ function endFlight() {
 function startRewind(f) {
   const pts = [];
   for (let i = 0; i < game.trail.length; i += 3) pts.push(game.trail[i], game.trail[i + 1]);
-  game.ghost = f ? { pts, angle: f.angle, power: f.power } : game.ghost;
+  game.ghost = f ? { pts, at: f.at, power: f.power } : game.ghost;
   game.mode = 'rewind';
   game.rewindFrom = game.clock;
   game.rewindT = 0;
@@ -447,16 +422,17 @@ function updateRewind(dt) {
   }
 }
 
-const SETTLE = 1.0;
+const SETTLE = 1.0; // the shortest settle; a faster arrival takes up to 2.2 s
 const smooth = (k) => k * k * (3 - 2 * k);
+const SETTLE_R = 0.7; // the distance settles in the first 70% of it, so the end is a clean circle
 function settleAt(c) {
-  const u = Math.min(1, c.t / SETTLE);
-  const k = smooth(u);
+  const k = smooth(Math.min(1, c.t / c.T));
+  const u = Math.min(1, c.t / (c.T * SETTLE_R));
   const ring = park(game.level, legOf().to).r;
   // the distance follows a Hermite curve: it starts at the probe's own speed in or out and ends
   // level on the ring, so the path curves in with no kink
   const h10 = u * u * u - 2 * u * u + u;
-  const r = c.r0 + (ring - c.r0) * k + h10 * c.vr0 * SETTLE;
+  const r = c.r0 + (ring - c.r0) * smooth(u) + h10 * c.vr0 * c.T * SETTLE_R;
   return { r, w: c.w0 + (c.wc - c.w0) * k };
 }
 function updateCapture(dt) {
@@ -466,7 +442,7 @@ function updateCapture(dt) {
   game.clock += dt;
   const p = probeWorld();
   game.trail.push(p.x, p.y, 1);
-  if (c.t >= SETTLE) finishCapture();
+  if (c.t >= c.T) finishCapture();
 }
 
 function finishCapture() {
@@ -585,8 +561,14 @@ function fadeIntro() {
 
 // ---------- Update ----------
 
+let lastMode = '';
 function update(dt) {
   if (game.paused) return;
+  if (game.mode !== lastMode) {
+    lastMode = game.mode;
+    syncBoost(); // the bar dims while the probe isn't on its orbit
+    if (game.mode !== 'idle') ui.hint.hidden = true;
+  }
   for (const b of game.burst) b.t += dt;
   game.burst = game.burst.filter((b) => b.t < 1.2);
   for (const [k, v] of game.skimFlash) {
@@ -597,9 +579,9 @@ function update(dt) {
     case 'idle':
       game.clock += dt;
       game.idleAge += dt;
+      keyPower(dt);
+      maybeHint();
       break;
-    case 'aim':
-      keyAim(dt); // the clock waits while you aim
     case 'fly': {
       let scale = 1;
       if (game.slowmo > 0) {
@@ -784,9 +766,16 @@ function drawGhost() {
   }
   ctx.stroke();
   ctx.setLineDash([]);
-  if (game.mode === 'idle' || game.mode === 'aim') {
-    const p = launchPoint(gh.angle);
-    drawAimLine(p.x, p.y, gh.angle, gh.power, 0.22);
+  if (game.mode === 'idle') {
+    // where the last release fired from: a small hollow mark on the orbit
+    const b = bodyPos(game.parkBody);
+    const x = sx(b.x + Math.cos(gh.at) * game.park.r);
+    const y = sy(b.y + Math.sin(gh.at) * game.park.r);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.stroke();
   }
 }
 
@@ -808,17 +797,20 @@ function drawTrail() {
 }
 
 function drawAim() {
-  if (game.mode !== 'aim' || input.power <= DEAD) return;
-  const p = launchPoint(input.angle);
-  drawAimLine(p.x, p.y, input.angle, input.power, 0.9);
+  if (game.mode !== 'idle') return;
+  const p = probeParked();
+  const a = orbitAngle();
+  const dir = Math.atan2(Math.cos(a) * game.park.dir, -Math.sin(a) * game.park.dir);
+  drawAimLine(p.x, p.y, dir, input.power, 0.55);
 }
 
-// The aim: a thin line out of the probe along the throw, longer with more power, and a small dot
-// at its end. It shows direction and strength only: where gravity takes the probe is for you to read.
+// The heading: a thin line out of the probe along the way it's moving (where it goes if you fire
+// now), longer with more power, and a small dot at its end. Where gravity then takes it is for you
+// to read.
 function drawAimLine(wx, wy, angle, power, alpha) {
   const x = sx(wx);
   const y = sy(wy);
-  const len = 8 + power * 64;
+  const len = 10 + power * 40;
   const ex = x + Math.cos(angle) * len;
   const ey = y + Math.sin(angle) * len;
   ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.8})`;
@@ -842,7 +834,6 @@ function timeoutDim() {
 
 function probeWorld() {
   if (game.mode === 'fly' && game.flight) return { x: game.flight.x, y: game.flight.y };
-  if (game.mode === 'aim') return launchPoint(input.angle);
   if (game.mode === 'capture' && game.capture) {
     const c = game.capture;
     const tp = bodyPos(legOf().to);
@@ -939,12 +930,13 @@ function drawBursts() {
 
 // ---------- Input ----------
 
+// A tap anywhere on the space (not the bar) fires the boosters, or brakes in flight (System 2 on).
 function onDown(e) {
   if (game.paused) {
     resumeGame();
     return;
   }
-  if (input.id !== null && e.pointerId !== input.id) return; // a second finger
+  if (!e.isPrimary && e.pointerType === 'touch') return; // a second finger
   if (e.clientY > H - insets.bottom - EDGE) return; // the phone's swipe strip
   if (game.mode === 'fly') {
     if (game.level.brake && game.flight && brake(game.flight, game.level)) {
@@ -957,38 +949,66 @@ function onDown(e) {
     }
     return;
   }
-  if (game.mode !== 'idle') return;
-  try {
-    canvas.setPointerCapture(e.pointerId);
-  } catch (err) {
-    // a synthetic or already-lifted pointer: the drag still works without capture
-  }
-  startAim(e.clientX, e.clientY, e.pointerId);
-}
-
-function onMove(e) {
-  if (!input.active || e.pointerId !== input.id || input.keyboard) return;
-  moveAim(e.clientX, e.clientY);
-}
-
-function onUp(e) {
-  if (!input.active || e.pointerId !== input.id) return;
-  moveAim(e.clientX, e.clientY);
-  releaseAim();
-}
-
-function onCancel(e) {
-  if (e.pointerId === input.id) cancelAim();
+  if (game.mode === 'idle') fire();
 }
 
 canvas.addEventListener('pointerdown', onDown);
-canvas.addEventListener('pointermove', onMove);
-canvas.addEventListener('pointerup', onUp);
-canvas.addEventListener('pointercancel', onCancel);
-canvas.addEventListener('lostpointercapture', onCancel);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-const keysDown = new Map(); // held arrow → seconds held
+// The booster bar: tap a point on it to set the power there, or drag along it.
+let barDrag = null;
+function powerAt(clientX) {
+  const r = ui.boostTrack.getBoundingClientRect();
+  return (clientX - r.left) / r.width;
+}
+ui.boost.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  if (game.paused) {
+    resumeGame();
+    return;
+  }
+  if (barDrag !== null) return; // a second finger
+  barDrag = e.pointerId;
+  try {
+    ui.boost.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // a synthetic pointer: the drag still works
+  }
+  setPower(powerAt(e.clientX));
+  fadeIntro();
+});
+ui.boost.addEventListener('pointermove', (e) => {
+  if (e.pointerId === barDrag) setPower(powerAt(e.clientX));
+});
+const endBar = (e) => {
+  if (e.pointerId === barDrag) barDrag = null;
+};
+ui.boost.addEventListener('pointerup', endBar);
+ui.boost.addEventListener('pointercancel', endBar);
+ui.boost.addEventListener('lostpointercapture', endBar);
+
+function syncBoost() {
+  const pct = Math.round(input.power * 100);
+  ui.boost.style.setProperty('--power', input.power);
+  ui.boost.setAttribute('aria-valuenow', String(pct));
+  ui.boostValue.textContent = `${pct}%`;
+  ui.boost.classList.toggle('is-off', game.mode !== 'idle');
+  if (game.ghost && game.mode === 'idle') {
+    ui.boostGhost.hidden = false;
+    ui.boostGhost.style.left = `${game.ghost.power * 100}%`;
+  } else {
+    ui.boostGhost.hidden = true;
+  }
+}
+
+// Keys: Space fires (or brakes in flight); left and right (or down and up) set the power. A tap
+// nudges it by 2%; a held key slides it smoothly, easing in over a third of a second (keyPower).
+const keysDown = new Map(); // held arrow -> seconds held
+const KEY_LESS = ['ArrowLeft', 'ArrowDown'];
+const KEY_MORE = ['ArrowRight', 'ArrowUp'];
+const TAP_POWER = 0.02;
+const POWER_RATE = 0.9; // of full power per second, at full speed
+let slowKeys = false;
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof Element && e.target.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
   if (game.paused) {
@@ -1002,29 +1022,15 @@ window.addEventListener('keydown', (e) => {
   }
   if (k === ' ') {
     e.preventDefault();
-    if (game.mode === 'fly') {
-      onDown({ pointerId: -2, clientY: 0 });
-      return;
-    }
-    if (game.mode === 'idle') keyAimStart();
-    if (game.mode === 'aim' && input.keyboard) {
-      if (input.power <= DEAD) input.power = 0.5;
-      releaseAim();
-    }
+    if (!e.repeat) onDown({ isPrimary: true, clientY: 0 });
     return;
   }
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(k)) {
+  if (KEY_LESS.includes(k) || KEY_MORE.includes(k)) {
     e.preventDefault();
-    if (game.mode === 'idle') keyAimStart();
-    if (game.mode !== 'aim' || !input.keyboard) return;
-    if (e.repeat) return; // a held key moves smoothly in update(), not by the key's repeat
-    // a tap nudges by a fine step; holding it turns or powers up smoothly (keyAim)
+    if (e.repeat) return; // a held key slides smoothly in keyPower(), not by the key's repeat
     keysDown.set(k, 0);
-    if (k === 'ArrowLeft') input.angle -= TAP_TURN;
-    if (k === 'ArrowRight') input.angle += TAP_TURN;
-    if (k === 'ArrowUp') input.power = Math.min(1, input.power + TAP_POWER);
-    if (k === 'ArrowDown') input.power = Math.max(DEAD + 0.01, input.power - TAP_POWER);
-    tickPower();
+    setPower(input.power + (KEY_MORE.includes(k) ? TAP_POWER : -TAP_POWER));
+    fadeIntro();
   }
   if (k === 'Shift') slowKeys = true;
 });
@@ -1034,38 +1040,36 @@ window.addEventListener('keyup', (e) => {
 });
 window.addEventListener('blur', () => keysDown.clear());
 
-// Held arrows: the aim turns at up to TURN_RATE and the power climbs at POWER_RATE, easing in over
-// the first third of a second so a short hold stays precise; Shift holds them to a quarter speed.
-const TAP_TURN = (0.5 * Math.PI) / 180;
-const TAP_POWER = 0.01;
-const TURN_RATE = (90 * Math.PI) / 180; // radians per second, at full speed
-const POWER_RATE = 0.9; // of full power per second, at full speed
-let slowKeys = false;
-function keyAim(dt) {
-  if (game.mode !== 'aim' || !input.keyboard || !keysDown.size) return;
+function keyPower(dt) {
+  if (!keysDown.size) return;
   const slow = slowKeys ? 0.25 : 1;
+  let p = input.power;
   for (const [k, held] of keysDown) {
     const t = held + dt;
     keysDown.set(k, t);
     if (t < 0.18) continue; // a tap is a tap
-    const ramp = Math.min(1, (t - 0.18) / 0.35) * slow * dt;
-    if (k === 'ArrowLeft') input.angle -= TURN_RATE * ramp;
-    if (k === 'ArrowRight') input.angle += TURN_RATE * ramp;
-    if (k === 'ArrowUp') input.power = Math.min(1, input.power + POWER_RATE * ramp);
-    if (k === 'ArrowDown') input.power = Math.max(DEAD + 0.01, input.power - POWER_RATE * ramp);
+    const ramp = Math.min(1, (t - 0.18) / 0.35) * slow * dt * POWER_RATE;
+    p += KEY_MORE.includes(k) ? ramp : -ramp;
   }
-  tickPower();
+  if (p !== input.power) setPower(p);
 }
 
-function keyAimStart() {
-  input.active = true;
-  input.keyboard = true;
-  input.id = null;
-  input.angle = game.ghost ? game.ghost.angle : aimAngleToTarget();
-  input.power = game.ghost ? game.ghost.power : 0.5;
-  input.lastTick = Math.floor(input.power * 5);
-  game.mode = 'aim';
-  fadeIntro();
+// The first level's hint, shown only until the boosters have been fired once (ever, in this
+// browser): if the probe has circled for a few seconds untouched, a line says how to fire.
+const HINT_AFTER = 4;
+let fired = Boolean(store.get('orbit.fired', false));
+function maybeHint() {
+  if (fired || game.sys !== 0 || game.leg !== 0 || !ui.hint.hidden || game.idleAge < HINT_AFTER) return;
+  const fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+  ui.hint.textContent = fine ? 'Click or press Space to fire the boosters' : 'Tap to fire the boosters';
+  ui.hint.hidden = false;
+}
+function hideHint(forGood) {
+  ui.hint.hidden = true;
+  if (forGood && !fired) {
+    fired = true;
+    store.set('orbit.fired', true);
+  }
 }
 
 // R: back to the leg's start. In flight it counts as a failed flight.
@@ -1075,8 +1079,6 @@ function rewindByHand() {
     game.legFails++;
     sfx('lost');
     startRewind(game.flight);
-  } else if (game.mode === 'aim') {
-    cancelAim();
   }
 }
 
@@ -1084,7 +1086,6 @@ function rewindByHand() {
 
 function pauseGame() {
   if (game.paused) return;
-  if (input.active) cancelAim();
   if (game.mode === 'capture') finishCapture();
   if (game.mode === 'fly' && game.flight) {
     // the flight is undone: its launch doesn't count, its motes stay
@@ -1165,6 +1166,7 @@ window.addEventListener('hashchange', () => startSystem(systemFromHash()));
 
 resize();
 startSystem(systemFromHash());
+syncBoost();
 Promise.all(loading).then(() => {
   document.body.dataset.ready = '';
 });
@@ -1190,7 +1192,9 @@ window.__orbit = {
   launchPoint,
   timeoutDim,
   resize,
-  tap: (y = 100) => onDown({ pointerId: -3, clientY: y }),
+  tap: (y = 100) => onDown({ isPrimary: true, clientY: y }),
+  setPower,
+  orbitAngle,
   rewindByHand,
   set manual(v) {
     manual = v;

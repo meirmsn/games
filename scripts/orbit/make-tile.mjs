@@ -17,11 +17,13 @@ const box = await page.evaluate(() => {
   document.querySelector('[data-screen="intro"]').hidden = true;
   document.querySelector('[data-hud]').hidden = true;
   document.querySelector('.mute').hidden = true;
+  document.querySelector('[data-boost]').hidden = true;
   document.querySelector('.shell-back').hidden = true;
   const g = o.game;
   g.braked = true;
-  // a flick that whips half way round the big planet (found with the solver's physics)
-  o.fire(-0.16, 0.06 + 0.28 * 0.94);
+  // a release that whips half way round the big planet (found with the solver's physics)
+  g.park.dir = -1;
+  o.fire(0, 5.672);
   for (let i = 0; i < 240 * 2.3 && g.mode === 'fly'; i++) o.update(1 / 240);
   o.draw();
   // a 16:10 box round the big planet and the target

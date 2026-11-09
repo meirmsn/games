@@ -1,13 +1,15 @@
-// Measure Orbit's legs headless, with the game's own physics: how many roughly aimed flicks
-// capture (with and without the brake), how many motes one captured flight can take, and whether
-// a parking ring ever touches another body. tests/orbit-levels.test.mjs pins the results.
+// Measure Orbit's legs headless, with the game's own physics. The probe circles its planet and
+// leaves along its orbit when the boosters fire, so a release is where it is on the orbit (`at`),
+// the booster power, and which way it circles. This measures how often a release catches the next
+// ring (with and without the brake), whether a parking ring ever touches another body, and lays
+// each leg's mote line and gold route. tests/orbit-levels.test.mjs pins the results.
 //
-//   node scripts/orbit/solve.mjs            every system
+//   node scripts/orbit/solve.mjs            every system's rates
 //   node scripts/orbit/solve.mjs 1          one system (0-based)
-//   node scripts/orbit/solve.mjs 1 2 close  print a mote line along a close route of leg 2
-//                                           (or 'wide'), to paste into orbit/levels.js
+//   node scripts/orbit/solve.mjs 1 lay      lay system 1's mote lines and gold routes, chained leg
+//                                           to leg, as JSON to paste into orbit/levels.js
 import { SYSTEMS } from '../../orbit/levels.js';
-import { fly, bodyAt, park, positions, SKIM, CATCH_WIDTH, FIELD, DT } from '../../orbit/physics.js';
+import { fly, park, positions, arrivalDir, SKIM, CATCH_WIDTH, FIELD, DT, bodyAt } from '../../orbit/physics.js';
 
 // Leg start times to sample: just 0, or across a full moon period when moons move.
 export function startTimes(sys, n = 12) {
@@ -22,31 +24,30 @@ function rng(seed) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-// One roughly aimed flick: within 35° of the straight line to the target, power above a quarter.
-function flick(sys, legIndex, rnd, t0) {
-  const leg = sys.legs[legIndex];
-  const a = bodyAt(sys.bodies, leg.from, t0);
-  const b = bodyAt(sys.bodies, leg.to, t0);
-  const direct = Math.atan2(b.y - a.y, b.x - a.x);
-  return { angle: direct + (rnd() - 0.5) * ((70 * Math.PI) / 180), power: 0.25 + rnd() * 0.75 };
-}
+// Which way the probe can be circling at a leg's start: a system starts it one way (the game's
+// START_DIR); after a catch it circles the way it arrived, which can be either.
+export const START_DIR = -1;
+export const dirsFor = (legIndex) => (legIndex === 0 ? [START_DIR] : [-1, 1]);
 
-const BRAKES = [0.4, 0.7, 1, 1.3, 1.6, 2, 2.4, 2.8, 3.3, 3.8, 4.4, 5];
+export const BRAKES = [0.4, 0.7, 1, 1.3, 1.6, 2, 2.4, 2.8, 3.3, 3.8, 4.4, 5];
+export const POWER_MIN = 0; // a blind release: any point on the orbit, any power on the bar
 
-// Capture rate over roughly aimed flicks; with brake: true, a flick counts if some brake moment
-// (a player watching the ring) makes it capture.
-export function rate(sys, legIndex, { samples = 1200, seed = 7, t0s = startTimes(sys), brake = false } = {}) {
+// The share of blind releases that are caught. With brake: true, a release counts if braking at
+// some moment (a player watching the ring) makes it caught.
+export function rate(sys, legIndex, { samples = 1200, seed = 7, t0s = startTimes(sys), brake = false, dirs = dirsFor(legIndex) } = {}) {
   const rnd = rng(seed);
   let ok = 0;
   const ages = [];
   for (let k = 0; k < samples; k++) {
     const t0 = t0s[k % t0s.length];
-    const { angle, power } = flick(sys, legIndex, rnd, t0);
-    let f = fly(sys, legIndex, angle, power, t0);
+    const dir = dirs[k % dirs.length];
+    const at = rnd() * 2 * Math.PI;
+    const power = POWER_MIN + rnd() * (1 - POWER_MIN);
+    let f = fly(sys, legIndex, at, power, t0, { dir });
     if (f.result !== 'captured' && brake && sys.brake) {
       for (const bt of BRAKES) {
         if (bt > f.age) break;
-        f = fly(sys, legIndex, angle, power, t0, { brakeAt: bt });
+        f = fly(sys, legIndex, at, power, t0, { dir, brakeAt: bt });
         if (f.result === 'captured') break;
       }
     }
@@ -60,35 +61,35 @@ export function rate(sys, legIndex, { samples = 1200, seed = 7, t0s = startTimes
   return ok / samples;
 }
 
+// The timing window: at the best power (in steps of `pstep`) and circling direction, how many
+// degrees of the orbit release into a catch, at leg time t0. With brake: true a release counts if
+// some brake moment catches it. This is what a player learns: when to fire, at what power.
+export function window(sys, legIndex, { t0 = 0, brake = false, dirs = dirsFor(legIndex), pstep = 0.05, astep = 2 } = {}) {
+  let best = { deg: 0, power: 0, dir: dirs[0] };
+  for (const dir of dirs) {
+    for (let p = 0; p <= 1.0001; p += pstep) {
+      let deg = 0;
+      for (let d = 0; d < 360; d += astep) {
+        const at = (d * Math.PI) / 180;
+        let f = fly(sys, legIndex, at, p, t0, { dir });
+        if (f.result !== 'captured' && brake && sys.brake) {
+          for (const bt of BRAKES) {
+            if (bt > f.age) break;
+            f = fly(sys, legIndex, at, p, t0, { dir, brakeAt: bt });
+            if (f.result === 'captured') break;
+          }
+        }
+        if (f.result === 'captured') deg += astep;
+      }
+      if (deg > best.deg) best = { deg, power: p, dir };
+    }
+  }
+  return best;
+}
+
 // The rate at each start time separately (for moon legs: does waiting matter?).
 export function rateByStart(sys, legIndex, opts = {}) {
   return startTimes(sys).map((t0) => rate(sys, legIndex, { ...opts, samples: 400, t0s: [t0] }));
-}
-
-// The most motes of this leg that one captured flight takes, searching a fine grid of aims (and
-// brake moments, start times).
-export function bestMotes(sys, legIndex, { t0s = startTimes(sys, 6) } = {}) {
-  const leg = sys.legs[legIndex];
-  let best = 0;
-  let route = null;
-  for (const t0 of t0s) {
-    const a = bodyAt(sys.bodies, leg.from, t0);
-    const b = bodyAt(sys.bodies, leg.to, t0);
-    const direct = Math.atan2(b.y - a.y, b.x - a.x);
-    for (let da = -80; da <= 80; da += 2) {
-      for (let p = 0.2; p <= 1.0001; p += 0.025) {
-        const tries = sys.brake ? [-1, ...BRAKES] : [-1];
-        for (const bt of tries) {
-          const f = fly(sys, legIndex, direct + (da * Math.PI) / 180, p, t0, { brakeAt: bt });
-          if (f.result === 'captured' && f.caught.length > best) {
-            best = f.caught.length;
-            route = { t0, angle: direct + (da * Math.PI) / 180, power: p, brakeAt: bt };
-          }
-        }
-      }
-    }
-  }
-  return { best, total: (sys.motes || []).filter((m) => m.leg === legIndex).length, route };
 }
 
 // Does any body's surface, or the target's band, ever reach the probe's parking ring on a leg?
@@ -112,21 +113,22 @@ export function parkingClear(sys) {
   return [...new Set(problems)];
 }
 
-// A captured route of the given kind, for laying a mote line on it: 'close' passes nearest a body
-// (other than the two ends) without touching; 'wide' strays farthest from the straight line.
-export function route(sys, legIndex, kind, t0 = 0) {
+// A captured release of the given kind, for laying a mote line on it: 'close' passes nearest a body
+// (other than the two ends) without touching; 'wide' strays farthest from the straight line between
+// the planets. Searched over the whole orbit and the power range, without a brake first, then with.
+export function route(sys, legIndex, kind, { t0 = 0, dir = START_DIR } = {}) {
   const leg = sys.legs[legIndex];
   const a = bodyAt(sys.bodies, leg.from, t0);
   const b = bodyAt(sys.bodies, leg.to, t0);
   const direct = Math.atan2(b.y - a.y, b.x - a.x);
   let best = null;
-  // without a brake first; a leg that can't be caught without one tries brake moments too
   for (const brakes of [[-1], sys.brake ? BRAKES : []]) {
-    for (let da = -80; da <= 80; da += 1) {
-      for (let p = 0.2; p <= 1.0001; p += 0.02) {
+    for (let deg = 0; deg < 360; deg += 1) {
+      const at = (deg * Math.PI) / 180;
+      for (let p = POWER_MIN; p <= 1.0001; p += 0.02) {
         for (const brakeAt of brakes) {
           const trail = [];
-          const f = fly(sys, legIndex, direct + (da * Math.PI) / 180, p, t0, { trail, brakeAt });
+          const f = fly(sys, legIndex, at, p, t0, { trail, brakeAt, dir });
           if (f.result !== 'captured') continue;
           let inside = true;
           for (let k = 0; k < trail.length; k += 2) {
@@ -151,7 +153,7 @@ export function route(sys, legIndex, kind, t0 = 0) {
               score = Math.max(score, Math.abs((trail[k] - a.x) * uy - (trail[k + 1] - a.y) * ux));
             }
           }
-          if (!best || score > best.score) best = { score, trail, angle: direct + (da * Math.PI) / 180, power: p, brakeAt };
+          if (!best || score > best.score) best = { score, trail, at, power: p, brakeAt, dir, t0, arrives: arrivalDir(f, sys) };
         }
       }
     }
@@ -160,29 +162,49 @@ export function route(sys, legIndex, kind, t0 = 0) {
   return best;
 }
 
+// Lay a system's mote lines and gold routes leg by leg: each leg's gold route starts circling the
+// way the previous one arrived, so the routes chain into one gold run.
+export const PLANS = [
+  ['wide', 'close', 'wide', 'wide'],
+  ['close', 'wide', 'close', 'wide'],
+  ['wide', 'close', 'close', 'wide'],
+];
+export function lay(si) {
+  const sys = SYSTEMS[si];
+  let dir = START_DIR;
+  const motes = [];
+  const gold = [];
+  sys.legs.forEach((_, li) => {
+    const kind = PLANS[si][li];
+    const count = li === sys.legs.length - 1 ? 7 : 5;
+    let r = null;
+    for (const t0 of startTimes(sys, 4)) {
+      r = route(sys, li, kind, { t0, dir });
+      if (r) break;
+    }
+    if (!r) throw new Error(`system ${si + 1} leg ${li + 1}: no captured route circling ${dir}`);
+    const n = r.trail.length / 2;
+    for (let k = 1; k <= count; k++) {
+      const i = Math.floor(n * (0.15 + (0.65 * (k - 1)) / (count - 1)));
+      motes.push({ line: kind, leg: li, x: Math.round(r.trail[i * 2]), y: Math.round(r.trail[i * 2 + 1]) });
+    }
+    const g = { at: +r.at.toFixed(4), power: +r.power.toFixed(2), dir };
+    if (r.brakeAt >= 0) g.brakeAt = r.brakeAt;
+    if (r.t0) g.t0 = +r.t0.toFixed(3);
+    gold.push(g);
+    dir = r.arrives;
+  });
+  return { motes, gold };
+}
+
 function pct(x) {
   return `${Math.round(x * 100)}%`.padStart(4);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const [si, li, kind, count = '5'] = process.argv.slice(2);
-  if (kind) {
-    const sys = SYSTEMS[Number(si)];
-    const r = route(sys, Number(li) - 1, kind);
-    if (!r) {
-      console.log('no captured route');
-      process.exit(1);
-    }
-    // motes spread along the middle of the route
-    const n = r.trail.length / 2;
-    const c = Number(count);
-    const out = [];
-    for (let k = 1; k <= c; k++) {
-      const i = Math.floor(n * (0.15 + (0.65 * (k - 1)) / (c - 1)));
-      out.push(`{ leg: ${Number(li) - 1}, x: ${Math.round(r.trail[i * 2])}, y: ${Math.round(r.trail[i * 2 + 1])} }`);
-    }
-    console.log(`// ${kind} route: angle ${r.angle.toFixed(3)}, power ${r.power.toFixed(2)}, brakeAt ${r.brakeAt}, score ${r.score.toFixed(2)}`);
-    console.log(out.join(',\n'));
+  const [si, cmd] = process.argv.slice(2);
+  if (cmd === 'lay') {
+    console.log(JSON.stringify(lay(Number(si))));
     process.exit(0);
   }
   const only = si !== undefined ? [Number(si)] : SYSTEMS.map((_, i) => i);
@@ -193,10 +215,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       const r0 = rate(sys, l);
       const age = rate.lastMedianAge;
       const rb = sys.brake ? rate(sys, l, { brake: true }) : null;
-      const m = process.env.FAST ? { best: '-', total: '-' } : bestMotes(sys, l);
       const byStart = sys.bodies.some((b) => b.orbit) ? rateByStart(sys, l).map((x) => Math.round(x * 100)) : null;
+      const w = window(sys, l);
       console.log(
-        `leg ${l + 1}: ${pct(r0)} capture (median ${age.toFixed(1)} s)${rb !== null ? `, ${pct(rb)} with the brake` : ''}, best flight ${m.best}/${m.total} motes` +
+        `leg ${l + 1}: window ${String(w.deg).padStart(3)}° at power ${w.power.toFixed(2)}, ${pct(r0)} of blind releases caught (median ${age.toFixed(1)} s)${rb !== null ? `, ${pct(rb)} with the brake` : ''}` +
           (byStart ? `  by start time ${byStart.join(' ')}` : '')
       );
     }

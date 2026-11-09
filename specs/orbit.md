@@ -22,13 +22,16 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
 
 **Concept check** (the guidelines' questions, answered after two rounds of adversarial review):
 
-- Verb: pull back and release, watch a readable arc bend around a planet, and the settle: the probe
-  eases into the ring's orbit with a chord.
+- Verb: set the boosters, and fire as the circling probe comes round to the right point; watch a
+  readable arc bend around a planet, and the settle: the probe eases into the ring's orbit with a
+  chord.
 - A typical 5-second choice: chase the leg's line of motes, a close pass by a planet (risking a crash)
   or a wide arc (risking drifting away), or take the plain capture; brake early (fall inward) or
   late (slow enough to be caught).
-- How it teaches: no text and no path preview. A throw straight at a planet hits it, and the ghost
-  of that flight shows why; a throw past it swings round into the ring. The brake arrives with a
+- How it teaches: no path preview, and one line of text only on the first level, until the first
+  firing. The probe circles with a short line showing which way it would leave; a release toward a
+  planet hits it, and the ghost of that flight, with its release point and power, shows why; a
+  release past it swings round into the ring. The brake arrives with a
   slow-motion moment and a pulsing flame on the probe. Moons first appear where waiting for one is
   plainly right.
 - Three clocks: a flight resolves every 3–8 s; a new system with a new element and new look every
@@ -39,34 +42,43 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
   close pass or a wide arc, the brake's moment, the moon's timing) within a par of launches.
 - Form: short-to-long. This slice is a 6–9 minute tour (3 systems of 4 legs), interruptible at any
   leg. Later slices lengthen it.
-- Orientation: portrait. One thumb; launches mostly upward, so the hand stays below the action; a
-  tall field gives long arcs. Desktop shows the same field centred, with stars filling the sides.
+- Orientation: portrait. One thumb: the booster bar sits at the bottom, and a tap anywhere fires,
+  so the hand stays below the action; a tall field gives long arcs. Desktop shows the same field centred, with stars filling the sides.
 - What a failure costs: a few seconds. The probe rewinds to the leg's start; motes already caught
   stay caught; only the par counts the extra launch.
 - What stands in for save games: the URL (`#s2`, `#s3`) starts at a system; medals and bests sit in
   localStorage, and losing them costs at most a few minutes of replay.
 - Riskiest technical part: tuning gravity so arcs are expressive yet controllable. It is proven
   with a headless solver (`scripts/orbit/solve.mjs`) that runs the game's own physics module over
-  thousands of flicks per leg; `tests/orbit-levels.test.mjs` pins the targets.
+  every release point and power of each leg; `tests/orbit-levels.test.mjs` pins the targets.
 
 **Different in kind:** against Reef (continuous steering; levels with lives and a game over;
-eat or avoid) the verb is aim, release and watch, the structure is hand-built legs with an instant
+eat or avoid) the verb is set, time the release and watch, the structure is hand-built legs with an instant
 rewind, and failure is a few-second rewind with nothing lost. Against Googly Faces (a tap toy) all
 three differ.
 
 ## Decisions
 
 - Slingshot between planets, caught by the next planet's orbit ring; rejected: "create your own
-  planet" (owner: "sounds boring") and a one-tap release-from-orbit hopper, which has no aim to
-  master (session, 2026-11-09).
-- The launch point depends on the aim alone. The probe leaves its parking orbit at the point that
-  faces the aim, with the aim's speed plus its planet's own motion. The same aim at the same moment
-  gives the same flight. Physics runs at a fixed 1/240 s step, accumulated from frame time, so 60
-  and 120 Hz screens agree. Rejected: launching from wherever the circling probe happens to be,
-  which made retries unrepeatable (first concept review, 2026-11-09).
-- Gravity is shown by its effect alone, never ahead of the throw. The aim is one thin line out of
-  the probe along the throw, its length the power, with a small dot at its end; nothing previews
-  where the probe will go. Rejected: a preview thread of the path, which made it too easy (owner,
+  planet" (owner: "sounds boring"). A release-from-orbit hopper was first rejected as having no aim
+  to master (session, 2026-11-09); the owner then chose it, with the booster power to set, and the
+  timing and power are what you master (owner, 2026-11-09, below).
+- The release is from the orbit. The probe never stops circling its planet; firing the boosters
+  sends it off along its orbit, the way it is moving, from wherever it is at that moment, at the
+  planet's escape speed plus the booster power (0 to 100% of 420 units a second), plus the planet's
+  own motion. So where it is when you fire aims it, and even the lowest power leaves the planet.
+  It circles once every 7 s, slow enough to time a release, whatever the planet's pull. After a
+  catch it circles the way it arrived; a system starts it one way. The same release at the same
+  moment gives the same flight. Physics runs at a fixed 1/240 s step, accumulated from frame time,
+  so 60 and 120 Hz screens agree. Rejected: pulling back to aim anywhere (owner, 2026-11-09: "when
+  you tap the space bar, it goes away. I don't think we should have that weird launching thing
+  where you use the arrows ... When you hit the space bar, it lives in the whatever tangential
+  velocity it has on the planet"); a release at plain orbit speed or a weak boost that only
+  stretches the orbit, which can't leave or drifts into the next ring from almost anywhere
+  (tuning, 2026-11-09).
+- Gravity is shown by its effect alone, never ahead of the throw. The circling probe shows one thin
+  line out of it along the way it is moving, its length the booster power, with a small dot at its
+  end; nothing previews where the probe will go. Rejected: a preview thread of the path, which made it too easy (owner,
   2026-11-09: "It even tells you, the controls are showing you if it's gonna bend or not bend.
   It's very easy to play the game"); and gravity-reach rings, which mislead and look like an
   existing well-known game (first concept review, 2026-11-09).
@@ -75,9 +87,10 @@ three differ.
   direction, and slower than the ring's limit relative to the target: 1.75 × the escape speed at
   the ring by default, with a per-system and per-planet value tuned in `orbit/levels.js`. A throw
   straight at a planet comes in head-on and hits it; you throw past the planet so the probe swings
-  round into its orbit. A caught probe eases into the ring over 1 s: its distance follows a smooth
-  curve from its own speed in or out, and its speed round the planet blends to the ring's,
-  carrying on the way it was flying. Rejected: catching any probe in the band and snapping it onto
+  round into its orbit. A caught probe eases into the ring over 1 s, or up to 2.2 s when it arrives
+  much faster than the ring's lap, so it slows in rather than swerving: its distance follows a
+  smooth curve from its own speed in or out and settles in the first 70% of that time, and its
+  speed round the planet blends to the ring's, carrying on the way it was flying. Rejected: catching any probe in the band and snapping it onto
   the ring in 0.4 s (owner, 2026-11-09: "if you pointed towards the planets and it's not going
   straight into it, it seems like it always catches it. It doesn't feel natural. It just goes
   almost at a right angle and then ploop, it clacks. It latches into the orbit").
@@ -116,20 +129,28 @@ three differ.
 - The brake is taught without text. On System 2's first leg, until the player first brakes, time
   slows to 0.4× for 0.6 s when the probe is near the ring too fast with its brake unused, and the
   probe's flame pulses (second concept review, 2026-11-09).
-- Controls: drag anywhere, except touches that start in the bottom 24 px (plus the safe area),
-  where the phone swipes. A drag may end there. Full power is a drag of 35% of the field's on-screen
-  width, so it matches on every screen. A small dead zone applies, dragging back to the start
-  cancels, and a second finger is ignored. A cancelled pointer, or a resize or rotation, cancels a
-  drag without launching; a flight carries on through a resize in world units. The leg's clock
-  (moons) pauses while a drag is held. A touch during flight brakes the moment it lands (from
-  System 2; in System 1 it does nothing), and dragging it aims nothing. Keyboard: left and right turn
-  the aim, up and down set the power (the aim line shows and the clock pauses, as in a drag); a tap
-  nudges by half a degree or 1% power, and a held key moves smoothly, easing in over a third of a
-  second to 90° a second or 90% power a second (Shift: a quarter of that). Space launches and brakes
-  in flight, R rewinds. The mouse drags like a finger. In landscape the field letterboxes and stays
-  playable (first concept review and spec review, 2026-11-09; a touch brakes as it lands: tuning,
-  2026-11-09; held keys: owner, 2026-11-09: "you touch the arrows and then it grows, but it grows
-  slowly ... it feels odd").
+- Controls: the booster bar at the bottom sets the power: tap a point on it, or drag along it. It
+  is a slim throttle, like a spacecraft's control strip in the game's plain style: a label, a cyan
+  fill over a rail ticked every 10%, a glowing knob, the percentage, and a faint mark at the last
+  failed flight's power; it dims while the probe is away from its orbit, and the power is kept
+  between visits. A tap anywhere else fires the boosters, the moment it lands; in flight it brakes
+  instead (from System 2; in System 1 it does nothing). There is no fire button. Touches that start
+  in the bottom 24 px (plus the safe area), where the phone swipes, are ignored, and so is a second
+  finger. Keyboard: Space fires (and brakes in flight); left and right, or down and up, set the
+  power: a tap nudges it by 2%, and a held key slides it smoothly, easing in over a third of a
+  second to 90% a second (Shift: a quarter of that); R rewinds. The mouse clicks like a finger. On
+  the first level, if the probe has circled 4 s untouched, one line above the bar says "Tap to fire
+  the boosters" ("Click or press Space to fire the boosters" with a mouse); it goes for good once the
+  boosters have fired. In landscape the field letterboxes and stays playable. A flight carries on
+  through a resize in world units (first concept review and spec review, 2026-11-09; the bar, a tap
+  to fire, no button and the hint: owner, 2026-11-09: "at the bottom there is a horizontal bar ...
+  it should look and be clear that that's about the ... power of the motors. And you can drag it or
+  just tap where you want to set the speed of the boosters ... draw inspiration from how it
+  actually looks on actual space craft controls, well make it match ... the visual style of what we
+  have so far", "the drag should control the ... booster power ... on the horizontal bar at the
+  bottom. And the tap ... anywhere is the same as pushing the button", "don't show any button there,
+  only the power bar. And then if on the first level you're doing nothing, then we kind of like show
+  you a hint like hey tap to turn on the boosters").
 - Look: pitch black, two layers of slowly twinkling stars, and a very faint, darkened nebula from
   Skyboxes Space that differs per system. Planets are the pack's whole planets with a slowly
   turning cloud layer from its parts and a soft shadow on the side away from one sun direction;
@@ -156,31 +177,31 @@ three differ.
   plays offline after one visit (spec review, 2026-11-09).
 - The name stays "Orbit", the landing tile's working title; other games share the word.
   Recorded for the owner to rename if they want (session, 2026-11-09).
-- Tuning targets, pinned by `tests/orbit-levels.test.mjs`, measured over roughly aimed flicks
-  (within 35° of the straight line to the target, any power above a quarter) and, where moons
-  move, over leg start times across a full moon period; where there's a brake, a flick counts if
-  braking at some moment catches it. In System 1 a throw straight at the next planet (within 5°)
-  is caught less than 5% of the time on every leg. System 1's first leg captures at least 30% at
-  leg time 0. Every leg can be captured. In each system leg 3 captures less often than leg 2, and
-  leg 4 most often of legs 2–4: leg 1 brings the system's new thing, so it is tuned by its own
-  target. Each leg's stored gold route captures and takes every mote of its leg, so a par-length
-  gold run exists. On every leg the median captured flight takes 0.7–3.5 s, so a leg is an arc,
-  not a hop. System 2's first leg captures under 10% without the brake and at least 25% with it.
-  On System 3's first moon leg, on a plain throw, the best start time captures at least twice as
-  often as the worst (session and spec review, 2026-11-09; the waves rule on legs 2–4: tuning,
-  2026-11-09; harder throughout, the straight-throw rule and these numbers: owner, 2026-11-09:
-  "it's too easy ... You just point at the planet and throw it").
+- Tuning targets, pinned by `tests/orbit-levels.test.mjs`. A leg's timing window is how many
+  degrees of the orbit release into a catch without the brake, at the leg's best booster power (in
+  5% steps) and circling direction; where moons move it is measured at the leg's start. System 1's
+  first leg has a window of at least 40°, and every leg at least 10°. In each system leg 3's window
+  is narrower than leg 2's, and leg 4's the widest of legs 2–4: leg 1 brings the system's new
+  thing, so it is tuned by its own target. On System 2's first leg the brake, at its best moment, at
+  least doubles the window. Each leg's stored gold route captures and takes every mote of its leg,
+  and arrives circling the way the next leg's starts, so a par-length gold run exists. On every leg
+  the median captured flight takes at least 0.7 s, so a leg is an arc, not a hop. On System 3's
+  first moon leg, on a plain throw, the best start time captures at least twice as often as the
+  worst (session and spec review, 2026-11-09; the waves rule on legs 2–4: tuning, 2026-11-09;
+  harder throughout: owner, 2026-11-09: "it's too easy"; timing windows replace aimed flicks with
+  the release from the orbit: owner, 2026-11-09, above).
 
 ## Acceptance items
 
 - **AC-1** Opening `orbit/` shows System 1 with its planets turning and the probe circling its first
   planet before any touch, the target's ring drawn, and no errors.
-- **AC-2** Dragging back and releasing launches the probe opposite the drag, from the point on its
-  parking orbit that faces the aim, at a speed set by the drag's length as a share of the field's
-  on-screen width. A drag inside the dead zone, or dragged back to its start, launches nothing; a
-  touch that starts in the bottom edge strip is ignored; a second finger doesn't change the aim.
+- **AC-2** A tap on the booster bar sets the power at that point and a drag along it moves it; a
+  second finger on the bar doesn't move it, and the bar fires nothing. A tap anywhere else fires: the
+  probe leaves from where it is on its orbit, along its orbit the way it was moving, at the escape
+  speed at its ring plus the bar's share of 420. A touch that starts in the bottom edge strip is
+  ignored.
 - **AC-3** Driven through the game's own frame loop with frames of 1/60 s and of 1/120 s, the same
-  aim at the same leg time, with a brake tap at the same moment, ends the same way at the same
+  release at the same leg time, with a brake tap at the same moment, ends the same way at the same
   place.
 - **AC-4** A probe in the target's band (inside the ring too), moving within 30° of along the ring
   and under the speed limit, is caught and eases onto the ring with no sudden turn; that planet
@@ -194,8 +215,8 @@ three differ.
 - **AC-6** Motes caught on a failed flight stay caught; a skim is counted apart from motes.
 - **AC-7** From System 2, one tap during flight cuts the probe's speed relative to the target by
   35%, once per flight; System 1 has no brake.
-- **AC-8** While aiming, only a line along the throw is drawn, longer with more power; nothing
-  previews the probe's path beyond it.
+- **AC-8** The circling probe shows only a short line the way it would leave, longer with more
+  power; nothing previews the probe's path beyond it.
 - **AC-9** With 0, 2, 3, 4 and 5 failed flights on a leg, the capture band grows by 0, 0, 5, 10
   and 15% of the ring's radius and the speed limit by 0, 0, 8.3, 16.7 and 25%; the drawn ring
   stays the same size; a capture resets them.
@@ -209,9 +230,9 @@ three differ.
 - **AC-13** Hiding the page in flight pauses play; on return the probe is at the leg's start,
   neither the launch nor a failed flight is counted, the flight's motes stay, and it waits for a touch.
   Hiding it during a capture completes the capture.
-- **AC-14** Arrow keys aim and set power: a tap nudges, and a one-second hold turns the aim more than
-  45° or takes off more than 35% power. Space launches and brakes, and R rewinds. A cancelled pointer
-  or a resize during a drag launches nothing.
+- **AC-14** Arrow keys set the power: a tap nudges it by 2%, and a one-second hold slides it more
+  than 35%. Space fires and brakes, and R rewinds. A cancelled drag on the bar stops it, and nothing
+  launches.
 - **AC-15** `#s2` and `#s3` start at System 2 and System 3 on a fresh browser; `#s9` and `#x`
   start System 1; changing the hash loads its system.
 - **AC-16** The landing page's Orbit tile is a link to `orbit/`, no longer "Coming soon", and the
@@ -223,15 +244,18 @@ three differ.
 - **AC-19** On System 2's first leg, until the first brake, a probe near the ring over the limit
   with its brake unused slows time to 0.4× for 0.6 s.
 - **AC-20** The probe dims over the last 2 s before its time runs out.
-- **AC-21** The field, back button and mute button fit a 360×640 and a 390×844 screen without
-  scrolling, and the field keeps clear of the back and mute buttons.
+- **AC-21** The field, back button, mute button and booster bar fit a 360×640 and a 390×844 screen
+  without scrolling; the field keeps clear of the back and mute buttons and sits above the bar, and
+  the bar is at least 44 px tall, above the bottom edge strip.
+- **AC-22** On the first level, after the probe has circled 4 s untouched, the hint to fire shows
+  above the bar; firing hides it, and it never shows again in that browser.
 
 ## Core flow
 
 1. Tap the Orbit tile: the probe circles a planet under a pitch-black sky; the next planet's ring
    glows.
-2. Drag back and release: the probe arcs around the planets and is caught by the ring, or rewinds
-   to try again.
+2. Set the boosters on the bar, and tap as the probe comes round: it arcs around the planets and is
+   caught by the ring, or rewinds to try again.
 3. Four legs make a system: a card shows the motes, launches against par and a medal; Next.
 4. System 2 brings the brake, System 3 moons; after System 3 the tour's end card offers to play it
    again.
@@ -241,10 +265,10 @@ three differ.
 | State | Intro card (system name, par) | End card (motes, par, medal) | Probe |
 | ----- | ----------------------------- | ---------------------------- | ----- |
 | System intro | shown, fades on first touch | hidden | circling its planet |
-| Aiming (a drag held) | hidden | hidden | at the aim's launch point, clock paused |
+| Setting the power (on the bar) | hidden | hidden | still circling, its heading line growing with the power |
 | Flying | hidden | hidden | flying with its trail |
 | Rewinding (after a failed flight) | hidden | hidden | back at the leg's start, ghost trail shown |
-| Captured (spiral in) | hidden | hidden | spiralling into the ring |
+| Captured (easing in) | hidden | hidden | easing into the ring |
 | System done | hidden | shown, with Next | parked on the last planet |
 | Paused (page hidden, then back) | hidden | hidden | at the leg's start, waiting for a touch |
 

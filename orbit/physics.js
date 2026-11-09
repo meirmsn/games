@@ -13,8 +13,7 @@ export const LOST_MARGIN = 200; // how far past the field's edge the probe may s
 export const MOTE_RADIUS = 30; // how close the probe must pass to pick up a mote
 export const SKIM = 1.35; // passing within SKIM × a body's radius without touching is a skim
 export const BRAKE = 0.35; // a brake takes this fraction off the current speed (relative to the target)
-export const LAUNCH_MIN = 120; // slowest launch, world units per second (at the dead zone's edge)
-export const LAUNCH_MAX = 660; // fastest launch (full drag)
+export const BOOST_MAX = 420; // full power adds this much speed on top of the escape speed
 export const MAX_SPEED = 1400; // speed is clamped here, so a close pass never tunnels
 export const CATCH_WIDTH = 26; // the capture band reaches this far outside the drawn ring
 export const CATCH_SPEED = 1.75; // capture needs speed (relative to the target) under this × escape speed at the ring
@@ -83,32 +82,33 @@ export function gravity(bodies, pos, x, y, acc) {
 export const escapeSpeed = (b, r) => Math.sqrt((2 * b.mu) / r);
 
 // The probe's parking orbit around body i: radius and period (it circles at the body's ring radius).
+export const PARK_PERIOD = 7; // seconds per lap of the parking orbit: slow enough to time a release
 export function park(level, i) {
-  const b = level.bodies[i];
-  const r = b.ring;
-  const v = Math.sqrt(b.mu / r);
-  return { r, period: (2 * Math.PI * r) / v };
+  // The launch doesn't depend on how fast the probe circles (it leaves at escape speed plus the
+  // boost), so the lap is set for a fair timing game rather than by the planet's pull.
+  return { r: level.bodies[i].ring, period: PARK_PERIOD };
 }
 
-// Launch speed for a drag of the given fraction (0..1) of full power.
-export const launchSpeed = (power) => LAUNCH_MIN + (LAUNCH_MAX - LAUNCH_MIN) * Math.min(1, Math.max(0, power));
-
-// The launch: the probe leaves its parking orbit at the point that faces the aim (so where it
-// starts depends on the aim alone), with the aim's speed plus the planet's own motion.
-export function launchState(level, legIndex, angle, power, t0) {
+// The release: the probe is on its parking orbit at angle `at` round its planet, circling in
+// direction `dir` (+1 or -1, the way the angle turns). Firing the boosters keeps it going the way it
+// was moving, along the orbit's tangent, at the planet's escape speed (so every release leaves the
+// planet: no weak boost that only stretches the orbit) plus `power` (0..1) of BOOST_MAX, plus the
+// planet's own motion. Where it is on the orbit when you fire is what aims it.
+export function launchState(level, legIndex, at, power, t0, dir = 1) {
   const leg = level.legs[legIndex];
+  const b = level.bodies[leg.from];
   const p = bodyAt(level.bodies, leg.from, t0);
   const pv = bodyVel(level.bodies, leg.from, t0);
   const { r } = park(level, leg.from);
-  const s = launchSpeed(power);
-  const ux = Math.cos(angle);
-  const uy = Math.sin(angle);
-  return { x: p.x + ux * r, y: p.y + uy * r, vx: ux * s + pv.x, vy: uy * s + pv.y };
+  const s = escapeSpeed(b, r) * 1.02 + BOOST_MAX * Math.min(1, Math.max(0, power));
+  const tx = -Math.sin(at) * dir;
+  const ty = Math.cos(at) * dir;
+  return { x: p.x + Math.cos(at) * r, y: p.y + Math.sin(at) * r, vx: tx * s + pv.x, vy: ty * s + pv.y };
 }
 
 // A flight in progress. Call step(f, level) at DT until f.result is set.
-export function launch(level, legIndex, angle, power, t0 = 0, assist = 0) {
-  const s = launchState(level, legIndex, angle, power, t0);
+export function launch(level, legIndex, at, power, t0 = 0, assist = 0, dir = 1) {
+  const s = launchState(level, legIndex, at, power, t0, dir);
   const leg = level.legs[legIndex];
   return {
     ...s,
@@ -143,6 +143,15 @@ export function catchLimit(level, to, assist = 0) {
 export function relSpeed(level, to, t, vx, vy) {
   const v = bodyVel(level.bodies, to, t, { x: 0, y: 0 });
   return Math.hypot(vx - v.x, vy - v.y);
+}
+
+// Which way a caught probe circles its new planet: the sign of its turn round it at the catch
+// (the game parks it going that way, and that's the way the next leg's release goes).
+export function arrivalDir(f, level) {
+  const p = bodyAt(level.bodies, f.to, f.t);
+  const v = bodyVel(level.bodies, f.to, f.t);
+  const w = (f.x - p.x) * (f.vy - v.y) - (f.y - p.y) * (f.vx - v.x);
+  return w >= 0 ? 1 : -1;
 }
 
 // One brake: BRAKE less speed relative to the target. Returns false if none is left.
@@ -271,8 +280,8 @@ export function step(f, level, taken = null) {
 }
 
 // Run a whole flight headless. brakeAt: the flight age to brake at (or -1 for none).
-export function fly(level, legIndex, angle, power, t0 = 0, { brakeAt = -1, assist = 0, trail = null } = {}) {
-  const f = launch(level, legIndex, angle, power, t0, assist);
+export function fly(level, legIndex, at, power, t0 = 0, { brakeAt = -1, assist = 0, trail = null, dir = 1 } = {}) {
+  const f = launch(level, legIndex, at, power, t0, assist, dir);
   let n = 0;
   while (!f.result) {
     if (brakeAt >= 0 && f.brakeLeft > 0 && f.age >= brakeAt) brake(f, level);
