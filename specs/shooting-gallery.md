@@ -130,7 +130,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   when they hit, and then the paint stays … The whole thing is becoming colorful because the paint
   is accumulating." Each shot is a paintball of the next colour in a palette of 8 (blues, purples,
   pinks, greens; never the gold or red that mark bullseyes and the gold duck). It flies for
-  0.18 s to the nearest lane and up to 0.42 s to the farthest, so a moving target must be led; it's
+  0.18 s to the nearest lane and up to 0.45 s to the top of the booth (0.42 s in the gun version), so a moving target must be led; it's
   judged where it lands, when it lands. It splats with one of the Kenney Splat Pack's 36 shapes,
   tinted, and a wet splat sound. A splat on a target goes down with it. A splat on the scenery (the
   lane strips, the wall) stays for the run, keeping its colour: fresh for 1 s, then it settles to
