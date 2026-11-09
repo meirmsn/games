@@ -119,7 +119,8 @@ three differ.
   System 2; in System 1 it does nothing), and dragging it aims nothing. Keyboard: left and right turn the aim, up and
   down set the power (the preview shows and the clock pauses, as in a drag), Space launches and
   brakes in flight, R rewinds. The mouse drags like a finger. In landscape the field letterboxes
-  and stays playable (first concept review and spec review, 2026-11-09).
+  and stays playable (first concept review and spec review, 2026-11-09; a touch brakes as it lands:
+  tuning, 2026-11-09).
 - Look: pitch black, two layers of slowly twinkling stars, and a very faint, darkened nebula from
   Skyboxes Space that differs per system. Planets are the pack's whole planets with a slowly
   turning cloud layer from its parts, a soft shadow on the side away from one sun direction, and a
@@ -150,7 +151,8 @@ three differ.
   stored gold route captures and takes every mote of its leg, so a par-length gold run exists.
   On every leg the median captured flight takes 0.7–2.5 s, so a leg is an arc, not a hop. System 2's first leg captures under 20%
   without the brake and at least 40% with it. On System 3's first moon leg the best start time
-  captures at least twice as often as the worst (session and spec review, 2026-11-09).
+  captures at least twice as often as the worst (session and spec review, 2026-11-09; the waves
+  rule on legs 2–4 and the 0.7–2.5 s flight range: tuning, 2026-11-09).
 
 ## Acceptance items
 
