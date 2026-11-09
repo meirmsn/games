@@ -77,8 +77,12 @@ while it's green should give you [0]." After playing that, the owner said (2026-
 levels are way too easy … the second one should be already harder. The flush sound is not good. It
 sounds like a space laser, so maybe go back to what you had before … The fast forward should be much
 faster. I'm waiting too long there. And also the NPCs [crossing] on green … it feels like it did the
-fast forward and then they cross … they should be part of that fast forward everything." This spec
-is the game after those changes.
+fast forward and then they cross … they should be part of that fast forward everything." Then: "it's
+very easy to win if you just … go up very fast because there's no cars on the road. So I think the
+cars need to start on the road already when the level starts. All of them … Perhaps only on the
+first level … there is like only one car on the road … it shouldn't be the case that as soon as you
+start the level, just tap up, and you win every single level." This spec is the game after those
+changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -171,7 +175,7 @@ goes now, and the people waiting start copying him.
   off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
   crossing, a row every 0.42 s. They never go past him (they may share the island or the far kerb
   with him). From a kerb or the island they wait while a car would reach the next lane's cell within
-  0.9 s; in the road they wait at most 1.2 s for the next lane, and only while their own spot is
+  1.1 s; in the road they wait at most 2.2 s for the next lane, and only while their own spot is
   clear, so in heavy traffic, or if he dawdles and they bunch up behind him in the lanes, they can be
   hit. A copier hit tumbles, then walks back to the crowd: out for this level, and their share of the
   points with them. Copiers across queue at the porta-potty (owner, 2026-11-09: "Walk on their own",
@@ -182,14 +186,20 @@ goes now, and the people waiting start copying him.
   There are no lives.
 - **Stars:** a level's score against its best possible (all its seconds × everyone across): 12% for
   one star, 28% for two, 45% for three. The best stars per level and the best total are kept.
+- **Traffic from the first second:** every level starts with every lane already full of traffic,
+  driving (filled by running 16 s of traffic on green before the level starts, every lane in a
+  platoon; then the lanes take up their staggered platoons and lulls), so tapping straight up gets
+  you hit. Level 1 starts with just one car, coming up to the crossing (owner, 2026-11-09, as quoted
+  in the intent).
 - **The eight levels**, getting harder one after another; tuned by playing (owner, 2026-11-09:
   "the first level is very, very easy to win. The second one is just a little bit harder … The
   third one is already getting more like a regular level, and they get progressively harder"):
   1. **Quiet Street:** just you, two slow lanes one way, sparse traffic, 30 s.
-  2. **Both Ways:** two lanes, one each way, twice level 1's speed and much busier (short lulls),
-     26 s: already a real crossing (owner, 2026-11-09: "the second one should be already harder").
-  3. **Market Avenue:** four lanes, an island in the middle and the first copier, busier, 28 s.
-  4. **Bus Lane:** buses and trucks (long vehicles), faster and denser, one copier, 28 s.
+  2. **Both Ways:** two lanes, one each way, nearly twice level 1's speed and much busier (short
+     lulls), 26 s: already a real crossing (owner, 2026-11-09: "the second one should be already
+     harder").
+  3. **Market Avenue:** four lanes, an island in the middle and the first copier, 28 s.
+  4. **Bus Lane:** buses and trucks (long vehicles), faster, one copier, 28 s.
   5. **Rush Hour:** five lanes, denser, two copiers, 30 s.
   6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, its lane's edge flashing
      and a siren 2.5 s before it comes, at 2.5 times the lane's speed), two copiers, 30 s.
@@ -200,8 +210,9 @@ goes now, and the people waiting start copying him.
 - **Tuning, measured with a scripted player** (reacting every 0.25 s, reading traffic perfectly,
   sidestepping, over 6 seeds a level, fast or careful): it never fails a level and is almost never
   hit, so every level is within reach; the seconds it has to spend waiting go from none on level 1
-  to up to 3 (fast) or 14 (careful) on level 2, and grow to levels 5–7; the fast way scores more on most levels; about a third to half of copiers are hit on
-  levels 3–7, and almost none in Downtown, where the islands give them rest. Knobs: each
+  to up to 8 on level 2, and up to about 20 on levels 3–7. A player tapping straight up without
+  looking is hit 3 to 10 times a level from level 2 on; the fast way scores more on most levels; about a third to half of copiers are hit on
+  levels 3–7 (more when the player rushes ahead), and a quarter in Downtown, where the islands give them rest. Knobs: each
   lane's speed, gaps, platoon and lull lengths, each level's seconds, and the copiers' start, pace,
   look and wait.
 - **Hidden assist (0–1):** a hit raises it by 0.25 (0.1 for a copier hit); each copier across lowers
@@ -289,6 +300,8 @@ goes now, and the people waiting start copying him.
   `tests/site.test.mjs`.
 - **AC-22** A car coming within 10 art px of him honks once, deep for big vehicles and high for
   small ones — `tests/walk-on-red.test.mjs`.
+- **AC-23** Every level from level 2 starts with traffic driving in every lane, and tapping straight
+  up from the start gets him hit; level 1 starts with exactly one car — `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 

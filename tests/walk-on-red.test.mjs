@@ -937,3 +937,42 @@ test('walk-on-red AC-22: a car coming close to him honks, deep for big vehicles 
   await context.close();
 });
 
+
+test('walk-on-red AC-23: every level from 2 starts with traffic in every lane, and tapping straight up gets him hit; level 1 has one car', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const out = [];
+    for (let level = 0; level < 8; level++) {
+      let hits = 0;
+      let empty = 0;
+      const cars = [];
+      for (const seed of [1, 2, 3, 4]) {
+        t.seed(seed);
+        t.startGame(level);
+        t.manual = true;
+        t.game.assist = 0;
+        cars.push(t.vehicles().length);
+        // A lane with no vehicle anywhere on it at the start.
+        empty += t.layout().lanes.filter((ln) => !t.vehicles().some((v) => v.lane === ln.row && !v.siren)).length;
+        let was = false;
+        for (let i = 0; i < 60 * 20 && t.game.mode === 'play'; i++) {
+          t.step(1 / 60);
+          if (t.player.down > 0) {
+            if (!was) hits++;
+            was = true;
+          } else was = false;
+          if (i % 9 === 0) t.move('up');
+        }
+      }
+      out.push({ level: level + 1, hits, empty, cars });
+    }
+    return out;
+  });
+  assert.deepEqual(r[0].cars, [1, 1, 1, 1], 'level 1: one car');
+  for (const l of r.slice(1)) {
+    assert.equal(l.empty, 0, `level ${l.level}: every lane has traffic at the start`);
+    assert.ok(l.hits >= 4, `level ${l.level}: tapping straight up, ${l.hits} hits in 4 tries`);
+  }
+  await context.close();
+});

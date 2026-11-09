@@ -75,8 +75,8 @@ const COP_HOP = 0.42; // a copier's pace, one row
 const FF = 20; // once he's in the loo, the game runs this many times faster, through the green light's crossing
 const DOOR_T = 1.8; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
-const COP_LOOK = 0.9; // on safe ground, a copier waits while a car would reach the next cell this soon
-const COP_DARE = 1.2; // in the road, a copier waits at most this long for the next lane
+const COP_LOOK = 1.1; // on safe ground, a copier waits while a car would reach the next cell this soon
+const COP_DARE = 2.2; // in the road, a copier waits at most this long for the next lane
 const DOWN_T = 1.2; // a hit player lies flat this long
 const GREEN_T = 3.6; // the green light's crossing
 const TALLY_T = 2.2;
@@ -107,10 +107,10 @@ const PAL = {
 // 'M' median. Each brings one new thing.
 const LEVELS = [
   { name: 'Quiet Street', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(1, 11, CARS, [50, 100], [2, 3], [5, 7]), L(1, 13, CARS, [50, 100], [2, 3], [5, 7])], pal: PAL.maple },
-  { name: 'Both Ways', red: 26, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [12, 34], [4, 7], [2, 3]), L(1, 24, CARS, [12, 34], [4, 7], [2, 3])], pal: PAL.maple },
-  { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, CITY, [16, 44], [4, 7], [2, 4]), L(-1, 23, CITY, [16, 44], [4, 7], [2, 4]), L(1, 22, CITY, [16, 44], [4, 7], [2, 4]), L(1, 20, CITY, [16, 44], [4, 7], [2, 4])], pal: PAL.market },
-  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 23, HEAVY, [14, 40]), L(-1, 25, CITY, [14, 40]), L(1, 24, CITY, [14, 40]), L(1, 22, HEAVY, [14, 40])], pal: PAL.market },
-  { name: 'Rush Hour', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, CITY, [18, 50]), L(-1, 23, CARS, [18, 50]), L(-1, 20, HEAVY, [18, 50]), L(1, 22, CARS, [18, 50]), L(1, 24, CITY, [18, 50])], pal: PAL.school },
+  { name: 'Both Ways', red: 26, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(-1, 20, CARS, [18, 46], [3, 6], [2, 4]), L(1, 22, CARS, [18, 46], [3, 6], [2, 4])], pal: PAL.maple },
+  { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 16, CITY, [30, 70]), L(-1, 18, CITY, [30, 70]), L(1, 17, CITY, [30, 70]), L(1, 15, CITY, [30, 70])], pal: PAL.market },
+  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 19, HEAVY, [24, 60]), L(-1, 21, CITY, [24, 60]), L(1, 20, CITY, [24, 60]), L(1, 18, HEAVY, [24, 60])], pal: PAL.market },
+  { name: 'Rush Hour', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 20, CITY, [20, 54]), L(-1, 22, CARS, [20, 54]), L(-1, 19, HEAVY, [20, 54]), L(1, 21, CARS, [20, 54]), L(1, 23, CITY, [20, 54])], pal: PAL.school },
   { name: 'Siren Boulevard', red: 30, copiers: 2, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING, [20, 52]), L(-1, 20, EVENING, [20, 52]), L(-1, 24, EVENING, [20, 52]), L(1, 21, EVENING, [20, 52]), L(1, 23, EVENING, [20, 52])], pal: PAL.evening },
   { name: 'Old Town', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [20, 54]), L(-1, 24, CARS, [20, 54]), L(-1, 21, CITY, [20, 54]), L(1, 23, CITY, [20, 54]), L(1, 25, CARS, [20, 54])], pal: PAL.school },
   { name: 'Downtown', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'M', 'L', 'L', 'M', 'L', 'K'], lanes: [L(-1, 27, NIGHT, [14, 44]), L(-1, 25, NIGHT, [14, 44]), L(1, 26, NIGHT, [14, 44]), L(1, 28, NIGHT, [14, 44])], pal: PAL.night },
@@ -336,8 +336,21 @@ function setupLevel(idx) {
     people.push(p);
   }
   resize();
-  // The road starts with traffic already in it.
-  for (let i = 0; i < 12 * 30; i++) updateTraffic(1 / 30, true);
+  // The road starts busy: every lane full of traffic driving on green (the last level's red light
+  // must not hold it at the stop lines), then the lanes take up their staggered phases.
+  const mode = game.mode;
+  if (mode !== 'title') game.mode = 'play';
+  const phases = layout.lanes.map((ln) => [ln.phase, ln.t]);
+  for (const ln of layout.lanes) ln.phase = 'on';
+  for (let i = 0; i < 16 * 30; i++) updateTraffic(1 / 30, true);
+  layout.lanes.forEach((ln, i) => ([ln.phase, ln.t] = phases[i]));
+  game.mode = mode;
+  // Level 1 starts with just one car, coming up to the crossing.
+  if (s.lanes.length && idx === 0) {
+    const before = vehicles.filter((v) => v.s < crossingStop(v) - 4);
+    const first = before.reduce((m, v) => (!m || v.s > m.s ? v : m), null);
+    vehicles = first ? [first] : [];
+  }
 }
 
 // ---------- Copiers ----------
