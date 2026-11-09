@@ -1,8 +1,9 @@
 // A timed playtest of High Seas (specs/high-seas.md AC-22): an autopilot plays whole voyages in
 // the real game at 390×844 and prints when it made its first delivery, bought each upgrade and
-// finished. It sails like a quick, tidy player: it follows the shortest water route, tacks when
-// the route is upwind, bears away from heavy heel, takes the best-paying contracts and buys each
-// upgrade as soon as it can. A person reading the cards and steering by hand takes longer.
+// finished. It is paced like a person: it spends a few seconds at each quay reading the cards,
+// adjusts its steering a few times a second rather than every frame, follows the shortest water
+// route, tacks when the route is upwind (changing tack when it meets a shore), bears away from
+// heavy heel, takes the best-paying contracts and buys each upgrade as soon as it can.
 // Run: node scripts/high-seas/playtest.mjs [SEED ...]   (needs Playwright's Chromium)
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
@@ -61,19 +62,24 @@ async function autopilot(max) {
   let tackT = 0;
   let delivered = 0;
   let wp = null;
+  let clear = null;
   let awayT = 0;
+  let quayT = 0; // seconds left reading the cards at a quay
+  let steerT = 0; // seconds until the next steering adjustment
   for (let k = 0; k < max * 30; k++) {
     if (S.mode === 'over') {
       mark('voyage done');
       break;
     }
-    if (S.mode === 'docked' && S.dock === null) {
+    if (S.mode === 'docked' && S.dock === null && quayT <= 0) quayT = 4;
+    if (S.mode === 'docked' && S.dock === null && (quayT -= 1 / 30) <= 0) {
       if (S.portAt === 0) {
         for (const w of ['keel', 'spinnaker', 'galleon']) if (!S.owned[w] && s.buy(w)) mark('bought the ' + w);
         if (S.owned.galleon) s.takeCharter();
       }
       const offers = (S.offers[S.portAt] || []).slice().sort((a, b) => b.pay / b.len - a.pay / a.len);
-      for (const c of offers) if (S.hold.length < s.rig().cargo) s.takeOffer(c);
+      // With the galleon, it sets off with the Grand Charter alone, as a player heading for the end.
+      if (!S.owned.galleon) for (const c of offers) if (S.hold.length < s.rig().cargo) s.takeOffer(c);
       if (!S.hold.length) {
         // Nothing to carry from here: head back to the shipyard (a contract that pays nothing).
         const c = s.makeContract(S.portAt, 0, 'goods');
@@ -95,7 +101,13 @@ async function autopilot(max) {
       }
       if (S.crates.length && S.hold.length < r.cargo) dest = { rx: S.crates[0].x, ry: S.crates[0].y };
       if (dest && (k % 6 === 0 || !wp)) {
-        const p = path(S.owned.galleon ? S.world.deep : S.world.light, b.x, b.y, dest.rx, dest.ry);
+        // The dinghy keeps a tile clear of rocks, as a person seeing the surf ring would.
+        if (!clear) {
+          clear = S.world.light.slice();
+          for (const q of S.world.rocks) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) clear[(q.j + dj) * N + q.i + di] = 0;
+        }
+        let p = path(S.owned.galleon ? S.world.deep : clear, b.x, b.y, dest.rx, dest.ry);
+        if (!p) p = path(S.world.light, b.x, b.y, dest.rx, dest.ry);
         wp = p ? p[Math.min(p.length - 1, S.owned.galleon ? 4 : 3)] : [dest.rx, dest.ry];
       }
       if (dest) {
@@ -107,19 +119,27 @@ async function autopilot(max) {
         if (Math.abs(rel) < r.wedge) {
           if (tackT <= 0) {
             tackSide = rel >= 0 ? 1 : -1;
-            tackT = 6;
+            tackT = S.owned.galleon ? 4 : 6;
           }
           tgt = from + tackSide * (r.wedge + 0.02);
         }
         if (b.heel > 0.9) tgt = S.wind.dir; // bear away from a knockdown
-        // Pressed against a shore for 2 s: bear away for 2 s, as a person would.
-        if ((b.grounded || 0) > 2) awayT = 2;
+        // Pressed against a shore: change tack and bear away for a moment, as a person would.
+        if ((b.grounded || 0) > 1 && awayT <= 0) {
+          awayT = 1.5;
+          tackSide = -tackSide;
+          tackT = 6;
+        }
         if (awayT > 0) {
           awayT -= 1 / 30;
           tgt = S.wind.dir;
           wp = null;
         }
-        b.target = wrap(tgt);
+        steerT -= 1 / 30;
+        if (steerT <= 0) {
+          b.target = wrap(tgt);
+          steerT = 0.25;
+        }
       }
     }
     s.step(1 / 30);

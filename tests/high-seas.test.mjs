@@ -325,7 +325,7 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
   assert.deepEqual(yard, [
     ['keel', '60', 'true'],
     ['spinnaker', '130', 'true'],
-    ['galleon', '320', 'true'],
+    ['galleon', '360', 'true'],
   ]);
   assert.ok(await page.evaluate(() => !!window.__seas.S.yardGalleon), 'the galleon waits at the shipyard');
   // Can't afford: nothing changes.
@@ -356,7 +356,7 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
   assert.equal(res.coinsAfterKeel, 940);
   assert.equal(res.runBeatsBeam, true);
   assert.deepEqual(res.galleon, { cargo: 3, wedge: 65, name: 'galleon' });
-  assert.equal(res.coins, 1000 - 60 - 130 - 320);
+  assert.equal(res.coins, 1000 - 60 - 130 - 360);
   // The galleon can't enter shallow water: sail it at a shallow tile and it never gets in.
   const inShallow = await page.evaluate(() => {
     const s = window.__seas;
@@ -590,12 +590,19 @@ test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter; 
     const s = window.__seas;
     const S = s.S;
     s.castOff();
+    // Sailing through another port's ring with only the charter aboard doesn't stop the voyage.
+    const p = S.world.ports[1];
+    Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0.5 });
+    S.armed[1] = true;
+    for (let i = 0; i < 30; i++) s.step(1 / 60);
+    window.__passed = S.mode;
     S.clock = 425;
     const l = S.world.lighthouse;
     Object.assign(S.boat, { x: l.rx, y: l.ry, v: 0 });
     for (let i = 0; i < 200 && S.mode !== 'over'; i++) s.step(1 / 60);
     return { mode: S.mode, best: JSON.parse(localStorage.getItem('high-seas-best')) };
   });
+  assert.equal(await page.evaluate(() => window.__passed), 'sail', 'no stop on the way');
   assert.equal(r.mode, 'over');
   assert.equal(await page.isVisible('[data-screen="over"]'), true);
   assert.equal(await page.textContent('[data-final-time]'), '7:06');

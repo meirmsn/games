@@ -147,7 +147,7 @@ function attempt(seed) {
   const lhPort = placeQuay(tiles, islands[0], rand);
   if (!lhPort) return fail("lhquay");
   const lighthouse = { id: 'lighthouse', name: 'The Lighthouse', colour: '#ffffff', island: islands[0], ...lhPort };
-  // Rocks: a few in the water between islands, never near a berth.
+  // Rocks: a few in open water between islands, never near a berth or a beach.
   const rocks = [];
   let rt = 0;
   const want = 7 + Math.floor(rand() * 5);
@@ -156,6 +156,8 @@ function attempt(seed) {
     const j = 2 + Math.floor(rand() * (H - 4));
     const t = tiles[idx(i, j)];
     if (t !== DEEP && t !== SHALLOW) continue;
+    // In open water, with room to pass on either side: never wedged against a beach.
+    if (dist[idx(i, j)] < 3) continue;
     if ([...ports, lighthouse].some((p) => Math.hypot(p.bx - i - 0.5, p.by - j - 0.5) < 5)) continue;
     if (rocks.some((r) => Math.hypot(r.x - i - 0.5, r.y - j - 0.5) < 3)) continue;
     rocks.push({ x: i + 0.5, y: j + 0.5, i, j, kind: rand() < 0.6 ? 'rock035' : rand() < 0.5 ? 'rock036' : 'rock025' });
@@ -316,7 +318,7 @@ function check(world, polarAt, topSpeed, firstLimit) {
   const [sx, sy] = ringOf(world.ports[0]);
   for (const p of all) if (routeLength(world.deep, sx, sy, ...ringOf(p)) === Infinity) return null;
   // The finale is a real passage.
-  if (routeLength(world.deep, sx, sy, ...ringOf(world.lighthouse)) < 32) return null;
+  if (routeLength(world.deep, sx, sy, ...ringOf(world.lighthouse)) < 44) return null;
   for (const p of world.ports) if (routeLength(world.light, sx, sy, ...ringOf(p)) === Infinity) return null;
   // The first contract: the nearest port, put on a beam reach by the starting wind.
   let best = null;

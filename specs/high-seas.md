@@ -79,12 +79,13 @@ has been waiting in the shipyard since the first minute.
   that port; cargo for other ports stays aboard. A contract can be loaded only if there is room;
   when there isn't, the cards show it and do nothing. The keel and spinnaker are the dinghy's;
   buying the galleon replaces the dinghy (its cargo moves aboard) and there is no going back.
-- Purchases change the verb, not a number: keel (60 coins), spinnaker (130), galleon (320). Each is
+- Purchases change the verb, not a number: keel (60 coins), spinnaker (130), galleon (360). Each is
   shown on the shipyard's quay, with its price, from the start (owner's guidelines: show the reward
   before it's earned). The galleon (Kenney's white-sailed ship) is moored at the shipyard from the
-  first minute. The prices were first 60, 120 and 260; playtesting during the build, before the PR,
-  raised the spinnaker to 130 and the galleon to 320, because voyages ended under the 8–12 minute
-  target (Claude, 2026-11-09).
+  first minute. The prices were first 60, 120 and 260, and a delivery paid 6 coins plus 0.8 a tile;
+  timed playtests during the build, before the owner played it, raised the spinnaker to 130 and the
+  galleon to 360 and lowered the pay to 5 plus 0.65 a tile, because voyages ended under the 8–12
+  minute target (Claude, 2026-11-09).
 - The start port is the shipyard. Three other ports, and a lighthouse island far off for the
   finale. Each port offers two contracts: goods (pay by distance) or mail (a departure window shown
   as a draining ring; delivered on time pays ×1.6, late pays the goods rate). The window is for
@@ -105,6 +106,11 @@ has been waiting in the shipyard since the first minute.
   wind, and the boat's speed with it.
 - Turn rates: the dinghy 150° a second, the galleon 55°. A second finger on the glass cancels the
   steer, and the boat holds its course.
+- Rocks stand in open water, at least 3 tiles from any land, so there is room to pass on either
+  side; a boat that hits one is thrown clear onto open water and turns away from it. While the
+  Grand Charter is aboard, the boat docks only where it has cargo to deliver and at the lighthouse,
+  so the last passage isn't interrupted by every port it passes (Claude, 2026-11-09, from the timed
+  playtest).
 - Rocks show a white surf ring at their footprint, which is what the boat hits, not the tall sprite.
 - The wind shifts by about 90°, announced at least 30 s ahead by a ghost arrow on the wind vane and
   clouds turning: 45 s after the fourth delivery, again 45 s after buying the galleon, then every

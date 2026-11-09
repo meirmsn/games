@@ -14,9 +14,9 @@ import { ATLAS } from './atlas.js';
 // --- Tuning: every knob in one place -------------------------------------------------------------
 const TUNE = {
   firstLimit: 40, // s: the first contract's route at the starting wind
-  prices: { keel: 60, spinnaker: 130, galleon: 320 },
-  goodsBase: 6, // coins for any delivery
-  goodsPerTile: 0.8, // and per tile of route
+  prices: { keel: 60, spinnaker: 130, galleon: 360 },
+  goodsBase: 5, // coins for any delivery
+  goodsPerTile: 0.65, // and per tile of route
   mailBonus: 1.6, // mail on time pays this many times the goods rate
   mailShare: 0.4, // share of offers that are mail
   mailSlack: 1.45, // mail window: route time at 70% speed, times this, plus mailGrace
@@ -551,10 +551,11 @@ function stepBoat(dt) {
       b.heel = 0;
     }
   } else if (b.bump > 0) {
+    // Knocked off a rock: the bow swings round to the way it was thrown, then steering returns.
     b.bump -= dt;
-    b.h = wrap(b.h + dt * 2.2);
-    b.target = b.h;
-    b.v *= Math.exp(-dt * 2);
+    b.h = turnTowards(b.h, b.bumpAway, r.turn * 1.5, dt);
+    b.target = clampToWedge(r, b.bumpAway, wind);
+    b.v *= Math.exp(-dt * 1.5);
   } else {
     if (S.keys.left || S.keys.right) {
       // Keys turn the wanted heading itself, through the wedge if held: a tack.
@@ -658,9 +659,22 @@ function stepBoat(dt) {
   // Rocks.
   const rock = b.bump <= 0 && b.knock <= 0 ? hitRock(b.x, b.y, rad) : null;
   if (rock) {
-    const a = Math.atan2(b.y - rock.y, b.x - rock.x);
-    b.x = rock.x + Math.cos(a) * (0.45 + rad + 0.05);
-    b.y = rock.y + Math.sin(a) * (0.45 + rad + 0.05);
+    // Thrown clear of the rock, onto open water: straight away from it, or the nearest open
+    // direction round it when that would be ashore (a rock by a beach never pins the boat).
+    const away = Math.atan2(b.y - rock.y, b.x - rock.x);
+    const out = 0.45 + rad + 0.08;
+    let a = away;
+    for (const d of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 2.6, -2.6, Math.PI]) {
+      const x = rock.x + Math.cos(away + d) * out;
+      const y = rock.y + Math.sin(away + d) * out;
+      if (!solid(x, y) && !solid(x + Math.cos(away + d) * 0.3, y + Math.sin(away + d) * 0.3)) {
+        a = away + d;
+        break;
+      }
+    }
+    b.x = rock.x + Math.cos(a) * out;
+    b.y = rock.y + Math.sin(a) * out;
+    b.bumpAway = a;
     b.bump = TUNE.bumpTime;
     b.v = r.top * 0.2;
     play('bump');
@@ -681,7 +695,11 @@ function stepBoat(dt) {
   for (const p of [...S.world.ports, S.world.lighthouse]) {
     const d = Math.hypot(p.rx - b.x, p.ry - b.y);
     if (d > TUNE.ringRearm + (S.owned.galleon ? 1.0 : 0)) S.armed[p.id] = true;
-    if (p.id === 'lighthouse' && !S.hold.some((c) => c.kind === 'charter')) continue;
+    const charter = S.hold.some((c) => c.kind === 'charter');
+    if (p.id === 'lighthouse' && !charter) continue;
+    // With the Grand Charter aboard, the voyage is heading home: no stopping at ports on the way,
+    // except to deliver what's aboard for them.
+    if (charter && p.id !== 'lighthouse' && !S.hold.some((c) => c.to === p.id)) continue;
     if (d < ringR() && S.armed[p.id] && b.knock <= 0) {
       S.mode = 'docked';
       S.dock = { t: 0, fromX: b.x, fromY: b.y, fromH: b.h, port: p };
