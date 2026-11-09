@@ -100,7 +100,7 @@ test('runes AC-1: the pool is already moving before any input, with its buttons,
   await context.close();
 });
 
-test('runes AC-2: a relative drag steps the line, a drag back takes it back, walls store nothing, a second finger moves nothing', async () => {
+test('runes AC-2: a relative drag steps the line, a drag back takes nothing back, walls store nothing, a second finger moves nothing', async () => {
   const { context, page } = await open();
   const c = await cellSize(page);
   // Start below the board, far from the line's head.

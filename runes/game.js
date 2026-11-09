@@ -645,8 +645,8 @@ function endDrag(e, cancelled) {
   if (e) hover(e.clientX, e.clientY);
 }
 
-// The mouse cursor: a hand over a stone the line can act on (step to, cut back to, or drag from
-// the head), a closed hand while dragging, the usual arrow everywhere else.
+// The mouse cursor: a hand over a stone the line can act on (step to it, or drag from the head),
+// a closed hand while dragging, the usual arrow everywhere else.
 function actionable(c) {
   if (c < 0 || ended() || game.overlay) return false;
   const s = game.s;
