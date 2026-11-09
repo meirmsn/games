@@ -255,6 +255,9 @@ test('trundle states: each state shows only its own bar, cards and Go or Stop, a
       done: document.querySelector('[data-card="done"]').checkVisibility(),
       floor: document.querySelector('[data-card="floor"]').checkVisibility(),
       rooms: document.querySelector('[data-card="rooms"]').checkVisibility(),
+      // the list's second shadow is the wash that dims the board behind it
+      dim: getComputedStyle(document.querySelector('[data-card="rooms"]')).boxShadow.split('rgba').length > 2,
+      floorRun: document.querySelector('[data-floor-run]').checkVisibility(),
     }));
   const only = (v, want) => {
     for (const [key, val] of Object.entries(want)) assert.equal(v[key], val, `${v.mode}: ${key}`);
@@ -269,7 +272,7 @@ test('trundle states: each state shows only its own bar, cards and Go or Stop, a
   only(await look(), { mode: 'run', bar: true, stop: true, label: 'Stop', done: false, floor: false, rooms: false });
   // rooms list, over a run: the run stops, the bar hides
   await page.click('[data-rooms]');
-  only(await look(), { bar: false, done: false, floor: false, rooms: true });
+  only(await look(), { bar: false, done: false, floor: false, rooms: true, dim: true, floorRun: false });
   await page.click('[data-close-rooms]');
   only(await look(), { mode: 'edit', bar: true, rooms: false });
   // room done
@@ -286,6 +289,9 @@ test('trundle states: each state shows only its own bar, cards and Go or Stop, a
     while (!T.G.floor.end && n++ < 6000) T.frame(1000 / 60);
   });
   only(await look(), { mode: 'floor', bar: false, done: false, floor: true, rooms: false });
+  // once the floor is earned, the rooms list offers the floor run
+  await page.click('[data-floor-rooms]');
+  only(await look(), { rooms: true, dim: true, floorRun: true });
   assert.deepEqual(errors, []);
   await context.close();
 });
