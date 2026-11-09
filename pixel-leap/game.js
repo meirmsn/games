@@ -36,6 +36,7 @@ export const MOVE = {
   drip: 30, // a drip's fall
 };
 const LIVES = 3;
+const ENEMY_SIZE = 1.5; // bad guys' size, in tiles
 const MAX_SHIELDS = 2; // hearts you can hold: each takes one hit for you
 const W_BOX = 0.7; // the monster's collision box, in tiles
 const H_BOX = 1.3;
@@ -127,6 +128,9 @@ const game = {
   time: 0, // this level's, counted only while playing
   lives: LIVES,
   shields: 0, // hearts held, at most MAX_SHIELDS
+  runCoins: 0, // the whole run's, shown at its end
+  runTime: 0,
+  map: null, // the world map between levels: { from, to }
   ears: false, // the prize, found on this run
   earsThisWorld: false,
   deaths: 0, // lives lost since the last level cleared (game overs included): the hidden assist
@@ -369,6 +373,20 @@ function update(dt) {
     cam.y = ROWS - 1.2 - view.tilesH;
     return;
   }
+  if (game.mode === 'map') {
+    if (game.modeT >= MAP.enter) {
+      // Into the world: the leap's steps from the map's pixels to the world's own rule.
+      startWorld(game.map.to, game.map.to === 0);
+      game.leapFrom = 0;
+      game.leapt = true;
+      setMode('leap');
+      play('leap', { gain: 0.7 });
+    } else if (game.modeT >= MAP.paint && !game.map.painted) {
+      game.map.painted = true;
+      play('m-part', { gain: 0.5 });
+    }
+    return;
+  }
   if (game.mode === 'leap') {
     if (game.modeT >= 0.3 && !game.leapt) {
       game.leapt = true;
@@ -377,6 +395,7 @@ function update(dt) {
     if (game.modeT >= 1.6) {
       setMode('play');
       music();
+      showBanner();
     }
     return;
   }
@@ -558,8 +577,8 @@ function touchThings(hb) {
         break;
       case 'walker':
       case 'worm': {
-        const hw = t.type === 'worm' ? 0.7 : 0.4;
-        const hh = t.type === 'worm' ? 0.55 : 0.8;
+        const hw = t.type === 'worm' ? 0.7 : 0.4 * ENEMY_SIZE;
+        const hh = t.type === 'worm' ? 0.55 : 0.8 * ENEMY_SIZE;
         if (!overlaps({ l: p.x - W_BOX / 2, r: p.x + W_BOX / 2, t: p.y - H_BOX, b: p.y }, t.x - hw, t.y - hh, t.x + hw, t.y)) break;
         // A stomp: falling, with your feet above its middle. A spiky walker can't be stomped.
         if (t.kind !== 'spiky' && p.vy > 0 && p.y - p.vy * STEP <= t.y - hh * 0.5 + 0.15) {
@@ -721,7 +740,7 @@ function sparkle(x, y) {
 }
 
 // ---------------------------------------------------------------- worlds, the tally and the leap
-function startWorld(w, keepAssist = false) {
+function startWorld(w, keepAssist = true) {
   game.coins = 0;
   game.time = 0;
   if (!keepAssist) {
@@ -739,26 +758,52 @@ function newRun() {
   game.lives = LIVES;
   game.shields = 0;
   game.ears = false;
+  game.runCoins = 0;
+  game.runTime = 0;
   baked = null;
   startWorld(0, true); // a game over keeps the assist it earned
+  showMap(-1, 0);
+}
+
+// The world map: the levels as cells on a path carved into a wall. The cells you've been to, and
+// the one you're heading for, are lit; the rest are dark hollows in the wall. Between levels the
+// path to the next cell is painted in, the monster walks along it and steps in, and the world opens.
+// A tap or a key skips ahead to the step in.
+const MAP = { paint: 0.5, walk: 1.3, arrive: 2.4, enter: 2.8 };
+function showMap(from, to) {
+  stopMusic();
+  banner.hidden = true;
+  game.map = { from, to, painted: false };
+  setMode('map');
+}
+function skipMap() {
+  if (game.mode === 'map' && game.modeT < MAP.arrive) game.modeT = MAP.arrive;
+}
+// The run's statistics, shown only at its end: game over, or past the last level's door.
+function showStats(title, note) {
+  const best = (readStore().best || {})[`${VERSION}:run`];
+  document.querySelector('[data-tally-title]').textContent = title;
+  document.querySelector('[data-tally-coins]').textContent = String(game.runCoins);
+  document.querySelector('[data-tally-time]').textContent = clock(game.runTime);
+  document.querySelector('[data-tally-prize]').textContent = game.ears ? 'Ears!' : '—';
+  document.querySelector('[data-tally-best]').textContent = clock(best);
+  document.querySelector('[data-tally-note]').textContent = note;
+  document.querySelector('[data-leap]').textContent = 'Play again';
+  document.querySelector('[data-rebuild]').hidden = false;
+  setMode('tally');
 }
 function gameOver() {
   stopMusic();
   play('done', { rate: 0.7 });
-  const w = world();
-  document.querySelector('[data-tally-title]').textContent = 'Game over';
-  document.querySelector('[data-tally-coins]').textContent = `${game.coins}/${game.coinsTotal}`;
-  document.querySelector('[data-tally-time]').textContent = clock(game.time);
-  document.querySelector('[data-tally-prize]').textContent = game.ears ? 'Ears!' : '—';
-  document.querySelector('[data-tally-best]').textContent = clock((readStore().best || {})[`${VERSION}:${w.id}`]);
-  document.querySelector('[data-tally-note]').textContent = `You reached level ${game.world + 1}, ${w.name}.`;
-  document.querySelector('[data-leap]').textContent = 'Play again';
-  document.querySelector('[data-rebuild]').hidden = false;
+  game.runCoins += game.coins;
+  game.runTime += game.time;
   game.over = true;
   game.last = false;
-  setMode('tally');
+  showStats('Game over', `You reached level ${game.world + 1}, ${world().name}.`);
 }
 
+// Through a level's door: its time is kept as a best, and the map shows the way on (no numbers
+// between levels). Past the last door, the run's statistics.
 function enterPortal() {
   const w = world();
   play('done');
@@ -766,22 +811,24 @@ function enterPortal() {
   const store = readStore();
   const best = { ...(store.best || {}) };
   const key = `${VERSION}:${w.id}`;
-  const isBest = !best[key] || game.time < best[key];
-  if (isBest) best[key] = Math.round(game.time * 10) / 10;
-  writeStore({ best });
+  if (!best[key] || game.time < best[key]) best[key] = Math.round(game.time * 10) / 10;
+  game.runCoins += game.coins;
+  game.runTime += game.time;
   const last = game.world === WORLDS.length - 1;
   game.over = false;
-  document.querySelector('[data-tally-title]').textContent = last ? `${w.name}: the end of the road, for now` : `Level ${game.world + 1}: ${w.name}`;
-  document.querySelector('[data-tally-coins]').textContent = `${game.coins}/${game.coinsTotal}`;
-  document.querySelector('[data-tally-time]').textContent = clock(game.time);
-  const prize = w.stages.some((s) => s.some((seg) => seg[0] === 'ears'));
-  document.querySelector('[data-tally-prize]').textContent = prize ? (game.earsThisWorld ? 'Ears!' : '—') : game.ears ? 'Ears' : '—';
-  document.querySelector('[data-tally-best]').textContent = clock(best[key]);
-  document.querySelector('[data-tally-note]').textContent = isBest && store.best && store.best[key] ? 'New best!' : last ? 'More worlds are on their way.' : '';
-  document.querySelector('[data-leap]').textContent = last ? 'Play again' : `Leap to ${WORLDS[game.world + 1].name}`;
-  document.querySelector('[data-rebuild]').hidden = !last;
   game.last = last;
-  setMode('tally');
+  if (last) {
+    const runKey = `${VERSION}:run`;
+    const isBest = !best[runKey] || game.runTime < best[runKey];
+    if (isBest) best[runKey] = Math.round(game.runTime * 10) / 10;
+    writeStore({ best });
+    showStats(`${w.name}: the end of the road, for now`, isBest ? 'A new best run! More worlds are on their way.' : 'More worlds are on their way.');
+    return;
+  }
+  writeStore({ best });
+  game.deaths = 0; // a cleared level resets the hidden assist
+  game.assist = 0;
+  showMap(game.world, game.world + 1);
 }
 function clock(s) {
   if (s == null) return '—';
@@ -789,20 +836,10 @@ function clock(s) {
   const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, '0')}`;
 }
+// The stats card's Play again: the same monster starts a new run from the first level.
 function leap() {
   if (game.mode !== 'tally') return;
-  if (game.over) {
-    // Game over: the same monster starts again from the first level.
-    newRun();
-    setMode('play');
-    music();
-    return;
-  }
-  if (game.last) return toBuilder();
-  play('leap');
-  game.leapFrom = game.world;
-  game.leapt = false;
-  setMode('leap');
+  newRun();
 }
 document.querySelector('[data-leap]').addEventListener('click', leap);
 document.querySelector('[data-rebuild]').addEventListener('click', () => {
@@ -910,8 +947,9 @@ function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height,
     g.imageSmoothingEnabled = sm;
     g.restore();
   };
+  // The main world draws one column past the line, under the glimpse, so no gap can show.
   if (region === 'next') layer(w, Math.max(c0, stage.next), c1);
-  else layer(w, c0, Math.min(c1, wn ? stage.next - 1 : c1));
+  else layer(w, c0, Math.min(c1, wn ? stage.next : c1));
   const mine = (x) => region === 'all' || (region === 'main' ? x < stage.next : x >= stage.next);
   g.save();
   g.translate(-ox, -oy);
@@ -1142,13 +1180,21 @@ function drawThings(g, w, res, pixel, mine) {
         g.save();
         g.translate(Math.round(px), Math.round(py));
         if (t.dir > 0) g.scale(-1, 1);
+        // Bad guys are drawn half again as big as a tile, so they read at a glance.
+        const z = ENEMY_SIZE;
         if (t.kind === 'ghost') {
-          inkTile(g, INK.ghost[f], -res / 2, -res + Math.round(Math.sin(game.t * 4 + t.id) * res * 0.06), res);
+          const r2 = Math.round(res * z);
+          inkTile(g, INK.ghost[f], -r2 / 2, -r2 + Math.round(Math.sin(game.t * 4 + t.id) * res * 0.06), r2);
+        } else if (tw.smooth) {
+          // Candy's bad guys: the New Platformer Pack's slimes, purple (stomp it) or green with a spike (don't).
+          const col = (t.kind === 'spiky' ? 3 : 0) + f;
+          const sz = res * z;
+          g.drawImage(images.slimes, col * 128, 0, 128, 128, -sz / 2, -sz + res * 0.04, sz, sz);
         } else {
           const idx = t.kind === 'spiky' ? PP.spiky[f] : PP.meadow.walker[f];
           const sx = (idx % 9) * 24;
           const sy = Math.floor(idx / 9) * 24;
-          const s = res / 18;
+          const s = Math.round((res / 18) * z * 2) / 2;
           g.drawImage(images.meadowChars, sx, sy, 24, 24, Math.round(-12 * s), Math.round(-24 * s + 2 * s), Math.round(24 * s), Math.round(24 * s));
         }
         g.restore();
@@ -1325,6 +1371,7 @@ function leapSteps(from, to) {
 // One frame: the world's rule decides how it reaches the screen.
 function render() {
   if (!stage) return;
+  if (game.mode === 'map') return drawMap();
   const w = world();
   let res = w.res;
   let overlay = 0;
@@ -1342,7 +1389,9 @@ function render() {
   }
   // The glimpse of the next world is drawn separately, by that world's own rule.
   const wn = WORLDS[game.world + 1];
-  const glimpse = wn && game.mode !== 'leap' && game.mode !== 'build' ? Math.round((stage.next - cam.x) * view.U) : Infinity;
+  // Where the main world's drawing puts the line, to the pixel (a pixel world's camera is snapped).
+  const pxCam = !w.smooth && res === w.res ? Math.round(cam.x * res) / res : cam.x;
+  const glimpse = wn && game.mode !== 'leap' && game.mode !== 'build' && game.mode !== 'map' ? Math.round((stage.next - pxCam) * view.U) : Infinity;
   const region = glimpse < view.W ? 'main' : 'all';
   const pixel = !w.smooth && res === w.res;
   if (pixel || res !== w.res) {
@@ -1413,6 +1462,158 @@ function drawSceneScaled(res, s, region = 'all') {
 const buffer2 = makeCanvas(1, 1); // the glimpse of a pixel world
 const b2ctx = buffer2.getContext('2d');
 
+// ---------------------------------------------------------------- the world map
+// Cells along a zig-zag path (up the screen in portrait, across it in landscape), the start first.
+function mapNodes() {
+  const n = WORLDS.length + 1;
+  const portrait = view.H >= view.W;
+  const nodes = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const zig = i === 0 ? 0.5 : i % 2 ? 0.27 : 0.73;
+    nodes.push(portrait ? { x: zig, y: 0.86 - t * 0.68 } : { x: 0.1 + t * 0.8, y: i === 0 ? 0.55 : i % 2 ? 0.34 : 0.68 });
+  }
+  return nodes.map((p) => ({ x: p.x * view.tilesW, y: p.y * view.tilesH }));
+}
+// A world's cell picture: a little scene drawn by that world's own rule.
+const thumbs = {};
+function thumbFor(wi) {
+  if (thumbs[wi]) return thumbs[wi];
+  const w = WORLDS[wi];
+  const res = w.smooth ? 70 : w.res;
+  const c = makeCanvas(res * 3, res * 3);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = Boolean(w.smooth);
+  const grad = g.createLinearGradient(0, 0, 0, res * 3);
+  grad.addColorStop(0, w.sky[0]);
+  grad.addColorStop(1, w.sky[1]);
+  g.fillStyle = grad;
+  g.fillRect(0, 0, res * 3, res * 3);
+  for (let x = 0; x < 3; x++) {
+    if (w.id === 'meadow' || w.id === 'frost') {
+      ppTile(g, PP[w.id].top[x === 0 ? 0 : x === 2 ? 2 : 1], x * res, res * 2, res);
+      ppTile(g, PP[w.id].decor[x], x * res, res, res);
+    } else if (w.id === 'ink') {
+      inkTile(g, INK.top[1], x * res, res * 2, res);
+      if (x !== 1) inkTile(g, INK.decor[x], x * res, res, res);
+    } else {
+      candyTile(g, ['cakeLeft', 'cakeMid', 'cakeRight'][x], x * res, res * 2, res);
+    }
+  }
+  if (w.id === 'candy') {
+    candyTile(g, 'lollipopBase', 0, res, res);
+    candyTile(g, 'lollipopRed', 0, 0, res);
+    g.drawImage(images.slimes, 0, 0, 128, 128, res * 1.6, res * 1.1, res * 1.1, res * 1.1);
+  }
+  if (w.id === 'ink') inkTile(g, INK.ghost[0], res, res, res);
+  thumbs[wi] = c;
+  return c;
+}
+function drawMap() {
+  const { from, to } = game.map;
+  const U = view.U;
+  const k = view.k;
+  const t = game.modeT;
+  const nodes = mapNodes();
+  // The wall: a dark stone face, drawn in the Meadow's pixels (18 per tile).
+  const bw = Math.ceil(view.W / k);
+  const bh = Math.ceil(view.H / k);
+  if (buffer.width !== bw || buffer.height !== bh) {
+    buffer.width = bw;
+    buffer.height = bh;
+  }
+  const g = bctx;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = '#3a3448';
+  g.fillRect(0, 0, bw, bh);
+  g.fillStyle = '#332d40';
+  for (let y = 0; y < bh; y += 9) {
+    const off = (y / 9) % 2 ? 9 : 0;
+    for (let x = -off; x < bw; x += 18) g.fillRect(x, y, 17, 8);
+  }
+  const P = (n) => ({ x: Math.round(n.x * 18), y: Math.round(n.y * 18) });
+  // The path: carved grooves, painted gold where it's open; the leg being opened paints in.
+  const paint = Math.max(0, Math.min(1, (t - MAP.paint) / (MAP.walk - MAP.paint)));
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = P(nodes[i]);
+    const b = P(nodes[i + 1]);
+    // Leg i leads into cell i: lit if that cell was reached before, painting in if it's the next.
+    const open = i <= from ? 1 : i === to ? paint : 0;
+    const steps = Math.max(2, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 6));
+    for (let s = 1; s < steps; s++) {
+      const q = s / steps;
+      const x = Math.round(a.x + (b.x - a.x) * q);
+      const y = Math.round(a.y + (b.y - a.y) * q);
+      const lit = q <= open;
+      g.fillStyle = '#231f2e';
+      g.fillRect(x - 2, y - 2, 4, 4);
+      if (lit) {
+        g.fillStyle = '#ffd23f';
+        g.fillRect(x - 2, y - 2, 3, 3);
+      }
+    }
+  }
+  // The start: a little stone pad.
+  const s0 = P(nodes[0]);
+  g.fillStyle = '#231f2e';
+  g.fillRect(s0.x - 10, s0.y - 4, 20, 8);
+  g.fillStyle = '#6d6482';
+  g.fillRect(s0.x - 10, s0.y - 5, 20, 6);
+  // The cells: hollows in the wall, lit once reached.
+  const cell = 3 * 18;
+  const lit = (i) => i <= from || i === to;
+  for (let i = 0; i < WORLDS.length; i++) {
+    const c = P(nodes[i + 1]);
+    g.fillStyle = '#1c1826';
+    g.fillRect(c.x - cell / 2 - 3, c.y - cell / 2 - 3, cell + 6, cell + 6);
+    g.fillStyle = lit(i) ? '#ffd23f' : '#4a435a';
+    g.fillRect(c.x - cell / 2 - 3, c.y + cell / 2, cell + 6, 3);
+    g.fillRect(c.x + cell / 2, c.y - cell / 2 - 3, 3, cell + 6);
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(buffer, 0, 0, bw * k, bh * k);
+  // Each lit cell's picture, drawn by its world's own rule, straight onto the screen.
+  for (let i = 0; i < WORLDS.length; i++) {
+    if (!lit(i)) continue;
+    const c = nodes[i + 1];
+    const img = thumbFor(i);
+    ctx.imageSmoothingEnabled = Boolean(WORLDS[i].smooth);
+    const pop = i === to && t > MAP.arrive ? 1 + Math.sin(Math.min(1, (t - MAP.arrive) / (MAP.enter - MAP.arrive)) * Math.PI) * 0.12 : 1;
+    const sz = 3 * U * pop;
+    ctx.drawImage(img, c.x * U - sz / 2, c.y * U - sz / 2, sz, sz);
+    ctx.font = `${Math.round(U * 0.9)}px 'Kenney Pixel', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fffdf2';
+    ctx.lineWidth = Math.max(2, Math.round(U / 9));
+    ctx.strokeStyle = '#1c1826';
+    ctx.strokeText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
+    ctx.fillText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
+  }
+  // The monster, walking from where it was to the next cell, and stepping in.
+  const a = from < 0 ? nodes[0] : nodes[from + 1];
+  const b = nodes[to + 1];
+  const q = Math.max(0, Math.min(1, (t - MAP.walk) / (MAP.arrive - MAP.walk)));
+  const ease = q * q * (3 - 2 * q);
+  const mx = a.x + (b.x - a.x) * ease;
+  const my = a.y + (b.y - a.y) * ease - Math.abs(Math.sin(q * Math.PI * 4)) * 0.25 * (q > 0 && q < 1 ? 1 : 0);
+  const bk = bakedFor(WORLDS[0]);
+  if (bk && t < MAP.enter - 0.15) {
+    const walking = q > 0 && q < 1;
+    const f = bk.frames[walking ? `run${Math.floor(t * 10) % 4}` : Math.floor(t * 1.5) % 2 ? 'stand1' : 'stand0'];
+    const sc = U / 18;
+    const shrink = t > MAP.arrive ? 1 - (t - MAP.arrive) / (MAP.enter - MAP.arrive) : 1;
+    ctx.save();
+    ctx.translate(Math.round(mx * U), Math.round((my + 1.2) * U));
+    if (b.x < a.x) ctx.scale(-1, 1);
+    ctx.scale(sc * shrink, sc * shrink);
+    ctx.drawImage(f, -bk.footX, -bk.footY);
+    ctx.restore();
+  }
+  renderRes = 18;
+}
+
 // ---------------------------------------------------------------- the builder
 const partsEl = document.querySelector('[data-parts]');
 for (const p of PARTS) {
@@ -1445,10 +1646,8 @@ function go() {
   if (game.mode !== 'build') return;
   writeStore({ code: codeOf(monster) });
   history.replaceState(null, '', `#m=${codeOf(monster)}`);
+  play('shuffle', { gain: 0.6 });
   newRun();
-  play('leap', { gain: 0.6 });
-  setMode('play');
-  music();
 }
 document.querySelector('[data-go]').addEventListener('click', go);
 
@@ -1506,6 +1705,7 @@ const hudStage = document.querySelector('[data-hud-stage]');
 const hudCoins = document.querySelector('[data-hud-coins]');
 const hudLives = document.querySelector('[data-hud-lives]');
 const hudHearts = document.querySelector('[data-hud-hearts]');
+const hudCoinIcon = document.querySelector('[data-hud-coin-icon]');
 let hudKey = '';
 function updateHud() {
   if (hud.hidden) return;
@@ -1519,6 +1719,8 @@ function updateHud() {
   const key = `${game.lives}:${game.shields}:${baked ? baked.key : ''}:${w.id}`;
   if (key !== hudKey) {
     hudKey = key;
+    hudCoinIcon.textContent = '';
+    hudCoinIcon.appendChild(icon('coin', true));
     hudLives.dataset.lives = String(game.lives);
     hudLives.textContent = '';
     for (let i = 0; i < LIVES; i++) hudLives.appendChild(icon('life', i < game.lives));
@@ -1529,7 +1731,40 @@ function updateHud() {
   hudLives.classList.toggle('pop', game.lifePop > 0);
   hudHearts.classList.toggle('pop', game.shieldPop > 0);
 }
-// A small HUD icon: a life is the monster's own head (from its baked frame), a heart the world's heart.
+// A small HUD icon: a life is the monster itself (its baked frame, cropped to it), a heart the
+// world's heart.
+function opaqueBox(c) {
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let x0 = c.width;
+  let y0 = c.height;
+  let x1 = 0;
+  let y1 = 0;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      if (d[(y * c.width + x) * 4 + 3]) {
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x);
+        y1 = Math.max(y1, y);
+      }
+    }
+  }
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0 + 1), h: Math.max(1, y1 - y0 + 1) };
+}
+// The level's name, big, for a moment as it opens.
+const banner = document.querySelector('[data-banner]');
+let bannerTimer = 0;
+function showBanner() {
+  banner.textContent = `${game.world + 1} ${world().name}`;
+  banner.hidden = false;
+  banner.classList.remove('go');
+  void banner.offsetWidth;
+  banner.classList.add('go');
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(() => {
+    banner.hidden = true;
+  }, 1800);
+}
 function icon(kind, on) {
   const c = document.createElement('canvas');
   c.className = `hud-icon ${on ? 'on' : 'off'}`;
@@ -1537,15 +1772,40 @@ function icon(kind, on) {
   g.imageSmoothingEnabled = false;
   if (kind === 'life' && baked) {
     const f = baked.frames.stand0;
-    const top = Math.floor(baked.footY - baked.h * 0.62);
-    c.width = Math.round(baked.w * 0.5);
-    c.height = Math.round(baked.h * 0.42);
-    g.drawImage(f, Math.round(baked.w * 0.25), top, c.width, c.height, 0, 0, c.width, c.height);
+    const box = baked.box || (baked.box = opaqueBox(f));
+    c.width = box.w;
+    c.height = box.h;
+    g.drawImage(f, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);
   } else if (kind === 'life') {
     c.width = 16;
     c.height = 16;
     g.fillStyle = '#ff7a59';
     g.fillRect(3, 3, 10, 10);
+  } else if (kind === 'coin') {
+    const w = world();
+    if (w.oneBit) {
+      c.width = 16;
+      c.height = 16;
+      inkTile(g, INK.coin[0], 0, 0, 16);
+    } else if (w.smooth) {
+      c.width = 70;
+      c.height = 70;
+      g.imageSmoothingEnabled = true;
+      candyTile(g, 'cherry', 0, 0, 70);
+    } else {
+      c.width = 18;
+      c.height = 18;
+      ppTile(g, PP.coin[0], 0, 0, 18);
+    }
+  } else if (world().oneBit) {
+    c.width = 16;
+    c.height = 16;
+    inkTile(g, INK.heart, 0, 0, 16);
+  } else if (world().smooth) {
+    c.width = 70;
+    c.height = 70;
+    g.imageSmoothingEnabled = true;
+    candyTile(g, 'heart', 0, 0, 70);
   } else {
     c.width = 18;
     c.height = 18;
@@ -1590,6 +1850,8 @@ window.addEventListener(
   { capture: true }
 );
 const swallowed = new Set();
+canvas.addEventListener('pointerdown', () => skipMap());
+deck.addEventListener('pointerdown', () => skipMap(), { capture: true });
 
 // ---------------------------------------------------------------- input
 function releaseAll() {
@@ -1620,6 +1882,11 @@ const KEYS = {
 // On the capture phase, so a pause can take Escape before the shell's back handler sees it.
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
+  if (game.mode === 'map' && (KEYS[e.code] || e.code === 'Enter')) {
+    e.preventDefault();
+    skipMap();
+    return;
+  }
   if (game.mode === 'paused' && !e.repeat && e.code !== 'Escape') {
     if (KEYS[e.code] || e.code === 'KeyP' || e.code === 'Enter') {
       e.preventDefault();
@@ -1751,9 +2018,10 @@ Promise.all([
   loadImage('img/candy.png'),
   loadImage('img/monster.png'),
   loadImage('img/ink-tiles.png'),
+  loadImage('img/candy-slimes.png'),
   import('./monster-atlas.js'),
-]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, atlas]) => {
-  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg });
+]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas]) => {
+  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes });
   MONSTER_FRAMES = atlas.MONSTER;
   // The colour under each background panel's hills, to fill below them.
   images.bgFill = {};
@@ -1810,6 +2078,8 @@ Promise.all([
     pause,
     resume,
     leap,
+    skipMap,
+    MAP,
     tileAt,
     sync,
     layout,

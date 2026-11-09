@@ -64,6 +64,20 @@ async function play(page, world = 0, stage = 0) {
   );
 }
 const steps = (page, n) => page.evaluate((n) => window.__leap.steps(n), n);
+// Steps the simulation until the game is playing (through the map and the leap), then hands the
+// clock back to the page unless `keep` is set.
+const untilPlay = (page, keep = false) =>
+  page.evaluate((keep) => {
+    const L = window.__leap;
+    L.manual = true;
+    for (let i = 0; i < 1200 && L.game.mode !== 'play'; i++) L.step();
+    L.manual = keep;
+    return L.game.mode;
+  }, keep);
+const goPlay = async (page, keep = false) => {
+  await page.click('[data-go]');
+  return untilPlay(page, keep);
+};
 const keys = (page, ...k) =>
   page.evaluate((k) => {
     const L = window.__leap;
@@ -105,6 +119,8 @@ test('pixel-leap AC-1: opens on the builder with a whole pixel monster; Go start
   const t1 = await page.evaluate(() => [window.__leap.game.t, window.__leap.cam.x]);
   assert.ok(t1[0] > t0[0] && t1[1] !== t0[1], 'the world moves behind the builder');
   await page.click('[data-go]');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map', 'Go shows the map first');
+  await untilPlay(page);
   const s = await page.evaluate(() => {
     const L = window.__leap;
     return { mode: L.game.mode, world: L.game.world, stage: L.game.stage, ground: L.player.ground };
@@ -150,8 +166,7 @@ test('pixel-leap AC-2: each builder button changes its part, Shuffle changes the
       throw new Error('blocked');
     };
   });
-  await blocked.page.click('[data-go]');
-  assert.equal(await blocked.page.evaluate(() => window.__leap.game.mode), 'play');
+  assert.equal(await goPlay(blocked.page), 'play');
   assert.deepEqual(blocked.errors, []);
   await blocked.context.close();
   assert.deepEqual(errors, []);
@@ -412,6 +427,7 @@ test('pixel-leap AC-7: a hit costs a heart if held, else a life and the level re
   assert.equal((await page.locator('[data-tally-title]').textContent()).trim(), 'Game over');
   assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
   await page.click('[data-leap]');
+  await untilPlay(page, true);
   const again = await page.evaluate(() => ({ mode: window.__leap.game.mode, world: window.__leap.game.world, lives: window.__leap.game.lives }));
   assert.deepEqual(again, { mode: 'play', world: 0, lives: 3 });
   await context.close();
@@ -630,7 +646,7 @@ test('pixel-leap AC-11: jelly bounces, cookies crumble and come back, springs la
   await context.close();
 });
 
-test('pixel-leap AC-12: the door shows the tally and freezes time; the leap from Frost steps 18, 35, smooth into Candy', async () => {
+test('pixel-leap AC-12: the door leads to the map with no numbers; the way on paints in, and the leap from Frost steps 18, 35, smooth into Candy', async () => {
   const { context, page } = await open(PHONE);
   await play(page, 1, 0);
   await page.evaluate(() => {
@@ -645,20 +661,10 @@ test('pixel-leap AC-12: the door shows the tally and freezes time; the leap from
     L.input.keys.clear();
     L.sync();
   });
-  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'tally');
-  assert.equal(await page.locator('[data-screen="tally"]').isVisible(), true);
-  for (const f of ['coins', 'time', 'prize', 'best']) {
-    assert.notEqual((await page.locator(`[data-tally-${f}]`).textContent()).trim(), '', `${f} shown`);
-  }
-  const frozen = await page.evaluate(() => {
-    const L = window.__leap;
-    const t = L.game.time;
-    const x = L.player.x;
-    L.steps(240);
-    return L.game.time === t && L.player.x === x;
-  });
-  assert.equal(frozen, true, 'time on the tally does not count and nothing moves');
-  await page.click('[data-leap]');
+  const map = await page.evaluate(() => ({ mode: window.__leap.game.mode, map: window.__leap.game.map }));
+  assert.equal(map.mode, 'map');
+  assert.deepEqual([map.map.from, map.map.to], [1, 2]);
+  assert.equal(await page.locator('[data-screen="tally"]').isVisible(), false, 'no numbers between levels');
   const k = await page.evaluate(() => window.__leap.view.k);
   const at = async (secs) => {
     await page.evaluate((s) => {
@@ -670,6 +676,11 @@ test('pixel-leap AC-12: the door shows the tally and freezes time; the leap from
       return window.__leap.renderRes();
     });
   };
+  await page.evaluate(() => {
+    const L = window.__leap;
+    for (let i = 0; i < 1000 && L.game.mode === 'map'; i++) L.step();
+  });
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'leap');
   assert.equal(await at(0.5), 18);
   const b18 = await blocky(page, k);
   assert.equal(b18.varied, 0, 'blocks of 18 px per tile');
@@ -716,10 +727,7 @@ test('pixel-leap AC-13: phones show at least 12 tiles across in whole multiples 
   }
   // Turning the phone mid-run keeps the monster's place, releases held controls and pauses.
   const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-  await page.click('[data-go]');
-  await page.evaluate(() => {
-    window.__leap.manual = true;
-  });
+  await goPlay(page, true);
   await keys(page, 'right', 'jump');
   const x0 = await page.evaluate(() => window.__leap.player.x);
   await page.setViewportSize({ width: 844, height: 390 });
@@ -744,7 +752,7 @@ const touch = (page, type, id, x, y) =>
 
 test('pixel-leap AC-14: the touch deck runs and jumps, a touch keeps its half, two fingers work; keys do the same', async () => {
   const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
-  await page.click('[data-go]');
+  await goPlay(page);
   const pad = await page.locator('[data-pad]').boundingBox();
   const jump = await page.locator('[data-jump]').boundingBox();
   const st = () => page.evaluate(() => ({ left: window.__leap.input.left, right: window.__leap.input.right, jump: window.__leap.input.jump }));
@@ -773,7 +781,7 @@ test('pixel-leap AC-14: the touch deck runs and jumps, a touch keeps its half, t
 
   // Keyboard.
   const k = await open();
-  await k.page.click('[data-go]');
+  await goPlay(k.page);
   for (const [key, want] of [['ArrowRight', 'right'], ['KeyD', 'right'], ['ArrowLeft', 'left'], ['KeyA', 'left'], ['Space', 'jump'], ['ArrowUp', 'jump'], ['KeyW', 'jump'], ['KeyZ', 'jump']]) {
     await k.page.keyboard.down(key);
     assert.equal(await k.page.evaluate((w) => window.__leap.input[w], want), true, key);
@@ -789,7 +797,7 @@ test('pixel-leap AC-14: the touch deck runs and jumps, a touch keeps its half, t
 
 test('pixel-leap AC-15: hiding the page pauses; a tap resumes without jumping, safe for 0.5 s; paused time does not count', async () => {
   const { context, page } = await open({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
-  await page.click('[data-go]');
+  await goPlay(page, true);
   await page.evaluate(() => {
     window.__leap.manual = true;
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
@@ -856,13 +864,13 @@ test('pixel-leap AC-16: after two lives lost the hidden assist widens coyote and
     lose(); // the third: game over
     const overMode = L.game.mode;
     L.leap(); // Play again
+    for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
     const afterOver = L.game.assist;
     // Clear the level: the next level starts without the assist.
     const po = L.stage().things.find((t) => t.type === 'portal');
     Object.assign(p, { x: po.x, y: po.y, invul: 0 });
     L.step();
-    L.leap();
-    for (let i = 0; i < 300 && L.game.mode !== 'play'; i++) L.step();
+    for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
     return { assists, before, after, coyote, base: L.MOVE.coyote, overMode, afterOver, reset: L.game.assist, world: L.game.world };
   });
   assert.equal(r.assists[0], 0);
@@ -936,10 +944,7 @@ test('pixel-leap AC-17: four levels, four worlds; each ends with a glimpse of th
 
 test("pixel-leap AC-18: each world plays its own jump sound and starts its own music", async () => {
   const { context, page } = await open();
-  await page.click('[data-go]');
-  await page.evaluate(() => {
-    window.__leap.manual = true;
-  });
+  await goPlay(page, true);
   const jumpIn = async (w) => {
     await play(page, w, 0);
     await place(page, 3);
@@ -959,8 +964,7 @@ test("pixel-leap AC-18: each world plays its own jump sound and starts its own m
       const po = L.stage().things.find((t) => t.type === 'portal');
       Object.assign(L.player, { x: po.x, y: po.y, invul: 0 });
       L.step();
-      L.leap();
-      for (let i = 0; i < 400 && L.game.mode !== 'play'; i++) L.step();
+      for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
       return L.heard.slice();
     }, w);
   assert.ok((await leapFrom(1)).includes('loop:c-music'), 'Candy starts its own music');
@@ -1073,7 +1077,7 @@ test('pixel-leap AC-21: every level can be finished; first coin within 5 s; haza
     return out;
   });
   for (const r of runs) {
-    assert.equal(r.end, 'tally', `level ${r.w + 1} finished (after ${r.t.toFixed(1)} s)`);
+    assert.equal(r.end, r.w === runs.length - 1 ? 'tally' : 'map', `level ${r.w + 1} finished (after ${r.t.toFixed(1)} s)`);
     assert.equal(r.nearStart, 0, `level ${r.w + 1}: no hazard near the start`);
     assert.deepEqual(r.blocked, [], `level ${r.w + 1}: open air above every spring and jelly`);
   }
@@ -1084,7 +1088,7 @@ test('pixel-leap AC-21: every level can be finished; first coin within 5 s; haza
 
 test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the same at 60 and 120 fps', async () => {
   const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
-  await page.click('[data-go]');
+  await goPlay(page);
   await page.evaluate(() => {
     const L = window.__leap;
     L.frameWork.length = 0;
@@ -1148,6 +1152,9 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
   await page.evaluate(() => {
     window.__leap.manual = true;
   });
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map');
+  assert.deepEqual(await seen(), row(false, true, false, false), 'the map');
+  await untilPlay(page, true);
   assert.deepEqual(await seen(), row(false, true, false, false), 'playing');
   await page.evaluate(() => window.__leap.pause());
   assert.deepEqual(await seen(), row(false, true, true, false), 'paused');
@@ -1159,11 +1166,11 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
     Object.assign(L.player, { x: po.x, y: po.y });
     L.step();
   });
-  assert.deepEqual(await seen(), row(false, true, false, true), 'tally');
-  assert.match(await page.locator('[data-leap]').textContent(), /Leap/);
-  await page.click('[data-leap]');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map');
+  assert.deepEqual(await seen(), row(false, true, false, false), 'the map between levels');
   await page.evaluate(() => {
     const L = window.__leap;
+    while (L.game.mode === 'map') L.step();
     while (L.game.modeT < 0.6) L.step();
   });
   assert.equal(await page.evaluate(() => window.__leap.game.mode), 'leap');
@@ -1179,11 +1186,12 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
   assert.deepEqual(await seen(), row(false, true, false, true), 'end of the slice');
   assert.equal((await page.locator('[data-leap]').textContent()).trim(), 'Play again');
   assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
+  // Play again: a new run, through the map.
   await page.click('[data-leap]');
-  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'build');
-  assert.deepEqual(await seen(), row(true, false, false, false), 'back to building');
-  // Game over: the tally card with Play again and New monster.
-  await page.click('[data-go]');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map');
+  assert.deepEqual(await seen(), row(false, true, false, false), 'a new run’s map');
+  await untilPlay(page, true);
+  // Game over: the stats card with Play again and New monster.
   await page.evaluate(() => {
     const L = window.__leap;
     L.manual = true;
@@ -1194,6 +1202,9 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
   assert.deepEqual(await seen(), row(false, true, false, true), 'game over');
   assert.equal((await page.locator('[data-leap]').textContent()).trim(), 'Play again');
   assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
+  // New monster: back to the builder.
+  await page.click('[data-rebuild]');
+  assert.deepEqual(await seen(), row(true, false, false, false), 'back to building');
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -1249,5 +1260,58 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
   assert.ok(candy.sounds.includes('morph-down'), 'a falling sound out of smooth Candy');
   assert.deepEqual(candy.steps, [35, 18]);
   assert.ok(candy.soft < 5, `Ink's glimpse is hard-edged pixels (${candy.soft} soft steps)`);
+  await context.close();
+});
+
+test('pixel-leap AC-24: the map shows the start, the cells reached and the next one lit, the rest carved dark, and the monster walks the newly painted way', async () => {
+  const { context, page } = await open(PHONE);
+  await page.click('[data-go]');
+  const look = (t) =>
+    page.evaluate((t) => {
+      const L = window.__leap;
+      L.manual = true;
+      while (L.game.mode === 'map' && L.game.modeT < t) L.step();
+      L.render();
+      const c = document.getElementById('view');
+      const g = c.getContext('2d');
+      const U = L.view.U;
+      const nodes = (() => {
+        // The same layout the game uses.
+        const n = L.WORLDS.length + 1;
+        const portrait = L.view.H >= L.view.W;
+        const out = [];
+        for (let i = 0; i < n; i++) {
+          const q = i / (n - 1);
+          const zig = i === 0 ? 0.5 : i % 2 ? 0.27 : 0.73;
+          out.push(portrait ? { x: zig, y: 0.86 - q * 0.68 } : { x: 0.1 + q * 0.8, y: i === 0 ? 0.55 : i % 2 ? 0.34 : 0.68 });
+        }
+        return out.map((p) => ({ x: p.x * L.view.tilesW * U, y: p.y * L.view.tilesH * U }));
+      })();
+      // A cell is lit when its middle shows its world's picture (bright), dark when carved.
+      const lum = (x, y) => {
+        const d = g.getImageData(Math.round(x), Math.round(y - U * 1.2), 1, 1).data;
+        return d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11;
+      };
+      return { mode: L.game.mode, map: L.game.map, lit: nodes.slice(1).map((n) => lum(n.x, n.y) > 120) };
+    }, t);
+  const start = await look(0.2);
+  assert.equal(start.mode, 'map');
+  assert.deepEqual([start.map.from, start.map.to], [-1, 0]);
+  assert.deepEqual(start.lit, [true, false, false, false], 'only the first world is lit; the rest are carved dark');
+  const after = await look(2.0);
+  assert.equal(after.mode, 'map');
+  // Skip ahead with a tap: the monster steps in and the world opens.
+  await page.evaluate(() => window.__leap.skipMap());
+  assert.equal(await untilPlay(page, true), 'play');
+  // Through the Meadow's door: the map again, from Meadow to Frost, with Frost now lit too.
+  await page.evaluate(() => {
+    const L = window.__leap;
+    const po = L.stage().things.find((t) => t.type === 'portal');
+    Object.assign(L.player, { x: po.x, y: po.y });
+    L.step();
+  });
+  const second = await look(2.0);
+  assert.deepEqual([second.map.from, second.map.to], [0, 1]);
+  assert.deepEqual(second.lit, [true, true, false, false]);
   await context.close();
 });

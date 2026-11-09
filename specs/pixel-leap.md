@@ -31,13 +31,13 @@ the design.
   monster with squash and stretch, and stomps that bounce you (higher if you hold jump).
 - **A typical 5-second choice:** in the Meadow, stomp the walker to bounce up to the coin ledge, or
   wait for it to pass and take the low road; in Candy, ride the crumbling cookie bridge for the coin
-  line before it drops, or take the slower floor past the gummy worms; spend a heart on a risky coin
+  line before it drops, or take the slower floor past the slimes; spend a heart on a risky coin
   line, or keep it for the spikes ahead.
 - **How it teaches:** each level opens gently and brings its new thing where it can't hurt yet,
   then ramps up to the level's full threat. The Meadow opens with run, jump and coins and no
   hazards, then one walker on flat ground, one spike, a small pit, then walkers in pairs and wider
   pits. Frost brings ice and spiky walkers you can't stomp, and the ears. Candy brings jelly,
-  crumbling cookies and worms. Ink brings ghosts and drips that fall as you pass. No text: the deck
+  crumbling cookies and slimes. Ink brings ghosts and drips that fall as you pass. No text: the deck
   lights the button you press.
 - **Three clocks:** seconds: coins, landings, stomps; minutes: a new level about every 1–2 minutes,
   each a new world with its own look, sound and rule; return: best time per level, the run's
@@ -91,6 +91,13 @@ item.
   features cut out, like the pack's own characters; in Candy it is the vector parts, drawn smooth
   with swinging limbs. Rejected: drawing every pack at its native size, and one style for the monster
   everywhere, which looks pasted on in one of the worlds.
+- **The HUD is big and chunky:** lives (your own monster, small), hearts and coins in thick-bordered
+  pixel boxes at the top, about 46 px tall on a wide screen and 40 on a phone, where the level's name
+  leaves the HUD for the banner as each level opens.
+- **Bad guys are bigger, and Candy's are clearly bad guys:** walkers, ghosts and slimes are drawn
+  half again as big as a tile, with hitboxes to match. Candy's are the New Platformer Pack's slimes,
+  vector like Candy: purple ones you can stomp, and green ones with a spike you can't (like Frost's
+  spiky walkers); Candy has more of them than before.
 - **The UI follows the rule too** (owner, 2026-11-09: "on the monster maker it should be pixelated
   already … make those buttons of body, color, eyes, and everything look 8-bit … Same goes for the
   … HUD … And then you change all the HUD as well to be smooth"): the builder shows the monster
@@ -121,7 +128,7 @@ item.
   walkers, spikes, a spring and pits ramping to the level's full threat); 2 Frost (the same pack's
   snow and icy sky: ice that keeps you sliding, spiky walkers you can't stomp, and the ears); 3 Candy
   (a different pack, smooth: jelly that bounces you high, cookies that crumble half a second after
-  you land and come back after 3 s, gummy worms); 4 Ink (the 1-Bit pack, two colours: ghosts, and
+  you land and come back after 3 s, slimes, the spiked ones unstompable); 4 Ink (the 1-Bit pack, two colours: ghosts, and
   drips that fall as you come near, landing just ahead of a monster at full speed). Each level is
   about a minute for a first-timer.
 - **A glimpse of the next world:** each level's last stretch, its door included, is drawn by the next
@@ -133,19 +140,38 @@ item.
   through the door, then there's some sound effect … to get the feeling that you're transitioning
   from smooth to 8-bit or from 8-bit to smooth. And visually … the monster transitions at the same
   time").
-- **The leap between levels is the event:** the door ends each level. Entering it takes the monster
-  out of physics and freezes the world, and the tally card shows. Its Leap button starts the leap,
-  1.6 s in all: a soft white flash (0.3 s), then the next world drawn through the resolutions
-  between the two: into a smooth world at 18, then 35 px per tile, then smooth; out of a smooth world
-  at 35, then 18, then the new world's own; between pixel worlds straight at the new world's own.
-  Rejected: a fade to black, which hides the rule. Time on the tally card, paused or hidden never
-  counts toward a level's time.
-- **Lives and hearts:** three lives. A hit (spikes, a walker's or worm's or ghost's side, a drip)
+- **Changed after the go, by the owner (2026-11-09), after playing the second preview:** "the HUD at
+  the top … should be much larger and clearly 8-bit … it shouldn't be huge on mobile either"; "I see
+  like a weird vertical line when the transition to the new world"; "once you get through the door,
+  I don't think you need to show those numbers. You just transition automatically to the next world
+  … at the end when you die, you can show the statistics"; "in the candy world, I don't know why the
+  bad guy is some candy … need something else to be a bad guy … That level felt a little bit empty of
+  bad guys … I think we need larger bad guys"; and a world map: "when you transition world or when
+  you start, we show you like a little map … the first cell where you are … then a line, and then a
+  cell … Once you go through the door, you go back to this view … the path ahead, now you can walk
+  through it … Don't show a lock … the rest is … carved out into the wall". These are the decisions
+  below on the map, the HUD, the bad guys and the statistics.
+- **The world map, between levels:** Go, and every level's door, lead to the world map: the levels
+  as cells on a zig-zag path carved into a dark stone wall (up the screen in portrait, across it in
+  landscape), with the start as a small pad. The cells you've reached and the one you're heading for
+  are lit, each showing a little scene of its world drawn by that world's own rule; the rest are dark
+  hollows in the wall, with no lock. The path's leg to the next cell paints in (gold dots), the
+  monster walks along it, steps into the cell, and the leap opens the world (about 3 s; a tap or a
+  key skips to the step in). No numbers between levels.
+- **The leap into a world:** from the map, 1.6 s: a soft white flash (0.3 s), then the world drawn
+  through the resolutions between the map's pixels and its own: into a smooth world at 18, then 35
+  px per tile, then smooth; into a pixel world straight at its own. The level's name then shows big
+  for a moment. Rejected: a fade to black, which hides the rule. Time on the map, paused or hidden
+  never counts toward a level's time.
+- **Statistics only at the end:** the run's coins, time, the prize and the best run show on the card
+  after game over or past the last level's door, with Play again and New monster; a level's best time
+  is kept as you pass its door.
+- **Lives and hearts:** three lives. A hit (spikes, a walker's, slime's or ghost's side, a drip)
   takes a heart if you hold one: you're knocked back and safe for a moment. Without one, it costs a
   life, and the level starts again from its beginning (its coins and things back as they were).
   Falling off always costs a life. With no lives left it's game over: the card shows how far you got,
-  and Play again starts a new run from level 1 with the same monster (or New monster goes to the
-  builder). A heart is a pickup that counts as a coin; you can hold at most two, and while you hold
+  and Play again starts a new run from level 1 (through the map) with the same monster, or New monster
+  goes to the builder. A heart is a pickup that counts as a coin; you can hold at most two, and while you hold
   two, the hearts ahead show as coins. Rejected: checkpoints with no lives, which the owner found
   gave no reason to care.
 - **Screen size of a tile:** the canvas is drawn at the device's pixel ratio, at least 2 and at
@@ -171,7 +197,7 @@ item.
   path, behind a route you choose to risk: a pair of big ears. Once you have them, holding jump while
   falling floats you down slowly. They join your monster, drawn in each world's style, for the rest
   of the run (a life lost in Frost loses them with the level).
-- **Rewards:** coins (all coins and hearts of a level counted on the tally), time, the prize; best
+- **Rewards:** coins (hearts count as coins too), time, the prize, shown for the whole run at its end; best
   time per level in localStorage, kept under this version of the levels.
 - **Hidden assist:** after two lives lost since the last level cleared (game overs included), coyote
   time, jump buffer and landing grace grow (up to double); clearing a level resets it. It never
@@ -196,7 +222,7 @@ item.
 - **Sound:** each world has its own sound set, as it has its own art: the Meadow and Frost use
   Kenney's Retro Sounds and a chiptune loop, Candy soft plucks, glass and a gentle loop, Ink the retro
   set and its own darker loop: jump, coin, stomp, hurt, heart, landing, spring, bounce, crumble,
-  prize; the builder's clicks; the leap and the tally's jingle. All under the site-wide mute, unlocked
+  prize; the builder's clicks; the leap and the end card's jingle. All under the site-wide mute, unlocked
   by the first touch. The owner will generate music for each world from prompts once the levels are
   settled (owner, 2026-11-09: "For the music, you can give me prompts, but let's first do the
   levels").
@@ -213,8 +239,8 @@ item.
 ## Acceptance items
 
 - **AC-1** The page opens on the builder over the moving Meadow with a random monster, shown baked
-  in pixels and whole (its head inside the preview); Go starts level 1, the Meadow, with the monster
-  on the ground; there are no errors — `tests/pixel-leap.test.mjs`.
+  in pixels and whole (its head inside the preview); Go shows the map, then level 1, the Meadow,
+  with the monster on the ground; there are no errors — `tests/pixel-leap.test.mjs`.
 - **AC-2** Each builder button changes its part of the monster, Shuffle changes it, and the monster
   code round-trips: a page opened with that `#m=` code shows the same monster; a page opened with a
   garbage code, or with localStorage that throws, shows a random monster with no error —
@@ -244,11 +270,10 @@ item.
   about 0.5 s after it's landed on and comes back after 3 s, a spring in the Meadow launches, Frost's
   ice keeps the monster sliding further than the Meadow's grass, and an Ink drip falls as the
   monster comes near and hurts — `tests/pixel-leap.test.mjs`.
-- **AC-12** Reaching a level's door freezes the world and shows the tally (coins, time, prize,
-  best); its Leap button starts the leap into the next level's world, which from Frost to Candy goes
-  through 18-px-per-tile blocks, then 35, then smooth; within 2 s the next level is playing with the
-  monster's ears kept. Time on the tally doesn't count toward the level's time —
-  `tests/pixel-leap.test.mjs`.
+- **AC-12** Reaching a level's door shows the world map, with no numbers card, heading from that
+  level's cell to the next; the map then leaps into the next level's world, which from Frost to
+  Candy goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
+  the monster's ears kept and its time at 0 — `tests/pixel-leap.test.mjs`.
 - **AC-13** At 360×640 and 390×844 in portrait, at pixel ratios 1, 2 and 3, the view shows at least
   12 tiles across and the tile is a whole multiple of 18 canvas pixels, the deck doesn't overlap the
   view, and while running the camera shows at least 7 tiles ahead; turning to landscape mid-run
@@ -285,25 +310,29 @@ item.
   pixels; stepping into a glimpse that changes the style plays the rising (into smooth) or falling
   (out of smooth) sound and draws the monster at in-between resolutions, then in the new style, and
   stepping from the Meadow into Frost's glimpse changes nothing — `tests/pixel-leap.test.mjs`.
+- **AC-24** The map at the start lights only the first world's cell and carves the others dark, and
+  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Frost with
+  both lit; a tap skips ahead to the step into the world — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
 2. Change parts or Shuffle, then Go.
-3. Run and jump through the Meadow to its door, which already shows Frost; see the tally and leap.
-4. Play Frost, Candy (redrawn smooth) and Ink (two colours), with three lives and up to two hearts.
+3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Frost.
+4. Back on the map, walk on to Frost, then Candy (redrawn smooth) and Ink (two colours), with three
+   lives and up to two hearts; the run's statistics show at its end.
 
 ## States
 
 | State | Builder | View and deck | Paused card | Tally card |
 | ----- | ------- | ------------- | ----------- | ---------- |
 | Building (the Meadow moves behind) | shown | view shown, deck hidden | hidden | hidden |
+| The map (after Go, and after each door but the last) | hidden | view shows the map, deck shown | hidden | hidden |
 | Playing | hidden | shown | hidden | hidden |
 | Paused (page hidden or blurred, a resize, P or Escape) | hidden | shown, still | shown | hidden |
-| Tally at a level's end | hidden | shown, still | hidden | shown |
 | Leaping to the next world | hidden | view shown, changing resolution | hidden | hidden |
-| Game over (the third life lost) | hidden | shown, still | hidden | shown, with Play again and New monster |
-| End of the slice (after Ink) | hidden | shown, still | hidden | shown, with Play again and New monster |
+| Game over (the third life lost) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
+| End of the slice (after Ink) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
 
 ## Out of scope
 

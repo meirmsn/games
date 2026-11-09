@@ -586,3 +586,137 @@ body:not(.smooth) .coin-icon {
     display: none !important;
   }
 }
+
+/* The HUD, bigger and chunkier: lives (your monster), hearts, coins and the level. On a phone it
+   shrinks to fit between the back and mute buttons, and the level's name moves to the banner. */
+.hud {
+  top: calc(env(safe-area-inset-top) + 10px);
+  height: 52px;
+  gap: 8px;
+}
+
+.hud > span {
+  height: 48px;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 34px;
+}
+
+body:not(.smooth) .hud > span {
+  height: 46px;
+  border-width: 4px;
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 35%);
+  font-size: 36px;
+}
+
+.hud-icon {
+  height: 30px;
+}
+
+.hud-lives .hud-icon {
+  height: 34px;
+}
+
+.hud-coin-icon {
+  display: inline-flex;
+}
+
+.hud-coin-icon .hud-icon {
+  height: 26px;
+}
+
+body.smooth .hud-icon {
+  image-rendering: auto;
+}
+
+@media (max-width: 480px) {
+  .hud {
+    left: calc(env(safe-area-inset-left) + 60px);
+    right: calc(env(safe-area-inset-right) + 60px);
+    height: 44px;
+    gap: 5px;
+  }
+
+  .hud > span,
+  body:not(.smooth) .hud > span {
+    height: 40px;
+    padding: 0 7px;
+    gap: 3px;
+    font-size: 28px;
+    border-width: 3px;
+  }
+
+  .hud-icon {
+    height: 22px;
+  }
+
+  .hud-lives .hud-icon {
+    height: 26px;
+  }
+
+  .hud-coin-icon .hud-icon {
+    height: 20px;
+  }
+
+  .hud-stage {
+    display: none !important;
+  }
+}
+
+/* The level's name as it opens. */
+.banner {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  top: 28%;
+  margin: 0;
+  padding: 10px 22px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: 'Kenney Pixel', ui-monospace, monospace;
+  font-size: clamp(40px, 12vw, 72px);
+  line-height: 1;
+  color: var(--px-ink, #2a2440);
+  background: var(--px-paper, #fffdf2);
+  border: 5px solid var(--px-ink, #2a2440);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+body.smooth .banner {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 800;
+  border: 0;
+  border-radius: 24px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  box-shadow: 0 10px 30px rgb(20 16 40 / 30%);
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.banner.go {
+  animation: banner 1.8s steps(6) both;
+}
+
+body.smooth .banner.go {
+  animation-timing-function: ease;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.8);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
