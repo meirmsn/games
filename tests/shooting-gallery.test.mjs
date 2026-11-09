@@ -228,6 +228,12 @@ test('shooting-gallery AC-5: the quota starts the bonus: faster, double points, 
   const s2 = await state(page);
   assert.equal(s2.shells, s.shells - 1);
   assert.equal(s2.score - s.score, 200, 'gold duck 100 × 2 (bonus)');
+  // Before the bonus the gold duck gives 2 shells (its own spent one comes back as one of them).
+  await ready(page, 3);
+  await page.evaluate(() => (window.__gallery.game.shells = 5));
+  const gold2 = await place(page, 'gold', { x: 200 });
+  await shoot(page, gold2.x, gold2.y);
+  assert.equal((await state(page)).shells, 6, '5 − 1 + 2');
   // Meeting the quota with the last shell wins the round at once.
   await ready(page, 2);
   await page.evaluate(() => {
@@ -345,6 +351,22 @@ test('shooting-gallery AC-8: each round brings its elements in, as in the table'
   assert.ok(!plan[0].free && !plan[1].free && !plan[2].free && !plan[4].free && !plan[5].free && !plan[7].free);
   assert.deepEqual([plan[4].turn || plan[5].turn, plan[4].wind || plan[5].wind, plan[4].turn && plan[4].wind], [true, true, false]);
   assert.deepEqual([plan[7].turn, plan[7].wind, plan[7].double, plan[7].name], [true, true, true, 'Closing time']);
+  // In Crosswind the small targets run against the ducks; otherwise both run the same way.
+  const dirs = await page.evaluate(() => {
+    const g = window.__gallery;
+    const run = (n) => {
+      g.startRun({ seed: 3, order: ['turn', 'wind'] });
+      g.startRound(n);
+      g.game.mode = 'play';
+      g.manual = true;
+      for (let i = 0; i < 60 * 8; i++) g.step(1 / 60);
+      const live = g.targets().filter((t) => t.state === 'live');
+      return [...new Set(live.filter((t) => t.kind === 'tin').map((t) => t.dir))].concat('|', [...new Set(live.filter((t) => t.kind === 'duck').map((t) => t.dir))]);
+    };
+    return { turn: run(5), wind: run(6) };
+  });
+  assert.deepEqual(dirs.turn, [1, '|', 1]);
+  assert.deepEqual(dirs.wind, [-1, '|', 1]);
   // The order of rounds 5 and 6 follows the run's seed: both orders happen.
   const orders = await page.evaluate(() => {
     const g = window.__gallery;
@@ -369,6 +391,15 @@ test('shooting-gallery AC-9: in Turnabouts a hit on a back, or mid-turn, scores 
   assert.equal((await shoot(page, turning.x, turning.y)).what, 'back');
   let s = await state(page);
   assert.deepEqual([s.score, s.shells, s.pips], [s0.score, s0.shells - 2, 0]);
+  // A turned pop-up's back blocks a duck behind it.
+  const duckBehind = await place(page, 'duck', { face: 'duck_yellow', x: 200 });
+  const popBack = await place(page, 'pop', { up: true, upFor: 99, turn: true, turnT: 3.0, x: 200 });
+  const blocked = await page.evaluate(({ x, y }) => {
+    const g = window.__gallery;
+    const r = g.resolve(x, y, g.snapshot());
+    return [r.what, r.p && r.p.t.kind];
+  }, { x: 200, y: Math.max(duckBehind.y, popBack.y - popBack.w * 0.3) });
+  assert.deepEqual(blocked, ['back', 'pop']);
   const back2 = await place(page, 'tin', { turn: true, turnT: 3.0, face: 'target_red1', x: 260 });
   assert.equal((await shoot(page, back2.x, back2.y + back2.w / 2 + 8)).what, 'stick');
   await context.close();
@@ -502,6 +533,23 @@ test('shooting-gallery AC-14: hiding the page pauses play; the resuming tap neve
   await page.waitForTimeout(700);
   const t = await page.evaluate(() => window.__gallery.game.modeT);
   assert.ok(t > introT && t < introT + 0.5, `the intro carries on from ${introT}: ${t}`);
+  // Hidden between rounds: the next round waits.
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    g.game.resumeT = 0;
+    g.game.mode = 'play';
+    g.clear();
+    g.game.pips = g.game.cfg.quota;
+    g.step(1 / 60);
+    g.manual = false;
+  });
+  assert.equal((await state(page)).mode, 'won');
+  await hide(page);
+  const wonT = await page.evaluate(() => window.__gallery.game.modeT);
+  assert.ok(await page.locator('[data-screen="pause"]').isVisible());
+  await page.waitForTimeout(2000);
+  assert.deepEqual([(await state(page)).mode, await page.evaluate(() => window.__gallery.game.modeT)], ['won', wonT], 'the next round waits');
   await context.close();
 });
 
@@ -563,42 +611,54 @@ test('shooting-gallery AC-16: the best score is kept across reloads', async () =
 test('shooting-gallery AC-17: each state shows only its own card and HUD', async () => {
   const { context, page } = await open();
   const ui = () => page.evaluate(() => window.__gallery.ui());
-  assert.deepEqual(await ui(), { start: true, over: false, pause: false, banner: null, hud: false });
+  const row = (u) => [u.start, u.over, u.pause, u.banner, u.score, u.pips, u.tray];
+  // Start: only the start card; no banner, no HUD.
+  assert.deepEqual(row(await ui()), [true, false, false, null, false, 'hidden', 'hidden'], 'start');
   await page.click('[data-play]');
   await page.evaluate(() => (window.__gallery.manual = true));
+  // The round intro: its banner over the HUD.
   let u = await ui();
-  assert.deepEqual([u.start, u.over, u.pause, u.banner, u.hud], [false, false, false, 'Round 1', true], 'the round intro');
+  assert.deepEqual(row(u), [false, false, false, 'Round 1', true, 'shown', 'shown'], 'round intro');
+  assert.equal(u.bannerSub, 'Ducks');
   await steps(page, 1.4);
-  u = await ui();
-  assert.deepEqual([u.start, u.over, u.pause, u.banner, u.hud], [false, false, false, null, true], 'playing');
+  assert.deepEqual(row(await ui()), [false, false, false, null, true, 'shown', 'shown'], 'playing');
+  // Paused: the pause card, no banner, the HUD under it.
   await page.evaluate(() => window.__gallery.pause());
-  u = await ui();
-  assert.deepEqual([u.start, u.over, u.pause, u.hud], [false, false, true, true], 'paused');
+  assert.deepEqual(row(await ui()), [false, false, true, null, true, 'shown', 'shown'], 'paused');
   await page.evaluate(() => window.__gallery.resume());
-  assert.equal((await ui()).banner, 'Ready…', 'the count-in');
-  await page.evaluate(() => (window.__gallery.game.resumeT = 0));
-  await page.evaluate(() => (window.__gallery.game.pips = 6));
-  await page.evaluate(() => (window.__gallery.game.queue.push({ at: 9999, kind: 'duck' }), 0));
+  assert.deepEqual(row(await ui()), [false, false, false, 'Ready…', true, 'shown', 'shown'], 'resuming');
+  await page.evaluate(() => {
+    const g = window.__gallery.game;
+    g.resumeT = 0;
+    g.pips = 6;
+    g.queue.push({ at: 9999, kind: 'duck' });
+  });
   await steps(page, 0.05);
-  assert.equal((await ui()).banner, 'Bonus! ×2 points');
+  assert.deepEqual(row(await ui()), [false, false, false, 'Bonus! ×2 points', true, 'gold', 'shown'], 'bonus: the pips lit gold');
+  // Round won: the banner shows the round's tally.
+  await page.evaluate(() => {
+    window.__gallery.clear();
+    window.__gallery.game.shells = 3;
+  });
+  await steps(page, 0.05);
+  u = await ui();
+  assert.deepEqual(row(u), [false, false, false, 'Round cleared', true, 'gold', 'shown'], 'round won');
+  assert.equal(u.bannerSub, '3 shells carried');
+  // The free round: its banner at its start, the pips hidden and the tray dimmed.
   await page.evaluate(() => {
     const g = window.__gallery;
-    g.clear();
+    g.startRound(4);
   });
-  await steps(page, 0.05);
-  assert.equal((await ui()).banner, 'Round cleared');
-  await page.evaluate(() => {
-    const g = window.__gallery.game;
-    g.shells = 0;
-  });
-  await steps(page, 2);
-  await page.evaluate(() => {
-    const g = window.__gallery.game;
-    g.shells = 0;
-  });
-  await steps(page, 3.5);
   u = await ui();
-  assert.deepEqual([u.start, u.over, u.pause, u.hud], [false, true, false, false], 'over');
+  assert.deepEqual(row(u), [false, false, false, 'Round 4', true, 'hidden', 'dimmed'], 'free round');
+  assert.equal(u.bannerSub, 'Free round');
+  // Over: the over card, the HUD still shown under it.
+  await ready(page, 1);
+  await page.evaluate(() => (window.__gallery.game.shells = 1));
+  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
+  assert.equal((await ui()).pips, 'flash', 'a lost round flashes the missing pips');
+  await steps(page, 1.6);
+  assert.deepEqual(row(await ui()), [false, true, false, null, true, 'shown', 'shown'], 'over');
   await context.close();
 });
 
@@ -665,17 +725,19 @@ test('shooting-gallery AC-21: at 390×844 and 360×640 the booth, tray and pips 
       const { k } = g.stage();
       const t = g.makeTarget('tin', { x: 200 });
       const [w] = g.dims(t);
+      const hb = g.hudBounds();
       return {
         tin: w * k,
-        trayBottom: (g.L.C + 70 + 16) * k,
-        pips: (g.L.C + 46) * k,
-        boothTop: g.L.T * k,
+        trayBottom: hb.trayBottom,
+        trayRight: hb.trayRight,
+        pips: hb.pipsBottom,
+        boothTop: hb.boothTop,
         scrollW: document.documentElement.scrollWidth,
         scrollH: document.documentElement.scrollHeight,
       };
     });
     assert.ok(m.tin >= 44, `small targets ${m.tin} px at ${viewport.width}`);
-    assert.ok(m.trayBottom <= viewport.height, `the tray fits at ${viewport.width}×${viewport.height}`);
+    assert.ok(m.trayBottom <= viewport.height && m.trayRight <= viewport.width, `the tray fits at ${viewport.width}×${viewport.height}`);
     assert.ok(m.pips < m.trayBottom && m.boothTop > 0);
     assert.ok(m.scrollW <= viewport.width && m.scrollH <= viewport.height, 'no scrolling');
     await context.close();

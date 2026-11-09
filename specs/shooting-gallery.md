@@ -102,7 +102,8 @@ keeps the site's tokens.
 - **No written tips.** A small start card shows Start and the best score; each round opens with its
   name on a banner; the screen teaches the rest (the gold pulse, the cracked stick, the grey back of
   a turned target) (Claude, 2026-11-09, following Reef's owner decision).
-- **Interruptible.** When the page is hidden during play or a round intro, play and sound pause
+- **Interruptible.** When the page is hidden during play, a round intro or the moment between
+  rounds (a round won or lost), play and sound pause
   and a "Tap to go on" card shows; a pending tap is cancelled. The tap that resumes counts in for
   1 s, with play frozen, and never fires; a round intro's banner then carries on where it was. On
   the start or over card, hiding the page only pauses the sound (Claude, 2026-11-09).
@@ -176,7 +177,7 @@ keeps the site's tokens.
   finger lifts — `tests/shooting-gallery.test.mjs`.
 - **AC-13** The mouse aims and clicks to fire; the arrow keys move the crosshair and Space fires —
   `tests/shooting-gallery.test.mjs`.
-- **AC-14** Hiding the page in play pauses it and shows the pause card; the tap that resumes it
+- **AC-14** Hiding the page in play, or between rounds, pauses it and shows the pause card; the tap that resumes it
   doesn't fire and play stays frozen for the 1 s count-in; a round intro resumes where it was; on
   the start card no pause card shows — `tests/shooting-gallery.test.mjs`.
 - **AC-15** The assist grows a target's body hit area but never its bullseye or stick; a new player
@@ -211,7 +212,7 @@ keeps the site's tokens.
 | Free round | hidden | shown at its start | hidden | hidden | shown, the pips hidden and the tray dimmed |
 | Round won (about 1.5 s) | hidden | the round's tally | hidden | hidden | shown |
 | Paused (page was hidden) | hidden | hidden | shown | hidden | shown |
-| Resuming (1 s count-in) | hidden | the count | hidden | hidden | shown |
+| Resuming (1 s count-in) | hidden | "Ready…", drawn by the game | hidden | hidden | shown |
 | Over (lost, or closing time with its shell payout) | hidden | hidden | hidden | shown | shown |
 
 ## Out of scope

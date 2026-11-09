@@ -1516,12 +1516,33 @@ atlas.decode().then(
       get manual() { return manual; },
       stage: () => ({ SW, SH, k, ox }),
       toClient: (x, y) => ({ x: ox + x * k, y: y * k }),
-      ui: () => ({
-        start: !ui.start.hidden,
-        over: !ui.over.hidden,
-        pause: !ui.pause.hidden,
-        banner: game.resumeT > 0 ? 'Ready…' : game.banner ? game.banner.text : null,
-        hud: hudVisible(),
+      // What each state shows: the cards, the banner (and its line under it), and the HUD's parts as
+      // drawHud draws them.
+      ui: () => {
+        const shown = hudVisible() || game.mode === 'over';
+        const cfg = game.cfg;
+        let pips = 'hidden';
+        if (shown && cfg && !cfg.free) pips = game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown';
+        return {
+          start: !ui.start.hidden,
+          over: !ui.over.hidden,
+          pause: !ui.pause.hidden,
+          banner: game.paused ? null : game.resumeT > 0 ? 'Ready…' : game.banner ? game.banner.text : null,
+          bannerSub: !game.paused && game.resumeT <= 0 && game.banner ? game.banner.sub : '',
+          hud: hudVisible(),
+          score: shown,
+          tray: !shown || !cfg ? 'hidden' : cfg.free ? 'dimmed' : 'shown',
+          pips,
+        };
+      },
+      // The HUD's drawn bounds in CSS px, from the same numbers drawHud uses.
+      hudBounds: () => ({
+        pipsTop: (L.C + 46 - pipR) * k,
+        pipsBottom: (L.C + 46 + pipR) * k,
+        trayTop: (trayY() - 16) * k,
+        trayBottom: (trayY() + 16) * k,
+        trayRight: ox + (trayX(TRAY_MAX - 1) + 8) * k,
+        boothTop: L.T * k,
       }),
     };
   },
