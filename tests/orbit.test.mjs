@@ -411,6 +411,62 @@ test('orbit AC-10: with localStorage throwing, the game plays and shows its card
   await context.close();
 });
 
+test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec\'s state table', async () => {
+  const { context, page } = await open();
+  await manual(page);
+  const cards = () =>
+    page.evaluate(() => {
+      const shown = (sel) => {
+        const el = document.querySelector(sel);
+        return !el.hidden && !el.classList.contains('fade');
+      };
+      return { mode: window.__orbit.game.mode, intro: shown('[data-screen="intro"]'), done: shown('[data-screen="done"]'), resume: shown('[data-resume]') };
+    });
+  // System intro: the intro card, the probe circling
+  assert.deepEqual(await cards(), { mode: 'idle', intro: true, done: false, resume: false });
+  // Aiming: the first touch fades the intro
+  await pointer(page, 'pointerdown', 200, 400);
+  await pointer(page, 'pointermove', 200, 480);
+  assert.deepEqual(await cards(), { mode: 'aim', intro: false, done: false, resume: false });
+  await page.waitForFunction(() => document.querySelector('[data-screen="intro"]').hidden);
+  // Flying
+  await pointer(page, 'pointerup', 200, 480);
+  assert.deepEqual(await cards(), { mode: 'fly', intro: false, done: false, resume: false });
+  // Rewinding (after a failed flight)
+  await page.evaluate(() => {
+    const o = window.__orbit;
+    const b = o.game.level.bodies[2];
+    Object.assign(o.game.flight, { x: b.x + b.r + 1, y: b.y, vx: -200, vy: 0 });
+    for (let i = 0; i < 20 && o.game.mode === 'fly'; i++) o.update(1 / 240);
+  });
+  assert.deepEqual(await cards(), { mode: 'rewind', intro: false, done: false, resume: false });
+  await settle(page);
+  // Captured (spiral in)
+  await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    o.fire(-1.5, 0.5);
+    const b = g.level.bodies[g.level.legs[g.leg].to];
+    Object.assign(g.flight, { x: b.x + b.ring, y: b.y, vx: 0, vy: -10 });
+    o.update(1 / 240);
+  });
+  assert.deepEqual(await cards(), { mode: 'capture', intro: false, done: false, resume: false });
+  await settle(page);
+  // Paused (page hidden, then back): only the resume button
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.deepEqual(await cards(), { mode: 'idle', intro: false, done: false, resume: true });
+  await page.click('[data-resume]');
+  // System done: only the end card
+  for (let i = 0; i < 4 && (await state(page)).mode !== 'done'; i++) await flyGold(page);
+  assert.deepEqual(await cards(), { mode: 'done', intro: false, done: true, resume: false });
+  await context.close();
+});
+
 test('orbit AC-13: hiding the page in flight undoes the flight; a capture in progress completes', async () => {
   const { context, page } = await open();
   await manual(page);
