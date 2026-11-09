@@ -75,7 +75,7 @@ body {
   top: calc(env(safe-area-inset-top) + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: min(240px, calc(100vw - 136px));
+  width: min(260px, calc(100vw - 116px));
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -107,9 +107,9 @@ body {
 }
 
 .hud-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.7;
   margin-right: 2px;
@@ -142,7 +142,7 @@ body {
 
 .hud-row {
   display: flex;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -155,8 +155,9 @@ body {
   color: #ffd98a;
 }
 
+/* a new count glows rather than grows, so it never runs into its neighbour */
 .slings.pop {
-  animation: pop 420ms ease-out;
+  animation: glow 900ms ease-out;
 }
 
 /* a slingshot: a little arc swinging round a dot */
@@ -261,12 +262,13 @@ body {
 }
 
 .dust.pop {
-  animation: pop 320ms ease-out;
+  animation: glow 500ms ease-out;
 }
 
-@keyframes pop {
-  40% {
-    transform: scale(1.3);
+@keyframes glow {
+  30% {
+    text-shadow: 0 0 10px rgb(255 217 138 / 95%);
+    color: #fff3d6;
   }
 }
 
@@ -363,10 +365,11 @@ body {
 }
 
 .stats {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
   justify-content: center;
-  gap: 28px;
-  margin: 0 0 12px;
+  gap: 10px 36px;
+  margin: 0 0 14px;
 }
 
 .stats div {

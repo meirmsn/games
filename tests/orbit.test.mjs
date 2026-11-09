@@ -994,12 +994,24 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
       const hud = document.querySelector('[data-hud]').getBoundingClientRect();
       return {
         probes: { top: probes.top, left: probes.left, right: probes.right },
-        hud: { left: hud.left, right: hud.right, bottom: hud.bottom, width: hud.width, scroll: document.querySelector('[data-hud]').scrollWidth },
+        hud: (() => {
+          // with the slingshot count showing and three-digit numbers, the widest the row gets
+          document.querySelector('.slings').hidden = false;
+          document.querySelector('[data-slings]').textContent = '12';
+          document.querySelector('[data-dust]').textContent = '22';
+          const row = document.querySelector('.hud-row');
+          const kids = [...row.children].map((k) => k.getBoundingClientRect());
+          const overlap = kids.length > 1 && kids[0].right > kids[1].left;
+          const r = row.getBoundingClientRect();
+          return { left: Math.min(r.left, ...kids.map((k) => k.left)), right: Math.max(r.right, ...kids.map((k) => k.right)), overlap, rowFits: row.scrollWidth <= row.clientWidth + 1 };
+        })(),
         top: v.y,
         left: v.x,
         right: v.x + 1000 * v.s,
         bottom: v.y + 1800 * v.s,
         backBottom: back.bottom,
+        backRight: back.right,
+        muteLeft: mute.left,
         muteBottom: mute.bottom,
         bar: { top: bar.top, bottom: bar.bottom, left: bar.left, right: bar.right, height: bar.height },
         buttons: [back.width, back.height, mute.width, mute.height],
@@ -1015,7 +1027,8 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
     assert.ok(r.bar.bottom <= r.h - 24 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, above the edge strip`);
     assert.ok(r.bar.height >= 44, 'the bar is easy to hit');
     assert.ok(r.probes.top >= r.bottom - 1 && r.probes.left >= 0 && r.probes.right <= r.w, `${viewport.width}: the probes left sit between the field and the bar`);
-    assert.ok(r.hud.left >= 0 && r.hud.right <= r.w && r.hud.scroll <= r.hud.width + 1, `${viewport.width}: the top bar fits`);
+    assert.ok(r.hud.left >= 0 && r.hud.right <= r.w && r.hud.rowFits && !r.hud.overlap, `${viewport.width}: the top bar fits, slingshots and all (${JSON.stringify(r.hud)})`);
+    assert.ok(r.hud.right <= r.muteLeft && r.hud.left >= r.backRight, `${viewport.width}: the top bar sits between the buttons (${JSON.stringify([r.backRight, r.hud.left, r.hud.right, r.muteLeft])})`);
     assert.equal(r.scroll, 0);
     await context.close();
   }
