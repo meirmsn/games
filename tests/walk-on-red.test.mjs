@@ -726,6 +726,18 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner', as
   assert.deepEqual(await shown(), { start: false, paused: true, over: false, hud: true, banner: null });
   await page.evaluate(() => window.__walkOnRed.resume());
   await page.evaluate(() => window.__walkOnRed.put(0));
+  // In the loo, then the fast-forward: the HUD, no card, no banner.
+  const stage = (st) =>
+    page.evaluate((st) => {
+      const t = window.__walkOnRed;
+      for (let i = 0; i < 60 * 5 && t.game.stage !== st; i++) t.step(1 / 60);
+      return t.game.mode === 'finish' && t.game.stage;
+    }, st);
+  const across = { start: false, paused: false, over: false, hud: true, banner: null };
+  assert.equal(await stage('door'), 'door');
+  assert.deepEqual(await shown(), across, 'in the loo');
+  assert.equal(await stage('ff'), 'ff');
+  assert.deepEqual(await shown(), across, 'fast-forward');
   assert.equal(await until('green'), 'green');
   await page.waitForTimeout(100);
   assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true, banner: null });
