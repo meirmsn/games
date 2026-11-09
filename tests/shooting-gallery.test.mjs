@@ -1103,6 +1103,40 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
     return { chime: g.heardOpts.chime.gain, warn: g.heardOpts.warn.gain };
   });
   assert.ok(gains.warn > gains.chime, `the 10 s ring is louder: ${JSON.stringify(gains)}`);
+  // And louder than every other sound the game plays: a hit, a bullseye, a miss, the quota, the
+  // frenzy target and the time running out.
+  const all = await page.evaluate(() => {
+    const g = window.__gallery;
+    const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: false, face: 'target_colored' });
+    g.aimAt(t.x, t.y);
+    g.game.lastFire = -1;
+    g.fire();
+    for (let i = 0; i < 40; i++) g.step(1 / 60);
+    g.aimAt(40, g.L.lanes[0].line);
+    g.game.lastFire = -1;
+    g.fire();
+    for (let i = 0; i < 40; i++) g.step(1 / 60);
+    g.game.pips = g.game.cfg.quota - 1;
+    const u = g.makeTarget('duck', { lane: 4, x: 200, speed: 0, turn: false, face: 'duck_yellow' });
+    g.aimAt(u.x, u.y);
+    g.game.lastFire = -1;
+    g.fire();
+    for (let i = 0; i < 30; i++) g.step(1 / 60);
+    const f = g.launchFrenzyTarget();
+    f.speed = 0;
+    f.x = 260;
+    g.aimAt(260, f.y);
+    g.game.lastFire = -1;
+    g.fire();
+    for (let i = 0; i < 40; i++) g.step(1 / 60);
+    g.game.frenzy = 0;
+    g.game.time = 0.01;
+    g.step(0.05);
+    return Object.fromEntries(Object.entries(g.heardOpts).map(([k, v]) => [k, v.gain]));
+  });
+  const others = Object.entries(all).filter(([k]) => k !== 'warn');
+  assert.ok(others.length >= 8, `sounds compared: ${Object.keys(all)}`);
+  for (const [name, gain] of others) assert.ok(all.warn > gain, `the 10 s ring is louder than ${name}: ${all.warn} vs ${gain}`);
   await context.close();
 });
 
