@@ -1,6 +1,6 @@
 // Walk on Red's pixel alphabet: 3×5 glyphs, read left to right, top to bottom ('1' = a pixel).
-// The game draws its street text with it (game.js), and scripts/walk-on-red/make-font.mjs turns
-// it into walk-on-red/fonts/pixel.otf for the page's own text, so both look the same.
+// The game draws its street text with it (game.js): the countdown, the score table, the labels.
+// The page's own text uses Kenney Mini Square, in the same blocky capitals.
 export const GLYPHS = {
   0: '111101101101111', 1: '010110010010111', 2: '111001111100111', 3: '111001111001111', 4: '101101111001001',
   5: '111100111001111', 6: '111100111101111', 7: '111001001001001', 8: '111101111101111', 9: '111101111001111',
@@ -15,6 +15,5 @@ export const GLYPHS = {
   ')': '010001001001010', '=': '000111000111000', '>': '100010001010100', '<': '001010100010001', '×': '000101010101000',
   '·': '000000010000000', '%': '101001010100101', '#': '101111101111101',
 };
-// The stars, five pixels wide.
+// A star, five pixels wide.
 export const STAR = ['00100', '01110', '11111', '01110', '01010'];
-export const STAR_OPEN = ['00100', '01010', '10001', '01010', '01010'];

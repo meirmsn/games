@@ -203,9 +203,9 @@ goes now, and the people waiting start copying him.
   screen readers (owner, 2026-11-09: "that should also look 8-bit").
 - **The 8-bit look, everywhere:** the page's own text and boxes (the start card, the level's
   banner, the HUD, the paused and game-over cards, the mute button, and, for this game, the shared
-  back button and "Leave this level?" question) use the same 3×5 pixel alphabet as the street,
-  built into a font (`walk-on-red/fonts/pixel.otf`, from `walk-on-red/pixel-font.js` by
-  `scripts/walk-on-red/make-font.mjs`), at whole-pixel sizes, in square boxes with a solid border
+  back button and "Leave this level?" question) use Kenney Mini Square, the pixel font of Kenney's
+  CC0 Fonts pack (the same blocky capitals as the street's 3×5 alphabet, and the font the airport
+  tower game uses), at whole-pixel sizes, in square boxes with a solid border
   and a hard shadow, with no blur or rounding; animations step rather than glide; the mute and
   back icons are pixel art. They stay page text and buttons, so taps, keys and screen readers work
   as before (owner, 2026-11-09: "those should also be 8-bit … if we have anything else that is not

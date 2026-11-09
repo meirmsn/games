@@ -1,11 +1,11 @@
 /* Walk on Red: the street canvas fills the screen; the HUD and cards float over it. Everything is
-   in the street's own 8-bit look: the game's pixel font (fonts/pixel.otf, made from pixel-font.js),
-   square boxes with solid borders and hard shadows, no blur and no rounding. The font's pixel is
-   1/8 em, so sizes are multiples of 8px to keep every pixel whole. */
+   in the street's own 8-bit look: Kenney's pixel font Kenney Mini Square (CC0, from the Kenney
+   Fonts pack), square boxes with solid borders and hard shadows, no blur and no rounding. Sizes
+   are multiples of 8px, where the font's pixels stay whole. */
 
 @font-face {
-  font-family: 'Walk on Red Pixel';
-  src: url('fonts/pixel.otf') format('opentype');
+  font-family: 'Kenney Mini Square';
+  src: url('fonts/kenney-mini-square.woff2') format('woff2');
   font-display: block;
 }
 
@@ -22,7 +22,7 @@
 body {
   background: #2b2f3a;
   color: var(--line);
-  font-family: 'Walk on Red Pixel', ui-monospace, monospace;
+  font-family: 'Kenney Mini Square', ui-monospace, monospace;
   font-size: 16px;
   line-height: 1;
   -webkit-font-smoothing: none;
@@ -112,7 +112,7 @@ body {
 /* The shared "Leave this level?" question, in this game's look. */
 .shell-leave {
   color: var(--line);
-  font-family: 'Walk on Red Pixel', ui-monospace, monospace;
+  font-family: 'Kenney Mini Square', ui-monospace, monospace;
 }
 
 .shell-leave-title {
