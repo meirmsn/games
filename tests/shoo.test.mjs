@@ -605,6 +605,16 @@ test('shoo AC-15: hiding the page pauses play; Resume restarts it with no decisi
   assert.ok(left === null || left >= 3 - 0.1, `decision ${left} s away`);
   await page.waitForTimeout(200);
   assert.ok((await page.evaluate(() => window.__shoo.st.simTime)) > a[0]);
+  // A refresh or closed tab asks first during a shift, and not on the start card.
+  const asks = () =>
+    page.evaluate(() => {
+      const e = new Event('beforeunload', { cancelable: true });
+      window.dispatchEvent(e);
+      return e.defaultPrevented;
+    });
+  assert.equal(await asks(), true, 'mid-shift');
+  await page.evaluate(() => window.__shoo.showStart());
+  assert.equal(await asks(), false, 'on the start card');
   await context.close();
 });
 

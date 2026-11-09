@@ -89,6 +89,8 @@ its place, so against `main` the change adds one game and one tile. The game has
   Losing it costs nothing you'd miss. With storage blocked the game still plays.
 - Hidden assist: an hour's gaps between landings are multiplied by 1 + min(0.08 × n, 0.25), where n
   counts that hour's retries in this shift; passing the hour or a New shift resets it.
+- A refresh or a closed tab during a shift gets the browser's own "leave?" warning (the shared
+  shell's `unsaved` option); on the start card it doesn't.
 - Interruptions never drop you into danger: on Resume, any decision less than 3 s away moves back
   to 3 s.
 - Interruptible: the page hidden pauses play and sound; coming back shows a Resume card, and nothing
@@ -150,7 +152,8 @@ its place, so against `main` the change adds one game and one tile. The game has
 - **AC-14** Each retry of an hour multiplies its landing gaps by 1 + min(0.08 × retries, 0.25) —
   `tests/shoo.test.mjs`.
 - **AC-15** Hiding the page pauses play; on return the Resume card shows and nothing moves until it
-  is tapped; after Resume no decision is less than 3 s away — `tests/shoo.test.mjs`.
+  is tapped; after Resume no decision is less than 3 s away; a refresh or closed tab asks first
+  during a shift, and not on the start card — `tests/shoo.test.mjs`.
 - **AC-16** At 360×640 and 390×844 the whole field, both runways included, fits below the HUD with no
   scrolling; the same 20 s of play run at 60 Hz and at 120 Hz frames ends with the same score and every
   bird and plane within 0.5 art px — `tests/shoo.test.mjs`.
