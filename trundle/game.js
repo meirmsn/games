@@ -523,7 +523,7 @@ function tickFloor(dt0) {
   // camera: centre on the ball, eased
   const target = floorBallWorldY();
   const viewH = (vh - playTop - 16) / k;
-  const maxY = oy(ROOMS.length) + 6 - viewH / 2;
+  const maxY = oy(ROOMS.length) + 3 + viewH * 0.3; // the door ends up high, clear of the card
   const want = Math.max(viewH / 2 - 0.5, Math.min(maxY, target));
   F.camY += (want - F.camY) * Math.min(1, dt * 4);
 }
@@ -533,7 +533,7 @@ const oy = (i) => i * (H + GAP);
 function floorBallWorldY() {
   const F = G.floor;
   const seg = F.segs[F.si];
-  if (F.phase === 'outro') return oy(ROOMS.length) + 3 + (vh - playTop) / k / 5;
+  if (F.phase === 'outro') return oy(ROOMS.length) + 3 + ((vh - playTop) / k) * 0.3;
   if (F.phase === 'pipe') return oy(seg.i) + seg.room.ball.y;
   return oy(seg.i) + floorPose(seg, F.phase === 'sink' ? segDur(seg) : F.t)[1];
 }
@@ -1262,7 +1262,7 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key === 'Escape' && !ui.rooms.hidden) {
-    ui.rooms.hidden = true;
+    closeRooms();
     e.preventDefault();
     return;
   }
@@ -1318,8 +1318,15 @@ ui.next.addEventListener('click', () => {
 });
 $('[data-replay]').addEventListener('click', startFloorRun);
 $('[data-floor-rooms]').addEventListener('click', showRooms);
-$('[data-rooms]').addEventListener('click', () => (ui.rooms.hidden ? showRooms() : (ui.rooms.hidden = true)));
-$('[data-close-rooms]').addEventListener('click', () => (ui.rooms.hidden = true));
+$('[data-rooms]').addEventListener('click', () => (ui.rooms.hidden ? showRooms() : closeRooms()));
+$('[data-close-rooms]').addEventListener('click', closeRooms);
+
+// Closing the list puts back the card it covered.
+function closeRooms() {
+  ui.rooms.hidden = true;
+  if (G.mode === 'done') showDone(G.lastStars);
+  else if (G.mode === 'floor' && G.floor && G.floor.end) ui.floorCard.hidden = false;
+}
 ui.floorRun.addEventListener('click', startFloorRun);
 
 function showRooms() {
@@ -1337,6 +1344,7 @@ function showRooms() {
   });
   ui.floorRun.hidden = !floorComplete();
   ui.floorCard.hidden = true;
+  ui.done.hidden = true;
   ui.rooms.hidden = false;
 }
 
@@ -1347,7 +1355,7 @@ function skipFloor() {
   F.si = F.segs.length - 1;
   F.phase = 'outro';
   F.phaseT = 0;
-  F.camY = oy(ROOMS.length) + 3 + (vh - playTop) / k / 5;
+  F.camY = oy(ROOMS.length) + 3 + ((vh - playTop) / k) * 0.3;
   ui.floorStars.textContent = String(F.total);
   ui.floorCard.hidden = false;
 }

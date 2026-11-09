@@ -234,6 +234,11 @@ test('trundle AC-4: reaching the exit completes the room; Trundle cheers; its st
   await page.waitForSelector('[data-card="done"]:not([hidden])');
   assert.equal(await page.locator('[data-done-stars] img.got').count(), 3);
   assert.equal(await page.locator('[data-room-stars] img[src$="img/star.png"]').count(), 3);
+  // the rooms list covers the card rather than stacking on it, and closing it brings the card back
+  await page.click('[data-rooms]');
+  assert.equal(await page.locator('[data-card="done"]').isVisible(), false);
+  await page.click('[data-close-rooms]');
+  assert.equal(await page.locator('[data-card="done"]').isVisible(), true);
   assert.deepEqual(errors, []);
   await context.close();
 });
