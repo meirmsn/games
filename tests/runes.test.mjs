@@ -749,17 +749,34 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   await context.close();
 });
 
-test('runes AC-25: in Runes, the back button asks before leaving only while there is a line to lose', async () => {
+test('runes AC-25: in Runes, the back button leaves at once before the first move, and asks after it wherever you are', async () => {
+  const fresh = await open();
+  await fresh.page.locator('.shell-back').click();
+  await fresh.page.waitForURL(BASE);
+  await fresh.context.close();
+
   const { context, page } = await open();
   const ask = page.locator('dialog.shell-leave');
+  const backAsks = async (where) => {
+    await page.locator('.shell-back').click();
+    await ask.waitFor({ state: 'visible' });
+    await page.locator('[data-shell-stay]').click();
+    await ask.waitFor({ state: 'hidden' });
+    assert.equal(new URL(page.url()).pathname, '/runes/', `Stay keeps you in the game (${where})`);
+  };
   await page.keyboard.press('ArrowRight');
-  await page.locator('.shell-back').click();
-  await ask.waitFor({ state: 'visible' });
-  await page.locator('[data-shell-stay]').click();
-  await ask.waitFor({ state: 'hidden' });
+  await backAsks('a line drawn');
   assert.deepEqual(await path(page), [0, 1], 'Stay keeps the line');
   await page.click('[data-restart]');
+  await backAsks('after a restart');
+  await page.click('[data-levels]');
+  await backAsks('on the level select');
+  await page.click('[data-close-levels]');
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) await page.keyboard.press(k);
+  await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
+  await backAsks('a solved level');
   await page.locator('.shell-back').click();
+  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   await context.close();
 });
