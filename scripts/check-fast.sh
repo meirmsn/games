@@ -1,14 +1,69 @@
 #!/usr/bin/env bash
-# The repo's fast checks. Run before every push; CI runs the same script.
-# Exit 0 = clean; 1 = failures.
+# The fast CI tier (the devshop's template; copy to scripts/check-fast.sh). CI's `fast` job runs it
+# (runtime/templates/ci.yml). Static checks and unit tests:
+#   - the secret scan over what the change adds since <base>: scripts/secret-scan.sh, a copy of the
+#     devshop's scripts/secret-scan.sh;
+#   - the spec check: every spec in specs/ has the shape, and every AC-<n> not marked "verified by
+#     review" is named by a test under TEST_DIRS (TARGET Verify): scripts/spec-check.py, a copy of
+#     the devshop's runtime/scripts/spec-check.py (needs python3, on GitHub's runners);
+#   - the project contract check: every file the tooling relies on is there and well-formed:
+#     scripts/contract-check.py over scripts/project-contract.txt, both copies of the devshop's;
+#   - lint, when the project has scripts/lint.sh (the stack home says what it runs);
+#   - the DESIGN.md shape check, when the project has a DESIGN.md: its front matter has the shape
+#     and the theme CSS (THEME_CSS below) is derived from it: scripts/ui/design-md-check.mjs, a copy
+#     of the devshop's runtime/templates/ui/design-md-check.mjs (ui.md § Checks). Without a
+#     DESIGN.md the baseline is the design and one line says so;
+#   - the stack's parts, from the stack home: unit tests, ...
+# Copy the scripts with their executable bit (exit 126, "couldn't run", otherwise). Keep a specs/
+# directory (a .gitkeep before the first spec): a missing one can't run.
+# Usage: scripts/check-fast.sh [base-sha]   (base as for secret-scan.sh)
+# Every part runs even after one fails. Exit 0 = clean; 1 = failures; 2 = a part couldn't run.
 set -uo pipefail
-cd "$(dirname "$0")/.."
-status=0
-python3 scripts/check-links.py || status=1
-python3 scripts/check-shell.py || status=1
-# The lockfile must resolve from the public npm registry, or CI can't install it.
-if grep -o '"resolved": "[^"]*"' package-lock.json | grep -v '"https://registry.npmjs.org/' ; then
-  echo "package-lock.json: packages must resolve from https://registry.npmjs.org/"; status=1
+
+cd "$(dirname "$0")/.." || exit 2
+TEST_DIRS=(tests) # where the project's tests live, e.g. (test tests)
+worst=0
+part() {
+  local rc
+  echo "== $*"
+  "$@"
+  rc=$?
+  case $rc in
+    0) ;;
+    1) echo "$1 failed"; [ "$worst" -ge 1 ] || worst=1 ;;
+    *) echo "$1 couldn't run (exit $rc)"; worst=2 ;;
+  esac
+}
+tests=()
+for d in "${TEST_DIRS[@]}"; do tests+=(--tests "$d"); done
+
+part scripts/secret-scan.sh "${1:-}"
+part scripts/spec-check.py "${tests[@]}" specs
+part scripts/contract-check.py
+if [ -x scripts/lint.sh ]; then part scripts/lint.sh "${1:-}"; else echo "no scripts/lint.sh: lint is the stack's part"; fi
+THEME_CSS="" # the theme CSS the pages load, derived from DESIGN.md's tokens, e.g. src/ui/base.css
+if [ -f DESIGN.md ]; then
+  part scripts/ui/design-md-check.mjs --theme "$THEME_CSS" DESIGN.md
+else
+  echo "no DESIGN.md: the baseline is the design (ui.md § Design direction)"
 fi
-node scripts/ui/tokens-check.mjs --theme assets/base.css assets/base.css assets/site.css shared/game-shell.css || status=1
-exit $status
+# --- Stack parts (from the stack home), e.g. part npm test ---
+# This repo's own checks, from before the devshop: relative links in the docs, the service worker's
+# precache list and each page's local references, and the theme tokens the stylesheets use.
+part python3 scripts/check-links.py
+# Stricter than the secret scan's registry check: this repo's lockfile resolves only from npmjs.
+lockfile_npmjs_only() {
+  if grep -o '"resolved": "[^"]*"' package-lock.json | grep -v '"https://registry.npmjs.org/'; then
+    echo "package-lock.json: packages must resolve from https://registry.npmjs.org/"
+    return 1
+  fi
+}
+part lockfile_npmjs_only
+part python3 scripts/check-shell.py
+part node scripts/ui/tokens-check.mjs --theme assets/base.css assets/base.css assets/site.css shared/game-shell.css
+# builds_previews_deploys: all-cloudflare (specs/all-cloudflare-deploys.md): previews never bind
+# production data, and the deploy step's own tests (no network).
+part node scripts/preview-bindings-check.mjs
+part tests/preview-bindings-check.test.sh
+part tests/deploy.test.sh
+exit "$worst"

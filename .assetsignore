@@ -16,3 +16,7 @@ LICENSE
 test-results
 .wrangler
 specs
+CLAUDE.md
+.devshop-version
+.gitleaks.toml
+.nvmrc
