@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Tag Along</title>
-    <meta name="description" content="Tag Along: lead a line of pedestrians across rush hour. They follow your path, a step behind." />
+    <title>Walk on Red</title>
+    <meta name="description" content="Walk on Red: you're late and on the phone, so you cross on red. Make it to safe ground and the crowd follows you." />
     <meta name="theme-color" content="#2b2f3a" />
     <link rel="manifest" href="../manifest.webmanifest" />
     <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
@@ -15,7 +15,7 @@
     <script type="module" src="game.js"></script>
   </head>
   <body>
-    <canvas id="street" aria-label="A busy street with traffic and people waiting to cross"></canvas>
+    <canvas id="street" aria-label="A busy street at a red light, with people waiting to cross"></canvas>
 
     <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
       <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
@@ -37,9 +37,9 @@
     </div>
 
     <section class="card start" data-screen="start" hidden>
-      <h1>Tag Along</h1>
+      <h1>Walk on Red</h1>
       <button class="play" type="button" data-play>Start</button>
-      <div class="chips" data-chips hidden></div>
+      <p class="best" data-best hidden></p>
     </section>
 
     <section class="card" data-screen="paused" hidden>
@@ -47,7 +47,7 @@
     </section>
 
     <section class="card" data-screen="over" hidden>
-      <h2>Time's up!</h2>
+      <h2>Across!</h2>
       <p class="score-line"><span data-final-score>0</span> points</p>
       <p class="detail" data-final-detail></p>
       <button class="play" type="button" data-again>Play again</button>

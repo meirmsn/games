@@ -1,6 +1,6 @@
-// Frames of tag-along/img/vehicles.png, Kenney's Pixel Vehicle Pack spritesheet (CC0), from its
+// Frames of walk-on-red/img/vehicles.png, Kenney's Pixel Vehicle Pack spritesheet (CC0), from its
 // spritesheet_complete.xml: name -> [x, y, width, height]. Vehicles face right.
-// Made by scripts/tag-along/build-atlas.mjs.
+// Made by scripts/walk-on-red/build-atlas.mjs.
 export const FRAMES = {
   ambulance: [59, 24, 38, 21],
   barrier: [103, 11, 25, 7],

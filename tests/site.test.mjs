@@ -63,14 +63,14 @@ test('reef AC-11: landing page lists eight games, Reef first and playable, with 
   await context.close();
 });
 
-test('tag-along AC-19: the landing page shows eight tiles, Tag Along playable after Googly Faces', async () => {
+test('walk-on-red AC-20: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names.indexOf('Tag Along'), names.indexOf('Googly Faces') + 1);
-  const tile = page.locator('.tile', { hasText: 'Tag Along' });
+  assert.equal(names.indexOf('Walk on Red'), names.indexOf('Googly Faces') + 1);
+  const tile = page.locator('.tile', { hasText: 'Walk on Red' });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
-  assert.equal(await tile.getAttribute('href'), 'tag-along/');
+  assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
   assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
   const img = tile.locator('img');
   await page.waitForLoadState('networkidle');
