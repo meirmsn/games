@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Runes](runes/), draw one line of light through every stone while runes raise and sink stones around it; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Orbit](orbit/), fling a probe round the planets and catch the next one's orbit ring; [Walk on Red](walk-on-red/), he needs the loo across the street, so cross before the light turns green; from level 8, people follow in your footsteps.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Runes](runes/), draw one line of light through every stone while runes raise and sink stones around it; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Orbit](orbit/), fling a probe round the planets and catch the next one's orbit ring; [Walk on Red](walk-on-red/), he needs the loo across the street, so cross before the light turns green; from level 8, people follow in your footsteps; [Pixel Leap](pixel-leap/), build a monster, then run and jump through worlds that each redraw it in their own art style.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
@@ -20,6 +20,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 | `runes/` | **Runes**, the puzzle (`specs/runes.md`). `rules.js` holds the rules and the solver; `levels.js` the levels, picked from `scripts/runes/generate.mjs` and checked with `scripts/runes/lab.mjs`; `scripts/runes/make-tile.mjs` draws its landing tile |
 | `orbit/` | **Orbit**, the gravity game. `orbit/physics.js` is shared with `scripts/orbit/solve.mjs`, which measures every leg headless while tuning; `scripts/orbit/make-tile.mjs` draws its tile from the game |
 | `walk-on-red/` | **Walk on Red**, the lane-crossing game on the Pixel Vehicle Pack. Its frame list comes from the pack's spritesheet (`scripts/walk-on-red/build-atlas.mjs`), its tile is drawn from the game (`scripts/walk-on-red/make-tile.mjs`); its page text is in Kenney Mini Square (`walk-on-red/fonts/`, from the Kenney Fonts pack) and its street text in the 3×5 alphabet of `walk-on-red/pixel-font.js` |
+| `pixel-leap/` | **Pixel Leap**, the platformer. `worlds.js` holds the worlds and their stages (as segment lists), `monster.js` the monster builder and the bake that redraws it at a pixel world's resolution, and `candy-atlas.js` and `monster-atlas.js` the Kenney spritesheets' frames (`specs/pixel-leap.md`) |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
