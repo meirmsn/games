@@ -129,8 +129,9 @@ has been waiting in the shipyard since the first minute.
   zoom and the download stays small; the boats, rocks, palms and other props are Kenney's PNGs,
   scaled down. The dinghy is drawn in code (no small sailboat in the pack).
 - Tuning targets, each a knob in one table in the code: the first delivery in under 40 s; the
-  first upwind contract by about 2 minutes; the keel by about 3 minutes; the galleon by about 7; the
-  voyage's end at 8–12 minutes. `scripts/high-seas/playtest.mjs` times an autopilot playing whole
+  first upwind contract by about 2 minutes; the keel by about 3 minutes; the galleon by about 7–9;
+  most voyages ending at 8–12 minutes and none outside 7–13, because seas differ in how long and
+  upwind their routes are. `scripts/high-seas/playtest.mjs` times an autopilot playing whole
   voyages at 390×844, for AC-22's playtest.
 - The address keeps a version, the seed, the progress, the voyage clock and a short checksum. An
   address that doesn't check out (edited, garbled or from another version) starts a fresh voyage on
@@ -147,6 +148,10 @@ has been waiting in the shipyard since the first minute.
   on a knockdown, a bell at the quay, coins on payment, a horn for the galleon and a fanfare at the
   end, all through the shared sound module and its site-wide mute.
 - The isometric module is general (no High Seas code in it), so Little Town can reuse it.
+- Changed after the go, by the owner in the chat on 2026-11-09 ("yeah your rec sounds good"): AC-22
+  and the tuning targets loosened from "the galleon by about 7, the end at 8–12 minutes" to "the
+  galleon by about 7–9, most voyages ending at 8–12 minutes and none outside 7–13", after the timed
+  playtest showed sea-to-sea spread (owner, 2026-11-09).
 - Built in one PR as the first slice, with the later slices in Out of scope (owner's batch process,
   2026-11-09).
 
@@ -211,9 +216,9 @@ has been waiting in the shipyard since the first minute.
   and the boat in view, and the boat covers the same distance at 60 and 120 frames a second — `tests/high-seas.test.mjs`.
 - **AC-21** A delivery, a gust and a knockdown each play their sound, and none plays while the
   site is muted — `tests/high-seas.test.mjs`.
-- **AC-22** The tuning targets hold in a playtest at 390×844: the first delivery in under 40 s, the
-  galleon by about 7 minutes, the voyage's end at 8–12 minutes — verified by review: a timed
-  playtest, its times in the PR.
+- **AC-22** The tuning targets hold in a playtest at 390×844 on several seas: the first delivery in
+  under 40 s, the galleon by about 7–9 minutes, most voyages ending at 8–12 minutes and none outside
+  7–13 — verified by review: a timed playtest, its times in the PR.
 
 ## Core flow
 
