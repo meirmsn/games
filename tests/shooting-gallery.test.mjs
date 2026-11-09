@@ -1389,5 +1389,48 @@ test('shooting-gallery AC-34: no pink lights in a frenzy; the alarms are quiet r
     return { alert10: g.heardOpts.alert10.gain, alert5: g.heardOpts.alert5.gain, alarm: g.heardOpts.alarm.gain };
   });
   for (const [n, v] of Object.entries(gains)) assert.ok(v <= 1.2, `${n} is played quietly: ${v}`);
+  // On screen, in a frenzy: the marquee's bulbs, the glowing edges and the banner hold no pink.
+  const pink = await page.evaluate(async () => {
+    const g = window.__gallery;
+    const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const { k, ox, oy, SW, SH } = g.stage();
+    const dpr = cv.width / innerWidth;
+    const at = (x, y) => Array.from(c.getImageData(Math.round((x * k + ox) * dpr), Math.round((y * k + oy) * dpr), 1, 1).data);
+    // The edges' glow: how far towards magenta (blue over green) the edges lean, before and in a frenzy.
+    // (Along the counter's bottom edge, where no bulb stands.)
+    const edge = [];
+    for (let x = 6; x < SW - 6; x += 8) edge.push([x, SH - 6], [x, SH - 16]);
+    const lean = () => edge.reduce((n, p) => {
+      const [, gr, b] = at(...p);
+      return n + (b - gr);
+    }, 0) / edge.length;
+    g.game.time = 20;
+    await frame();
+    const before = lean();
+    g.startFrenzy();
+    g.game.spawn.frenzy = 999;
+    g.step(0.5);
+    await frame();
+    const during = lean();
+    const spots = g.marqueeBulbs().map((b) => [b.x, b.y]);
+    const isPink = ([r, gr, b]) => r > 190 && b > 130 && b > gr + 20;
+    const bad = spots.filter((p) => isPink(at(...p)));
+    // The Frenzy banner's lettering, across its pill (its bounds are in CSS px).
+    const pb = g.ui().pill;
+    let banner = 0;
+    for (let x = pb.left + 4; x < pb.right - 4; x += 1) {
+      for (let y = pb.top + 4; y < pb.bottom - 4; y += 2) {
+        banner++;
+        const d = Array.from(c.getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data);
+        if (isPink(d)) bad.push(['banner', x, y]);
+      }
+    }
+    return { checked: spots.length + banner, pink: bad, before, during };
+  });
+  assert.ok(pink.checked > 40, `pixels checked: ${pink.checked}`);
+  assert.deepEqual(pink.pink, [], 'no pink in the frenzy’s lights');
+  assert.ok(pink.during <= pink.before + 2, `the frenzy’s glow at the edges is warm, not pink: blue over green ${pink.before.toFixed(1)} → ${pink.during.toFixed(1)}`);
   await context.close();
 });
