@@ -178,7 +178,7 @@ export function step(f, level, taken = null) {
   gravity(bodies, f.pos, f.x, f.y, acc);
   f.vx += acc.x * DT;
   f.vy += acc.y * DT;
-  const sp = Math.hypot(f.vx, f.vy);
+  const sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
   if (sp > MAX_SPEED) {
     f.vx *= MAX_SPEED / sp;
     f.vy *= MAX_SPEED / sp;
@@ -192,7 +192,7 @@ export function step(f, level, taken = null) {
   for (let i = 0; i < bodies.length; i++) {
     const dx = f.x - f.pos[i * 2];
     const dy = f.y - f.pos[i * 2 + 1];
-    const d = Math.hypot(dx, dy);
+    const d = Math.sqrt(dx * dx + dy * dy);
     const b = bodies[i];
     if (d < b.r) {
       f.result = 'crashed';
@@ -214,7 +214,7 @@ export function step(f, level, taken = null) {
     for (let i = 0; i < motes.length; i++) {
       const m = motes[i];
       if (m.leg !== f.legIndex || f.caught.includes(i) || (taken && taken.has(i))) continue;
-      if (Math.hypot(f.x - m.x, f.y - m.y) < MOTE_RADIUS) f.caught.push(i);
+      if (Math.sqrt((f.x - m.x) * (f.x - m.x) + (f.y - m.y) * (f.y - m.y)) < MOTE_RADIUS) f.caught.push(i);
     }
   }
 
@@ -222,12 +222,12 @@ export function step(f, level, taken = null) {
   const tb = bodies[f.to];
   const tx = f.pos[f.to * 2];
   const ty = f.pos[f.to * 2 + 1];
-  const d = Math.hypot(f.x - tx, f.y - ty);
+  const d = Math.sqrt((f.x - tx) * (f.x - tx) + (f.y - ty) * (f.y - ty));
   if (d < tb.ring * (1 + ASSIST_BAND * Math.min(1, f.assist)) + CATCH_WIDTH) {
     bodyVel(bodies, f.to, f.t, tv);
     const rvx = f.vx - tv.x;
     const rvy = f.vy - tv.y;
-    const rel = Math.hypot(rvx, rvy);
+    const rel = Math.sqrt(rvx * rvx + rvy * rvy);
     // along the ring, not into it: the part of the speed heading in or out must be small
     const radial = Math.abs((rvx * (f.x - tx) + rvy * (f.y - ty)) / (d || 1));
     const along = radial <= rel * Math.sin((CATCH_ANGLE * Math.PI) / 180);
@@ -247,7 +247,7 @@ export function step(f, level, taken = null) {
     const dy = f.y - f.pos[strongest * 2 + 1];
     bodyVel(bodies, strongest, f.t, tv);
     const v2 = (f.vx - tv.x) ** 2 + (f.vy - tv.y) ** 2;
-    const bound = v2 / 2 - b.mu / Math.hypot(dx, dy) < 0;
+    const bound = v2 / 2 - b.mu / Math.sqrt(dx * dx + dy * dy) < 0;
     const ang = Math.atan2(dy, dx);
     if (bound && f.sweepBody === strongest) {
       let da = ang - f.lastAngle;
