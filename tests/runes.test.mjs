@@ -115,6 +115,15 @@ test('runes AC-2: a relative drag steps the line, a drag back takes it back, wal
   assert.deepEqual(await path(page), [0]);
   await drag(page, x - 3 * c, y, 0.95 * c, 0, { start: false });
   assert.deepEqual(await path(page), [0, 1], 'the push into the wall stored nothing');
+  // Push into a lit stone that is not the previous one: nothing steps and nothing is stored.
+  await board(page, ['Soo', 'ooo', 'ooG']);
+  for (const c2 of [1, 4, 3]) await page.evaluate((c2) => window.__runes.stepTo(c2), c2);
+  await drag(page, x, y, 0, -3 * c, { end: false }); // up from 3 is the lit source
+  assert.deepEqual(await path(page), [0, 1, 4, 3], 'a lit stone takes nothing');
+  await drag(page, x, y - 3 * c, 0, 0.95 * c, { start: false });
+  assert.deepEqual(await path(page), [0, 1, 4, 3, 6], 'the push into the lit stone stored nothing');
+  await page.evaluate(() => window.__runes.loadLevel(0));
+  await page.evaluate(() => window.__runes.stepTo(1));
   // Down from stone 1 is water: nothing happens.
   await drag(page, x, y, 0, 2 * c);
   assert.deepEqual(await path(page), [0, 1]);
@@ -230,6 +239,37 @@ test('runes AC-7: the gate takes the light only last; then the level is solved, 
   await page.locator('[data-next]').click();
   assert.equal(await page.evaluate(() => window.__runes.game.index), 1);
   assert.equal(new URL(page.url()).hash, '#2');
+  await context.close();
+});
+
+test('runes AC-7: each state shows only its own card, and the board takes input only while playing', async () => {
+  const { context, page } = await open();
+  const seen = () =>
+    page.evaluate(() => ({
+      solved: !document.querySelector('[data-screen="solved"]').hidden,
+      levels: !document.querySelector('[data-screen="levels"]').hidden,
+    }));
+  const c = await cellSize(page);
+  // Playing: neither card.
+  assert.deepEqual(await seen(), { solved: false, levels: false });
+  // Choosing a level: the level select only; keys and drags move nothing.
+  await page.click('[data-levels]');
+  assert.deepEqual(await seen(), { solved: false, levels: true });
+  await page.keyboard.press('ArrowRight');
+  await drag(page, 100, 700, c, 0);
+  assert.deepEqual(await path(page), [0], 'no input while choosing a level');
+  await page.click('[data-close-levels]');
+  // Solved: the solved card only; keys and drags move nothing.
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
+    await page.keyboard.press(k);
+  }
+  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  assert.deepEqual(await seen(), { solved: true, levels: false });
+  const solvedLine = await path(page);
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Backspace');
+  await drag(page, 100, 700, 0, -c);
+  assert.deepEqual(await path(page), solvedLine, 'no input once solved');
   await context.close();
 });
 

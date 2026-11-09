@@ -861,15 +861,6 @@ function draw(now) {
   }
   ctx.restore();
 
-  // Stones left, on the gate.
-  if (!game.done) {
-    const left = R.left(s);
-    ctx.font = `700 ${Math.round(c * 0.26)}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = game.dead ? 'rgba(200, 205, 215, 0.7)' : 'rgba(255, 255, 255, 0.92)';
-    ctx.fillText(String(left), gx + c * 0.3, gy - c * 0.28);
-  }
 
   // Rings: splashes where stones rose or sank, the gate opening, bumps.
   game.rings = game.rings.filter((r) => now - r.t < (r.big ? 1400 : 700));
