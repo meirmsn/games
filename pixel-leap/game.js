@@ -129,7 +129,7 @@ const game = {
   shields: 0, // hearts held, at most MAX_SHIELDS
   ears: false, // the prize, found on this run
   earsThisWorld: false,
-  deaths: 0, // lives lost in this level: the hidden assist
+  deaths: 0, // lives lost since the last level cleared (game overs included): the hidden assist
   assist: 0,
   modeT: 0,
   leapFrom: 0,
@@ -581,8 +581,9 @@ function loseLife() {
   game.lives--;
   game.deaths++;
   game.lifePop = 0.8;
-  // The hidden assist: after 3 lives lost in a level, a little more coyote, buffer and landing grace.
-  if (game.deaths >= 3) game.assist = Math.min(1, (game.deaths - 2) * 0.34);
+  // The hidden assist: after 2 lives lost since the last level cleared, a little more coyote, buffer
+  // and landing grace. It never touches enemies or hazards.
+  if (game.deaths >= 2) game.assist = Math.min(1, (game.deaths - 1) * 0.34);
   play(`${world().sound}-poof`);
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
@@ -686,11 +687,13 @@ function sparkle(x, y) {
 }
 
 // ---------------------------------------------------------------- worlds, the tally and the leap
-function startWorld(w) {
+function startWorld(w, keepAssist = false) {
   game.coins = 0;
   game.time = 0;
-  game.deaths = 0;
-  game.assist = 0;
+  if (!keepAssist) {
+    game.deaths = 0;
+    game.assist = 0;
+  }
   game.earsThisWorld = false;
   game.earsBefore = game.ears;
   const built = buildStage(WORLDS[w].stages[0]);
@@ -703,7 +706,7 @@ function newRun() {
   game.shields = 0;
   game.ears = false;
   baked = null;
-  startWorld(0);
+  startWorld(0, true); // a game over keeps the assist it earned
 }
 function gameOver() {
   stopMusic();
