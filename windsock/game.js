@@ -872,6 +872,7 @@ function syncScreens() {
   ui.done.hidden = !(mode === 'done' && !paused);
   ui.paused.hidden = !paused;
   ui.hud.hidden = mode === 'start';
+  syncHud();
   if (mode === 'crash' && crashInfo) {
     const h = `${String(6 + crashInfo.hour).padStart(2, '0')}:00`;
     ui.retry.textContent = `Retry ${h}`;
