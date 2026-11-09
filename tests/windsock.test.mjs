@@ -818,3 +818,36 @@ test('windsock AC-22: each state shows only its own card and HUD', async () => {
   assert.deepEqual(await look(), { start: false, crash: false, done: true, paused: false, hud: true });
   await context.close();
 });
+
+test('windsock AC-23: the UI is 8-bit: a pixel font, no rounding, blur or soft shadows, and marks with no smooth edges', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => document.fonts.ready);
+  const r = await page.evaluate(() => {
+    const els = ['[data-screen="start"]', '[data-play]', '.mute', '.shell-back'].map((s) => document.querySelector(s));
+    document.querySelector('[data-hud]').hidden = false;
+    els.push(document.querySelector('[data-hud]'));
+    return {
+      styles: els.map((el) => {
+        const cs = getComputedStyle(el);
+        return { radius: cs.borderTopLeftRadius, backdrop: cs.backdropFilter, shadow: cs.boxShadow, font: el.textContent.trim() ? cs.fontFamily : 'Kenney Mini Square (icon only)' };
+      }),
+      fontLoaded: document.fonts.check('16px "Kenney Mini Square"'),
+      rendering: getComputedStyle(document.getElementById('field')).imageRendering,
+      alphas: window.__windsock.marksAlphaProbe(),
+    };
+  });
+  assert.ok(r.fontLoaded, 'the pixel font loads');
+  for (const s of r.styles) {
+    assert.equal(s.radius, '0px');
+    assert.ok(s.backdrop === 'none' || !s.backdrop);
+    assert.ok(s.font.includes('Kenney Mini Square'));
+    // Only hard inset bevels: every shadow has no blur.
+    for (const part of s.shadow === 'none' ? [] : s.shadow.split(/,(?![^(]*\))/)) {
+      const lengths = part.replace(/rgba?\([^)]*\)/, '').trim().split(/\s+/).filter((t) => t.endsWith('px'));
+      assert.equal(lengths[2], '0px', `no blur in "${part.trim()}"`);
+    }
+  }
+  assert.equal(r.rendering, 'pixelated');
+  assert.deepEqual(r.alphas, [0, 255], 'every mark pixel is fully drawn or not at all');
+  await context.close();
+});

@@ -100,6 +100,14 @@ and the planes in the sky have to turn around.
   first swing) at about 07:00; the first failure, for most players, at 08:00 or later. Knobs at the
   top of `game.js`: hour length, gaps and caps per hour, speeds, turn rates, fuel, warning and lull
   lengths, separation, drift, the finger offset.
+- Changed after the go, the owner's (2026-11-09, in the session's chat): "All the UI elements should
+  not be smooth. They should also be 8-bit to go with the art of the game." So the whole game is
+  drawn on a canvas at the art's own resolution and enlarged with no smoothing; every mark over the
+  field (rings, lines, chevrons, the windsock, arrows, fuel arcs, conflict marks, the points) is
+  plotted pixel by pixel with no anti-aliasing, and the points use a 3 × 5 pixel font. The HUD,
+  cards and buttons use Kenney's pixel font (Kenney Mini Square, CC0, from the private asset repo),
+  square panels with stepped corners, flat colours and hard pixel bevels, with no rounded corners,
+  blur, soft shadows or eased animation; the back and mute buttons use pixel icons.
 - Not a copy: no other game's names, levels, characters or look; the art is Kenney's CC0 pack and
   the runways are drawn in its palette (Claude, 2026-11-09).
 
@@ -156,6 +164,11 @@ and the planes in the sky have to turn around.
 - **AC-21** While one finger draws, a second finger draws nothing and changes no line —
   `tests/windsock.test.mjs`.
 - **AC-22** Each state shows only its own card and HUD, as in the state table —
+  `tests/windsock.test.mjs`.
+
+- **AC-23** The UI is 8-bit: the HUD, cards and buttons use the pixel font and have no rounded
+  corners, blur or soft shadows; the canvas is enlarged with no smoothing; and the marks drawn over
+  the field are fully opaque or fully clear pixel by pixel (no anti-aliased edges) —
   `tests/windsock.test.mjs`.
 
 ## Core flow

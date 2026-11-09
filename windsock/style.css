@@ -1,9 +1,46 @@
-/* Windsock: the canvas fills the screen; the HUD and cards float over it. */
+/* Windsock: the canvas fills the screen; the HUD and cards float over it.
+   Everything here is 8-bit, like the art: a pixel font (Kenney Mini Square), square edges with
+   stepped corners, flat colours from the pack's palette, hard pixel bevels, no blur, no rounding,
+   no soft shadows, no smooth transitions. One UI pixel is 4 CSS px (2 art px). */
+
+@font-face {
+  font-family: 'Kenney Mini Square';
+  src: url('fonts/kenney-mini-square.woff2') format('woff2');
+  font-display: block;
+}
+
+:root {
+  --ink: #1e2130; /* outlines */
+  --navy: #3e4255; /* the pack's outline colour, panels */
+  --navy-hi: #5c6274;
+  --sun: #ffd23f;
+  --sun-hi: #fff2a6;
+  --sun-lo: #c98a14;
+  --p: 4px; /* one UI pixel */
+  /* Stepped corners: a one-pixel notch at each corner. */
+  --notch: polygon(
+    0 var(--p),
+    var(--p) var(--p),
+    var(--p) 0,
+    calc(100% - var(--p)) 0,
+    calc(100% - var(--p)) var(--p),
+    100% var(--p),
+    100% calc(100% - var(--p)),
+    calc(100% - var(--p)) calc(100% - var(--p)),
+    calc(100% - var(--p)) 100%,
+    var(--p) 100%,
+    var(--p) calc(100% - var(--p)),
+    0 calc(100% - var(--p))
+  );
+}
 
 body {
   background: #8cc63f;
   color: #fff;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Kenney Mini Square', ui-monospace, monospace;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  text-transform: uppercase;
 }
 
 #field {
@@ -14,6 +51,50 @@ body {
   display: block;
   touch-action: none;
   cursor: crosshair;
+  image-rendering: pixelated;
+}
+
+/* The back button (from the shared shell) and the mute button: pixel squares. */
+.shell-back,
+.mute {
+  width: 44px;
+  height: 44px;
+  border-radius: 0;
+  box-sizing: border-box;
+  border: var(--p) solid var(--ink);
+  background: var(--navy);
+  box-shadow:
+    inset 0 calc(-1 * var(--p)) 0 #2a2d3c,
+    inset 0 var(--p) 0 var(--navy-hi);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  clip-path: var(--notch);
+  transition: none;
+}
+
+.shell-back svg {
+  display: none;
+}
+
+.shell-back::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  image-rendering: pixelated;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 11' shape-rendering='crispEdges' fill='%23fff'%3E%3Crect x='6' y='1' width='2' height='1'/%3E%3Crect x='5' y='2' width='2' height='1'/%3E%3Crect x='4' y='3' width='2' height='1'/%3E%3Crect x='3' y='4' width='2' height='1'/%3E%3Crect x='2' y='5' width='2' height='1'/%3E%3Crect x='3' y='6' width='2' height='1'/%3E%3Crect x='4' y='7' width='2' height='1'/%3E%3Crect x='5' y='8' width='2' height='1'/%3E%3Crect x='6' y='9' width='2' height='1'/%3E%3C/svg%3E")
+    center / 22px 22px no-repeat;
+}
+
+@media (hover: hover) {
+  .shell-back:hover,
+  .mute:hover {
+    background: var(--navy-hi);
+  }
+}
+
+.shell-back:active,
+.mute:active {
+  transform: translateY(2px);
 }
 
 .mute {
@@ -21,18 +102,10 @@ body {
   z-index: 10;
   top: calc(env(safe-area-inset-top) + 12px);
   right: calc(env(safe-area-inset-right) + 12px);
-  width: 44px;
-  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
-  border-radius: 999px;
   color: #fff;
-  background: rgb(20 22 31 / 55%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
   cursor: pointer;
 }
 
@@ -40,10 +113,7 @@ body {
   width: 22px;
   height: 22px;
   fill: currentColor;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  shape-rendering: crispEdges;
 }
 
 .mute .i-off,
@@ -55,14 +125,10 @@ body {
   display: block;
 }
 
-.mute:active {
-  transform: scale(0.92);
-}
-
 .mute:focus-visible,
 .card button:focus-visible {
-  outline: 3px solid #fff;
-  outline-offset: 2px;
+  outline: var(--p) solid #fff;
+  outline-offset: 0;
 }
 
 /* The clock and the score, centred between the back and mute buttons. */
@@ -73,18 +139,19 @@ body {
   left: 50%;
   transform: translateX(-50%);
   height: 44px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   padding: 0 16px;
-  border-radius: 999px;
-  background: rgb(20 22 31 / 55%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
-  font-weight: 800;
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
+  border: var(--p) solid var(--ink);
+  background: var(--navy);
+  box-shadow:
+    inset 0 calc(-1 * var(--p)) 0 #2a2d3c,
+    inset 0 var(--p) 0 var(--navy-hi);
+  clip-path: var(--notch);
+  font-size: 16px;
+  line-height: 1;
   pointer-events: none;
   white-space: nowrap;
 }
@@ -93,33 +160,31 @@ body {
   display: none;
 }
 
-.hud .clock {
-  letter-spacing: 0.04em;
-}
-
+/* A new hour: the clock flashes yellow in two hard steps, no easing. */
 .hud .clock.tick {
-  animation: tick 600ms ease-out;
+  animation: tick 800ms steps(1, end);
 }
 
 @keyframes tick {
-  0% {
-    transform: scale(1.5);
-    color: #ffd23f;
+  0%,
+  50% {
+    color: var(--sun);
   }
+  25%,
+  75%,
   100% {
-    transform: scale(1);
+    color: #fff;
   }
 }
 
 .hud .score {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
 }
 
 .hud .streak {
-  color: #ffd23f;
-  font-size: 15px;
+  color: var(--sun);
 }
 
 .hud .streak[hidden] {
@@ -134,17 +199,18 @@ body {
   transform: translateX(-50%);
   width: min(320px, calc(100vw - 48px));
   box-sizing: border-box;
-  padding: 18px 20px 20px;
-  border-radius: 20px;
-  background: rgb(20 22 31 / 78%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 30%);
+  padding: 16px 20px 20px;
+  border: var(--p) solid var(--ink);
+  background: var(--navy);
+  box-shadow:
+    inset 0 calc(-1 * var(--p)) 0 #2a2d3c,
+    inset 0 var(--p) 0 var(--navy-hi);
+  clip-path: var(--notch);
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 10px;
+  gap: 12px;
 }
 
 .card[hidden] {
@@ -153,53 +219,70 @@ body {
 
 .card h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 24px;
+  font-weight: normal;
+  line-height: 1;
 }
 
 .card p {
   margin: 0;
+  line-height: 1.5;
 }
 
-.card .day {
-  font-weight: 700;
-  font-size: 15px;
-  opacity: 0.9;
+.card .day,
+.card .best,
+.card .detail {
+  font-size: 16px;
 }
 
 .card .best,
 .card .detail {
-  font-size: 15px;
-  opacity: 0.85;
-  line-height: 1.4;
+  color: #cfd2de;
 }
 
 .card .score-line {
-  font-size: 28px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: 32px;
+  line-height: 1;
+  color: var(--sun);
 }
 
 .card button {
   min-height: 48px;
-  border: 0;
-  border-radius: 14px;
+  border: var(--p) solid var(--ink);
+  border-radius: 0;
+  clip-path: var(--notch);
   font: inherit;
-  font-weight: 800;
-  font-size: 18px;
+  font-size: 16px;
+  text-transform: uppercase;
   cursor: pointer;
+  transition: none;
 }
 
 .card .play {
-  color: #1d2230;
-  background: #ffd23f;
+  color: var(--ink);
+  background: var(--sun);
+  box-shadow:
+    inset 0 calc(-1 * var(--p)) 0 var(--sun-lo),
+    inset 0 var(--p) 0 var(--sun-hi);
 }
 
 .card .alt {
   color: #fff;
-  background: rgb(255 255 255 / 16%);
-  font-size: 16px;
+  background: var(--navy-hi);
+  box-shadow:
+    inset 0 calc(-1 * var(--p)) 0 var(--navy),
+    inset 0 var(--p) 0 #7d8398;
 }
 
-.card button:active {
-  transform: scale(0.97);
+/* Pressed: the bevel flips, as on an old console menu. */
+.card .play:active {
+  box-shadow:
+    inset 0 var(--p) 0 var(--sun-lo),
+    inset 0 calc(-1 * var(--p)) 0 var(--sun-hi);
+}
+
+.card .alt:active {
+  box-shadow:
+    inset 0 var(--p) 0 var(--navy),
+    inset 0 calc(-1 * var(--p)) 0 #7d8398;
 }

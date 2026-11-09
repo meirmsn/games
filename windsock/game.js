@@ -211,6 +211,7 @@ function resize() {
   S = Math.max(0.5, Math.min(availW / FW, availH / FH));
   offX = insets.left + (cssW - insets.left - insets.right - FW * S) / 2;
   offY = hudBottom + (availH - FH * S) / 2;
+  sizeLow();
 }
 
 const insetProbe = document.createElement('div');
@@ -1052,7 +1053,7 @@ function drawRunways(c, O) {
   c.fillStyle = '#e8e8ef';
   c.fillRect(mx + 1, my, 1, ml);
   c.fillRect(mx + MAIN.w - 2, my, 1, ml);
-  for (let y = my + 18; y < my + ml - 18; y += 12) c.fillRect(O + MAIN.x - 0.5, y, 1, 6);
+  for (let y = my + 18; y < my + ml - 18; y += 12) c.fillRect(O + MAIN.x - 1, y, 2, 6);
   for (const yy of [my + 2, my + ml - 7]) for (let x = mx + 3; x < mx + MAIN.w - 3; x += 2) c.fillRect(x, yy, 1, 5);
   // The crossing: the long runway's asphalt runs over the strip.
   c.fillStyle = '#5c6274';
@@ -1096,6 +1097,168 @@ function seedClouds() {
   }
 }
 
+// ---------- Pixel drawing ----------
+//
+// Everything is drawn on a small canvas at the art's own resolution (one canvas pixel per art px),
+// then enlarged to the screen with no smoothing, so the whole game is one grid of square pixels.
+// Shapes on top of the sprites (rings, lines, chevrons, the sock, arrows, fuel arcs, conflict marks,
+// points) are plotted pixel by pixel, never with anti-aliased paths: nothing is smooth.
+
+const lo = document.createElement('canvas');
+let lc = lo.getContext('2d');
+let LW = 1;
+let LH = 1;
+let OX = 0; // the field's origin on the small canvas, whole pixels
+let OY = 0;
+
+function sizeLow() {
+  OX = Math.round(offX / S) + 1;
+  OY = Math.round(offY / S) + 1;
+  LW = Math.ceil(cssW / S) + 3;
+  LH = Math.ceil(cssH / S) + 3;
+  if (lo.width !== LW) lo.width = LW;
+  if (lo.height !== LH) lo.height = LH;
+}
+
+const px = (x, y) => lc.fillRect(Math.round(x), Math.round(y), 1, 1);
+
+// A line, Bresenham.
+function pxLine(x0, y0, x1, y1, color) {
+  lc.fillStyle = color;
+  x0 = Math.round(x0);
+  y0 = Math.round(y0);
+  x1 = Math.round(x1);
+  y1 = Math.round(y1);
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx + dy;
+  for (let i = 0; i < 2000; i++) {
+    lc.fillRect(x0, y0, 1, 1);
+    if (x0 === x1 && y0 === y1) break;
+    const e2 = 2 * err;
+    if (e2 >= dy) {
+      err += dy;
+      x0 += sx;
+    }
+    if (e2 <= dx) {
+      err += dx;
+      y0 += sy;
+    }
+  }
+}
+
+// A ring (or an arc of one, clockwise from a0) `th` pixels thick; `fill` fills the inside too.
+function pxRing(cx, cy, r, color, { th = 1, a0 = 0, a1 = Math.PI * 2, fill = null } = {}) {
+  cx = Math.round(cx);
+  cy = Math.round(cy);
+  const R = Math.ceil(r + th);
+  const span = a1 - a0;
+  for (let j = -R; j <= R; j++) {
+    for (let i = -R; i <= R; i++) {
+      const d = Math.hypot(i, j);
+      if (fill && d < r - th / 2) {
+        lc.fillStyle = fill;
+        lc.fillRect(cx + i, cy + j, 1, 1);
+        continue;
+      }
+      if (Math.abs(d - r) > th / 2) continue;
+      if (span < Math.PI * 2) {
+        let a = Math.atan2(j, i) - a0;
+        a = ((a % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        if (a > span) continue;
+      }
+      lc.fillStyle = color;
+      lc.fillRect(cx + i, cy + j, 1, 1);
+    }
+  }
+}
+
+// A filled polygon, by testing each pixel's centre.
+function pxPoly(pts, color) {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const p of pts) {
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+  }
+  lc.fillStyle = color;
+  for (let y = Math.floor(y0); y <= Math.ceil(y1); y++) {
+    for (let x = Math.floor(x0); x <= Math.ceil(x1); x++) {
+      const qx = x + 0.5;
+      const qy = y + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i];
+        const b = pts[j];
+        if (a.y > qy !== b.y > qy && qx < ((b.x - a.x) * (qy - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      if (inside) lc.fillRect(x, y, 1, 1);
+    }
+  }
+}
+const rot = (x, y, a, ox, oy) => ({ x: ox + x * Math.cos(a) - y * Math.sin(a), y: oy + x * Math.sin(a) + y * Math.cos(a) });
+
+// A 3 × 5 pixel font for the points that pop up.
+const GLYPHS = {
+  0: '111101101101111',
+  1: '010110010010111',
+  2: '111001111100111',
+  3: '111001111001111',
+  4: '101101111001001',
+  5: '111100111001111',
+  6: '111100111101111',
+  7: '111001001010010',
+  8: '111101111101111',
+  9: '111101111001111',
+  '+': '000010111010000',
+  x: '000101010101000',
+  D: '110101101101110',
+  I: '111010010010111',
+  V: '101101101101010',
+  E: '111100110100111',
+  R: '110101110101101',
+  T: '111010010010010',
+  ' ': '000000000000000',
+};
+function pxText(text, cx, y, color, outline) {
+  const w = text.length * 4 - 1;
+  const x0 = Math.round(cx - w / 2);
+  y = Math.round(y);
+  for (const pass of outline ? [0, 1] : [1]) {
+    lc.fillStyle = pass ? color : outline;
+    for (let k = 0; k < text.length; k++) {
+      const g = GLYPHS[text[k]] || GLYPHS[' '];
+      for (let i = 0; i < 15; i++) {
+        if (g[i] !== '1') continue;
+        const x = x0 + k * 4 + (i % 3);
+        const yy = y + Math.floor(i / 3);
+        if (pass) lc.fillRect(x, yy, 1, 1);
+        else lc.fillRect(x - 1, yy - 1, 3, 3);
+      }
+    }
+  }
+}
+
+// Black silhouettes of the plane sprites, for shadows (canvas filters aren't everywhere).
+let silhouettes = null;
+function buildSilhouettes() {
+  const c = document.createElement('canvas');
+  c.width = planesImg.naturalWidth;
+  c.height = planesImg.naturalHeight;
+  const g = c.getContext('2d');
+  g.drawImage(planesImg, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+
 function sprite(p) {
   const row = p.type === 'heavy' ? 0 : 1;
   return { sx: p.livery * 32, sy: row * 32 };
@@ -1104,156 +1267,120 @@ function sprite(p) {
 function drawPlane(p, a) {
   const T = TYPES[p.type];
   const { sx, sy } = sprite(p);
-  const fadeA = p.state === 'divert' ? 1 - p.fade : p.state === 'roll' ? 1 - p.fade : 1;
+  const fadeA = p.state === 'divert' || p.state === 'roll' ? 1 - p.fade : 1;
   // Crab: the nose turned a little into the wind while airborne.
   const blow = blowVec(st.wind);
   const cross = Math.cos(p.hd) * blow.y - Math.sin(p.hd) * blow.x;
   const crab = p.alt > 0.2 ? -cross * 0.22 : 0;
-  const rot = p.hd + Math.PI / 2 + crab;
+  const r = p.hd + Math.PI / 2 + crab;
   const sc = T.scale * (0.86 + 0.14 * p.alt);
+  const x = Math.round(p.x);
+  const y = Math.round(p.y);
   // Shadow, offset by height.
-  ctx.save();
-  ctx.globalAlpha = 0.28 * fadeA * a;
-  ctx.translate(p.x + 4 * p.alt + 1, p.y + 6 * p.alt + 1);
-  ctx.rotate(rot);
-  ctx.scale(sc, sc);
-  ctx.filter = 'brightness(0)';
-  ctx.drawImage(planesImg, sx, sy, 32, 32, -16, -16, 32, 32);
-  ctx.restore();
-  ctx.save();
-  ctx.globalAlpha = fadeA * a;
-  ctx.translate(p.x, p.y);
-  ctx.rotate(rot);
-  ctx.scale(sc, sc);
-  ctx.drawImage(planesImg, sx, sy, 32, 32, -16, -16, 32, 32);
-  ctx.restore();
+  lc.save();
+  lc.globalAlpha = 0.28 * fadeA * a;
+  lc.translate(x + Math.round(4 * p.alt) + 1, y + Math.round(6 * p.alt) + 1);
+  lc.rotate(r);
+  lc.scale(sc, sc);
+  if (silhouettes) lc.drawImage(silhouettes, sx, sy, 32, 32, -16, -16, 32, 32);
+  lc.restore();
+  lc.save();
+  lc.globalAlpha = fadeA * a;
+  lc.translate(x, y);
+  lc.rotate(r);
+  lc.scale(sc, sc);
+  lc.drawImage(planesImg, sx, sy, 32, 32, -16, -16, 32, 32);
+  lc.restore();
 }
 
-function ringPath(x, y, r) {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-}
-
-function drawEnds() {
-  const open = stripOpen();
-  for (const e of Object.values(ENDS)) {
-    const strip = e.runway === 'strip';
-    if (strip && !open) continue;
-    const live = isLive(e.id);
-    const soon = soonLive(e.id);
-    const blink = Math.sin(clock * 10) > 0;
-    let color = 'rgba(62,66,85,0.55)';
-    if (live) color = '#5ee05a';
-    if (soon) color = blink ? '#ffb02e' : 'rgba(255,176,46,0.35)';
-    const going = live && st.warn && !liveEndsHas(st.warn.to, e.id);
-    if (going) color = blink ? '#5ee05a' : 'rgba(94,224,90,0.4)';
-    ctx.lineWidth = live || soon ? 2 : 1.2;
-    ctx.strokeStyle = color;
-    ringPath(e.ring.x, e.ring.y, RING_R);
-    ctx.stroke();
-    if (live || soon) {
-      ctx.fillStyle = live ? 'rgba(94,224,90,0.16)' : 'rgba(255,176,46,0.12)';
-      ringPath(e.ring.x, e.ring.y, RING_R);
-      ctx.fill();
-      // Rabbit lights: chevrons running toward the runway.
-      const n = 3;
-      const L = dist(e.ring, e.thr);
-      const ang = Math.atan2(e.dir.y, e.dir.x);
-      for (let i = 0; i < n; i++) {
-        const k = (i + 1) / (n + 1);
-        const phase = (clock * 2.5 - k) % 1;
-        const on = phase > 0 && phase < 0.35;
-        const cx = e.ring.x + (e.thr.x - e.ring.x) * k;
-        const cy = e.ring.y + (e.thr.y - e.ring.y) * k;
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(ang);
-        ctx.strokeStyle = live ? (on ? '#d6ffd0' : '#5ee05a') : on ? '#fff0c0' : '#ffb02e';
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(-2, -4);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(-2, 4);
-        ctx.stroke();
-        ctx.restore();
-      }
-      void L;
-    }
-    // A refused end shows a cross for a moment.
-    if (e.refused && clock - e.refused < 0.5) {
-      ctx.strokeStyle = 'rgba(62,66,85,0.9)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(e.ring.x - 5, e.ring.y - 5);
-      ctx.lineTo(e.ring.x + 5, e.ring.y + 5);
-      ctx.moveTo(e.ring.x + 5, e.ring.y - 5);
-      ctx.lineTo(e.ring.x - 5, e.ring.y + 5);
-      ctx.stroke();
-    }
-  }
-  if (!open) {
-    // A closed runway: yellow crosses on it.
-    ctx.strokeStyle = '#ffd23f';
-    ctx.lineWidth = 1.6;
-    for (const x of [STRIP.x0 + 10, STRIP.x1 - 10]) {
-      ctx.beginPath();
-      ctx.moveTo(x - 4, STRIP.y - 3);
-      ctx.lineTo(x + 4, STRIP.y + 3);
-      ctx.moveTo(x + 4, STRIP.y - 3);
-      ctx.lineTo(x - 4, STRIP.y + 3);
-      ctx.stroke();
-    }
-  }
-}
 function liveEndsHas(dir, id) {
   const l = liveEnds(dir);
   return l.main === id || l.strip === id;
 }
 
+function drawCross(x, y, s, color) {
+  pxLine(x - s, y - s, x + s, y + s, color);
+  pxLine(x + s, y - s, x - s, y + s, color);
+}
+
+function drawEnds() {
+  const open = stripOpen();
+  const blink = Math.sin(clock * 10) > 0;
+  for (const e of Object.values(ENDS)) {
+    if (e.runway === 'strip' && !open) continue;
+    const live = isLive(e.id);
+    const soon = soonLive(e.id);
+    const going = live && st.warn && !liveEndsHas(st.warn.to, e.id);
+    let color = '#3e4255';
+    let fill = null;
+    if (live) {
+      color = going && !blink ? '#2f8a2c' : '#5ee05a';
+      fill = 'rgba(94,224,90,0.18)';
+    }
+    if (soon) {
+      color = blink ? '#ffb02e' : '#a86a10';
+      fill = 'rgba(255,176,46,0.14)';
+    }
+    pxRing(e.ring.x, e.ring.y, RING_R, color, { th: live || soon ? 2 : 1, fill });
+    if (live || soon) {
+      // Rabbit lights: chevrons running toward the runway.
+      const ang = Math.atan2(e.dir.y, e.dir.x);
+      for (let i = 0; i < 3; i++) {
+        const k = (i + 1) / 4;
+        const phase = (((clock * 2.5 - k) % 1) + 1) % 1;
+        const on = phase < 0.35;
+        const cx = e.ring.x + (e.thr.x - e.ring.x) * k;
+        const cy = e.ring.y + (e.thr.y - e.ring.y) * k;
+        const c = live ? (on ? '#d6ffd0' : '#5ee05a') : on ? '#fff0c0' : '#ffb02e';
+        const a = rot(-2, -3, ang, cx, cy);
+        const m = rot(1, 0, ang, cx, cy);
+        const b = rot(-2, 3, ang, cx, cy);
+        pxLine(a.x, a.y, m.x, m.y, c);
+        pxLine(m.x, m.y, b.x, b.y, c);
+      }
+    }
+    // A refused end shows a cross for a moment.
+    if (e.refused && clock - e.refused < 0.5) drawCross(e.ring.x, e.ring.y, 4, '#3e4255');
+  }
+  if (!open) {
+    // A closed runway: yellow crosses on it.
+    for (const x of [STRIP.x0 + 10, STRIP.x1 - 10]) {
+      drawCross(x, STRIP.y, 3, '#ffd23f');
+      drawCross(x + 1, STRIP.y, 3, '#ffd23f');
+    }
+  }
+}
+
 function drawSock() {
   const shiver = st.warn ? Math.sin(clock * 38) * 0.35 : Math.sin(clock * 5) * 0.06;
   const a = sockAngle + shiver;
-  // Pole and its shadow.
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ctx.fillRect(SOCK.x - 1, SOCK.y, 5, 2);
-  ctx.fillStyle = '#3e4255';
-  ctx.fillRect(SOCK.x - 2, SOCK.y - 2, 4, 4);
-  ctx.save();
-  ctx.translate(SOCK.x, SOCK.y);
-  ctx.rotate(a);
+  lc.fillStyle = '#6c9a2e'; // its shadow on the grass
+  lc.fillRect(SOCK.x - 1, SOCK.y + 1, 5, 2);
+  lc.fillStyle = '#3e4255';
+  lc.fillRect(SOCK.x - 2, SOCK.y - 2, 4, 4);
   // A striped cone, wide at the pole, flapping a little.
-  const segs = 4;
   const len = 20;
+  const segs = 4;
+  const outline = [];
   for (let i = 0; i < segs; i++) {
     const x0 = (i * len) / segs + 2;
     const x1 = ((i + 1) * len) / segs + 2;
-    const w0 = 4.2 - i * 0.7;
-    const w1 = 4.2 - (i + 1) * 0.7;
-    const wob = Math.sin(clock * 9 - i) * 0.6 * (i / segs);
-    ctx.fillStyle = i % 2 ? '#ffffff' : '#ff6a2b';
-    ctx.beginPath();
-    ctx.moveTo(x0, -w0 + wob);
-    ctx.lineTo(x1, -w1 + wob);
-    ctx.lineTo(x1, w1 + wob);
-    ctx.lineTo(x0, w0 + wob);
-    ctx.closePath();
-    ctx.fill();
+    const w0 = 4.4 - i * 0.7;
+    const w1 = 4.4 - (i + 1) * 0.7;
+    const wob = Math.round(Math.sin(clock * 9 - i) * 0.8 * (i / segs));
+    const quad = [rot(x0, -w0 + wob, a, SOCK.x, SOCK.y), rot(x1, -w1 + wob, a, SOCK.x, SOCK.y), rot(x1, w1 + wob, a, SOCK.x, SOCK.y), rot(x0, w0 + wob, a, SOCK.x, SOCK.y)];
+    outline.push(quad);
   }
-  ctx.strokeStyle = '#3e4255';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(2, -4.2);
-  ctx.lineTo(len + 2, -1.4);
-  ctx.lineTo(len + 2, 1.4);
-  ctx.lineTo(2, 4.2);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.restore();
+  // Outline first, one pixel bigger, then the stripes.
+  for (const q of outline) {
+    const c = { x: (q[0].x + q[2].x) / 2, y: (q[0].y + q[2].y) / 2 };
+    pxPoly(q.map((p) => ({ x: p.x + Math.sign(p.x - c.x) * 0.9, y: p.y + Math.sign(p.y - c.y) * 0.9 })), '#3e4255');
+  }
+  outline.forEach((q, i) => pxPoly(q, i % 2 ? '#ffffff' : '#ff6a2b'));
 }
 
 function drawLine(p) {
   if (!p.path.length) return;
-  const ringI = p.ringIdx;
   let last = { x: p.x, y: p.y };
   let acc = 0;
   for (let i = 0; i < p.path.length; i++) {
@@ -1262,9 +1389,8 @@ function drawLine(p) {
     last = q;
     if (acc < 3) continue;
     acc = 0;
-    const final = p.ring && i > ringI;
-    ctx.fillStyle = final ? 'rgba(94,224,90,0.9)' : 'rgba(255,255,255,0.88)';
-    ctx.fillRect(q.x - 1, q.y - 1, 2, 2);
+    lc.fillStyle = p.ring && i > p.ringIdx ? '#5ee05a' : '#ffffff';
+    lc.fillRect(Math.round(q.x) - 1, Math.round(q.y) - 1, 2, 2);
   }
 }
 
@@ -1274,140 +1400,140 @@ function drawFuel(p) {
   const f = clamp(p.fuel / p.fuelMax, 0, 1);
   const low = f < 0.25;
   if (low && Math.sin(clock * 12) < 0) return;
-  ctx.strokeStyle = low ? '#ffffff' : 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = low ? 1.6 : 1;
-  ctx.beginPath();
-  ctx.arc(p.x, p.y, T.r + 4, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2);
-  ctx.stroke();
+  pxRing(p.x, p.y, T.r + 4, low ? '#ffffff' : 'rgba(255,255,255,0.6)', { a0: -Math.PI / 2, a1: -Math.PI / 2 + f * Math.PI * 2 });
 }
 
-function draw() {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#8cc63f';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const k = S * dpr;
-  ctx.setTransform(k, 0, 0, k, offX * dpr, offY * dpr);
-  ctx.imageSmoothingEnabled = false;
-  if (ground) ctx.drawImage(ground, -GEXT, -GEXT);
-  // Cloud shadows on the ground.
-  for (const c of clouds) {
-    ctx.globalAlpha = 0.1;
-    ctx.drawImage(c.shadow, Math.round(c.x + 14), Math.round(c.y + 20));
-  }
-  ctx.globalAlpha = 1;
-  drawEnds();
-  drawSock();
-  // Smoke and tyre puffs.
-  for (const p of particles) {
-    const a = 1 - p.life / p.max;
-    ctx.globalAlpha = 0.55 * a;
-    const s = 10 * p.size * (0.6 + 0.6 * (p.life / p.max));
-    ctx.drawImage(tiles, 8 * 16, 0, 16, 16, p.x - s / 2, p.y - s / 2, s, s);
-  }
-  ctx.globalAlpha = 1;
-  // Arrival arrows at the edge.
-  if (mode === 'play') {
-    for (const a of schedule) {
-      if (!a.shown || a.done) continue;
-      const e = entryPoint(a);
-      const x = clamp(e.x, 7, FW - 7);
-      const y = clamp(e.y, 7, FH - 7);
-      const ang = Math.atan2(a.aim.y - e.y, a.aim.x - e.x);
-      const pulse = 0.6 + 0.4 * Math.sin(clock * 8);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(ang);
-      ctx.scale(1.4, 1.4);
-      ctx.globalAlpha = pulse;
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#3e4255';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(5, 0);
-      ctx.lineTo(-3, -4);
-      ctx.lineTo(-1, 0);
-      ctx.lineTo(-3, 4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+function drawArrow(a) {
+  const e = entryPoint(a);
+  const x = clamp(e.x, 8, FW - 8);
+  const y = clamp(e.y, 8, FH - 8);
+  const ang = Math.atan2(a.aim.y - e.y, a.aim.x - e.x);
+  if (Math.sin(clock * 8) < -0.3) return; // it blinks
+  const shape = (k) => [rot(7 * k, 0, ang, x, y), rot(-4 * k, -5 * k, ang, x, y), rot(-1 * k, 0, ang, x, y), rot(-4 * k, 5 * k, ang, x, y)];
+  pxPoly(shape(1.25), '#3e4255');
+  pxPoly(shape(0.95), '#ffffff');
+}
+
+// The swing's sweep of light: a band of pixels crossing the field, under the planes.
+function drawSweep() {
+  const k = sweep.t / 1.4;
+  const ang = Math.atan2(sweep.dir.y, sweep.dir.x);
+  const cx = FW / 2;
+  const cy = FH / 2;
+  const d = -260 + k * 520;
+  const band = (w) => [rot(d - w, -320, ang, cx, cy), rot(d + w, -320, ang, cx, cy), rot(d + w, 320, ang, cx, cy), rot(d - w, 320, ang, cx, cy)];
+  pxPolyClipped(band(26), 'rgba(255,255,255,0.10)');
+  pxPolyClipped(band(10), 'rgba(255,255,255,0.12)');
+}
+// pxPoly limited to the small canvas, so a huge band costs only the visible pixels.
+function pxPolyClipped(pts, color) {
+  const box = [
+    { x: -OX, y: -OY },
+    { x: LW - OX, y: LH - OY },
+  ];
+  lc.fillStyle = color;
+  const x0 = Math.floor(box[0].x);
+  const y0 = Math.floor(box[0].y);
+  for (let y = y0; y < box[1].y; y++) {
+    for (let x = x0; x < box[1].x; x++) {
+      const qx = x + 0.5;
+      const qy = y + 0.5;
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i];
+        const b = pts[j];
+        if (a.y > qy !== b.y > qy && qx < ((b.x - a.x) * (qy - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      if (inside) lc.fillRect(x, y, 1, 1);
     }
   }
-  // Lines under the planes.
-  for (const p of st.planes) drawLine(p);
-  // The swing's sweep of light, under the planes.
-  if (sweep) {
-    const k2 = sweep.t / 1.4;
-    const ang = Math.atan2(sweep.dir.y, sweep.dir.x);
-    ctx.save();
-    ctx.translate(FW / 2, FH / 2);
-    ctx.rotate(ang);
-    const x = -260 + k2 * 520;
-    const grad = ctx.createLinearGradient(x - 40, 0, x + 40, 0);
-    grad.addColorStop(0, 'rgba(255,255,255,0)');
-    grad.addColorStop(0.5, 'rgba(255,255,255,0.22)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(x - 40, -300, 80, 600);
-    ctx.restore();
-  }
-  // Planes: rolling ones first, then the air.
-  const order = [...st.planes].sort((a, b) => a.alt - b.alt);
-  const dim = mode === 'crashing' || mode === 'crash' ? 0.75 : 1;
-  for (const p of order) drawPlane(p, p.crashed ? 1 : dim);
-  // Clouds above the ground, faint, under the planes' marks.
-  for (const c of clouds) {
-    ctx.globalAlpha = 0.32;
-    ctx.drawImage(c.img, Math.round(c.x), Math.round(c.y));
-  }
-  ctx.globalAlpha = 1;
-  // Fuel, conflict and crash marks on top: nothing hides them.
+}
+
+// The marks drawn over the field: rings, lines, arrows, fuel, conflict, the head, points.
+function drawMarks() {
   for (const p of st.planes) drawFuel(p);
   const byId = new Map(st.planes.map((p) => [p.id, p]));
   for (const p of st.planes) {
     if (!p.conflict) continue;
-    const T = TYPES[p.type];
-    ctx.strokeStyle = '#ff3b30';
-    ctx.lineWidth = 1.6;
-    ringPath(p.x, p.y, T.r + 2);
-    ctx.stroke();
+    pxRing(p.x, p.y, TYPES[p.type].r + 2, '#ff3b30', { th: 2 });
     const q = byId.get(p.conflictWith);
-    if (q && q.conflict) {
-      ctx.beginPath();
-      ctx.moveTo(p.x, p.y);
-      ctx.lineTo(q.x, q.y);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+    if (q && q.conflict) pxLine(p.x, p.y, q.x, q.y, '#ff3b30');
   }
   if (crashInfo && (mode === 'crashing' || mode === 'crash')) {
-    ctx.strokeStyle = '#ff3b30';
-    ctx.lineWidth = 2;
-    ringPath(crashInfo.x, crashInfo.y, 16 + Math.sin(clock * 6) * 1.5);
-    ctx.stroke();
+    pxRing(crashInfo.x, crashInfo.y, 16 + Math.round(Math.sin(clock * 6) * 1.5), '#ff3b30', { th: 2 });
   }
-  // The drawing head.
-  if (drawing && !drawing.snapped && drawing.head) {
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.2;
-    ringPath(drawing.head.x, drawing.head.y, 3.5);
-    ctx.stroke();
-  }
-  // Points.
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  if (drawing && !drawing.snapped && drawing.head) pxRing(drawing.head.x, drawing.head.y, 3.5, '#ffffff');
   for (const p of popups) {
-    const a = 1 - p.t / 1.4;
-    ctx.globalAlpha = a;
-    ctx.font = 'bold 8px system-ui, sans-serif';
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = 'rgba(30,34,48,0.8)';
-    ctx.fillStyle = p.dim ? '#e3e8f2' : '#ffd23f';
-    const y = p.y - p.t * 10;
-    ctx.strokeText(p.text, p.x, y);
-    ctx.fillText(p.text, p.x, y);
+    if (Math.sin(p.t * 30) < -0.6 && p.t > 1) continue; // flickers out, 8-bit style
+    pxText(p.text, p.x, p.y - Math.floor(p.t * 10), p.dim ? '#e3e8f2' : '#ffd23f', '#1e2130');
   }
-  ctx.globalAlpha = 1;
+}
+
+function draw() {
+  lc = lo.getContext('2d');
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  lc.imageSmoothingEnabled = false;
+  lc.globalAlpha = 1;
+  lc.fillStyle = '#8cc63f';
+  lc.fillRect(0, 0, LW, LH);
+  lc.translate(OX, OY);
+  if (ground) lc.drawImage(ground, -GEXT, -GEXT);
+  for (const c of clouds) {
+    lc.globalAlpha = 0.1;
+    lc.drawImage(c.shadow, Math.round(c.x + 14), Math.round(c.y + 20));
+  }
+  lc.globalAlpha = 1;
+  drawEnds();
+  drawSock();
+  for (const p of particles) {
+    const a = 1 - p.life / p.max;
+    lc.globalAlpha = Math.round(0.55 * a * 4) / 4; // a few steps, not a smooth fade
+    const s = Math.max(2, Math.round(10 * p.size * (0.6 + 0.6 * (p.life / p.max))));
+    lc.drawImage(tiles, 8 * 16, 0, 16, 16, Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
+  }
+  lc.globalAlpha = 1;
+  if (mode === 'play') for (const a of schedule) if (a.shown && !a.done) drawArrow(a);
+  for (const p of st.planes) drawLine(p);
+  if (sweep) drawSweep();
+  const order = [...st.planes].sort((a, b) => a.alt - b.alt);
+  const dim = mode === 'crashing' || mode === 'crash' ? 0.75 : 1;
+  for (const p of order) drawPlane(p, p.crashed ? 1 : dim);
+  for (const c of clouds) {
+    lc.globalAlpha = 0.32;
+    lc.drawImage(c.img, Math.round(c.x), Math.round(c.y));
+  }
+  lc.globalAlpha = 1;
+  drawMarks();
+  // Enlarge to the screen, square pixels, no smoothing.
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  const bx = (offX - OX * S) * dpr;
+  const by = (offY - OY * S) * dpr;
+  ctx.drawImage(lo, 0, 0, LW, LH, bx, by, LW * S * dpr, LH * S * dpr);
+}
+
+// For the test: draw every kind of mark on a clear canvas and return the alpha values it used.
+function marksAlphaProbe() {
+  const keep = lc;
+  const c = document.createElement('canvas');
+  c.width = FW;
+  c.height = FH;
+  lc = c.getContext('2d');
+  pxRing(40, 40, RING_R, '#5ee05a', { th: 2 });
+  pxRing(80, 40, 12, '#ffffff', { a0: -Math.PI / 2, a1: 2 });
+  pxLine(10, 100, 170, 140, '#ff3b30');
+  pxPoly([rot(7, 0, 0.7, 60, 200), rot(-4, -5, 0.7, 60, 200), rot(-1, 0, 0.7, 60, 200), rot(-4, 5, 0.7, 60, 200)], '#ffffff');
+  pxText('+30 x3', 90, 260, '#ffd23f', '#1e2130');
+  const stKeep = st;
+  st = st || newShiftState(0);
+  lc.translate(-SOCK.x + 140, -SOCK.y + 200);
+  drawSock();
+  st = stKeep;
+  const data = lc.getImageData(0, 0, FW, FH).data;
+  lc = keep;
+  const alphas = new Set();
+  for (let i = 3; i < data.length; i += 4) alphas.add(data[i]);
+  return [...alphas].sort((a, b) => a - b);
 }
 
 // ---------- Loop ----------
@@ -1425,6 +1551,7 @@ function frame(now) {
   }
   if (tiles.complete && planesImg.complete) {
     if (!ground && tiles.naturalWidth) ground = buildGround();
+    if (!silhouettes && planesImg.naturalWidth) silhouettes = buildSilhouettes();
     draw();
   }
   syncHud();
@@ -1602,4 +1729,5 @@ window.__windsock = {
   entryPoint,
   advance,
   clouds: () => clouds.map((c) => ({ x: c.x, y: c.y })),
+  marksAlphaProbe,
 };
