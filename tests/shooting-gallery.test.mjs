@@ -1140,7 +1140,7 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
   await context.close();
 });
 
-test('shooting-gallery AC-30: a hit target tips back with its stick, and is lowered out of sight within 0.8 s', async () => {
+test('shooting-gallery AC-30: a hit target is pulled straight down with its stick, at once and gathering speed, out of sight behind its strip within 0.45 s', async () => {
   const { context, page } = await open();
   await ready(page);
   const t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
@@ -1149,40 +1149,107 @@ test('shooting-gallery AC-30: a hit target tips back with its stick, and is lowe
     const g = window.__gallery;
     const tg = g.targets().find((x) => x.id === id);
     const lane = g.L.lanes[tg.lane];
-    const pv = g.pivotOf(tg);
     const [, h] = g.dims(tg);
-    const topAt = (anim) => {
-      tg.anim = anim;
+    const poses = [];
+    for (let a = 0; a <= 0.4001; a += 0.04) {
+      tg.anim = a;
       const k = g.knockPose(tg);
-      return { top: pv.y - (pv.y - (tg.y - h / 2)) * k.sy + k.dy, sy: k.sy };
-    };
-    const early = topAt(0.1);
-    const late = topAt(0.75);
-    tg.anim = 0.3;
+      poses.push({ a, sy: k.sy, dy: k.dy, top: tg.y - h / 2 + k.dy });
+    }
+    tg.anim = 0.2;
     // Its stick is still drawn while it goes down.
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-    return { early, late, strip: lane.strip, poles: g.polesDrawn(), state: tg.state };
+    return { poses, strip: lane.strip, poles: g.polesDrawn(), state: tg.state };
   }, t.id);
   assert.equal(r.state, 'knocked');
-  assert.ok(r.early.sy < 1 && r.early.top < r.strip, 'it tips back, still in view');
-  assert.ok(r.late.top >= r.strip, `then it is lowered out of sight: ${r.late.top} vs ${r.strip}`);
+  assert.ok(r.poses.every((p) => p.sy === 1), 'it is not folded back: it keeps its shape');
+  // Each step until it is hidden moves farther than the one before: no pause, no slowing to a stop.
+  const shown = r.poses.filter((p) => p.top < r.strip);
+  for (let i = 1; i < shown.length; i++) {
+    const was = shown[i - 1].dy - (shown[i - 2]?.dy ?? 0);
+    assert.ok(shown[i].dy - shown[i - 1].dy >= was - 1e-9 && shown[i].dy > shown[i - 1].dy, `it gathers speed while in view: ${JSON.stringify(shown.map((p) => p.dy.toFixed(1)))}`);
+  }
+  assert.ok(r.poses[1].dy > 2, 'it starts moving at once');
+  assert.ok(r.poses.find((p) => Math.abs(p.a - 0.4) < 1e-6).top >= r.strip, 'it is out of sight by 0.4 s');
+  assert.ok(r.poses.find((p) => Math.abs(p.a - 0.2) < 1e-6).top < r.strip, 'but not in a flash: still partly in view at 0.2 s');
   assert.equal(r.poles, 1, 'its stick is drawn as it goes down');
-  // A hit drop-down swings back and is pulled up behind the valance.
+  // A hit drop-down is pulled straight up behind the valance.
   const drop = await page.evaluate(() => {
     const g = window.__gallery;
     const d = g.makeTarget('drop', { lane: 3, x: 300, up: true, turn: false });
     d.state = 'knocked';
-    d.anim = 0.75;
+    d.anim = 0.4;
     const k = g.knockPose(d);
-    const pv = g.pivotOf(d);
     const [, h] = g.dims(d);
-    return { bottom: pv.y + (d.y + h / 2 - pv.y) * k.sy + k.dy, valance: g.L.top + 30 };
+    return { bottom: d.y + h / 2 + k.dy, valance: g.L.top + 30 };
   });
   assert.ok(drop.bottom <= drop.valance, `a drop-down is pulled up out of sight: ${JSON.stringify(drop)}`);
-  // By 0.8 s after the hit the target is gone from the booth.
+  // By 0.45 s after the hit the target is gone from the booth.
   const t2 = await place(page, 'target', { lane: 1, x: 120, face: 'target_red1' });
   await shoot(page, t2.x + t2.w * 0.38, 1);
-  await steps(page, 0.8);
-  assert.equal(await page.evaluate((id) => window.__gallery.targets().some((x) => x.id === id), t2.id), false, 'gone within 0.8 s');
+  await steps(page, 0.45);
+  assert.equal(await page.evaluate((id) => window.__gallery.targets().some((x) => x.id === id), t2.id), false, 'gone within 0.45 s');
+  await context.close();
+});
+
+test('shooting-gallery AC-31: paint on the water or grass shows only below its crest, never hanging in the air above the edge', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(async () => {
+    const g = window.__gallery;
+    const out = [];
+    for (const lane of g.L.lanes) {
+      for (let x = 40; x < g.stage().SW - 40; x += 23) {
+        const crest = g.stripY(lane, x);
+        out.push({ lane: lane.i, x, above: g.paintShowsAt(lane.i, x, crest - 3), below: g.paintShowsAt(lane.i, x, crest + 3) });
+      }
+    }
+    // A shot just under a crest lands on the strip, and its lane's paint is drawn clipped.
+    const lane = g.L.lanes[2];
+    const x = 150;
+    g.aimAt(x, g.stripY(lane, x) + 2);
+    g.game.lastLand = null;
+    g.fire();
+    for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    return { out, landed: g.game.lastLand, clipped: g.paintClipped(), lanes: g.L.n };
+  });
+  assert.equal(r.landed.what, 'strip');
+  assert.ok(r.out.every((p) => !p.above && p.below), `clipped at the crest: ${JSON.stringify(r.out.filter((p) => p.above || !p.below))}`);
+  assert.equal(r.clipped, r.lanes, 'every lane’s paint is drawn clipped to its strip');
+  await context.close();
+});
+
+test('shooting-gallery AC-32: a target’s stick stays in the background: its tones are soft, far less contrasting than the target', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(async () => {
+    const g = window.__gallery;
+    const lane = g.L.lanes[2];
+    const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: false, face: 'target_red1' });
+    const [w, h] = g.dims(t);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const { k, ox, oy } = g.stage();
+    const dpr = cv.width / innerWidth;
+    const lum = (ux, uy) => {
+      const d = c.getImageData(Math.round((ux * k + ox) * dpr), Math.round((uy * k + oy) * dpr), 1, 1).data;
+      return 0.2126 * d[0] + 0.7152 * d[1] + 0.0722 * d[2];
+    };
+    const range = (xs, y) => {
+      const v = xs.map((x) => lum(x, y));
+      return Math.max(...v) - Math.min(...v);
+    };
+    const sw = g.stickWidth(lane);
+    const y = (t.y + h / 2 + g.stripY(lane, t.x)) / 2;
+    const stickXs = [];
+    for (let x = t.x - sw / 2; x <= t.x + sw / 2 + 1e-9; x += sw / 12) stickXs.push(x);
+    const faceXs = [];
+    for (let x = t.x - w * 0.45; x <= t.x + w * 0.45; x += w / 40) faceXs.push(x);
+    return { stick: range(stickXs, y), face: range(faceXs, t.y) };
+  });
+  assert.ok(r.stick < 70, `the stick’s tones are soft: a range of ${r.stick.toFixed(0)}`);
+  assert.ok(r.stick < r.face * 0.4, `far less contrasting than the target: ${r.stick.toFixed(0)} vs ${r.face.toFixed(0)}`);
   await context.close();
 });

@@ -19,6 +19,27 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's sixth playtest (owner, 2026-11-09)
+
+Where they differ from the fifth playtest below, these win.
+
+- **Sticks in the background.** "The stick below the targets, it calls too much the attention now
+  … it has to be … more in the background … lighter colors, softer texture or softer edges … The
+  main thing you see should … [be] the targets as they are now." Every stick is narrower and drawn
+  in soft, muted browns close to the booth's own, with a faint edge and grain: its tones span far
+  less than a target's.
+- **Paint stays on the water and grass.** "if the splash is hitting on the edge of the level … the
+  water edge or the foliage edge … the paint is like floating … just leave the paint on the bottom
+  side, the actual physical part, as if the paint had gone to the back side and fell off." Paint on
+  a strip is clipped to the strip's own crest; the part of a splat that would hang in the air is
+  not drawn.
+- **A hit is pulled straight down.** "it starts going down, but then it stops and then it
+  disappears … imagine you had a mechanism there that you hit them and it will lower them … Don't
+  try to fold them to the back … just lower them … whoop, it goes down. It cannot be super fast,
+  but it also shouldn't be … too slow." A hit target is pulled straight down along its stick, the
+  stick with it, starting at once and gathering speed with no pause, out of sight behind its strip
+  in 0.38 s; a drop-down is hauled straight up. The fifth playtest's tip back is gone.
+
 ### The owner's fifth playtest (owner, 2026-11-09)
 
 - **A hit tips the whole thing back, stick and all.** "When you hit one of them, it doesn't look
@@ -386,8 +407,13 @@ moment 8–18 s into rounds 2 to 6.
   `tests/shooting-gallery.test.mjs`.
 - **AC-29** The start, over, pause and turn cards are wooden signs from the pack's wood, and the
   10 s chime is louder than the others — `tests/shooting-gallery.test.mjs`.
-- **AC-30** A hit target tips back with its stick, which stays drawn, and is lowered out of sight
-  behind its strip (a drop-down is pulled up) within 0.8 s — `tests/shooting-gallery.test.mjs`.
+- **AC-30** A hit target is pulled straight down with its stick, which stays drawn, starting at
+  once and gathering speed, out of sight behind its strip (a drop-down pulled up) within 0.45 s,
+  still partly in view at 0.2 s — `tests/shooting-gallery.test.mjs`.
+- **AC-31** Paint on a lane's water or grass shows only below the strip's crest, never above its
+  edge — `tests/shooting-gallery.test.mjs`.
+- **AC-32** A target's stick is drawn in soft tones: across its width they span less than 70 levels
+  of luminance and less than 0.4 of what the target's face spans — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

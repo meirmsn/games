@@ -1174,8 +1174,8 @@ function update(dt) {
       if ((t.dir > 0 && t.x > SW + w / 2 + 8) || (t.dir < 0 && t.x < -w / 2 - 8)) t.state = 'gone';
     }
   }
-  // A hit target is out of sight once lowered (0.72 s), and gone just after.
-  targets = targets.filter((t) => t.state === 'live' || (t.state === 'knocked' && t.anim < 0.75));
+  // A hit target is out of sight once lowered (0.38 s), and gone just after.
+  targets = targets.filter((t) => t.state === 'live' || (t.state === 'knocked' && t.anim < KNOCK_LEN + 0.04));
 
   for (const b of balls) {
     b.t += dt;
@@ -1247,7 +1247,39 @@ function drawStrip(lane) {
   for (; x < SW + tw; x += tw) ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * part, x, lane.strip, tw + 0.5, th);
 }
 
+// A strip's paint shows only on the water or grass itself: it's clipped to the strip's own crest, so
+// a splat that lands on the edge loses the part that would hang in the air, as if it had gone over
+// the back and run off.
+const stripClips = new WeakMap();
+function stripClip(lane) {
+  let c = stripClips.get(lane);
+  if (!c) {
+    c = new Path2D();
+    c.moveTo(-4, SH + 4);
+    for (let x = -4; x <= SW + 4; x += 1) c.lineTo(x, stripY(lane, x));
+    c.lineTo(SW + 4, SH + 4);
+    c.closePath();
+    stripClips.set(lane, c);
+  }
+  return c;
+}
+let clipCtx = null;
+// Whether a strip's paint can show at (x, y) (for the tests).
+function paintShowsAt(laneIdx, x, y) {
+  clipCtx = clipCtx || document.createElement('canvas').getContext('2d');
+  return clipCtx.isPointInPath(stripClip(L.lanes[laneIdx]), x, y);
+}
+let paintClipped = 0;
 function drawPaint(layer) {
+  if (layer >= 0) {
+    ctx.save();
+    ctx.clip(stripClip(L.lanes[layer]));
+    paintClipped++;
+  }
+  drawPaintIn(layer);
+  if (layer >= 0) ctx.restore();
+}
+function drawPaintIn(layer) {
   for (const p of paint) {
     if (p.layer !== layer) continue;
     const a = paintAlpha(p);
@@ -1288,7 +1320,7 @@ function drawTarget(t) {
     ctx.stroke();
   } else {
     // The stick it stands on, from its middle down past its lane's strip; it goes down with it.
-    pole(t.x, t.y, pv.y + 16, Math.max(5, 30 * lane.s * 0.8));
+    pole(t.x, t.y, pv.y + 16, stickWidth(lane));
   }
   ctx.save();
   ctx.translate(t.x, t.y);
@@ -1325,39 +1357,40 @@ function drawTarget(t) {
   ctx.globalAlpha = 1;
 }
 
-// A hit target's pose: the whole thing, target and stick together, tips back about the stick's foot
-// (seen foreshortened as it falls away, `sy`), then the mechanism lowers it out of sight behind the
-// strip (`dy`); a drop-down swings back on its rope and is pulled up behind the valance.
+// A hit target's pose: the mechanism under the booth pulls it straight down along its stick, the
+// stick going with it, out of sight behind its strip; a drop-down is hauled up behind the valance.
+// It starts at once and gathers speed, like a lever letting go, with no pause before it's hidden.
+const KNOCK_LEN = 0.38;
+const knockEase = (p) => (p + p * p) / 2;
 function knockPose(t) {
   const [, h] = dims(t);
   const pv = pivotOf(t);
-  const tip = 1 - Math.pow(1 - Math.min(1, t.anim / 0.22), 2);
-  const lower = Math.max(0, Math.min(1, (t.anim - 0.22) / 0.5));
-  const sy = 1 - 0.55 * tip;
-  if (t.kind === 'drop') return { sy, dy: -lower * ((t.y + h / 2 - pv.y) * sy + 12) };
-  const top = pv.y - (pv.y - (t.y - h / 2)) * sy;
-  return { sy, dy: lower * Math.max(0, L.lanes[t.lane].strip + 10 - top) };
+  const e = knockEase(Math.min(1, t.anim / KNOCK_LEN));
+  if (t.kind === 'drop') return { sy: 1, dy: -e * (t.y + h / 2 - pv.y + 12) };
+  return { sy: 1, dy: e * Math.max(0, L.lanes[t.lane].strip + 12 - (t.y - h / 2)) };
 }
 // How many poles the last frame drew (for the tests).
 let polesDrawn = 0;
-// A wooden pole: outlined, light on one side and dark on the other, with a faint grain, so it shows
-// against water, grass and wood alike.
+// A wooden pole, kept in the background: soft, muted browns close to the booth's own, lit a little
+// on one side, with a faint grain and a soft edge, so it reads as a stick without drawing the eye.
+const stickWidth = (lane) => Math.max(4, 30 * lane.s * 0.65);
+const STICK = { light: '#b08d6b', mid: '#97735a', dark: '#7d5d46', edge: 'rgba(55, 32, 16, 0.22)', grain: 'rgba(60, 34, 14, 0.12)' };
 function pole(x, top, bottom, w) {
   polesDrawn++;
   const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-  g.addColorStop(0, '#e0a566');
-  g.addColorStop(0.45, '#b07034');
-  g.addColorStop(1, '#5e3311');
+  g.addColorStop(0, STICK.light);
+  g.addColorStop(0.5, STICK.mid);
+  g.addColorStop(1, STICK.dark);
   ctx.fillStyle = g;
   ctx.fillRect(x - w / 2, top, w, bottom - top);
-  ctx.strokeStyle = 'rgba(60, 30, 8, 0.45)';
+  ctx.strokeStyle = STICK.grain;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(x - w * 0.12, top);
   ctx.lineTo(x - w * 0.08, bottom);
   ctx.stroke();
-  ctx.strokeStyle = '#2e1808';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = STICK.edge;
+  ctx.lineWidth = 1;
   ctx.strokeRect(x - w / 2, top, w, bottom - top);
 }
 
@@ -1909,6 +1942,7 @@ function drawLamps() {
 
 function draw() {
   polesDrawn = 0;
+  paintClipped = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2181,7 +2215,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
