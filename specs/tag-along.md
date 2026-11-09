@@ -167,7 +167,7 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 - **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the
   game itself, which makes 8 tiles on today's `main`; games built in parallel add theirs, so the count
   is set when this rebases; the picture is made by `scripts/tag-along/make-tile.mjs` (Claude,
-  2026-11-09). On a wide screen the street outside the 12 walkable columns is dimmed a little. The atlas is the pack's own spritesheet, its frame
+  2026-11-09). The atlas is the pack's own spritesheet, its frame
   list made by `scripts/tag-along/build-atlas.mjs`.
 - **Tests** drive the game through `window.__tagAlong` (its state, a seeded random source and a
   `step(dt)` that advances the simulation), as Reef's tests do (Claude, 2026-11-09).
