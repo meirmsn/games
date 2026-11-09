@@ -403,8 +403,9 @@ test('orbit AC-9: the hidden assist grows with misses, never changes the drawn r
   });
   assert.deepEqual(steps, [0, 0, 0.333, 0.667, 1, 1]);
   // with 3 misses, a probe 4% outside the drawn band is caught; with 2 it isn't
-  const caught = (n) =>
-    page.evaluate((n) => {
+  // a probe `out` of the ring's radius beyond the drawn band, moving along the ring
+  const caught = (n, out = 0.04) =>
+    page.evaluate(([n, out]) => {
       const o = window.__orbit;
       const g = o.game;
       o.startSystem(0);
@@ -412,18 +413,23 @@ test('orbit AC-9: the hidden assist grows with misses, never changes the drawn r
       o.fire(0.5);
       const b = g.level.bodies[g.level.legs[0].to];
       const ringBefore = b.ring;
-      Object.assign(g.flight, { x: b.x + b.ring * 1.04 + 26, y: b.y, vx: 0, vy: -60 }); // along the ring
+      Object.assign(g.flight, { x: b.x + b.ring * (1 + out) + 26, y: b.y, vx: 0, vy: -60 }); // along the ring
       o.update(1 / 240);
       const res = g.mode;
       for (let i = 0; i < 400 && g.mode !== 'idle'; i++) o.update(1 / 60);
       return { res, ring: b.ring === ringBefore, legFails: g.legFails };
-    }, n);
+    }, [n, out]);
   const two = await caught(2);
   assert.notEqual(two.res, 'capture');
   const three = await caught(3);
   assert.equal(three.res, 'capture');
   assert.ok(three.ring, 'the drawn ring is the same');
   assert.equal(three.legFails, 0, 'reset by the capture');
+  // the band keeps growing: 9% out is caught at 4 misses (10%) but not 3 (5%); 14% at 5 (15%) but not 4
+  assert.notEqual((await caught(3, 0.09)).res, 'capture');
+  assert.equal((await caught(4, 0.09)).res, 'capture');
+  assert.notEqual((await caught(4, 0.14)).res, 'capture');
+  assert.equal((await caught(5, 0.14)).res, 'capture');
   await context.close();
 });
 
