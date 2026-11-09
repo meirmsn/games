@@ -255,6 +255,7 @@ test('runes AC-7: each state shows only its own panel, and the board takes input
   // Choosing a level: the level select only; keys and drags move nothing.
   await page.click('[data-levels]');
   assert.deepEqual(await seen(), { solved: false, levels: true });
+  assert.equal(await page.locator('.bar').isVisible(), true, 'the bar stays while choosing a level');
   await page.keyboard.press('ArrowRight');
   await drag(page, 100, 700, c, 0);
   assert.deepEqual(await path(page), [0], 'no input while choosing a level');
@@ -603,6 +604,21 @@ test('runes AC-20: a line that ends unsolved shows a loud panel below the board 
   for (const c of toGate.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
   const panel = page.locator('[data-result][data-kind="failed"]');
   await panel.waitFor({ state: 'visible' });
+  // The state: the bar gives way to the panel, the missed stones are outlined, and keys and drags
+  // move nothing.
+  assert.equal(await page.locator('.bar').isVisible(), false, 'the bar is hidden');
+  const dark = await page.evaluate(() => {
+    const s = window.__runes.game.s;
+    return [...s.up].map((u, i) => (u && !s.lit[i] ? i : -1)).filter((i) => i >= 0);
+  });
+  assert.ok(dark.length > 0);
+  assert.deepEqual(await page.evaluate(() => window.__runes.missed()), dark, 'every dark stone is outlined');
+  const ended = await path(page);
+  for (const k of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) await page.keyboard.press(k);
+  const cs = await cellSize(page);
+  await drag(page, 100, 300, -cs, 0);
+  await drag(page, 100, 300, 0, -cs);
+  assert.deepEqual(await path(page), ended, 'no keys or drags once the attempt ended');
   assert.match(await panel.textContent(), /didn’t make it/);
   assert.match(await panel.textContent(), /still dark/);
   assert.match(await page.locator('[data-result-tip]').textContent(), /Light every stone before you step on the gate/);
@@ -672,6 +688,14 @@ test('runes AC-21: with a mouse, the cursor is a hand over stones the line can a
   p = await at(0); // the head
   await mouse(p.x, p.y);
   assert.equal(await cursor(), 'pointer');
+  await page.evaluate(() => {
+    window.__runes.stepTo(1);
+    window.__runes.stepTo(2);
+  });
+  p = await at(1); // a lit stone (not the head): a tap cuts back to it
+  await mouse(p.x, p.y);
+  assert.equal(await cursor(), 'pointer');
+  await page.evaluate(() => window.__runes.restart());
   p = await at(3); // water
   await mouse(p.x, p.y);
   assert.equal(await cursor(), 'auto');

@@ -415,6 +415,14 @@ function playerMoves() {
   return out;
 }
 
+// The stones an unsolved attempt left dark: they are outlined on the board.
+function missed() {
+  if (!game.failed) return [];
+  const out = [];
+  for (let i = 0; i < game.s.up.length; i++) if (game.s.up[i] && !game.s.lit[i]) out.push(i);
+  return out;
+}
+
 // Why the line ended unsolved, as a tip for next time.
 const TIPS = {
   gate: 'Light every stone before you step on the gate: the gate is always the last stone.',
@@ -867,6 +875,7 @@ function draw(now) {
   const pv = preview();
   const pvSet = new Set(pv.cells);
   const strandedSet = new Set(guidance ? game.stranded : []);
+  const missedSet = new Set(missed());
   const lineIdx = new Map(s.path.map((cell, i) => [cell, i]));
   const head = R.head(s);
 
@@ -937,7 +946,7 @@ function draw(now) {
       ctx.fillStyle = `rgba(${HUES.sink}, ${KNOBS.previewAlpha * 0.7})`;
       ctx.fillRect(xx + c * 0.06, y + c * 0.06, c * 0.88, c * 0.88);
     }
-    if (game.failed && !s.lit[i]) {
+    if (missedSet.has(i)) {
       // The attempt is over: the stones it missed pulse, so you see what was left dark.
       ctx.strokeStyle = `rgba(255, 120, 110, ${0.55 + 0.35 * Math.sin(t * 4)})`;
       ctx.lineWidth = Math.max(2, c * 0.05);
@@ -1131,4 +1140,5 @@ window.__runes = {
   setGuidance,
   guidance: () => guidance,
   tips: TIPS,
+  missed,
 };
