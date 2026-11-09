@@ -80,15 +80,18 @@ performance item.
   palette: the Meadow is 18 px per tile, drawn into a back buffer and scaled to the screen by a whole
   number with no smoothing; Candy is 70 px per tile, drawn smooth. The monster is drawn by the
   world's rule too: in the Meadow it is baked to 18 px per tile (about 27 px tall) with binary alpha,
-  a short palette of its own (at most 8 flat colours: its body's, and its face's kept apart so eyes
-  read on a body of the same hue) and the pack's dark 1-px outline, with its eyes and mouth enlarged so the face reads, and animated
+  a short palette of its own (a few flat colours, none near another: the body's main colour and its
+  face's) and the pack's dark 1-px outline, with its eyes and mouth enlarged so the face reads, and animated
   by a few pose frames instead of rotation; in Candy it is the vector parts, drawn smooth with
   swinging limbs. Rejected: drawing every pack at its native size (a 70 px tile beside an 18 px
   one), and one style for the monster everywhere, which looks pasted on in one of the two worlds.
 - **Changed after the go, by the owner (2026-11-09), on seeing the first baked monsters:** "the
   pixelated looks better BUT don't have those transition pixels … just commit to a short list of
   colors per character". So a baked monster has no in-between shades: every pixel is one of its
-  short palette's colours or the outline.
+  short palette's colours or the outline. Then (2026-11-09): "That white monster still looks odd
+  because there's like two shades of black and two shades of gray … not allow near colors." So no
+  two colours of a baked monster may be near each other: a colour close to one already in (the
+  outline first, then the body's main colour, then the face's) merges into it.
 - **The leap between worlds is the event:** a portal ends each world. Entering it takes the
   monster out of physics and freezes the world, and the tally card shows. Its Leap button starts the
   leap, 1.6 s in all: a soft white flash (0.3 s), then the next world drawn blocky at 18 px per tile
@@ -177,7 +180,7 @@ performance item.
   smoothing (the screen is made of uniform blocks of that size), and in Candy at 70 px per tile
   drawn smooth; the screen size of a tile is the same in both — `tests/pixel-leap.test.mjs`.
 - **AC-5** The Meadow monster is baked with binary alpha and a dark outline around it, uses at most
-  8 colours plus the outline across all its frames, and has pose frames for standing, running and
+  8 colours plus the outline across all its frames, no two of them near each other, and has pose frames for standing, running and
   jumping — `tests/pixel-leap.test.mjs`.
 - **AC-6** Coyote time and the jump buffer work: a jump pressed just after running off a ledge, or
   just before landing, jumps — `tests/pixel-leap.test.mjs`.

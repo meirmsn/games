@@ -169,7 +169,7 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
   const footX = Math.floor(w / 2);
   const footY = h - 2;
   const [or, og, ob] = hex(outline);
-  const pal = palette(img, m, s, ears, faceBoost);
+  const pal = palette(img, m, s, ears, faceBoost, hex(outline));
   const frames = {};
   for (const [name, pose] of Object.entries(POSES)) {
     const c = makeCanvas(w, h);
@@ -216,7 +216,8 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
 // anti-aliased edges are a tiny share of the pixels; colours are merged when close, and only those
 // covering a real share of the monster are kept (at most 8), so blends at the edges never become
 // colours of their own.
-export function palette(img, m, s, ears, faceBoost) {
+export const MIN_APART = 150; // how far apart (weighted RGB) any two palette colours must be
+export function palette(img, m, s, ears, faceBoost, outline = [38, 35, 56]) {
   const big = 6;
   const w = Math.ceil((s * big * 1000) / 2.4) || 1;
   const c = makeCanvas(Math.min(900, w), Math.min(900, w));
@@ -242,12 +243,16 @@ export function palette(img, m, s, ears, faceBoost) {
     else pal.push({ col, n });
   }
   const body = pal.filter((p) => p.n >= total * 0.004).slice(0, 4).map((p) => p.col);
-  // The face keeps its own colours (sclera, iris, pupil, mouth), even where they're close to the
-  // body's, so eyes on a body of the same hue still read.
+  // No two colours may be near each other: the outline first, then the body's main colour, then
+  // the face's (sclera, iris, pupil, mouth), then the body's shades. A colour too close to one
+  // already in merges into it, so near-blacks become the outline and white and light grey one white.
   const face = faceColours(img, m);
-  const out = [...body];
-  for (const col of face) if (!out.some((p) => dist2(p, col) < 14 * 14) && out.length < 8) out.push(col);
-  return out.length ? out : [[128, 128, 128]];
+  const chosen = [outline];
+  for (const col of [body[0], ...face, ...body.slice(1)]) {
+    if (!col || chosen.length >= 9) continue;
+    if (chosen.every((p) => dist2(p, col) >= MIN_APART * MIN_APART)) chosen.push(col);
+  }
+  return chosen;
 }
 
 function faceColours(img, m) {
