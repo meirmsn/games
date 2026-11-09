@@ -5,15 +5,15 @@
 // targets running along it, one way or the other; pop-ups rise from behind any lane's strip and
 // drop-downs are lowered into a lane on a rope.
 //
-// There is no crosshair. The gun stands at the bottom centre: turning it (yaw) moves the landing
-// point along the lanes, raising it (pitch) picks the lane, and the paintball takes a moment to fly,
-// so a moving target has to be led. Every miss leaves its paint on the booth.
+// There is no crosshair. A slingshot stands on the counter: pull back and let go. Pulling sideways
+// moves the landing point the other way along the lanes, pulling down sends it farther, and the
+// paintball takes a moment to fly, so a moving target has to be led. Every miss leaves its paint.
 import { mountShell } from '../shared/game-shell.js';
 import { FRAMES, ATLAS_SCALE } from './atlas.js';
 
 const { sound } = mountShell({
   sounds: {
-    shot: 'sounds/shot.mp3',
+    twang: 'sounds/twang.mp3',
     splat: 'sounds/splat.mp3',
     splat2: 'sounds/splat2.mp3',
     plip: 'sounds/plip.mp3',
@@ -28,6 +28,10 @@ const { sound } = mountShell({
     finale: 'sounds/finale.mp3',
     music: 'sounds/music.mp3',
     frenzy: 'sounds/frenzy.mp3',
+    frenzyhit: 'sounds/frenzyhit.mp3',
+    chime: 'sounds/chime.mp3',
+    warn: 'sounds/warn.mp3',
+    tock: 'sounds/tock.mp3',
   },
 });
 
@@ -44,14 +48,14 @@ function sfx(name, opts) {
 const ROUND_TIME = 30;
 const HOPPER = 6;
 const REFILL = 0.6;
-const YAW_MAX = 55;
-const YAW_REACH = 0.47; // of the stage width, either side
-const PX_PER_DEG = 3;
-const PX_PER_LANE = 44;
-const TAP_MS = 250;
-const TAP_PX = 8;
+// The slingshot: a pull of PULL_X sideways reaches 0.47 of the stage width either way, a pull of
+// PULL_Y down reaches the top of the booth. A pull under PULL_MIN is no shot.
+const REACH = 0.47;
+const pullX = () => (orient === 'landscape' ? 90 : 80);
+const pullY = () => (orient === 'landscape' ? 64 : 110);
+const PULL_MIN = 10;
 const FLIGHT_NEAR = 0.18;
-const FLIGHT_FAR = 0.42;
+const FLIGHT_FAR = 0.45;
 const FRENZY_LEN = 6;
 const FRENZY_SPEED = 1.6;
 const MULT_CAP = 8;
@@ -61,7 +65,7 @@ const PALETTE = ['#2f80ed', '#9b51e0', '#eb4f9b', '#27ae60', '#00b5c8', '#7ac143
 
 const ROUNDS = [
   null,
-  { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55 },
+  { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55, frenzy: true },
   { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true },
   { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true },
   { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true },
@@ -183,8 +187,10 @@ function layoutStage(o) {
     });
   }
   L.n = n;
-  L.gunX = SW / 2;
-  L.gunY = SH - bottom - (land ? 6 : 10);
+  // The slingshot's pouch at rest, on the counter; its handle runs down to the bottom.
+  L.slingX = SW / 2;
+  L.slingY = L.C + (land ? 50 : 70);
+  L.slingFoot = SH - bottom - 2;
   fit();
 }
 
@@ -291,7 +297,7 @@ const game = {
   hopper: HOPPER,
   refillT: 0,
   frenzy: 0, // seconds of frenzy left
-  frenzyAt: 0, // when in the round it comes; 0 = not this round
+  frenzyTimes: [], // when in the round the frenzy target comes
   frenzyDone: false,
   spawn: {},
   colour: 0,
@@ -303,7 +309,9 @@ const game = {
   lastFire: -1,
   attract: true,
 };
-const aim = { yaw: 0, lane: 4, acc: 0 };
+// The pull, in units: x to the right, y down. `active` while a finger or the mouse holds the pouch;
+// `kb` once the keyboard has set it (the keyboard's pull stays between shots).
+const aim = { px: 0, py: 0, active: false, kb: false, kx: 0, ky: 55, shots: 0 };
 let targets = [];
 let balls = [];
 let paint = []; // splats on the scenery
@@ -414,6 +422,25 @@ function launchPop(i, upFor = 1.8) {
   t.x = freeSpot(i, dims(t)[0] * 1.2);
   return t;
 }
+// The frenzy target: easy in round 1 (big, rising in the nearest lane for 3.5 s), harder in round 2
+// (crossing a middle lane), hard from round 3 (crossing the farthest lane at 1.8× its speed).
+function launchFrenzyTarget() {
+  const n = L.n;
+  const cfg = game.cfg;
+  if (game.round === 1) {
+    const t = makeTarget('frenzy', { lane: n - 1, face: 'target_colored', turn: false, big: 1.15, upFor: 3.5 });
+    t.motion = 'pop';
+    t.y = hiddenY(t);
+    t.x = freeSpot(n - 1, dims(t)[0] * 1.2);
+    return t;
+  }
+  const i = game.round === 2 ? Math.floor((n - 1) / 2) : 0;
+  const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, speed: laneSpeed(cfg, i) * (game.round === 2 ? 1 : 1.8) });
+  t.motion = 'mover';
+  const [w] = dims(t);
+  t.x = t.dir > 0 ? -w / 2 - 4 : SW + w / 2 + 4;
+  return t;
+}
 function launchDrop(i, upFor = 1.8) {
   const t = makeTarget('drop', { lane: i, upFor });
   t.x = freeSpot(i, dims(t)[0] * 1.2);
@@ -453,9 +480,10 @@ function startRun({ seed = Date.now(), restart = false } = {}) {
   targets = [];
   balls = [];
   makeDecor();
-  aim.yaw = 0;
-  aim.lane = L.n - 1;
-  aim.acc = 0;
+  aim.px = 0;
+  aim.py = 0;
+  aim.active = false;
+  aim.shots = 0;
   startRound(1);
   music('music');
 }
@@ -471,7 +499,10 @@ function startRound(n) {
   game.elapsed = 0;
   game.frenzy = 0;
   game.frenzyDone = false;
-  game.frenzyAt = cfg.frenzy ? rand(8, 18) : 0;
+  // The frenzy target comes 5–9 s in, and again at 17–22 s if no frenzy has come.
+  game.frenzyTimes = cfg.frenzy ? [rand(5, 9), rand(17, 22)] : [];
+  game.halfDone = false;
+  game.tenDone = false;
   game.missRow = 0;
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 1.8)), pop: rand(1.5, 3), drop: rand(2.5, 4), gold: [] };
   if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
@@ -484,6 +515,7 @@ function startRound(n) {
     // A big, slow target crosses the middle of the nearest lane, where the gun already points.
     const i = L.n - 1;
     const t = makeTarget(L.lanes[i].kind === 'water' ? 'duck' : 'target', { lane: i, speed: 26, big: 1.15, face: L.lanes[i].kind === 'water' ? 'duck_target_yellow' : 'target_colored', turn: false });
+    // It crosses the middle, where a straight pull lands.
     t.x = SW / 2 - t.dir * 60;
     game.spawn.movers[i] = 3.5;
   }
@@ -560,38 +592,29 @@ function endFrenzy() {
 
 // ---------- Aiming and shooting ----------
 
-function aimPoint() {
-  const lane = L.lanes[aim.lane];
-  return { x: SW / 2 + (aim.yaw / YAW_MAX) * YAW_REACH * SW, y: lane.line };
+function aimPoint(px = aim.px, py = aim.py) {
+  const fx = clamp(px / pullX(), -1, 1);
+  const fy = clamp(py / pullY(), 0, 1);
+  return { x: SW / 2 - fx * REACH * SW, y: L.C - fy * (L.C - L.T) };
 }
-function turnBy(deg) {
-  aim.yaw = clamp(aim.yaw + deg, -YAW_MAX, YAW_MAX);
+// Set the pull, clamped: sideways to ±pullX, down to pullY, a little up.
+function setPull(px, py) {
+  aim.px = clamp(px, -pullX(), pullX());
+  aim.py = clamp(py, -20, pullY());
 }
-// Raise by `steps` lanes (toward the far lane), one at a time, never past the ends.
-function raiseBy(steps) {
-  aim.lane = clamp(aim.lane - steps, 0, L.n - 1);
+const pullLen = () => Math.hypot(aim.px, aim.py);
+// The flight: longer the farther it goes.
+function flightTime(y) {
+  return lerp(FLIGHT_NEAR, FLIGHT_FAR, clamp((L.C - y) / (L.C - L.T), 0, 1));
 }
-function flightTime(i) {
-  const n = L.n;
-  return lerp(FLIGHT_NEAR, FLIGHT_FAR, n === 1 ? 0 : (n - 1 - i) / (n - 1));
+// The lane whose band holds a height.
+function laneAt(y) {
+  const band = (L.C - L.T) / L.n;
+  return clamp(Math.floor((y - L.T) / band), 0, L.n - 1);
 }
-// The pack's rifle is drawn on a slant: from the stock's foot (0.75, 1) to the muzzle (0.12, 0) of
-// its sprite. The gun turns about the stock's foot, corrected by that slant.
-const RIFLE_FOOT = [0.75, 1];
-const RIFLE_TIP = [0.12, 0.02];
-const gunScale = () => (orient === 'landscape' ? 0.24 : 0.34);
-function rifleAxis() {
-  const [w, h] = size('rifle');
-  const dx = (RIFLE_TIP[0] - RIFLE_FOOT[0]) * w;
-  const dy = (RIFLE_TIP[1] - RIFLE_FOOT[1]) * h;
-  return { len: Math.hypot(dx, dy), slant: Math.atan2(dx, -dy) };
-}
-const gunLen = () => rifleAxis().len * gunScale();
-function muzzle() {
-  const a = aimPoint();
-  const ang = Math.atan2(a.x - L.gunX, L.gunY - a.y);
-  const len = gunLen();
-  return { x: L.gunX + Math.sin(ang) * len, y: L.gunY - Math.cos(ang) * len, ang };
+// Where the pouch is drawn: it follows the pull, a little less than the finger.
+function pouch() {
+  return { x: L.slingX + aim.px * 0.75, y: L.slingY + clamp(aim.py, -20, pullY()) * (orient === 'landscape' ? 0.45 : 0.6) };
 }
 
 function canFire() {
@@ -600,6 +623,7 @@ function canFire() {
 
 function fire() {
   if (!canFire()) return null;
+  if (pullLen() < PULL_MIN) return null;
   const free = game.frenzy > 0;
   if (!free && game.hopper < 1) {
     sfx('dry');
@@ -612,12 +636,14 @@ function fire() {
   }
   game.lastFire = game.T;
   game.kick = 1;
-  const m = muzzle();
+  aim.shots++;
+  const from = pouch();
   const a = aimPoint();
   const colour = PALETTE[game.colour++ % PALETTE.length];
-  const b = { x0: m.x, y0: m.y, x1: a.x, y1: a.y, t: 0, dur: flightTime(aim.lane), colour, lane: aim.lane, free };
+  const lane = laneAt(a.y);
+  const b = { x0: from.x, y0: from.y, x1: a.x, y1: a.y, t: 0, dur: flightTime(a.y), colour, lane, free };
   balls.push(b);
-  sfx('shot', { rate: rand(0.95, 1.08) });
+  sfx('twang', { rate: rand(0.95, 1.08) });
   return b;
 }
 
@@ -709,6 +735,14 @@ function landOn(b) {
   }
   t.state = 'knocked';
   t.anim = 0;
+  if (t.kind === 'frenzy') {
+    game.score += 50;
+    game.roundScore += 50;
+    popup(b.x1, b.y1 - 18, '+50', '#ffd1ea');
+    sfx('frenzyhit');
+    startFrenzy();
+    return r;
+  }
   const bull = r.what === 'bull';
   const lane = L.lanes[t.lane];
   const pips = t.kind === 'gold' ? 2 : lane.pips;
@@ -820,6 +854,10 @@ function spawnStep(dt, cfg) {
       sp.gold[g] = -1;
     }
   }
+  if (!game.frenzyDone && !fr && game.frenzyTimes.length && game.elapsed >= game.frenzyTimes[0]) {
+    game.frenzyTimes.shift();
+    if (!targets.some((t) => t.kind === 'frenzy' && t.state === 'live')) launchFrenzyTarget();
+  }
   if (fr) {
     // Targets spring up across every lane.
     sp.frenzy -= dt;
@@ -830,6 +868,31 @@ function spawnStep(dt, cfg) {
     }
   }
 }
+
+// The timer's cues: a chime and a swell at half time, a double chime at 10 s, a tick in each of the
+// last 3 seconds.
+function timerCues(before, now) {
+  const half = ROUND_TIME / 2;
+  if (before > half && now <= half) {
+    sfx('chime');
+    game.pulse = 1;
+  }
+  if (before > 10 && now <= 10) {
+    sfx('warn');
+    game.pulse = 1;
+  }
+  for (const s of [3, 2, 1]) if (before > s && now <= s) sfx('tock');
+}
+// The timer badge's background: plain, then yellow from 10 s, orange from 5 s, red from 3 s; pink
+// in a frenzy.
+function timerColour() {
+  if (game.frenzy > 0) return 'pink';
+  if (game.time <= 3) return 'red';
+  if (game.time <= 5) return 'orange';
+  if (game.time <= 10) return 'yellow';
+  return 'plain';
+}
+const TIMER_BG = { plain: '#fff4dc', yellow: '#ffd23f', orange: '#f28c28', red: '#e8452c', pink: '#ff7ab8' };
 
 function attractStep(dt) {
   const cfg = ROUNDS[1];
@@ -852,6 +915,7 @@ function update(dt) {
     if (game.banner.t > game.banner.life) game.banner = null;
   }
   game.kick = Math.max(0, game.kick - dt * 6);
+  game.pulse = Math.max(0, (game.pulse || 0) - dt * 1.6);
   for (const d of decor) if (d.v) d.x = d.x + d.v * dt > SW + 80 ? -80 : d.x + d.v * dt;
 
   if (game.mode === 'intro' && game.modeT >= 1.2) {
@@ -864,9 +928,10 @@ function update(dt) {
       game.frenzy -= dt;
       if (game.frenzy <= 0) endFrenzy();
     } else {
+      const before = game.time;
       game.time -= dt;
       game.elapsed += dt;
-      if (game.frenzyAt && !game.frenzyDone && game.elapsed >= game.frenzyAt) startFrenzy();
+      timerCues(before, game.time);
     }
     spawnStep(dt, cfg);
     // The hopper refills one ball every 0.6 s.
@@ -889,7 +954,7 @@ function update(dt) {
     }
     if (t.state !== 'live' || !moving) continue;
     const lane = L.lanes[t.lane];
-    if (t.kind === 'pop' || t.kind === 'drop') {
+    if (t.kind === 'pop' || t.kind === 'drop' || t.motion === 'pop') {
       t.popT += dt * speed;
       const up = t.upFor;
       let h;
@@ -901,10 +966,10 @@ function update(dt) {
         t.state = 'gone';
       }
       const e = h * h * (3 - 2 * h);
-      const from = t.kind === 'pop' ? hiddenY(t) : dropTop(t);
+      const from = t.kind === 'drop' ? dropTop(t) : hiddenY(t);
       const wasHidden = t.y > lane.strip;
       t.y = from + (lane.line - from) * e;
-      if (t.kind === 'pop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
+      if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
     } else {
       t.x += t.dir * t.speed * dt * speed;
       t.y = lane.line + (t.isDuck ? 2.5 * Math.sin(game.T * 2.4 + t.phase) : 0);
@@ -1034,6 +1099,16 @@ function drawTarget(t) {
   let name = t.face;
   if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
   sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
+  if (t.kind === 'frenzy' && t.state === 'live') {
+    const r = w * (0.62 + 0.06 * Math.sin(game.T * 9));
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = '#ff5fa2';
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   if (t.kind === 'gold' && !ts.showBack) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = fade * (0.25 + 0.2 * Math.sin(game.T * 8));
@@ -1091,40 +1166,51 @@ function drawCounter() {
 
 const hudVisible = () => game.mode !== 'start';
 
-// The HUD's places on the counter, in units.
+// The HUD's places, in units: the timer badge at the top left beside the back button, the rest on
+// the counter.
 function hudLayout() {
   const land = orient === 'landscape';
+  const bh = land ? 40 : 48;
   return {
-    timer: { x: 20, y: L.C + 12, w: SW - 40, h: 8 },
-    label: { x: 22, y: L.C + 32 },
-    pips: { x: 22, y: L.C + (land ? 52 : 56), r: land ? 5.5 : 6.5 },
-    hopper: { x: 22, y: L.C + (land ? 80 : 92), r: land ? 7 : 8.5 },
-    gauge: { x: L.gunX + (land ? 52 : 66), y: L.gunY - 8, step: land ? 11 : 13 },
+    timer: { x: Math.max(8, (64 - ox) / k), y: L.top + (land ? 6 : 8), w: land ? 64 : 76, h: bh, font: land ? 30 : 36 },
+    score: { y: L.top + (land ? 26 : 34), font: land ? 22 : 26 },
+    label: { x: 22, y: L.C + 20 },
+    pips: { x: 22, y: L.C + (land ? 42 : 46), r: land ? 5.5 : 6.5 },
+    hopper: { x: 22, y: L.C + (land ? 72 : 82), r: land ? 7 : 8.5 },
   };
 }
 
 function drawHud() {
   if (!hudVisible()) return;
   const cfg = game.cfg;
-  label(game.score.toLocaleString('en-US'), SW / 2, L.top + (orient === 'landscape' ? 26 : 34), orient === 'landscape' ? 24 : 30, 'center');
-  if (!cfg) return;
   const H = hudLayout();
-  // The round's timer: a bar that drains; in a frenzy it stops and turns pink.
-  const frac = clamp(game.time / ROUND_TIME, 0, 1);
-  ctx.fillStyle = 'rgba(255, 244, 220, 0.2)';
-  roundRect(H.timer.x, H.timer.y, H.timer.w, H.timer.h, 4);
+  label(game.score.toLocaleString('en-US'), SW / 2, H.score.y, H.score.font, 'center');
+  if (!cfg) return;
+  // The timer badge: whole seconds, large, its background warning as time runs out.
+  const tm = H.timer;
+  const col = timerColour();
+  const swell = 1 + 0.3 * Math.sin(Math.PI * Math.min(1, game.pulse || 0));
+  ctx.save();
+  ctx.translate(tm.x + tm.w / 2, tm.y + tm.h / 2);
+  ctx.scale(swell, swell);
+  ctx.fillStyle = TIMER_BG[col];
+  ctx.strokeStyle = '#7a3f12';
+  ctx.lineWidth = 3;
+  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 12);
   ctx.fill();
-  ctx.fillStyle = game.frenzy > 0 ? '#ff5fa2' : frac < 0.2 ? '#e8452c' : '#ffd23f';
-  if (frac > 0) {
-    roundRect(H.timer.x, H.timer.y, Math.max(8, H.timer.w * frac), H.timer.h, 4);
-    ctx.fill();
-  }
+  ctx.stroke();
+  const secs = Math.max(0, Math.ceil(game.time - 1e-6));
+  ctx.font = `800 ${tm.font}px "Trebuchet MS", "Arial Rounded MT Bold", system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = col === 'plain' || col === 'yellow' ? '#4a2a12' : '#fff';
+  ctx.fillText(String(secs), 0, 2);
+  ctx.restore();
   label(`Round ${game.round} · ${cfg.name}`, H.label.x, H.label.y, 14, 'left', '#fff4dc');
-  // The quota: a bar that fills with every pip, and the count beside it; gold in the bonus, the
-  // missing part flashing red when the time runs out.
+  // The quota: a bar that fills with every pip, the count inside it; gold in the bonus, the
+  // missing part flashing red when the time runs out. It stays left of the slingshot.
   const flash = game.mode === 'lost' && Math.floor(game.modeT * 6) % 2 === 0;
-  // It stays left of the gun: the count sits inside it.
-  const bw = Math.min(SW * 0.42, L.gunX - 52 - H.pips.x);
+  const bw = Math.min(SW * 0.42, L.slingX - 62 - H.pips.x);
   const bh = H.pips.r * 2.4;
   const by = H.pips.y - bh / 2;
   ctx.fillStyle = flash ? '#d0342c' : 'rgba(255, 244, 220, 0.18)';
@@ -1161,24 +1247,78 @@ function drawHud() {
   }
 }
 
-// The gun and its gauge: the barrel points at where the ball will land; the gauge lights the lane.
-function drawGun() {
-  const [w, h] = size('rifle');
-  const s = gunScale();
-  const m = muzzle();
-  ctx.save();
-  ctx.translate(L.gunX, L.gunY + game.kick * 6);
-  ctx.rotate(m.ang - rifleAxis().slant);
-  sprite('rifle', -RIFLE_FOOT[0] * w * s, -RIFLE_FOOT[1] * h * s, w * s, h * s);
-  ctx.restore();
-  if (!hudVisible() || !game.cfg) return;
-  const g = hudLayout().gauge;
-  for (let i = 0; i < L.n; i++) {
-    const y = g.y - (L.n - 1 - i) * g.step;
-    const on = i === aim.lane;
-    ctx.fillStyle = on ? '#ffd23f' : 'rgba(255, 244, 220, 0.28)';
-    roundRect(g.x, y - 4, on ? 22 : 16, 8, 4);
+// The slingshot: a fork of the pack's wooden sticks, a band from its prongs to the pouch, and the
+// next paintball in the pouch. The pouch follows the pull; the band shows which way and how far.
+function slingGeometry() {
+  const land = orient === 'landscape';
+  const spread = land ? 32 : 42;
+  const forkY = L.slingY - (land ? 20 : 28);
+  return { spread, forkY, crotchY: L.slingY + (land ? 18 : 28), stick: land ? 13 : 17 };
+}
+function drawSlingshot() {
+  const g = slingGeometry();
+  const x = L.slingX;
+  const wood = (x1, y1, x2, y2, wdt) => {
+    // A stick from the pack, stretched and turned to run from (x1, y1) to (x2, y2).
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    ctx.save();
+    ctx.translate(x1, y1);
+    ctx.rotate(Math.atan2(x2 - x1, -(y2 - y1)));
+    sprite('stick_wood', -wdt / 2, -len, wdt, len + 2);
+    ctx.restore();
+  };
+  const showPull = hudVisible() && game.cfg && (aim.active || aim.kb);
+  const p = showPull ? pouch() : { x: x, y: L.slingY };
+  const ball = PALETTE[game.colour % PALETTE.length];
+  const ready = game.frenzy > 0 || game.hopper >= 1;
+  // The back band, the handle and prongs, then the pouch and the front band.
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#5b3a1e';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(x - g.spread, g.forkY);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  wood(x, L.slingFoot, x, g.crotchY, g.stick * 1.25);
+  wood(x, g.crotchY + 2, x - g.spread, g.forkY, g.stick);
+  wood(x, g.crotchY + 2, x + g.spread, g.forkY, g.stick);
+  ctx.fillStyle = '#4a2f18';
+  roundRect(p.x - 13, p.y - 5, 26, 13, 5);
+  ctx.fill();
+  if (ready && hudVisible() && game.cfg) {
+    ctx.fillStyle = ball;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - 4, 8.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc(p.x - 3, p.y - 7, 2.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = '#6b4424';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(x + g.spread, g.forkY);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  // Until the run's first shot, an arrow under the pouch shows the pull.
+  if (game.mode === 'play' && aim.shots === 0 && !aim.active) {
+    const bob = 6 * Math.sin(game.T * 5);
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#fff4dc';
+    ctx.translate(x + 40, L.slingY + 6 + bob);
+    ctx.beginPath();
+    ctx.moveTo(-7, -10);
+    ctx.lineTo(7, -10);
+    ctx.lineTo(7, 4);
+    ctx.lineTo(13, 4);
+    ctx.lineTo(0, 18);
+    ctx.lineTo(-13, 4);
+    ctx.lineTo(-7, 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -1337,8 +1477,8 @@ function draw() {
   drawCurtains();
   drawCounter();
   drawHud();
+  drawSlingshot();
   drawBalls();
-  drawGun();
   drawFx();
   drawBanner();
   if (game.frenzy > 0) {
@@ -1360,7 +1500,8 @@ function makeDecor() {
   decor.push({ name: 'cloud2', x: SW * 0.7, y: top + 16, w: cw * 0.4, h: ch * 0.4, v: 4 });
   const [pw, ph] = size('tree_pine');
   const [ow, oh] = size('tree_oak');
-  const base = L.lanes[0].strip + 10;
+  // The trunks go down behind the far lane's strip, past its deepest trough.
+  const base = L.lanes[0].strip + 38;
   decor.push({ name: 'tree_pine', x: SW * 0.08, y: base - ph * 0.42, w: pw * 0.42, h: ph * 0.42, v: 0 });
   decor.push({ name: 'tree_oak', x: SW * 0.8, y: base - oh * 0.38, w: ow * 0.38, h: oh * 0.38, v: 0 });
 }
@@ -1371,102 +1512,59 @@ const toUnits = (cx, cy) => ({ x: (cx - ox) / k, y: (cy - oy) / k });
 // The counter is the thumb's pad; the lanes aren't for touching.
 const onPad = (cx, cy) => toUnits(cx, cy).y >= L.C - 8;
 
-let finger = null; // the finger on the counter: { id, x, y, t0, moved, cancelled, second }
-let mouse = null; // a mouse press: { x, y, moved }
+// The slingshot is pulled from wherever the finger first touches the counter (or the mouse
+// presses anywhere): the pull is how far it has moved since, and letting go fires.
+let grip = null; // { id, x, y }: the pointer holding the pouch, and where it first touched
 canvas.addEventListener('pointerdown', (e) => {
-  if (game.paused || game.turned) return;
-  if (e.pointerType === 'mouse') {
-    if (e.button !== 0) return;
-    mouse = { x: e.clientX, y: e.clientY, moved: 0 };
-    return;
+  if (game.paused || game.turned || grip) return;
+  const isMouse = e.pointerType === 'mouse';
+  if (isMouse && e.button !== 0) return;
+  if (!isMouse && !onPad(e.clientX, e.clientY)) return;
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // A synthetic pointer can't be captured; it still pulls.
   }
-  if (!finger) {
-    if (!onPad(e.clientX, e.clientY)) return;
-    try {
-      canvas.setPointerCapture(e.pointerId);
-    } catch (err) {
-      // A synthetic pointer can't be captured; it still aims.
-    }
-    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, t0: performance.now(), moved: 0, cancelled: false };
-    return;
-  }
-  if (finger.second == null) {
-    // A second finger fires at once; the first finger's lift then won't.
-    finger.second = e.pointerId;
-    finger.cancelled = true;
-    fire();
-  }
+  grip = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  aim.active = true;
+  aim.kb = false;
+  setPull(0, 0);
 });
-// A drag: across turns the gun, 3 px a degree; up and down raises it a lane every 44 px.
-function drag(dx, dy) {
-  turnBy(dx / PX_PER_DEG);
-  aim.acc -= dy;
-  while (aim.acc >= PX_PER_LANE) {
-    raiseBy(1);
-    aim.acc -= PX_PER_LANE;
-  }
-  while (aim.acc <= -PX_PER_LANE) {
-    raiseBy(-1);
-    aim.acc += PX_PER_LANE;
-  }
-}
 canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') {
-    if (!mouse || game.paused || game.turned) return;
-    const dx = e.clientX - mouse.x;
-    const dy = e.clientY - mouse.y;
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-    mouse.moved += Math.hypot(dx, dy);
-    drag(dx, dy);
-    return;
-  }
-  if (!finger || e.pointerId !== finger.id) return;
-  const dx = e.clientX - finger.x;
-  const dy = e.clientY - finger.y;
-  finger.x = e.clientX;
-  finger.y = e.clientY;
-  finger.moved += Math.hypot(dx, dy);
-  if (game.paused || game.turned) return;
-  drag(dx, dy);
+  if (!grip || e.pointerId !== grip.id || game.paused || game.turned) return;
+  setPull((e.clientX - grip.x) / k, (e.clientY - grip.y) / k);
 });
 function release(e) {
-  if (e.pointerType === 'mouse') {
-    const m = mouse;
-    mouse = null;
-    if (m && m.moved < 6 && e.type === 'pointerup') fire();
-    return;
-  }
-  if (!finger) return;
-  if (e.pointerId === finger.second) {
-    finger.second = undefined;
-    return;
-  }
-  if (e.pointerId !== finger.id) return;
-  const f = finger;
-  finger = null;
-  if (e.type === 'pointercancel' || f.cancelled || game.paused || game.turned) return;
-  if (f.moved < TAP_PX && performance.now() - f.t0 < TAP_MS) fire();
+  if (!grip || e.pointerId !== grip.id) return;
+  grip = null;
+  if (e.type === 'pointerup' && !game.paused && !game.turned) fire();
+  aim.active = false;
+  setPull(0, 0);
 }
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+// The keyboard sets a pull that stays between shots: Left and Right aim along the lanes, Up and Down
+// farther and nearer (Shift for fine), Space or Enter lets go.
 const keys = new Set();
-let held = 0;
 window.addEventListener('keydown', (e) => {
   const t = e.target;
   if (t instanceof HTMLElement && t.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
-  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+  if (e.key.startsWith('Arrow')) {
     keys.add(e.key);
     e.preventDefault();
-  } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    e.preventDefault();
-    if (!game.paused && !game.turned) raiseBy(e.key === 'ArrowUp' ? 1 : -1);
+    if (!aim.kb) {
+      aim.kb = true;
+      aim.kx = clamp(aim.kx, -pullX(), pullX());
+    }
   } else if (e.key === 'Shift') keys.add('Shift');
   else if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
     if (game.mode === 'play' || game.mode === 'intro') {
       e.preventDefault();
+      if (aim.active) return;
+      aim.kb = true;
+      setPull(aim.kx, aim.ky);
       fire();
     }
   }
@@ -1474,22 +1572,21 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
 function updateKeys(dt) {
-  const ax = (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0);
-  if (!ax) {
-    held = 0;
-    return;
-  }
-  held += dt;
-  const v = keys.has('Shift') ? 12 : Math.min(90, 30 + held * 90); // degrees a second
-  turnBy(ax * v * dt);
+  const ax = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
+  const ay = (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0);
+  if (!ax && !ay) return;
+  const v = keys.has('Shift') ? 18 : 60; // units of pull a second
+  aim.kx = clamp(aim.kx + ax * v * dt, -pullX(), pullX());
+  aim.ky = clamp(aim.ky + ay * v * dt, 0, pullY());
+  if (!aim.active) setPull(aim.kx, aim.ky);
 }
 
 // ---------- Pause and orientation ----------
 
 const inRun = () => ['intro', 'play', 'won', 'lost'].includes(game.mode);
 function pause() {
-  finger = null;
-  mouse = null;
+  grip = null;
+  aim.active = false;
   if (inRun()) {
     game.paused = true;
     ui.pause.hidden = game.turned;
@@ -1521,7 +1618,6 @@ function onResize() {
       targets = [];
       paint = [];
       game.spawn = {};
-      aim.lane = L.n - 1;
     } else layoutStage(orient);
     makeDecor();
     if (game.mode === 'start') showStart();
@@ -1536,8 +1632,8 @@ function checkTurn() {
   const w = wanted();
   if (w !== orient && !game.turned) {
     game.turned = true;
-    finger = null;
-    mouse = null;
+    grip = null;
+    aim.active = false;
     ui.turned.hidden = false;
     ui.pause.hidden = true;
     ui.turnedText.textContent = `Restart in ${w}?`;
@@ -1620,7 +1716,6 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     layoutStage(screenOrient());
     makeMasks();
     makeDecor();
-    aim.lane = L.n - 1;
     // The booth is already moving behind the start card.
     game.spawn = { movers: L.lanes.map(() => rand(2, 4)) };
     for (let i = 0; i < L.n; i++) {
@@ -1634,7 +1729,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, muzzle, flightTime, launchPop, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
@@ -1645,6 +1740,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
       set manual(v) { manual = v; },
       get manual() { return manual; },
       stage: () => ({ SW, SH, k, ox, oy, orient }),
+      pullRange: () => ({ x: pullX(), y: pullY() }),
+      // For tests: set the pull that lands at (x, y), and start a frenzy.
+      aimAt(x, y) {
+        setPull(((SW / 2 - x) / (REACH * SW)) * pullX(), ((L.C - y) / (L.C - L.T)) * pullY());
+      },
+      startFrenzy,
       toClient: (x, y) => ({ x: ox + x * k, y: oy + y * k }),
       music: () => musicName,
       ui: () => {
@@ -1660,6 +1761,8 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           hud: shown,
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
           timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',
+          timerColour: !shown || !game.cfg ? 'hidden' : timerColour(),
+          timerText: !shown || !game.cfg ? '' : String(Math.max(0, Math.ceil(game.time - 1e-6))),
           // Under the orientation veil the whole booth, HUD included, is greyed by the veil's filter.
           greyed: !ui.turned.hidden && getComputedStyle(ui.turned).backdropFilter.includes('grayscale'),
           // A mid-play banner's pill, in CSS px.
@@ -1677,9 +1780,10 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           counterTop: c(0, L.C).y,
           timer: c(H.timer.x + H.timer.w, H.timer.y + H.timer.h),
           hopper: c(H.hopper.x + H.hopper.r * (2.6 * (HOPPER - 1) + 2), H.hopper.y + H.hopper.r),
-          gauge: c(H.gauge.x + 22, H.gauge.y + 4),
-          gaugeTop: c(H.gauge.x, H.gauge.y - (L.n - 1) * H.gauge.step - 4),
-          gun: c(L.gunX, L.gunY),
+          timerBadge: { ...c(H.timer.x, H.timer.y), w: H.timer.w * k, h: H.timer.h * k, font: H.timer.font * k },
+          scoreFont: H.score.font * k,
+          sling: c(L.slingX, L.slingY),
+          slingFoot: c(L.slingX, L.slingFoot),
           boothTop: c(0, L.T).y,
         };
       },

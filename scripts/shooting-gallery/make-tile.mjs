@@ -40,9 +40,8 @@ try {
     at('target', 2, SW * 0.36, 'target_red3');
     at('pop', 2, SW * 0.74, 'target_colored', { up: true, upFor: 99 });
     // Paint already on the booth: a few misses, and one shot on its way.
-    for (const [yaw, lane] of [[-42, 0], [-12, 1], [22, 0], [38, 1], [-30, 2], [8, 2], [46, 0], [-50, 1]]) {
-      g.aim.yaw = yaw;
-      g.aim.lane = lane;
+    for (const [fx, lane] of [[0.12, 0], [0.4, 1], [0.66, 0], [0.82, 1], [0.24, 2], [0.55, 2], [0.9, 0], [0.06, 1]]) {
+      g.aimAt(SW * fx, L.lanes[lane].line);
       g.game.lastFire = -1;
       g.fire();
       for (let i = 0; i < 30; i++) g.step(1 / 60);
@@ -54,16 +53,22 @@ try {
     at('duck', 1, SW * 0.52, 'duck_target_brown');
     at('target', 2, SW * 0.36, 'target_red3');
     at('pop', 2, SW * 0.74, 'target_colored', { up: true, upFor: 99 });
-    g.aim.yaw = 6;
-    g.aim.lane = 1;
+    g.aimAt(SW * 0.47, L.lanes[1].line);
+    g.aim.active = true;
     g.game.lastFire = -1;
     g.fire();
+    g.setPull(-18, 40);
     g.step(0.12);
-    // The tile: the booth from the valance to the gun, at the tile's 1.6 aspect.
-    const w = SW * k;
-    const h = w / 1.6;
-    const bottom = oy + (L.C + 60) * k;
-    return { x: ox, y: Math.max(0, bottom - h), width: w, height: Math.min(h, bottom) };
+    // No HUD on the tile: just the booth, its paint, the ball in flight and the slingshot.
+    g.game.mode = 'start';
+    g.game.attract = false;
+    // The tile: the booth from the valance down to the slingshot, cropped at the tile's own 16:10
+    // (cropping a wider strip and scaling it to 16:10 squeezed the picture).
+    const top = oy + (L.top + 4) * k;
+    const bottom = oy + (L.C + 64) * k;
+    const h = bottom - top;
+    const w = h * 1.6;
+    return { x: ox + (SW * k - w) / 2, y: top, width: w, height: h };
   });
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const shot = await page.screenshot({ clip });

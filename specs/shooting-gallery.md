@@ -19,11 +19,57 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's second playtest (owner, 2026-11-09)
+
+The owner played the paintball version's preview and asked, in the session's chat on 2026-11-09,
+for these changes. Where they differ from the decisions further down, these win.
+
+- **A slingshot, aimed continuously.** "the vertical movement is not clear how it works … it's
+  only 3 levels … it should be not discrete. You should be able to point in any vertical direction,
+  and if you miss, you miss … you should see that it's changing … the actual gun moving up and down
+  … I wonder if there are any assets for a slingshot instead of the gun … I think the slingshot will
+  be actually great … the point is we need to make it intuitive to use." The gun and its lane gauge
+  are gone. A slingshot stands on the counter at the bottom centre, drawn in the booth's style from
+  the pack's wooden sticks (Kenney's only slingshot is a voxel icon that clashes with the pack).
+  Claude's mapping:
+  - **Pull and release.** Touch anywhere on the counter and pull: the pouch, holding the next
+    paintball, follows the finger and the band stretches; let go and it flies. The pull is measured
+    from where the finger first touched, so there's no small pouch to find. A pull under 10 units is
+    no shot (let go to cancel).
+  - **Where it lands**, separable and the same everywhere: pulling sideways moves the landing point
+    the other way along the lanes, x = the centre − (pull x / 80) × 0.47 × the stage width; pulling
+    down sends it farther, y = the counter's top − (pull y / 110) × the booth's height (90 and 64 in
+    landscape). Any height, not lane steps: between lanes it lands on whatever is there.
+  - Mouse: press anywhere, pull and release. Keyboard: the arrows set the pull (it's kept between
+    shots), Space lets go.
+  - Until the run's first shot, a soft arrow under the pouch shows the pull.
+- **A timer you can't miss.** "it should be more … like digits … even larger than the points …
+  hanging on the top left … when you get to half the time, it makes some sort of chime and visually
+  calls your attention. And then when there's like 10 seconds left, it makes another chime and it
+  changes color to … yellow and then orange and then red on the last … 2 or 3 seconds … the color
+  is not on the digits but on the background of the timer." The seconds left, in large digits on a
+  badge at the top left beside the back button, larger than the score. At half time a chime and the
+  badge swells; at 10 s a double chime and the badge turns yellow, at 5 s orange, at 3 s red, with a
+  tick each of the last 3 seconds. During a frenzy the badge is pink and stopped. The counter's
+  timer bar is gone.
+- **A frenzy you earn.** "it's not clear when you're gonna get the frenzy, so maybe you earn it by
+  hitting one of the special target … you show them from time to time … on the first level they're
+  easy to hit, but on the second level they're harder, and then from level 3 onwards they're hard to
+  hit." A frenzy target (a target with a pink glow and sparkles) appears from time to time, every
+  round from round 1; hitting it starts the frenzy, at most one a round. Round 1: a big one rises in
+  the nearest lane and stays 3.5 s. Round 2: it crosses a middle lane at the lane's speed. Round 3
+  on: it crosses the farthest lane at 1.8× the speed. It comes about 5–9 s into a round and, if
+  missed, again at 17–22 s.
+- **Fixes:** the tile was squeezed (its picture is now cropped at the tile's own 16:10 before
+  scaling); the gun's sprite carried a speck of its neighbour (the gun is gone); the trees floated
+  (their trunks now go down behind the far lane's water).
+
 ### The owner's changes after playing v2 (owner, 2026-11-09)
 
 The owner played the first version's preview and asked, in the session's chat on 2026-11-09, for a
 harder, paintball version. These decisions replace the first version's controls, economy, rounds
-and music; the first version's decisions they replace are kept, struck, in "Replaced" below.
+and music; the first version's decisions they replace are kept, struck, in "Replaced" below. The owner's
+second playtest, above, then replaced the gun with a slingshot and changed the timer and frenzy.
 
 - **Aim the gun, with no crosshair.** "The game has no challenge because you just have to tap on
   the animal and then it hits perfectly … you only control near the gun … 2 degrees of freedom …
@@ -140,12 +186,12 @@ and music; the first version's decisions they replace are kept, struck, in "Repl
   rounds) pauses play and music under a "Tap to go on" card; the tap that resumes counts in 1 s,
   with play frozen, and never fires. On the start or over card it only pauses the sound.
 - **Sound**, all under the site-wide mute: the waltz and the galop (synthesised), and Kenney sounds
-  as MP3: a pneumatic pop on each shot, a wet splat on landing (two variants, varied pitch), a wood
+  as MP3: the band's twang on each shot, a wet splat on landing (two variants, varied pitch), a wood
   knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
   empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
-  at the quota, a falling pizzicato when the time runs out, and a finale at closing time.
+  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a bell at half time and a double bell at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
 - **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
-  targets, sticks, the rifle as the gun) and its Splat Pack's; the gauge, the timer bar, the ropes
+  targets, sticks, from which the slingshot is built) and its Splat Pack's; the slingshot's band and pouch, the timer badge, the ropes
   and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
 - **Tuning targets:** a first hit within 5 s of Start; a first-timer ends in round 2–3 (about
   1.5–2 minutes); an expert reaches closing time.
@@ -156,7 +202,11 @@ and music; the first version's decisions they replace are kept, struck, in "Repl
   3–4, after about 2–2.5 minutes (a real first-timer, still learning aim without a crosshair, does
   worse than the script, which knows where its shots land); an average player reaches rounds 4–6;
   an expert reaches closing time, with 4 to 15 times a beginner's score.
-- **The landing tile** links to `shooting-gallery/`, its line "Turn the gun, lead the shot and paint
+- **Re-measured with the slingshot** (Claude, 2026-11-09), the same scripts erring now in both
+  directions, as a pull does: a beginner's run ends in rounds 2–3, mostly 2, after about 1.3–1.8
+  minutes (one run in six ended in round 1); an average player reaches rounds 4–5; an expert reaches
+  closing time, in portrait and landscape alike. The quotas stay as they are.
+- **The landing tile** links to `shooting-gallery/`, its line "Pull the slingshot, lead the shot and paint
   the booth", its picture drawn from the game. The game exposes `window.__gallery` for the tests.
 - The owner's whole round of changes goes in this PR, as asked; the adversarial review suggested
   three PRs (Claude, 2026-11-09).
@@ -166,24 +216,27 @@ and music; the first version's decisions they replace are kept, struck, in "Repl
 The first version's decisions that the owner's changes replaced, kept as a record: a relative
 crosshair with tap-to-fire judged at touch-down; shells in a tray of 10 with an overflow payout and
 a 6-shell floor; stick shots; 8 rounds with free rounds 4 and 7 and a Crosswind card; losing when
-the tray emptied or the parade passed; the "Polka Train" loop; a full run of 2.5–3 minutes.
+the tray emptied or the parade passed; the "Polka Train" loop; a full run of 2.5–3 minutes. From the
+paintball version, replaced by the owner's second playtest: the gun turned and raised a lane at a
+time with its lane gauge, a tap to fire, the timer as a bar on the counter, and a frenzy at a random
+moment 8–18 s into rounds 2 to 6.
 
 ## Acceptance items
 
 - **AC-1** The booth is alive behind the start card (targets change position over 1 s); Start
-  begins round 1 with a 30 s timer, a quota of 7, a full hopper of 6 and the gun pointing at the
-  nearest lane; there is no crosshair; no errors — `tests/shooting-gallery.test.mjs`.
-- **AC-2** Turning the gun moves the landing point along the lanes by (yaw / 55°) × 0.47 × the
-  stage width, the same in every lane; raising it steps one lane at a time, never past the nearest
-  or the farthest; the barrel points at the landing point — `tests/shooting-gallery.test.mjs`.
-- **AC-3** On a touch screen a drag on the counter turns (3 px per degree) and raises (a lane per
-  44 px) the gun and its lift doesn't fire; a tap on the counter fires; a second finger's tap fires
-  while the first drags; touches on the lanes neither aim nor fire — `tests/shooting-gallery.test.mjs`.
-- **AC-4** The mouse turns and raises the gun by dragging and fires with a click; the arrow keys
-  turn and raise it and Space fires — `tests/shooting-gallery.test.mjs`.
-- **AC-5** A paintball takes 0.18 s to the nearest lane and longer to farther ones, up to 0.42 s; it
-  is judged where it lands when it lands, so a target that moved away in the meantime is missed —
+  begins round 1 with a 30 s timer, a quota of 7 and a full hopper of 6, the slingshot on the
+  counter; there is no crosshair and no gun; no errors — `tests/shooting-gallery.test.mjs`.
+- **AC-2** A pull lands the ball at x = the centre − (pull x / 80) × 0.47 × the stage width and
+  y = the counter's top − (pull y / 110) × the booth's height (90 and 64 in landscape), at any
+  height, the pull clamped to those ranges; the pouch follows the pull — `tests/shooting-gallery.test.mjs`.
+- **AC-3** On a touch screen, touching the counter and pulling stretches the slingshot and letting
+  go fires; a pull under 10 units fires nothing; touches on the lanes neither aim nor fire —
   `tests/shooting-gallery.test.mjs`.
+- **AC-4** The mouse pulls and releases the slingshot the same way; the arrow keys set the pull,
+  which stays between shots, and Space lets go — `tests/shooting-gallery.test.mjs`.
+- **AC-5** A paintball takes 0.18 s to land just above the counter and longer the farther it goes,
+  up to 0.45 s at the top of the booth; it is judged where it lands when it lands, so a target that
+  moved away in the meantime is missed — `tests/shooting-gallery.test.mjs`.
 - **AC-6** A hit scores 10 points a pip with pips 1 near to 3 far; a bullseye scores double and
   puts a ball back in the hopper; the gold duck scores 100 and 2 pips and refills the hopper; a miss
   scores nothing — `tests/shooting-gallery.test.mjs`.
@@ -200,10 +253,10 @@ the tray emptied or the parade passed; the "Polka Train" loop; a full run of 2.5
   `tests/shooting-gallery.test.mjs`.
 - **AC-11** Meeting the quota starts the bonus: ×1 near, ×2 middle, ×3 far and on the gold duck;
   closing time doubles everything; no hit scores more than ×8 — `tests/shooting-gallery.test.mjs`.
-- **AC-12** A frenzy comes once a round from round 2, 8–18 s in, for 6 s: the galop plays, targets
-  spring up across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it
-  and the bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz
-  returns — `tests/shooting-gallery.test.mjs`.
+- **AC-12** Hitting the frenzy target starts a frenzy for 6 s: the galop plays, targets spring up
+  across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it and the
+  bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz returns; no
+  frenzy comes without the target — `tests/shooting-gallery.test.mjs`.
 - **AC-13** Rounds bring in their elements as in the table: movers in every lane in round 1,
   pop-ups from 2, drop-downs from 3 (only into the front three lanes in portrait), turnabouts from
   4, gold ducks in 5, everything in 6 with points doubled — `tests/shooting-gallery.test.mjs`.
@@ -221,32 +274,41 @@ the tray emptied or the parade passed; the "Polka Train" loop; a full run of 2.5
 - **AC-17** The best score is kept across reloads — `tests/shooting-gallery.test.mjs`.
 - **AC-18** Each state shows only its own card, banner and HUD, as in the state table —
   `tests/shooting-gallery.test.mjs`.
-- **AC-19** A shot, a splat, a hit, a bullseye, an empty hopper, a round's start, the quota and the
-  time running out each play their sound — `tests/shooting-gallery.test.mjs`.
+- **AC-19** A shot (the band's twang), a splat, a hit, a bullseye, an empty hopper, a round's start,
+  the quota, the frenzy target and the time running out each play their sound —
+  `tests/shooting-gallery.test.mjs`.
 - **AC-20** The landing page's Shooting Gallery tile is a link to `shooting-gallery/` with no
   coming-soon badge, and it opens the game — `tests/site.test.mjs`.
 - **AC-21** The game plays offline once it has been played — `tests/shooting-gallery.test.mjs`.
-- **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the gun, the gauge,
-  the hopper, the pips and the timer fit without scrolling, the far targets are at least 44 px wide,
-  and the counter, where the thumb works, holds no target — `tests/shooting-gallery.test.mjs`.
+- **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the slingshot, the
+  hopper, the pips and the timer fit without scrolling, the timer's digits are larger than the
+  score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
+  target — `tests/shooting-gallery.test.mjs`.
+- **AC-23** The timer shows the whole seconds left on a badge at the top left; at half time it
+  chimes and swells; at 10 s it chimes twice and its background turns yellow, at 5 s orange and at
+  3 s red, ticking each of the last 3 seconds; in a frenzy it is pink and stopped —
+  `tests/shooting-gallery.test.mjs`.
+- **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
+  in round 1 a big one rising in the nearest lane for 3.5 s, in round 2 one crossing a middle lane,
+  from round 3 one crossing the farthest lane at 1.8× its speed — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 
 1. Tap the Shooting Gallery tile: the booth is alive behind a small start card.
-2. Tap Start: round 1's targets cross every lane, the gun pointing at the nearest.
-3. On the counter, drag to turn and raise the gun and tap to fire; lead the moving targets and
-   meet the quota before the timer runs out.
+2. Tap Start: round 1's targets cross every lane.
+3. On the counter, pull the slingshot back and let go; lead the moving targets, hit the frenzy
+   target when it shows, and meet the quota before the timer runs out.
 4. Reach closing time, or run out of time: see the score, the round and the best, then play again.
 
 ## States
 
-| State | Start card | Banner | Pause card | Orientation veil | Over card | Gun, gauge, hopper, pips, timer, score |
+| State | Start card | Banner | Pause card | Orientation veil | Over card | Slingshot's ball, hopper, pips, timer, score |
 | ----- | ---------- | ------ | ---------- | ---------------- | --------- | -------------------------------------- |
 | Start (the booth moves behind) | shown | hidden | hidden | hidden | hidden | hidden |
 | Round intro (about 1.2 s) | hidden | the round's number and name | hidden | hidden | hidden | shown |
 | Playing | hidden | hidden | hidden | hidden | hidden | shown |
 | Bonus (quota met) | hidden | "Bonus!" briefly, a pill on the counter | hidden | hidden | hidden | shown, the pips lit gold |
-| Frenzy (6 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer stopped |
+| Frenzy (6 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer pink and stopped |
 | Round won (about 1.5 s) | hidden | "Round cleared" and the round's score | hidden | hidden | hidden | shown |
 | Paused (page was hidden) | hidden | hidden | shown | hidden | hidden | shown |
 | Turned (the screen's orientation changed) | hidden | hidden | hidden | shown, offering a restart | hidden | shown, greyed |

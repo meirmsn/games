@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Shooting Gallery](shooting-gallery/), turn the gun and lead the shot in a fairground paintball booth, with no crosshair, until the whole booth is painted.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Shooting Gallery](shooting-gallery/), pull the slingshot and lead the shot in a fairground paintball booth, with no crosshair, until the whole booth is painted.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 

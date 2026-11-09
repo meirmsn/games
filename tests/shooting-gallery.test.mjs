@@ -63,8 +63,10 @@ async function ready(page, round = 1, { assist = 0 } = {}) {
       G.banner = null;
       G.assist = assist;
       G.lastFire = -1;
-      G.frenzyAt = 0;
+      G.frenzyTimes = [];
       G.spawn = { movers: g.L.lanes.map(() => 999), pop: 999, drop: 999, gold: [] };
+      // A pull aimed at the middle lane, so a bare fire() has somewhere to go.
+      g.aimAt(g.stage().SW / 2, g.L.lanes[Math.floor(g.L.n / 2)].line);
     },
     { round, assist }
   );
@@ -83,14 +85,12 @@ async function place(page, kind, opts = {}) {
   );
 }
 
-// Aim at x in a lane, fire, and let the ball land. Returns what it landed on.
+// Pull to land at x on a lane's line, let go, and let the ball land. Returns what it landed on.
 const shoot = (page, x, lane, { wait = true } = {}) =>
   page.evaluate(
     ({ x, lane, wait }) => {
       const g = window.__gallery;
-      const { SW } = g.stage();
-      g.aim.yaw = ((x - SW / 2) / (0.47 * SW)) * 55;
-      g.aim.lane = lane;
+      g.aimAt(x, g.L.lanes[lane].line);
       g.game.lastFire = -1;
       g.game.lastLand = null;
       const b = g.fire();
@@ -112,7 +112,7 @@ const steps = (page, seconds) =>
   }, seconds);
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
-test('shooting-gallery AC-1: the booth moves behind the start card; Start begins round 1 at the nearest lane, with no crosshair', async () => {
+test('shooting-gallery AC-1: the booth moves behind the start card; Start begins round 1 with the slingshot, no gun and no crosshair', async () => {
   const { context, page, errors } = await open();
   assert.ok(await page.locator('[data-screen="start"]').isVisible());
   const before = await page.evaluate(() => window.__gallery.targets().map((t) => [t.id, t.x]));
@@ -123,125 +123,137 @@ test('shooting-gallery AC-1: the booth moves behind the start card; Start begins
   await page.click('[data-play]');
   const s = await page.evaluate(() => {
     const g = window.__gallery;
-    return { round: g.game.round, time: g.game.time, quota: g.game.cfg.quota, hopper: g.game.hopper, lane: g.aim.lane, n: g.L.n, yaw: g.aim.yaw, cross: 'cross' in g || 'crosshair' in g };
+    const hb = g.hudBounds();
+    return {
+      round: g.game.round, time: g.game.time, quota: g.game.cfg.quota, hopper: g.game.hopper, n: g.L.n,
+      slingOnCounter: hb.sling.y > hb.counterTop,
+      noGun: !('muzzle' in g) && !('cross' in g) && !('crosshair' in g),
+    };
   });
-  assert.deepEqual(s, { round: 1, time: 30, quota: 7, hopper: 6, lane: 4, n: 5, yaw: 0, cross: false });
+  assert.deepEqual(s, { round: 1, time: 30, quota: 7, hopper: 6, n: 5, slingOnCounter: true, noGun: true });
   assert.ok(await page.locator('[data-screen="start"]').isHidden());
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('shooting-gallery AC-2: turning moves the landing point linearly, the same in every lane; raising steps a lane; the barrel points at it', async () => {
+test('shooting-gallery AC-2: a pull lands the ball by a separable, linear rule at any height; the pouch follows the pull', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
     const g = window.__gallery;
     const { SW } = g.stage();
-    const out = {};
-    g.aim.yaw = 55;
-    g.aim.lane = 4;
-    out.right = g.aimPoint().x - SW / 2;
-    g.aim.lane = 0;
-    out.rightFar = g.aimPoint().x - SW / 2;
-    g.aim.yaw = -27.5;
-    out.half = g.aimPoint().x - SW / 2;
-    out.reach = 0.47 * SW;
-    out.lines = g.L.lanes.map((l) => l.line);
-    out.ys = [0, 1, 2, 3, 4].map((i) => ((g.aim.lane = i), g.aimPoint().y));
-    // The barrel points at the landing point.
-    g.aim.yaw = 30;
-    g.aim.lane = 1;
-    const a = g.aimPoint();
-    const m = g.muzzle();
-    out.barrel = Math.abs(m.ang - Math.atan2(a.x - g.L.gunX, g.L.gunY - a.y));
-    return out;
+    const P = g.pullRange();
+    const L = g.L;
+    const at = (px, py) => {
+      g.setPull(px, py);
+      return g.aimPoint();
+    };
+    return {
+      P,
+      SW,
+      C: L.C,
+      T: L.T,
+      left: at(P.x, 0).x, // pulling right sends it left
+      right: at(-P.x / 2, 0).x,
+      top: at(0, P.y).y,
+      mid: at(0, P.y / 2).y,
+      // Sideways and down are separate: the same x at any height.
+      xAtTop: at(P.x / 2, P.y).x,
+      xAtLow: at(P.x / 2, P.y / 4).x,
+      clamped: (g.setPull(P.x * 3, P.y * 3), [g.aim.px, g.aim.py]),
+      pouchMoves: (() => {
+        g.setPull(0, 0);
+        const a = g.pouch();
+        g.setPull(30, 60);
+        const b = g.pouch();
+        return b.x > a.x && b.y > a.y;
+      })(),
+    };
   });
-  assert.ok(near(r.right, r.reach) && near(r.rightFar, r.reach), 'the same x in the nearest and farthest lane');
-  assert.ok(near(r.half, -r.reach / 2));
-  assert.deepEqual(r.ys, r.lines);
-  assert.ok(r.barrel < 1e-9);
+  assert.ok(near(r.left, r.SW / 2 - 0.47 * r.SW));
+  assert.ok(near(r.right, r.SW / 2 + 0.47 * r.SW / 2));
+  assert.ok(near(r.top, r.T));
+  assert.ok(near(r.mid, r.C - (r.C - r.T) / 2), 'any height, not lane steps');
+  assert.ok(near(r.xAtTop, r.xAtLow));
+  assert.deepEqual(r.clamped, [r.P.x, r.P.y]);
+  assert.ok(r.pouchMoves);
+  assert.deepEqual([r.P.x, r.P.y], [80, 110]);
   await context.close();
 });
 
-test('shooting-gallery AC-3: on touch, a drag on the counter turns and raises the gun without firing; a tap there fires; a second finger fires; the lanes ignore touches', async () => {
+test('shooting-gallery AC-3: on touch, a pull from the counter stretches the slingshot and letting go fires; a short pull or a touch on the lanes does nothing', async () => {
   const { context, page } = await open({ hasTouch: true });
   await ready(page);
   const cdp = await context.newCDPSession(page);
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
-  const pad = await page.evaluate(() => window.__gallery.hudBounds().counterTop + 60);
-  // Drag 30 px right and 44 px up: 10 degrees right and one lane farther; the lift doesn't fire.
-  await touch('touchStart', [{ x: 150, y: pad, id: 1 }]);
-  for (let i = 1; i <= 10; i++) await touch('touchMove', [{ x: 150 + i * 3, y: pad - i * 4.4, id: 1 }]);
+  const pad = await page.evaluate(() => window.__gallery.hudBounds().counterTop + 20);
+  const k = await page.evaluate(() => window.__gallery.stage().k);
+  // Pull 30 px left and 60 px down from where the finger lands, then let go.
+  await touch('touchStart', [{ x: 200, y: pad, id: 1 }]);
+  for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x: 200 - i * 5, y: pad + i * 10, id: 1 }]);
+  await page.waitForTimeout(50); // the last move arrives with the next frame
+  const held = await page.evaluate(() => ({ px: window.__gallery.aim.px, py: window.__gallery.aim.py, active: window.__gallery.aim.active, balls: window.__gallery.balls().length }));
+  assert.ok(near(held.px, -30 / k, 0.01) && near(held.py, 60 / k, 0.01), `the pull follows the finger: ${JSON.stringify(held)}`);
+  assert.deepEqual([held.active, held.balls], [true, 0], 'nothing flies while held');
+  const target = await page.evaluate(({ px, py }) => window.__gallery.aimPoint(px, py), held);
   await touch('touchEnd', []);
-  let a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw, lane: window.__gallery.aim.lane, balls: window.__gallery.balls().length }));
-  assert.ok(near(a.yaw, 10, 0.05), `yaw ${a.yaw}`);
-  assert.deepEqual([a.lane, a.balls], [3, 0]);
-  // Raising never goes past the farthest lane.
-  await touch('touchStart', [{ x: 150, y: pad + 40, id: 2 }]);
-  for (let i = 1; i <= 30; i++) await touch('touchMove', [{ x: 150, y: pad + 40 - i * 10, id: 2 }]);
-  await touch('touchEnd', []);
-  assert.equal(await page.evaluate(() => window.__gallery.aim.lane), 0);
-  // A tap on the counter fires.
-  await touch('touchStart', [{ x: 200, y: pad, id: 3 }]);
-  await touch('touchEnd', []);
-  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1);
-  // A second finger fires at once while the first is down; the first's lift then doesn't.
+  const b = await page.evaluate(() => window.__gallery.balls().map((x) => ({ x1: x.x1, y1: x.y1 })));
+  assert.equal(b.length, 1, 'letting go fires');
+  assert.ok(near(b[0].x1, target.x, 0.01) && near(b[0].y1, target.y, 0.01));
+  // A short pull fires nothing.
   await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await touch('touchStart', [{ x: 120, y: pad, id: 4 }]);
-  await touch('touchStart', [{ x: 120, y: pad, id: 4 }, { x: 300, y: pad, id: 5 }]);
-  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 2);
-  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await touch('touchEnd', [{ x: 120, y: pad, id: 4 }]);
+  await touch('touchStart', [{ x: 200, y: pad, id: 2 }]);
+  await touch('touchMove', [{ x: 203, y: pad + 4, id: 2 }]);
   await touch('touchEnd', []);
-  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 2);
-  // A tap or a drag on the lanes does nothing.
-  const before = await page.evaluate(() => ({ ...window.__gallery.aim }));
-  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await touch('touchStart', [{ x: 200, y: 300, id: 6 }]);
-  await touch('touchMove', [{ x: 260, y: 200, id: 6 }]);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'a short pull is no shot');
+  // A pull starting on the lanes does nothing.
+  await touch('touchStart', [{ x: 200, y: 300, id: 3 }]);
+  await touch('touchMove', [{ x: 160, y: 400, id: 3 }]);
+  assert.equal(await page.evaluate(() => window.__gallery.aim.active), false);
   await touch('touchEnd', []);
-  await touch('touchStart', [{ x: 200, y: 300, id: 7 }]);
-  await touch('touchEnd', []);
-  const after = await page.evaluate(() => ({ ...window.__gallery.aim, balls: window.__gallery.balls().length }));
-  assert.deepEqual([after.yaw, after.lane, after.balls], [before.yaw, before.lane, 2]);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'the lanes are not for touching');
   await context.close();
 });
 
-test('shooting-gallery AC-4: the mouse turns the gun by dragging and fires with a click; the arrow keys aim and Space fires', async () => {
+test('shooting-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go', async () => {
   const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
   await ready(page);
-  await page.mouse.move(500, 400);
+  const k = await page.evaluate(() => window.__gallery.stage().k);
+  await page.mouse.move(500, 300);
   await page.mouse.down();
-  await page.mouse.move(530, 400, { steps: 5 });
-  await page.mouse.move(530, 356, { steps: 5 });
+  await page.mouse.move(530, 340, { steps: 5 });
+  await page.waitForTimeout(50);
+  const held = await page.evaluate(() => ({ px: window.__gallery.aim.px, py: window.__gallery.aim.py }));
+  assert.ok(near(held.px, 30 / k, 0.01) && near(held.py, 40 / k, 0.01), JSON.stringify(held));
   await page.mouse.up();
-  let a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw, lane: window.__gallery.aim.lane, balls: window.__gallery.balls().length }));
-  assert.ok(near(a.yaw, 10, 0.05), `yaw ${a.yaw}`);
-  assert.equal(a.balls, 0, 'a drag never fires');
-  assert.equal(a.lane, 1, 'raised one of 3 lanes');
-  await page.mouse.click(500, 400);
-  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'a click fires');
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'letting go fires');
+  // The keyboard: Left and Up move the kept pull; Space lets go, and the pull stays for the next.
   await page.keyboard.down('ArrowLeft');
+  await page.keyboard.down('ArrowUp');
   await steps(page, 0.5);
   await page.keyboard.up('ArrowLeft');
-  a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw }));
-  assert.ok(a.yaw < 0, `the left arrow turned the gun: ${a.yaw}`);
-  await page.keyboard.press('ArrowUp');
-  assert.equal(await page.evaluate(() => window.__gallery.aim.lane), 0);
+  await page.keyboard.up('ArrowUp');
+  const kb = await page.evaluate(() => ({ kx: window.__gallery.aim.kx, ky: window.__gallery.aim.ky }));
+  const maxY = await page.evaluate(() => window.__gallery.pullRange().y);
+  assert.ok(near(kb.kx, 30, 1) && near(kb.ky, Math.min(85, maxY), 1), `the arrows moved the pull: ${JSON.stringify(kb)}`);
   await page.evaluate(() => {
     window.__gallery.game.lastFire = -1;
     window.__gallery.heard.length = 0;
   });
   await page.keyboard.press('Space');
-  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'shot')), ['shot'], 'Space fires');
+  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
+  await page.keyboard.press('Space');
+  const r = await page.evaluate(() => ({ shots: window.__gallery.heard.filter((n) => n === 'twang').length, kx: window.__gallery.aim.kx, ky: window.__gallery.aim.ky }));
+  assert.equal(r.shots, 2, 'Space fires, twice with the same pull');
+  assert.deepEqual([r.kx, r.ky], [kb.kx, kb.ky], 'the pull stayed');
   await context.close();
 });
 
-test('shooting-gallery AC-5: the ball flies 0.18 s to the nearest lane and 0.42 s to the farthest, and is judged when it lands', async () => {
+test('shooting-gallery AC-5: the ball flies 0.18 s just above the counter up to 0.45 s at the top, and is judged when it lands', async () => {
   const { context, page } = await open();
   await ready(page);
-  const times = await page.evaluate(() => [window.__gallery.flightTime(4), window.__gallery.flightTime(0)]);
-  assert.ok(near(times[0], 0.18) && near(times[1], 0.42));
+  const times = await page.evaluate(() => [window.__gallery.flightTime(window.__gallery.L.C), window.__gallery.flightTime(window.__gallery.L.T)]);
+  assert.ok(near(times[0], 0.18) && near(times[1], 0.45), `${times}`);
   // A still target is hit; one moving fast across is gone by the time the ball lands.
   const still = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
   assert.equal((await shoot(page, still.x + still.w * 0.38, 3)).what, 'body');
@@ -309,8 +321,7 @@ test('shooting-gallery AC-7: each shot is the next colour; splats land on target
     const g = window.__gallery;
     g.paint().length = 0;
     g.game.lastFire = -1;
-    g.aim.yaw = -40;
-    g.aim.lane = 0;
+    g.aimAt(g.stage().SW * 0.15, g.L.lanes[0].line);
     g.fire();
     for (let i = 0; i < 40; i++) g.step(1 / 60);
     const fresh = g.paintAlpha(g.paint()[0]);
@@ -324,8 +335,7 @@ test('shooting-gallery AC-7: each shot is the next colour; splats land on target
     for (let i = 0; i < 80; i++) {
       g.game.lastFire = -1;
       g.game.hopper = 6;
-      g.aim.yaw = -50 + (i % 20) * 5;
-      g.aim.lane = i % 5;
+      g.aimAt(g.stage().SW * (0.06 + (i % 20) * 0.045), g.L.lanes[i % 5].line);
       g.fire();
       for (let j = 0; j < 30; j++) g.step(1 / 60);
     }
@@ -440,28 +450,20 @@ test('shooting-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3
   await context.close();
 });
 
-test('shooting-gallery AC-12: a frenzy comes once a round from round 2, 8–18 s in: the galop, faster targets, free shots for points only, the timer stopped', async () => {
+test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the galop, faster targets, free shots for points only, the timer stopped; none comes without it', async () => {
   const { context, page } = await open();
-  const at = await page.evaluate(() => {
-    const g = window.__gallery;
-    g.manual = true;
-    g.startRun({ seed: 9 });
-    const out = [];
-    for (let n = 1; n <= 6; n++) {
-      g.startRound(n);
-      out.push(g.game.frenzyAt);
-    }
-    return out;
-  });
-  assert.equal(at[0], 0, 'none in round 1');
-  assert.ok(at.slice(1).every((t) => t >= 8 && t <= 18), `${at}`);
   await ready(page, 2, { assist: 0.5 });
-  await page.evaluate(() => {
-    const g = window.__gallery;
-    g.game.frenzyAt = 0.1;
-    g.game.frenzyDone = false;
+  // Without the target, no frenzy comes.
+  await steps(page, 20);
+  assert.equal((await state(page)).frenzy, 0);
+  await page.evaluate(() => (window.__gallery.game.time = 25));
+  const ft = await page.evaluate(() => {
+    const t = window.__gallery.launchFrenzyTarget();
+    t.speed = 0;
+    t.x = 200;
+    return { lane: t.lane, x: t.x, w: window.__gallery.dims(t)[0] };
   });
-  await steps(page, 0.2);
+  assert.equal((await shoot(page, ft.x + ft.w * 0.3, ft.lane)).kind, 'frenzy');
   let s = await state(page);
   assert.ok(s.frenzy > 0);
   assert.equal(await page.evaluate(() => window.__gallery.music()), 'frenzy');
@@ -479,6 +481,7 @@ test('shooting-gallery AC-12: a frenzy comes once a round from round 2, 8–18 s
     const g = window.__gallery;
     g.clear();
     g.game.hopper = 3;
+    g.game.pips = 0;
   });
   const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   const s1 = await state(page);
@@ -506,7 +509,7 @@ test('shooting-gallery AC-13: rounds bring in their elements as in the table', a
     for (let n = 1; n <= 6; n++) {
       g.startRun({ seed: 4 + n });
       if (n > 1) g.startRound(n);
-      g.game.frenzyAt = 0;
+      g.game.frenzyTimes = [];
       g.game.mode = 'play';
       const kinds = new Set();
       const lanes = { drop: new Set(), mover: new Set() };
@@ -689,16 +692,16 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   // A frenzy: its pill, the timer stopped.
   await steps(page, 3);
   await page.evaluate(() => {
-    const g = window.__gallery.game;
-    g.mode = 'play';
-    g.banner = null;
-    g.frenzyAt = 0.05;
-    g.frenzyDone = false;
+    const g = window.__gallery;
+    g.game.mode = 'play';
+    g.game.banner = null;
+    g.startFrenzy();
   });
   await steps(page, 0.1);
   u = await ui();
   assert.deepEqual(row(u), [false, false, false, false, 'Frenzy!', true, 'shown', 'stopped'], 'frenzy');
   assert.ok(u.pill.top >= u.pill.counterTop, 'the Frenzy pill sits on the counter');
+  assert.equal(u.timerColour, 'pink');
   // Over.
   await page.evaluate(() => {
     const g = window.__gallery.game;
@@ -721,7 +724,7 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   await L.context.close();
 });
 
-test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota and the time running out have their sounds', async () => {
+test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota, the frenzy target and the time running out have their sounds', async () => {
   const { context, page } = await open();
   await page.click('[data-play]');
   assert.ok(await page.evaluate(() => window.__gallery.heard.includes('round')));
@@ -732,7 +735,7 @@ test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hoppe
   const t = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
   await shoot(page, t.x + t.w * 0.38, 3);
   let h = await heard();
-  assert.equal(h[0], 'shot');
+  assert.equal(h[0], 'twang');
   assert.ok(h.includes('splat') || h.includes('splat2'), `a wet splat: ${h}`);
   assert.ok(h.includes('hit'));
   await clearHeard();
@@ -756,6 +759,16 @@ test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hoppe
   await clearHeard();
   await shoot(page, q.x, 4);
   assert.ok((await heard()).includes('quota'));
+  // The frenzy target.
+  const ft = await page.evaluate(() => {
+    const t = window.__gallery.launchFrenzyTarget();
+    t.speed = 0;
+    t.x = 200;
+    return { lane: t.lane };
+  });
+  await clearHeard();
+  await shoot(page, 200, ft.lane);
+  assert.ok((await heard()).includes('frenzyhit'));
   await ready(page);
   await clearHeard();
   await page.evaluate(() => (window.__gallery.game.time = 0.01));
@@ -782,7 +795,7 @@ test('shooting-gallery AC-21: the gallery plays offline once it has been played'
   await context.close();
 });
 
-test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, far targets are at least 44 px, and the counter holds no target', async () => {
+test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, the timer’s digits beat the score’s, far targets are at least 44 px, and the counter holds no target', async () => {
   for (const viewport of [PORTRAIT, { width: 360, height: 640 }, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await page.click('[data-play]');
@@ -809,12 +822,97 @@ test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits
     const where = `${viewport.width}×${viewport.height}`;
     assert.equal(m.n, viewport.width > viewport.height ? 3 : 5, where);
     assert.ok(m.far >= 44, `far targets ${m.far} px at ${where}`);
-    for (const key of ['timer', 'hopper', 'gauge', 'gun']) {
+    for (const key of ['hopper', 'sling', 'slingFoot']) {
       assert.ok(m.hb[key].x <= viewport.width && m.hb[key].y <= viewport.height, `${key} fits at ${where}`);
     }
-    assert.ok(m.hb.gaugeTop.y > m.hb.counterTop, `the gauge is on the counter at ${where}`);
+    const tb = m.hb.timerBadge;
+    assert.ok(tb.x >= 0 && tb.y >= 0 && tb.x + tb.w <= viewport.width && tb.y + tb.h <= m.hb.boothTop + 4, `the timer badge fits at the top at ${where}`);
+    assert.ok(tb.x >= 56, `the timer sits beside the back button at ${where}`);
+    assert.ok(tb.font > m.hb.scoreFont, `the timer's digits are larger than the score's at ${where}`);
+    assert.ok(m.hb.sling.y > m.hb.counterTop, `the slingshot is on the counter at ${where}`);
     assert.ok(m.lowest <= m.hb.counterTop + 1, `no target on the counter at ${where}: ${m.lowest} vs ${m.hb.counterTop}`);
     assert.ok(m.scrollW <= viewport.width && m.scrollH <= viewport.height, 'no scrolling');
     await context.close();
   }
+});
+
+test('shooting-gallery AC-23: the timer counts whole seconds on its badge; it chimes and swells at half time, chimes at 10 s and warms to yellow, orange and red, ticking the last 3', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const ui = () => page.evaluate(() => window.__gallery.ui());
+  await page.evaluate(() => {
+    window.__gallery.game.time = 15.05;
+    window.__gallery.heard.length = 0;
+  });
+  let u = await ui();
+  assert.deepEqual([u.timerText, u.timerColour], ['16', 'plain']);
+  await steps(page, 0.1);
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('chime')), 'a chime at half time');
+  assert.ok(await page.evaluate(() => window.__gallery.game.pulse > 0.5), 'the badge swells');
+  await page.evaluate(() => {
+    window.__gallery.game.time = 10.05;
+    window.__gallery.heard.length = 0;
+  });
+  await steps(page, 0.1);
+  u = await ui();
+  assert.deepEqual([u.timerText, u.timerColour], ['10', 'yellow']);
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('warn')), 'a chime at 10 s');
+  await page.evaluate(() => (window.__gallery.game.time = 4.5));
+  assert.equal((await ui()).timerColour, 'orange');
+  await page.evaluate(() => {
+    window.__gallery.game.time = 3.05;
+    window.__gallery.heard.length = 0;
+  });
+  await steps(page, 2.1);
+  u = await ui();
+  assert.equal(u.timerColour, 'red');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'tock')), ['tock', 'tock', 'tock'], 'a tick at 3, 2 and 1 s');
+  await context.close();
+});
+
+test('shooting-gallery AC-24: a frenzy target comes 5–9 s in and again 17–22 s if missed; easy in round 1, harder in round 2, hard from round 3', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    const out = [];
+    for (let n = 1; n <= 6; n++) {
+      g.startRun({ seed: 40 + n });
+      if (n > 1) g.startRound(n);
+      const times = g.game.frenzyTimes.slice();
+      g.clear();
+      g.game.mode = 'play';
+      g.game.spawn = { movers: g.L.lanes.map(() => 999), pop: 999, drop: 999, gold: [] };
+      let first = null;
+      let second = null;
+      let target = null;
+      for (let i = 0; i < 60 * 24; i++) {
+        g.step(1 / 60);
+        g.game.time = 30;
+        const t = g.targets().find((x) => x.kind === 'frenzy');
+        if (t && first === null) {
+          first = g.game.elapsed;
+          target = { lane: t.lane, motion: t.motion, speed: t.speed, big: t.big, upFor: t.upFor };
+          t.state = 'gone'; // missed
+        } else if (t && first !== null && second === null && g.game.elapsed > first + 1) {
+          second = g.game.elapsed;
+          t.state = 'gone';
+        }
+      }
+      out.push({ times, first, second, target, laneSpeed: g.ROUNDS[n].vFar });
+    }
+    return { out, n: window.__gallery.L.n };
+  });
+  for (const [i, x] of r.out.entries()) {
+    assert.ok(x.times[0] >= 5 && x.times[0] <= 9 && x.times[1] >= 17 && x.times[1] <= 22, `round ${i + 1}: ${x.times}`);
+    assert.ok(x.first !== null && Math.abs(x.first - x.times[0]) < 0.05, `round ${i + 1} first at ${x.first}`);
+    assert.ok(x.second !== null && Math.abs(x.second - x.times[1]) < 0.05, `round ${i + 1} again at ${x.second}`);
+  }
+  const [r1, r2, r3] = r.out.map((x) => x.target);
+  assert.deepEqual([r1.lane, r1.motion, r1.upFor, r1.big], [r.n - 1, 'pop', 3.5, 1.15], 'round 1: big, rising in the nearest lane for 3.5 s');
+  assert.deepEqual([r2.lane, r2.motion], [2, 'mover'], 'round 2: crossing a middle lane');
+  assert.deepEqual([r3.lane, r3.motion], [0, 'mover'], 'from round 3: crossing the farthest lane');
+  assert.ok(near(r3.speed, r.out[2].laneSpeed * 1.8, 0.01), 'at 1.8× its speed');
+  for (const x of r.out.slice(3)) assert.equal(x.target.lane, 0);
+  await context.close();
 });
