@@ -243,9 +243,9 @@ goes now, and the people waiting start copying him.
   and a siren, all under the site-wide mute. The flush is the owner's own recording (made with ElevenLabs, 2026-11-09), trimmed and levelled; the ambience, horn, siren and chirp are synthesised for
   the game; the rest are Kenney's CC0 sounds as MP3 (owner, 2026-11-09: "more of like sounds of being
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
-- **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the game
-  itself (`scripts/walk-on-red/make-tile.mjs`), which makes 8 tiles on today's `main`; games built in
-  parallel add theirs, so the count is set when this rebases. The atlas is the pack's own
+- **Tile:** a new playable tile on the landing page, right after Googly Faces, drawn from the game
+  itself (`scripts/walk-on-red/make-tile.mjs`), which makes 8 tiles on `main` with Runes; games built
+  in parallel add theirs, so the count is set when this brings `main` in. The atlas is the pack's own
   spritesheet, its frame list made by `scripts/walk-on-red/build-atlas.mjs`.
 - **Tests** drive the game through `window.__walkOnRed` (its state, a seeded random source and a
   `step(dt)` that advances the simulation), as Reef's tests do.
