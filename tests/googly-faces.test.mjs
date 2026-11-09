@@ -226,6 +226,8 @@ test('a round ends after twelve faces, and play again starts a new one', async (
   assert.equal((await state(page)).taps, 12);
   const again = page.locator('[data-play-again]');
   await again.waitFor({ state: 'visible', timeout: 5000 });
+  // it scales in from 40%: measure it once its entrance has finished, not part-way through
+  await again.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
   const box = await again.boundingBox();
   assert.ok(box.width >= 44 && box.height >= 44, 'play again is a big button');
   assert.equal((await state(page)).state, 'party');
