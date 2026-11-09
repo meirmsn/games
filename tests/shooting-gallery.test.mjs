@@ -1204,17 +1204,37 @@ test('shooting-gallery AC-31: paint on the water or grass shows only below its c
         out.push({ lane: lane.i, x, above: g.paintShowsAt(lane.i, x, crest - 3), below: g.paintShowsAt(lane.i, x, crest + 3) });
       }
     }
-    // A shot just under a crest lands on the strip, and its lane's paint is drawn clipped.
+    // A shot just under a crest lands on the strip: the pixels just above the crest stay as they
+    // were, and those just below take the paint.
     const lane = g.L.lanes[2];
     const x = 150;
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const { k, ox, oy } = g.stage();
+    const dpr = cv.width / innerWidth;
+    const px = (ux, uy) => Array.from(c.getImageData(Math.round((ux * k + ox) * dpr), Math.round((uy * k + oy) * dpr), 1, 1).data);
+    const spots = [];
+    for (let dx = -8; dx <= 8; dx += 2) {
+      const crest = g.stripY(lane, x + dx);
+      spots.push([x + dx, crest - 3], [x + dx, crest + 3]);
+    }
+    const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    await frame();
+    const before = spots.map(([a, b]) => px(a, b));
     g.aimAt(x, g.stripY(lane, x) + 2);
     g.game.lastLand = null;
     g.fire();
     for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
-    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-    return { out, landed: g.game.lastLand, clipped: g.paintClipped(), lanes: g.L.n };
+    await frame();
+    const after = spots.map(([a, b]) => px(a, b));
+    const same = (i) => before[i].every((v, j) => Math.abs(v - after[i][j]) <= 2);
+    const aboveKept = spots.filter((_, i) => i % 2 === 0 && !same(i)).length;
+    const belowPainted = spots.filter((_, i) => i % 2 === 1 && !same(i)).length;
+    return { out, landed: g.game.lastLand, clipped: g.paintClipped(), lanes: g.L.n, aboveKept, belowPainted };
   });
   assert.equal(r.landed.what, 'strip');
+  assert.equal(r.aboveKept, 0, 'no paint is drawn above the crest');
+  assert.ok(r.belowPainted >= 5, `the paint shows below it: ${r.belowPainted} of 9`);
   assert.ok(r.out.every((p) => !p.above && p.below), `clipped at the crest: ${JSON.stringify(r.out.filter((p) => p.above || !p.below))}`);
   assert.equal(r.clipped, r.lanes, 'every lane’s paint is drawn clipped to its strip');
   await context.close();
