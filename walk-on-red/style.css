@@ -1,0 +1,385 @@
+/* Walk on Red: the street canvas fills the screen; the HUD and cards float over it. Everything is
+   in the street's own 8-bit look: Kenney's pixel font Kenney Mini Square (CC0, from the Kenney
+   Fonts pack), square boxes with solid borders and hard shadows, no blur and no rounding. Sizes
+   are multiples of 8px, where the font's pixels stay whole. */
+
+@font-face {
+  font-family: 'Kenney Mini Square';
+  src: url('fonts/kenney-mini-square.woff2') format('woff2');
+  font-display: block;
+}
+
+:root {
+  --ink: #1b1e29;
+  --line: #f4f1e8;
+  --shade: #000;
+  --gold: #ffd23f;
+  --gold-dark: #b38a00;
+  --dim: #c9ccd6;
+  --go: #5ae17c;
+}
+
+body {
+  background: #2b2f3a;
+  color: var(--line);
+  font-family: 'Kenney Mini Square', ui-monospace, monospace;
+  font-size: 16px;
+  line-height: 1;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+}
+
+#street {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: pointer;
+}
+
+/* A pixel box: solid fill, a light border and a hard shadow. */
+.mute,
+.hud,
+.banner,
+.card,
+.shell-back,
+.shell-leave {
+  border: 3px solid var(--line);
+  border-radius: 0;
+  background: var(--ink);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 3px 3px 0 var(--shade);
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font: inherit;
+  color: var(--line);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  shape-rendering: crispEdges;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active,
+.shell-back:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--shade);
+}
+
+/* The shared back button, in this game's look: a pixel arrow instead of the smooth one. */
+.shell-back {
+  box-sizing: border-box;
+  color: var(--line);
+  transition: none;
+}
+
+.shell-back svg {
+  display: none;
+}
+
+.shell-back::before {
+  content: '<';
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* The shared "Leave this level?" question, in this game's look. */
+.shell-leave {
+  color: var(--line);
+  font-family: 'Kenney Mini Square', ui-monospace, monospace;
+}
+
+.shell-leave-title {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.shell-leave-text {
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.shell-leave-actions button {
+  border: 3px solid var(--shade);
+  border-radius: 0;
+  font-size: 16px;
+  font-weight: 400;
+  box-shadow: 3px 3px 0 var(--shade);
+}
+
+.shell-leave-stay {
+  color: var(--ink);
+  background: var(--line);
+}
+
+/* HUD: between the back and mute buttons, clear of the notch. */
+.hud {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: calc(env(safe-area-inset-left) + 64px);
+  right: calc(env(safe-area-inset-right) + 64px);
+  max-width: 460px;
+  margin: 0 auto;
+  height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  pointer-events: none;
+}
+
+.hud[hidden] {
+  display: none;
+}
+
+.hud-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.street-name {
+  overflow: hidden;
+  font-size: 16px;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.quota {
+  height: 6px;
+  margin-top: 5px;
+  overflow: hidden;
+  border: 1px solid var(--dim);
+  background: transparent;
+}
+
+.quota-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--go);
+}
+
+/* A fixed width, room for five digits, so the bar beside it never changes width as points come in. */
+.score {
+  flex: none;
+  width: 3.2em;
+  overflow: hidden;
+  font-size: 24px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--gold);
+}
+
+.banner {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  padding: 14px 20px;
+  text-align: center;
+  pointer-events: none;
+  animation: pop 240ms steps(3, end);
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+/* The score table is drawn on the street in pixels; its words stay here for screen readers. */
+.banner.as-text {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  box-shadow: none;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  animation: none;
+}
+
+.banner p {
+  margin: 0;
+}
+
+.banner-num {
+  font-size: 16px;
+  color: var(--dim);
+}
+
+/* The level's score, for screen readers (it is drawn on the street). */
+.tally {
+  margin: 10px auto 2px;
+  border-collapse: collapse;
+  font-size: 16px;
+}
+
+.tally[hidden] {
+  display: none;
+}
+
+.tally td {
+  padding: 2px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tally td + td {
+  padding-left: 16px;
+  text-align: right;
+  color: var(--gold);
+}
+
+.banner-name {
+  margin-top: 8px !important;
+  font-size: 32px;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.card {
+  position: fixed;
+  z-index: 8;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 20px 16px 16px;
+  text-align: center;
+  animation: rise 240ms steps(3, end);
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h1,
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 1;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 var(--shade);
+}
+
+.card p {
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.detail {
+  font-size: 16px;
+  color: var(--dim);
+}
+
+.score-line {
+  font-size: 24px;
+}
+
+/* The start card sits low, so the street stays in view above it. */
+.card.start {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  animation-name: rise-low;
+}
+
+.play {
+  min-width: 160px;
+  min-height: 52px;
+  margin: 4px 0;
+  padding: 0 24px;
+  border: 3px solid var(--shade);
+  border-radius: 0;
+  font: inherit;
+  font-size: 24px;
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: 0 4px 0 var(--gold-dark), 3px 7px 0 var(--shade);
+  cursor: pointer;
+}
+
+.play:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--gold-dark), 3px 4px 0 var(--shade);
+}
+
+.play:focus-visible,
+.mute:focus-visible,
+.shell-back:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.lead {
+  margin: 0 0 16px !important;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.best {
+  margin: 12px 0 0 !important;
+  font-size: 16px;
+  color: var(--dim);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -42%);
+  }
+}
+
+@keyframes rise-low {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .banner {
+    animation: none;
+  }
+}

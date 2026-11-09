@@ -1,0 +1,585 @@
+/* Orbit: pitch-black space on one canvas; a quiet HUD and small cards float over it. */
+
+body {
+  background: #000;
+  color: #e9f3ff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#space {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active,
+.resume:active,
+.card button:active {
+  transform: scale(0.94);
+}
+
+.mute:focus-visible,
+.card button:focus-visible,
+.resume:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* The HUD: the system's name, a dot per leg and the stardust count, between the two buttons. */
+.hud {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(260px, calc(100vw - 116px));
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud p {
+  margin: 0;
+}
+
+.sys-name {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 62%);
+  white-space: nowrap;
+}
+
+.jump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 55%);
+  white-space: nowrap;
+}
+
+.hud-label {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-right: 2px;
+}
+
+.legs {
+  display: flex;
+  gap: 7px;
+  height: 10px;
+  align-items: center;
+}
+
+.legs i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid rgb(150 225 255 / 55%);
+  transition: background 300ms ease, transform 300ms ease;
+}
+
+.legs i.done {
+  background: #96e1ff;
+  border-color: #96e1ff;
+}
+
+.legs i.now {
+  transform: scale(1.35);
+  border-color: #fff;
+}
+
+.hud-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.slings {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffd98a;
+}
+
+/* a new count glows rather than grows, so it never runs into its neighbour */
+.slings.pop {
+  animation: glow 900ms ease-out;
+}
+
+/* a slingshot: a little arc swinging round a dot */
+.sling-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ffd98a;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(-20deg);
+}
+
+.sling-icon::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: rgb(255 217 138 / 55%);
+}
+
+/* The probes left, just above the booster bar: one ship per probe, spent ones faint. */
+.probes {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 74px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #e9f3ff;
+  pointer-events: none;
+}
+
+.probes .hud-label {
+  color: rgb(233 243 255 / 55%);
+  opacity: 1;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+}
+
+.probes-count {
+  min-width: 1.4em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.probes.low {
+  color: #ffa64d;
+}
+
+/* each launch ticks the countdown down */
+.probes.tick .probes-count {
+  animation: glow 600ms ease-out;
+}
+
+.out-text {
+  margin: -4px 0 16px;
+  color: rgb(233 243 255 / 70%);
+}
+
+.dust {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffd98a;
+}
+
+.dust-of {
+  color: rgb(255 217 138 / 50%);
+  font-weight: 500;
+}
+
+.mote-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffd98a;
+  box-shadow: 0 0 8px 2px rgb(255 200 90 / 60%);
+}
+
+.dust.pop {
+  animation: glow 500ms ease-out;
+}
+
+@keyframes glow {
+  30% {
+    text-shadow: 0 0 10px rgb(255 217 138 / 95%);
+    color: #fff3d6;
+  }
+}
+
+/* The system's intro: its name and par, low on the screen, fading on the first touch. */
+.intro {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 88px);
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 1px 12px #000, 0 0 2px #000;
+  transition: opacity 500ms ease;
+  white-space: nowrap;
+}
+
+.intro.fade {
+  opacity: 0;
+}
+
+.intro h2 {
+  margin: 2px 0 4px;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.intro-num,
+.intro-par {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 60%);
+}
+
+.intro-best {
+  margin-left: 10px;
+}
+
+/* End of a system. */
+.card {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 24px 22px 20px;
+  text-align: center;
+  border-radius: 22px;
+  background: rgb(10 14 26 / 82%);
+  border: 1px solid rgb(150 225 255 / 18%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 60%);
+  animation: rise 360ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -44%);
+  }
+}
+
+.card h2 {
+  margin: 10px 0 14px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.medal {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 8%, var(--medal) 40%, var(--medal-dark) 100%);
+  box-shadow: 0 0 24px var(--medal);
+  --medal: #c98b5a;
+  --medal-dark: #6b3f22;
+}
+
+.medal[data-kind='silver'] {
+  --medal: #cfd8e6;
+  --medal-dark: #5c6677;
+}
+
+.medal[data-kind='gold'] {
+  --medal: #ffd36b;
+  --medal-dark: #8a5a10;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  justify-content: center;
+  gap: 10px 36px;
+  margin: 0 0 14px;
+}
+
+.stats div {
+  display: grid;
+  gap: 2px;
+}
+
+.stats dt {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 60%);
+}
+
+.stats dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  display: inline-block;
+  margin: 0 0 14px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0a0e1a;
+  background: #96e1ff;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.card button {
+  flex: 1;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card .play {
+  color: #06121f;
+  background: #96e1ff;
+}
+
+.card .secondary {
+  color: #e9f3ff;
+  background: rgb(150 225 255 / 14%);
+}
+
+.resume {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #06121f;
+  background: #96e1ff;
+  box-shadow: 0 0 30px rgb(150 225 255 / 45%);
+  cursor: pointer;
+}
+
+.resume:active {
+  transform: translate(-50%, -50%) scale(0.94);
+}
+
+.resume svg {
+  width: 30px;
+  height: 30px;
+  fill: currentColor;
+}
+
+/* The booster bar: a slim throttle along the bottom, like a spacecraft's control strip. Tap a point
+   on it or drag along it to set the power; it dims while the probe is away from its orbit. */
+.boost {
+  --power: 0.25;
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 26px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  height: 44px;
+  display: grid;
+  grid-template-columns: auto 1fr 3.2em;
+  align-items: center;
+  gap: 12px;
+  touch-action: none;
+  cursor: pointer;
+  transition: opacity 250ms ease;
+}
+
+.boost.is-off {
+  opacity: 0.4;
+}
+
+.boost-label,
+.boost-value {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 55%);
+  pointer-events: none;
+}
+
+.boost-value {
+  text-align: right;
+  letter-spacing: 0.04em;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zone-colour, #96e1ff);
+  font-variant-numeric: tabular-nums;
+}
+
+.boost-track {
+  position: relative;
+  height: 44px;
+}
+
+/* The zones: slate for gentle, green, orange, and red for the last tenth. The empty rail shows them
+   faintly; the fill shows them bright up to the power. */
+.boost-rail,
+.boost-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 5px;
+  --zones: linear-gradient(90deg, #7d93b2 0 30%, #4fd18b 30% 70%, #ffa64d 70% 90%, #ff5a4f 90% 100%);
+}
+
+.boost-rail {
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgb(0 0 0 / 45%) calc(10% - 1px) 10%),
+    var(--zones);
+  opacity: 0.22;
+}
+
+.boost-fill {
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgb(0 0 0 / 35%) calc(10% - 1px) 10%),
+    var(--zones);
+  clip-path: inset(0 calc((1 - var(--power)) * 100%) 0 0 round 5px);
+  box-shadow: 0 0 14px rgb(255 255 255 / 8%);
+}
+
+/* the fill's leading edge: a bright line, so the exact power reads */
+.boost-edge {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--power) * 100%);
+  width: 2px;
+  height: 24px;
+  margin: -12px 0 0 -1px;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 6px rgb(255 255 255 / 70%);
+  pointer-events: none;
+}
+
+.boost-ghost {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  margin: -14px 0 0 -1px;
+  border-radius: 1px;
+  background: rgb(255 255 255 / 35%);
+  pointer-events: none;
+}
+
+/* The first level's one hint, above the bar. */
+.hint {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 100px);
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  color: #e9f3ff;
+  background: rgb(10 14 26 / 70%);
+  border: 1px solid rgb(150 225 255 / 25%);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .dust.pop,
+  .slings.pop,
+  .probes.tick .probes-count {
+    animation: none;
+  }
+}

@@ -155,6 +155,10 @@ has been waiting in the shipyard since the first minute.
   and the tuning targets loosened from "the galleon by about 7, the end at 8–12 minutes" to "the
   galleon by about 7–9, most voyages ending at 8–12 minutes and none outside 7–13", after the timed
   playtest showed sea-to-sea spread (owner, 2026-11-09).
+- Changed after the go, when `main` came in on 2026-11-09: AC-18's tile count follows `main`'s (7
+  when this was specced, 8 once Walk on Red merged), as the owner's batch brief asks: "Expect
+  conflicts in `index.html` … keep both sides, and make sure the tile count matches" (owner,
+  2026-11-09).
 - Built in one PR as the first slice, with the later slices in Out of scope (owner's batch process,
   2026-11-09).
 
@@ -211,8 +215,8 @@ has been waiting in the shipyard since the first minute.
   until then — `tests/high-seas.test.mjs`.
 - **AC-17** A boat slow for 4 s gets a gust forming upwind of it within 6 s —
   `tests/high-seas.test.mjs`.
-- **AC-18** The landing page's High Seas tile is playable and the page still shows 7 tiles —
-  `tests/site.test.mjs`.
+- **AC-18** The landing page's High Seas tile is playable and the page keeps the tiles `main` has
+  (8 when `main` came in, after Walk on Red) — `tests/site.test.mjs`.
 - **AC-19** High Seas plays offline once it has been played — `tests/high-seas.test.mjs`.
 - **AC-20** On a 390×844 phone the page doesn't scroll, every button is at least 44 px, the canvas
   is drawn at no more than 2× the CSS size, turning the phone to 844×390 keeps the page unscrolled
