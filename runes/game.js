@@ -49,6 +49,11 @@ const HUES = { rise: '255, 201, 90', sink: '186, 150, 255', light: '255, 216, 13
 // ---------------------------------------------------------------------------------------------
 // Shell, sound, page parts.
 const { sound } = mountShell({
+  // Solved levels are saved as they are solved; the only thing leaving can lose is the line on a
+  // level not yet solved. The shell asks (and the browser warns on a refresh) only then.
+  unsaved: () => Boolean(game.s && game.s.path.length > 1 && !game.done && !game.failed),
+  leaveTitle: 'Leave this level?',
+  leaveText: 'Your line on this level will be lost. Solved levels stay saved.',
   sounds: {
     chime: 'sounds/chime.mp3',
     rise: 'sounds/rise.mp3',

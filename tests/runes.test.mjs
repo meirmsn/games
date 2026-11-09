@@ -763,28 +763,65 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   await context.close();
 });
 
-test('runes AC-25: in Runes, the back button always asks, from the first moment, the level select and a solved level included', async () => {
+test('runes AC-25: in Runes, the back button asks only while there is an unsaved line, in its own words', async () => {
   const { context, page } = await open();
   const ask = page.locator('dialog.shell-leave');
-  const backAsks = async (where) => {
-    await page.locator('.shell-back').click();
-    await ask.waitFor({ state: 'visible' });
-    await page.locator('[data-shell-stay]').click();
-    await ask.waitFor({ state: 'hidden' });
-    assert.equal(new URL(page.url()).pathname, '/runes/', `Stay keeps you in the game (${where})`);
-  };
-  await backAsks('before any move');
+  // Nothing drawn yet: nothing to lose, so it leaves at once.
+  await page.locator('.shell-back').click();
+  await page.waitForURL(BASE);
+  await page.goto(`${BASE}runes/#1`);
+  await page.waitForFunction(() => window.__runes);
+  // A line drawn on an unsolved level: it asks, in Runes' words, from the level select too.
   await page.keyboard.press('ArrowRight');
-  await backAsks('a line drawn');
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  assert.match(await ask.textContent(), /Leave this level\?/);
+  assert.match(await ask.textContent(), /Your line on this level will be lost\. Solved levels stay saved\./);
+  await page.locator('[data-shell-stay]').click();
+  await ask.waitFor({ state: 'hidden' });
   assert.deepEqual(await path(page), [0, 1], 'Stay keeps the line');
   await page.click('[data-levels]');
-  await backAsks('on the level select');
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-stay]').click();
   await page.click('[data-close-levels]');
+  // Solved: saved, so it leaves at once.
   for (const k of ['ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) await page.keyboard.press(k);
   await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
-  await backAsks('a solved level');
   await page.locator('.shell-back').click();
-  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
+  // A failed attempt: the line is over, so it leaves at once too.
+  await page.goto(`${BASE}runes/#2`);
+  await page.waitForFunction(() => window.__runes);
+  await page.evaluate(() => {
+    const r = window.__runes;
+    for (const c of [1, 2, 6, 7, 11, 15]) r.stepTo(c); // onto the gate early
+  });
+  await page.locator('[data-result][data-kind="failed"]').waitFor({ state: 'visible' });
+  await page.locator('.shell-back').click();
+  await page.waitForURL(BASE);
+  await context.close();
+});
+
+test('runes AC-26: a refresh or closing the tab warns only while there is an unsaved line', async () => {
+  const { context, page } = await open();
+  const warned = async () => {
+    let type = '';
+    const onDialog = (d) => {
+      type = d.type();
+      d.dismiss().catch(() => {});
+    };
+    page.on('dialog', onDialog);
+    await page.close({ runBeforeUnload: true }).catch(() => {});
+    await new Promise((r) => setTimeout(r, 400));
+    page.off('dialog', onDialog);
+    return type;
+  };
+  await page.keyboard.press('ArrowRight'); // a line, and the user's gesture the browser asks for
+  assert.equal(await warned(), 'beforeunload', 'an unsaved line warns');
+  assert.equal(page.isClosed(), false, 'dismissing the warning stays');
+  await page.keyboard.press('r'); // Restart: nothing left to lose
+  assert.equal(await warned(), '', 'no line, no warning');
+  assert.equal(page.isClosed(), true, 'and the tab closes');
   await context.close();
 });
