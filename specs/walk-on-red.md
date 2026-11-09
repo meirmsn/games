@@ -57,8 +57,17 @@ easy to win. The second one is just a little bit harder … The third one is alr
 a regular level, and they get progressively harder … the music is not great … more of like sounds of
 being on a street … he shouldn't be wiggling all the time … at the top, you should show like a
 public bathroom … Maybe it can be even a porta potty … on a near miss of a car or incoming car to
-you, you can even sound like a horn, different types of horn depending on the car." This spec is
-the game after those changes.
+you, you can even sound like a horn, different types of horn depending on the car." After playing that, the owner said (2026-11-09):
+"this is feeling much better … when you get to the toilet, it closes the [door] … it should make a
+sound of a flushing, so that it's clear what happened. Then you do the sound, the chime of
+celebrating. Also, when you fast forward the time of the counter, it should also fast forward all
+the time … the cars and also for the NPCs crossing … maybe some of the NPCs will have, if this was in
+regular time, they would have get run over, and that happens … it should run the actual rules of the
+game, and you earn points or not according to that. Lastly, I don't think we should see on the left
+and the right of the crosswalk … The game should be only on the crosswalk. So maybe to keep it
+simple, we can do it portrait, and if it's on desktop, you only see the portrait … Maybe you can
+show just a tiny sliver of regular street on both sides so that it makes sense that the light is the
+light of those cars coming in." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -82,9 +91,8 @@ goes now, and the people waiting start copying him.
 - **Tenth play vs first:** the stars you're missing, and crossing fast enough that your copiers make
   it.
 - **Form:** short-form: a run is eight levels, about 5 minutes, because it's an arcade crossing game.
-- **Orientation:** the game takes the shape of the screen it loads on: upright, a 12-column street
-  for the thumb; wide (desktop, a phone held sideways), a wider street. Turning the device mid-game
-  pauses and asks to turn it back or start over.
+- **Orientation:** portrait, everywhere: the view is the zebra crossing and a sliver of road either
+  side, the same shape on a phone, a phone held sideways and a desktop.
 - **What a failure costs:** a hit costs a few seconds; a copier hit costs their share of the points;
   too slow costs the level's points and a replay of that level (about 30 s). No lives.
 - **Save-game stand-in:** the best total, the best stars per level and the hidden assist, in
@@ -106,19 +114,20 @@ goes now, and the people waiting start copying him.
   and medians between, the pack's side-view vehicles driving left and right. A zebra crossing six
   columns wide runs up the middle, with a stop line on each lane before it. Columns are 12 art pixels
   and rows 22; rows are drawn from the top, vehicles then people in each row, with a strip of sky
-  above for the porta-potty. The street's width is chosen once, when the game loads: on an upright
-  screen 12 columns; on a wide one as many columns as fit at the scale the height allows (12 to 30).
-  Every street and every state uses one scale (as if each street had 8 rows), so the width never
-  changes, Start included; a resize in the same shape only rescales. Turning the device mid-level
-  pauses the game and shows a card: turn it back to keep playing (then the paused card waits for a
-  tap), or start over in the new shape (a new run at level 1). On the start card or after a run, the
-  street just takes the new shape. The street is simulated in fixed world coordinates (vehicles enter
-  80 art pixels beyond the play area), and only the street is drawn, centred, with plain background
-  either side (owner, 2026-11-09, as quoted in the intent).
+  above for the porta-potty. Only the crossing is shown: its six columns and a sliver of road either
+  side, 12 to 24 art pixels wide (as much as the screen's width allows at the scale its height
+  allows), enough to see each lane's car light and the front of a car waiting at its stop line. The
+  same view on every screen: on a wide one it stands centred with plain background either side; it
+  doesn't change with the device turned, only rescales. Every street and every state uses one scale
+  (as if each street had 8 rows), so the width never changes, Start included. The street is
+  simulated in fixed world coordinates, 12 columns wide (vehicles enter 80 art pixels beyond them),
+  and the view is cut from its middle; the landing page's tile picture shows it wider (owner,
+  2026-11-09: "The game should be only on the crosswalk … if it's on desktop, you only see the
+  portrait"; this replaces the earlier screen-shaped street and its turn-back card).
 - **The player:** hops one cell at a time: a tap anywhere (or Up, W or Space) hops forward, a swipe
   down (or Down or S) back, a swipe left or right (or Left/A, Right/D) sideways; the street's sides
   and kerbs stop him. One hop can be queued during a hop. A second finger is ignored (owner,
-  2026-11-09: "we should allow to move left and right").
+  2026-11-09: "we should allow to move left and right"). He stays on the zebra: its edges stop him.
 - **The lights, which the cars obey:** the walk light on each kerb shows a red man with the seconds
   left in a pixel countdown (the same number as the clock at the top). Each lane has a car light at
   its stop line. It's green while the walk light counts down, turns yellow at 4.5 s and red at 2 s.
@@ -131,12 +140,16 @@ goes now, and the people waiting start copying him.
   1); the level scores those seconds × (1 + copiers across by the time the light turns green). If
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
   on. While playing, what the level is worth right now ("14 s × 3 = 42") shows above the far kerb.
-  Once he's across nobody waits in real time: copiers still on the way finish at triple speed (the
-  whole street with them); then the walk light's seconds drain 15 a second while the points count up
-  big over the far sidewalk ("+42", "× 3 a second"), with a rising tick; then the car lights go
-  yellow (1.2 s) and red, and once the crossing is clear the walk light turns green (owner,
-  2026-11-09: "accelerate the time, and as the time is being accelerated, you see the points going
-  up").
+  Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
+  the celebrating chime, about 1.6 s in all, while the walk light holds its seconds and the street
+  goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 8 times
+  speed under its own rules until the walk light turns green: the walk light's seconds drain, the car
+  lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
+  way carry on as they would, so they can make it, or be hit. The points count up big over the far
+  sidewalk as the seconds drain ("+42", "× 3 a second", the multiplier growing as copiers arrive),
+  with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
+  once the crossing is clear the walk light turns green at normal speed (owner, 2026-11-09: "it
+  should run the actual rules of the game, and you earn points or not according to that").
 - **Copiers walk on their own:** from level 3, people at the kerb beside his column copy him. Each sets
   off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
   crossing, a row every 0.42 s. They never go past him (they may share the island or the far kerb
@@ -170,8 +183,7 @@ goes now, and the people waiting start copying him.
   sidestepping, over 6 seeds a level, fast or careful): it never fails a level and is almost never
   hit, so every level is within reach; the seconds it has to spend waiting grow from level 1 (none)
   to levels 5–7; the fast way scores more on most levels; about a third to half of copiers are hit on
-  levels 3–7, and almost none in Downtown, where the islands give them rest. On a wide screen the
-  early levels are a little easier (the same traffic spreads over a longer street). Knobs: each
+  levels 3–7, and almost none in Downtown, where the islands give them rest. Knobs: each
   lane's speed, gaps, platoon and lull lengths, each level's seconds, and the copiers' start, pace,
   look and wait.
 - **Hidden assist (0–1):** a hit raises it by 0.25 (0.1 for a copier hit); each copier across lowers
@@ -186,8 +198,8 @@ goes now, and the people waiting start copying him.
   missing him, honks once: deep for buses, trucks and vans, high for small and sports cars), a
   pluck when a copier sets off, a rising chime for each copier across, a rising tick as the seconds
   count into points, a soft bump and a horn for a hit, a tick each second for the last 5 s, the
-  crossing chirp and a jingle on green, a jingle at each level's start and at the end of the run,
-  and a siren, all under the site-wide mute. The ambience, horn, siren and chirp are synthesised for
+  crossing chirp and a jingle on green, a flush and a chime when he gets into the porta-potty, a jingle at each level's start and at the end of the run,
+  and a siren, all under the site-wide mute. The ambience, horn, siren, chirp and flush are synthesised for
   the game; the rest are Kenney's CC0 sounds as MP3 (owner, 2026-11-09: "more of like sounds of being
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
 - **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the game
@@ -205,17 +217,19 @@ goes now, and the people waiting start copying him.
   errors; Start begins level 1, Quiet Street, with only the player and 30 s on the walk light —
   `tests/walk-on-red.test.mjs`.
 - **AC-2** A tap hops the player one row forward, a swipe down one row back, a swipe left or right
-  one column sideways, the keys do the same, and a second finger does nothing; the street's sides and
-  kerbs stop him — `tests/walk-on-red.test.mjs`.
+  one column sideways, the keys do the same, and a second finger does nothing; the zebra's edges and
+  the kerbs stop him — `tests/walk-on-red.test.mjs`.
 - **AC-3** The car lights are green while the walk light counts down, yellow from 4.5 s and red from
   2 s; on red, cars short of their stop line stop at it, and none crosses it —
   `tests/walk-on-red.test.mjs`.
 - **AC-4** When the walk light reaches 0 it turns green only once no vehicle is on the crossing; then
   everyone still waiting crosses, no vehicle enters the crossing, and the next level (or the same
   one) starts after the tally — `tests/walk-on-red.test.mjs`.
-- **AC-5** Reaching the far kerb fixes the seconds left; the level scores them × (1 + copiers across
-  by the green light); the points count up as the seconds drain, and from across to green takes
-  under 8 s — `tests/walk-on-red.test.mjs`.
+- **AC-5** Reaching the far kerb fixes the seconds left; he goes in, the door closes and the flush
+  plays, then the chime; then the game runs at 8 times speed with its own rules (the car lights
+  change, cars stop at their lines, copiers on the way carry on and can be hit) while the points
+  count up as the seconds drain; the level scores the seconds × (1 + copiers across by the green
+  light); from across to green takes under 8 s — `tests/walk-on-red.test.mjs`.
 - **AC-6** If the walk light turns green before the player is across, the level scores 0 and starts
   again — `tests/walk-on-red.test.mjs`.
 - **AC-7** Copiers set off once the player is two rows out, one after another, hop up their own
@@ -242,15 +256,14 @@ goes now, and the people waiting start copying him.
 - **AC-16** Each state shows only its own card, HUD and banner, as in the state table —
   `tests/walk-on-red.test.mjs`.
 - **AC-17** The game plays offline once it has been played — `tests/walk-on-red.test.mjs`.
-- **AC-18** The street takes the screen's shape at load: 12 columns upright, more on a wide screen,
-  centred with plain background either side; its width doesn't change on Start or between levels; at
-  390×844 and 360×640 it fits with no scrolling and a person is at least 36 CSS px tall, and in
-  landscape (844×390) it fits; a resize in the same shape changes no game state; turning the device
-  mid-level pauses with a card, turning back hides it, and "start over this way" starts a new run in
-  the new shape — `tests/walk-on-red.test.mjs`.
+- **AC-18** The view is the zebra crossing and 12 to 24 art px of road either side, on every screen;
+  on a wide screen it is centred with plain background either side; its width doesn't change on Start
+  or between levels; at 390×844 and 360×640 it fits with no scrolling and a person is at least 36 CSS
+  px tall, and in landscape (844×390, 1280×720) it fits; turning the device mid-level only rescales
+  it and changes no game state — `tests/walk-on-red.test.mjs`.
 - **AC-19** A hop plays a footstep, a copier setting off the pluck, a copier across the chime (higher
-  for each), a hit the bump and the horn, the green light its jingle, and the end of the run the
-  closing jingle — `tests/walk-on-red.test.mjs`.
+  for each), a hit the bump and the horn, getting into the porta-potty the flush and then the chime,
+  the green light its jingle, and the end of the run the closing jingle — `tests/walk-on-red.test.mjs`.
 - **AC-20** While a level with copiers is played, what it is worth right now shows above the far
   kerb as "s s × m = score"; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
@@ -264,8 +277,9 @@ goes now, and the people waiting start copying him.
 1. Tap the Walk on Red tile: traffic is driving behind a small start card.
 2. Tap Start: he's on the near kerb, hopping from foot to foot, and the walk light is counting down.
 3. Hop across through the gaps; from level 3, the people waiting start copying you.
-4. Reach the porta-potty: the seconds count into points, the lights change, everyone crosses, the
-   tally shows, the next level starts.
+4. Reach the porta-potty: the door closes, a flush, a chime; the street fast-forwards as the seconds
+   count into points and the lights change; everyone crosses on green, the tally shows, the next
+   level starts.
 5. After level 8, see the total and the stars, and play again.
 
 ## States
@@ -274,10 +288,9 @@ goes now, and the people waiting start copying him.
 | ----- | ---------- | ----------- | -------------- | ------------------------- | ------ |
 | Start (traffic drives behind) | shown | hidden | hidden | hidden | hidden |
 | Playing (walk light red) | hidden | hidden | hidden | shown | the level's name, for a moment |
-| Across, lights changing, green | hidden | hidden | hidden | shown, the clock reading GO on green | hidden |
+| Across: in the loo, fast-forward, green | hidden | hidden | hidden | shown, the clock reading GO on green | hidden |
 | Tally | hidden | hidden | hidden | shown | the tally, or "Try again" |
 | Paused (returned from hidden) | hidden | shown | hidden | shown | as before |
-| Turned the other way mid-level | hidden | hidden (the rotate card instead) | hidden | shown | as before |
 | Game over | hidden | hidden | shown, with the total, the stars and the best | hidden | hidden |
 
 ## Out of scope
