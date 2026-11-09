@@ -932,6 +932,18 @@ test('orbit AC-26: crossing a ring uncaught says why by the ring; too fast with 
     return g.miss && g.miss.text;
   });
   assert.equal(steep, 'Too steep');
+  // too close: slow, along the ring, but so near the planet and drifting in that settling would touch it
+  const close = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    o.startSystem(0);
+    o.fire(0.5);
+    const b = g.level.bodies[g.level.legs[0].to];
+    Object.assign(g.flight, { x: b.x + b.r + 9, y: b.y, vx: -80, vy: -200 });
+    o.update(1 / 240);
+    return g.miss && g.miss.text;
+  });
+  assert.equal(close, 'Too close');
   await context.close();
 });
 
