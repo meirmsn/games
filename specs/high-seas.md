@@ -79,7 +79,7 @@ has been waiting in the shipyard since the first minute.
   that port; cargo for other ports stays aboard. A contract can be loaded only if there is room;
   when there isn't, the cards show it and do nothing. The keel and spinnaker are the dinghy's;
   buying the galleon replaces the dinghy (its cargo moves aboard) and there is no going back.
-- Purchases change the verb, not a number: keel (60 coins), spinnaker (120), galleon (260). Each is
+- Purchases change the verb, not a number: keel (60 coins), spinnaker (130), galleon (320). Each is
   shown on the shipyard's quay, with its price, from the start (owner's guidelines: show the reward
   before it's earned). The galleon (Kenney's white-sailed ship) is moored at the shipyard from the
   first minute.

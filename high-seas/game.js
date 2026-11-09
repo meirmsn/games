@@ -14,7 +14,7 @@ import { ATLAS } from './atlas.js';
 // --- Tuning: every knob in one place -------------------------------------------------------------
 const TUNE = {
   firstLimit: 40, // s: the first contract's route at the starting wind
-  prices: { keel: 60, spinnaker: 120, galleon: 260 },
+  prices: { keel: 60, spinnaker: 130, galleon: 320 },
   goodsBase: 6, // coins for any delivery
   goodsPerTile: 0.8, // and per tile of route
   mailBonus: 1.6, // mail on time pays this many times the goods rate
@@ -45,7 +45,7 @@ const TUNE = {
 
 // --- Page, shell and sound -----------------------------------------------------------------------
 const canvas = document.getElementById('sea');
-const ctx = canvas.getContext('2d');
+let ctx = canvas.getContext('2d'); // swapped briefly while a cached bitmap is drawn
 const $ = (sel) => document.querySelector(sel);
 const screens = {
   start: $('[data-screen="start"]'),
@@ -378,7 +378,6 @@ function scheduleShift(inS) {
 }
 
 function spawnGusts(anywhere, near) {
-  const w = S.world;
   const b = S.boat;
   const up = S.wind.dir + Math.PI;
   let cx;
@@ -414,7 +413,6 @@ function spawnGusts(anywhere, near) {
       seed: S.rand() * 100,
     });
   }
-  void w;
 }
 
 // A gust's strength now (it swells in and fades out over its life).
@@ -567,13 +565,11 @@ function stepBoat(dt) {
       b.keyTurning = false;
       b.target = clampToWedge(r, b.h, wind);
     }
-    const before = b.h;
     b.h = turnTowards(b.h, b.target, r.turn, dt);
     // A tack: the bow crosses the wind.
     const side = Math.sign(wrap(b.h - (wind + Math.PI)));
     if (S.sounds.side && side && side !== S.sounds.side && offWind(b.h, wind) < 1.2) play('tack');
     if (side) S.sounds.side = side;
-    void before;
   }
   // Speed.
   const off = offWind(b.h, wind);
@@ -613,39 +609,50 @@ function stepBoat(dt) {
   const rad = r.radius;
   // The hull's bow tip and its beam on each side must stay in water.
   const reach = r.length / 2 + 0.06;
-  const blockedAt = (x, y, hh) => {
+  // How strictly the hull must clear land: the whole hull, then the bow alone, then the centre (a
+  // tight spot never traps the boat).
+  const blockedAt = (x, y, hh, strict = 2) => {
     const ch = Math.cos(hh);
     const sh = Math.sin(hh);
+    if (solid(x, y)) return true;
+    if (strict >= 1 && solid(x + ch * reach * (strict === 2 ? 1 : 0.6), y + sh * reach * (strict === 2 ? 1 : 0.6))) return true;
     return (
-      solid(x, y) ||
-      solid(x + ch * reach, y + sh * reach) ||
-      solid(x + ch * reach * 0.4 - sh * rad, y + sh * reach * 0.4 + ch * rad) ||
-      solid(x + ch * reach * 0.4 + sh * rad, y + sh * reach * 0.4 - ch * rad)
+      strict === 2 &&
+      (solid(x + ch * reach * 0.4 - sh * rad, y + sh * reach * 0.4 + ch * rad) ||
+        solid(x + ch * reach * 0.4 + sh * rad, y + sh * reach * 0.4 - ch * rad))
     );
   };
   if (!blockedAt(nx, ny, b.h)) {
     b.x = nx;
     b.y = ny;
     b.grounded = 0;
+    b.slideSide = 0;
   } else {
-    // Against the shore: slide along it, in the open direction nearest the heading, never dead.
+    // Against the shore: slide along it, in the open direction nearest the heading, keeping to the
+    // side it chose (so it runs along the coast instead of jittering), never dead.
     b.grounded = (b.grounded || 0) + dt;
     const v = Math.max(b.v * 0.97, r.top * 0.25);
     let moved = false;
-    for (const d of [0.4, -0.4, 0.8, -0.8, 1.2, -1.2, 1.6, -1.6, 2.1, -2.1, 2.6, -2.6, Math.PI]) {
-      const hh = b.h + d;
-      const x = b.x + Math.cos(hh) * v * dt;
-      const y = b.y + Math.sin(hh) * v * dt;
-      if (blockedAt(x, y, hh)) continue;
-      b.x = x;
-      b.y = y;
-      b.v = v;
-      // The bow follows the way it slides; the wanted heading follows too if it pointed ashore.
-      b.h = turnTowards(b.h, hh, r.turn * 1.2, dt);
-      if (Math.abs(wrap(b.target - b.h)) < 1.2) b.target = clampToWedge(r, b.h, wind);
-      moved = true;
-      break;
-    }
+    for (let strict = 2; strict >= 0 && !moved; strict--)
+      for (const m of [0.4, 0.8, 1.2, 1.6, 2.1, 2.6, Math.PI]) {
+        const first = b.slideSide || 1;
+        for (const d of [m * first, -m * first]) {
+          const hh = b.h + d;
+          const x = b.x + Math.cos(hh) * v * dt;
+          const y = b.y + Math.sin(hh) * v * dt;
+          if (blockedAt(x, y, hh, strict)) continue;
+          b.x = x;
+          b.y = y;
+          b.v = v;
+          if (!b.slideSide) b.slideSide = Math.sign(d) || 1;
+          // The bow follows the way it slides; the wanted heading follows too if it pointed ashore.
+          b.h = turnTowards(b.h, hh, r.turn * 1.2, dt);
+          if (Math.abs(wrap(b.target - b.h)) < 1.2) b.target = clampToWedge(r, b.h, wind);
+          moved = true;
+          break;
+        }
+        if (moved) break;
+      }
     if (!moved) b.v = r.top * 0.2;
   }
   // Rocks.
@@ -942,7 +949,8 @@ function quad(p1, p2, p3, p4, fill) {
 function drawGround(range, items) {
   const w = S.world;
   const t = S.t;
-  // Shallows and their animated sparkle, then the land blocks, back to front.
+  // Shallows in one path, glints on the deep water; land blocks go to the sorted pass.
+  const shallow = new Path2D();
   for (let s = range.x0 + range.y0; s <= range.x1 + range.y1; s++)
     for (let i = range.x0; i <= range.x1; i++) {
       const j = s - i;
@@ -951,16 +959,12 @@ function drawGround(range, items) {
       const inside = i >= 0 && j >= 0 && i < W && j < H;
       if (!inside) continue;
       if (tt === SHALLOW) {
-        tilePath(i, j, 0);
-        ctx.fillStyle = C.shallow;
-        ctx.fill();
-        ctx.strokeStyle = C.shallow; // hide hairline seams
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        if (S.owned.galleon) {
-          ctx.fillStyle = 'rgba(232,96,76,0.13)';
-          ctx.fill();
-        }
+        const a = iso.toScreen(i, j);
+        shallow.moveTo(a.x, a.y);
+        shallow.lineTo(a.x + iso.tileW / 2, a.y + iso.tileH / 2);
+        shallow.lineTo(a.x, a.y + iso.tileH);
+        shallow.lineTo(a.x - iso.tileW / 2, a.y + iso.tileH / 2);
+        shallow.closePath();
       } else if (tt >= SAND) {
         items.push({ depth: iso.depth(i + 0.5, j + 0.5, 0), draw: () => drawBlock(i, j, tt) });
       } else if (((i * 7 + j * 13) % 5 === 0)) {
@@ -978,13 +982,23 @@ function drawGround(range, items) {
         }
       }
     }
-  // Surf where the shallows meet the beach: a soft white line that breathes.
-  ctx.lineWidth = 2;
+  ctx.fillStyle = C.shallow;
+  ctx.fill(shallow);
+  ctx.strokeStyle = C.shallow; // hide hairline seams
+  ctx.lineWidth = 1;
+  ctx.stroke(shallow);
+  if (S.owned.galleon) {
+    ctx.fillStyle = 'rgba(232,96,76,0.13)';
+    ctx.fill(shallow);
+  }
+  // Surf where the shallows meet the beach: a soft white line that breathes. Four brightness
+  // levels, one path each.
+  const surf = [new Path2D(), new Path2D(), new Path2D(), new Path2D()];
   for (let j = Math.max(0, range.y0); j <= Math.min(H - 1, range.y1); j++)
     for (let i = Math.max(0, range.x0); i <= Math.min(W - 1, range.x1); i++) {
       if (tileAt(w, i + 0.5, j + 0.5) < SAND) continue;
-      const a = 0.25 + 0.2 * Math.sin(t * 1.6 + i * 0.9 + j * 0.6);
-      ctx.strokeStyle = `rgba(255,255,255,${a})`;
+      const lvl = Math.min(3, Math.floor((0.5 + 0.5 * Math.sin(t * 1.6 + i * 0.9 + j * 0.6)) * 4));
+      const path = surf[lvl];
       for (const [di, dj, x0, y0, x1, y1] of [
         [1, 0, 1, 0, 1, 1],
         [0, 1, 0, 1, 1, 1],
@@ -995,23 +1009,59 @@ function drawGround(range, items) {
         const off = 0.12 + 0.05 * Math.sin(t * 1.6 + i + j);
         const p = iso.toScreen(i + x0 + di * off, j + y0 + dj * off, -2);
         const q = iso.toScreen(i + x1 + di * off, j + y1 + dj * off, -2);
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(q.x, q.y);
-        ctx.stroke();
+        path.moveTo(p.x, p.y);
+        path.lineTo(q.x, q.y);
       }
     }
+  ctx.lineWidth = 2;
+  surf.forEach((path, k) => {
+    ctx.strokeStyle = `rgba(255,255,255,${0.25 + 0.4 * ((k + 0.5) / 4)})`;
+    ctx.stroke(path);
+  });
 }
 
 
+// A land block, stamped from a bitmap drawn once per kind (its type and its front neighbours'
+// heights) and per zoom: much cheaper than filling its faces every frame.
+const blockCache = new Map();
+let blockScale = 0;
 function drawBlock(i, j, tt, at = (x, y) => tileAt(S.world, x, y)) {
-  const z = LIFT[tt];
-  const top = tt === GRASS ? C.grass : C.sand;
-  // Side faces where the neighbour in front is lower.
   const right = at(i + 1.5, j + 0.5);
   const left = at(i + 0.5, j + 1.5);
   const zr = right >= SAND ? LIFT[right] : -3;
   const zl = left >= SAND ? LIFT[left] : -3;
+  const scale = Math.round(cam.zoom * dpr * 8) / 8;
+  if (scale !== blockScale) {
+    blockCache.clear();
+    blockScale = scale;
+  }
+  const key = `${tt}|${zr}|${zl}`;
+  let bmp = blockCache.get(key);
+  if (!bmp) {
+    // The block's top corner at (hw, top margin); it spans the tile's width and its height plus
+    // its lift and the faces below the water line.
+    const hw = iso.tileW / 2;
+    const up = LIFT[tt] + 2;
+    const h = iso.tileH + up + 8;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil((iso.tileW + 2) * scale);
+    c.height = Math.ceil(h * scale);
+    const g = c.getContext('2d');
+    g.setTransform(scale, 0, 0, scale, (hw + 1) * scale, up * scale);
+    const saved = ctx;
+    ctx = g;
+    blockFaces(0, 0, tt, zr, zl);
+    ctx = saved;
+    bmp = { c, ox: hw + 1, oy: up, w: iso.tileW + 2, h };
+    blockCache.set(key, bmp);
+  }
+  const p = iso.toScreen(i, j);
+  ctx.drawImage(bmp.c, p.x - bmp.ox, p.y - bmp.oy, bmp.c.width / scale, bmp.c.height / scale);
+}
+
+function blockFaces(i, j, tt, zr, zl) {
+  const z = LIFT[tt];
+  const top = tt === GRASS ? C.grass : C.sand;
   if (zr < z) {
     const sideTop = tt === GRASS ? C.grassR : C.sandR;
     quad(iso.toScreen(i + 1, j, z), iso.toScreen(i + 1, j + 1, z), iso.toScreen(i + 1, j + 1, zr), iso.toScreen(i + 1, j, zr), zr < 0 ? C.dirtR : sideTop);
@@ -1045,7 +1095,25 @@ function ellipse(x, y, r, fill, stroke, lw) {
   }
 }
 
+// One soft dark disc, drawn once, stretched into each gust's ellipse.
+let gustBlob = null;
+function blob() {
+  if (gustBlob) return gustBlob;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(64, 64, 13, 64, 64, 64);
+  grad.addColorStop(0, 'rgba(18,70,120,1)');
+  grad.addColorStop(0.7, 'rgba(18,70,120,0.8)');
+  grad.addColorStop(1, 'rgba(18,70,120,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 128, 128);
+  gustBlob = c;
+  return c;
+}
+
 function drawGusts() {
+  const img = blob();
   for (const g of S.gusts) {
     const k = gustNow(g);
     if (k <= 0) continue;
@@ -1053,19 +1121,9 @@ function drawGusts() {
     const c = iso.toScreen(g.x, g.y);
     const rx = g.r * iso.tileW * 0.7071;
     const ry = g.r * iso.tileH * 0.7071;
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.scale(1, ry / rx);
-    const grad = ctx.createRadialGradient(0, 0, rx * 0.2, 0, 0, rx);
-    const a = (strong ? 0.32 : 0.22) * k;
-    grad.addColorStop(0, `rgba(18,70,120,${a})`);
-    grad.addColorStop(0.7, `rgba(18,70,120,${a * 0.8})`);
-    grad.addColorStop(1, 'rgba(18,70,120,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(0, 0, rx, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    ctx.globalAlpha = (strong ? 0.32 : 0.22) * k;
+    ctx.drawImage(img, c.x - rx, c.y - ry, rx * 2, ry * 2);
+    ctx.globalAlpha = 1;
     // Cat's paws: little dark ripples scattered inside, moving.
     const n = Math.round(g.r * 5);
     ctx.strokeStyle = `rgba(16,58,100,${0.45 * k})`;
@@ -1123,7 +1181,6 @@ function drawStreaks(range) {
     }
     ctx.stroke();
   }
-  void range;
 }
 
 function drawWakes() {
@@ -1688,7 +1745,6 @@ function drawMinimap(x, y, size) {
   ctx.restore();
 }
 
-const cssVar = (name) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name)) || 0;
 let safe = { top: 0, right: 0 };
 function readSafe() {
   const probe = document.createElement('div');
@@ -1700,7 +1756,6 @@ function readSafe() {
 }
 const safeTop = () => safe.top;
 const safeRight = () => safe.right;
-void cssVar;
 
 // The landing tile's picture (scripts/high-seas/make-tile.mjs): an islet with palms, the galleon,
 // and the dinghy running under its spinnaker, on a pool of sea, with the page's background clear.
@@ -1774,7 +1829,6 @@ function draw() {
   if (!S.world) return;
   const b = S.boat;
   // Follow the boat, a little ahead of where it's going.
-  const r = currentRig();
   const lead = S.mode === 'sail' ? Math.min(1.8, b.v * 1.2) : 0;
   const target = iso.toScreen(b.x + Math.cos(b.h) * lead, b.y + Math.sin(b.h) * lead);
   if (S.mode === 'start' || S.mode === 'over') {
@@ -1817,7 +1871,6 @@ function draw() {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (S.mode !== 'start' && S.mode !== 'over') drawOverlay();
-  void r;
 }
 
 // --- Input -------------------------------------------------------------------------------------------

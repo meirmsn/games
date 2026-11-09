@@ -316,7 +316,7 @@ function check(world, polarAt, topSpeed, firstLimit) {
   const [sx, sy] = ringOf(world.ports[0]);
   for (const p of all) if (routeLength(world.deep, sx, sy, ...ringOf(p)) === Infinity) return null;
   // The finale is a real passage.
-  if (routeLength(world.deep, sx, sy, ...ringOf(world.lighthouse)) < 26) return null;
+  if (routeLength(world.deep, sx, sy, ...ringOf(world.lighthouse)) < 32) return null;
   for (const p of world.ports) if (routeLength(world.light, sx, sy, ...ringOf(p)) === Infinity) return null;
   // The first contract: the nearest port, put on a beam reach by the starting wind.
   let best = null;

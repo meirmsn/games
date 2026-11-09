@@ -324,8 +324,8 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
   const yard = await page.$$eval('[data-buy]', (b) => b.map((x) => [x.dataset.buy, x.querySelector('.price').textContent, x.getAttribute('aria-disabled')]));
   assert.deepEqual(yard, [
     ['keel', '60', 'true'],
-    ['spinnaker', '120', 'true'],
-    ['galleon', '260', 'true'],
+    ['spinnaker', '130', 'true'],
+    ['galleon', '320', 'true'],
   ]);
   assert.ok(await page.evaluate(() => !!window.__seas.S.yardGalleon), 'the galleon waits at the shipyard');
   // Can't afford: nothing changes.
@@ -356,7 +356,7 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
   assert.equal(res.coinsAfterKeel, 940);
   assert.equal(res.runBeatsBeam, true);
   assert.deepEqual(res.galleon, { cargo: 3, wedge: 65, name: 'galleon' });
-  assert.equal(res.coins, 1000 - 60 - 120 - 260);
+  assert.equal(res.coins, 1000 - 60 - 130 - 320);
   // The galleon can't enter shallow water: sail it at a shallow tile and it never gets in.
   const inShallow = await page.evaluate(() => {
     const s = window.__seas;
@@ -581,7 +581,7 @@ test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter; 
   await page.evaluate(() => {
     const s = window.__seas;
     s.manual = true;
-    s.S.coins = 300;
+    s.S.coins = 400;
     s.buy('galleon');
   });
   assert.equal(await page.locator('[data-charter]').count(), 1);
