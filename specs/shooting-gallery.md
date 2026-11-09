@@ -33,9 +33,10 @@ Where they differ from the playtests below, these win.
 - **A frenzy target in lights.** "the target that triggers the frenzy currently has like a weird
   purple glow … not analog … it should have … some lights … all around it … marquee lights around
   it, not tiny, not huge … then if you hit it, then it starts the frenzy mode … I connected because
-  they look similar." The pink glow is gone: the frenzy target wears a ring of 14 marquee bulbs just
-  outside its rim, about half the size of the frenzy marquee's, in the same warm white, yellow and
-  orange, chasing round at the same pace.
+  they look similar." The pink glow is gone: the frenzy target wears a ring of marquee bulbs in the
+  same warm white, yellow and orange as the frenzy marquee, chasing round at the same pace. "make
+  it so that the light bulbs are not like floating around it, but actually around the inner
+  border … around the white border": the 16 bulbs are set into its white border.
 
 ### The owner's eighth playtest (owner, 2026-11-09)
 
@@ -66,7 +67,8 @@ Where they differ from the playtests below, these win.
 - **No pink on the timer.** "during the frenzy mode, the pink on the light bulb should go out …
   keep it with the other colors … maybe … alternate between … black and yellow." In a frenzy the
   stopped timer's bulbs flash yellow and dark, three times a second.
-- **Alarms you can't miss.** "when there's 10 seconds left, the chime doesn't sound particularly
+- **Alarms you can't miss** (remade by the eighth and ninth playtests: recorded bells at 10 and
+  5 s, a quieter klaxon at 3, 2 and 1). "when there's 10 seconds left, the chime doesn't sound particularly
   different than the rest, so make something that is like … hey, alert, it's happening. And then on
   the last five, do another chime. And then on the last 3, 2, 1 … sound already like an alarm."
   At 10 s an electric alarm bell rattles for a second; at 5 s a big bell strikes three falling
@@ -479,8 +481,8 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-33** The score, the painted signs and the cards are lettered in Rye, a fairground woodtype
   served from the game's folder, its paint chipped in specks — `tests/shooting-gallery.test.mjs`.
 - **AC-34** No pink shows in a frenzy's marquee, edges or banner, nor on the frenzy target, which
-  wears a chasing ring of at least 12 marquee bulbs round its rim, smaller than the frenzy
-  marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
+  wears a chasing ring of at least 12 marquee bulbs set into its white border, smaller than
+  the frenzy marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
   2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar and every
   paintball is drawn as a textured shell — `tests/shooting-gallery.test.mjs`.
 

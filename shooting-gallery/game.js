@@ -1489,7 +1489,8 @@ function drawTarget(t) {
   if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
   sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
   if (t.kind === 'frenzy') {
-    // A ring of little marquee bulbs, chasing like the frenzy's own marquee: it's what a hit sets off.
+    // Little marquee bulbs set into its white border, chasing like the frenzy's own marquee: it's
+    // what a hit sets off.
     const step = Math.floor(game.T * 9);
     for (const b of frenzyRing(t)) {
       const col = (b.i + step) % 3 !== 0 ? MARQUEE_COLOURS[(b.i + Math.floor(step / 3)) % MARQUEE_COLOURS.length] : null;
@@ -2073,13 +2074,13 @@ function marqueeBulbs() {
   for (const b of out) b.lit = (b.i + step) % 3 !== 0;
   return out;
 }
-// The frenzy target's ring of bulbs, relative to its centre: 14 bulbs a little outside its rim,
-// each a third of the frenzy marquee's in size relative to the booth (about 1/15 of the target).
+// The frenzy target's ring of bulbs, relative to its centre: 16 bulbs set into its white border
+// (which runs from 0.39 to 0.46 of its width), like the frenzy marquee's in miniature.
 function frenzyRing(t) {
   const [w] = dims(t);
-  const n = 14;
-  const R = w * 0.6;
-  const r = Math.max(2.5, w * 0.065);
+  const n = 16;
+  const R = w * 0.428;
+  const r = Math.max(2, w * 0.042);
   const out = [];
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 - Math.PI / 2;

@@ -1337,7 +1337,7 @@ test('shooting-gallery AC-33: the score, the signs and the cards are lettered in
   await context.close();
 });
 
-test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears a ring of marquee bulbs; the alarms stand out without blaring; the quota’s brass and the paintballs are textured', async () => {
+test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears marquee bulbs in its white border; the alarms stand out without blaring; the quota’s brass and the paintballs are textured', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1434,7 +1434,7 @@ test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which
   });
   assert.ok(pink.checked > 40, `pixels checked: ${pink.checked}`);
   assert.deepEqual(pink.pink, [], 'no pink in the frenzy’s lights');
-  // The frenzy target wears a ring of little marquee bulbs round its rim, chasing, and no pink glow.
+  // The frenzy target wears little marquee bulbs set into its white border, chasing, and no pink glow.
   const ring = await page.evaluate(async () => {
     const g = window.__gallery;
     g.game.frenzy = 0;
@@ -1454,7 +1454,7 @@ test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which
     let pinkPx = 0;
     let seen = 0;
     for (let a = 0; a < Math.PI * 2; a += 0.1) {
-      for (const f of [0.3, 0.4, 0.47]) {
+      for (const f of [0.1, 0.22, 0.28]) {
         const x = t.x + Math.cos(a) * w * f;
         const y = t.y + Math.sin(a) * w * f;
         const [r, gr, b] = c.getImageData(Math.round((x * k + ox) * dpr), Math.round((y * k + oy) * dpr), 1, 1).data;
@@ -1476,8 +1476,8 @@ test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which
     };
   });
   assert.ok(ring.n >= 12, `a ring of bulbs: ${ring.n}`);
-  assert.ok(ring.dist.every((d) => d > 0.5 && d < 0.7), 'round its rim');
-  assert.ok(ring.size > 0.2 && ring.size < 0.7, `smaller than the frenzy marquee's bulbs, not specks: ${ring.size.toFixed(2)}`);
+  assert.ok(ring.dist.every((d) => d > 0.39 && d < 0.46), 'set into its white border (0.39 to 0.46 of its width)');
+  assert.ok(ring.size > 0.15 && ring.size < 0.7, `smaller than the frenzy marquee's bulbs, not specks: ${ring.size.toFixed(2)}`);
   assert.ok(ring.chases, 'its lit bulbs chase round');
   assert.equal(ring.pinkPx, 0, `no pink glow on it (${ring.seen} pixels looked at)`);
   assert.ok(pink.during <= pink.before + 2, `the frenzy’s glow at the edges is warm, not pink: blue over green ${pink.before.toFixed(1)} → ${pink.during.toFixed(1)}`);
