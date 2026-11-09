@@ -722,7 +722,7 @@ test('shoo AC-19: the UI is 8-bit: a pixel font, no rounding, blur or soft shado
   const { context, page } = await open();
   await page.evaluate(() => document.fonts.ready);
   const r = await page.evaluate(() => {
-    const els = ['[data-screen="start"]', '[data-play]', '.mute', '.shell-back'].map((s) => document.querySelector(s));
+    const els = ['[data-screen="start"]', '[data-play]', '.mute', '.shell-back', '.shell-leave', '[data-shell-stay]', '[data-shell-leave]'].map((s) => document.querySelector(s));
     document.querySelector('[data-hud]').hidden = false;
     els.push(document.querySelector('[data-hud]'));
     return {

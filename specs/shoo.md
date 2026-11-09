@@ -96,7 +96,7 @@ its place, so against `main` the change adds one game and one tile. The game has
 - 8-bit throughout (the owner's words above): the scene is drawn at the art's own resolution and
   enlarged with no smoothing; every mark (reticle ring, shadows, lights, digits) is plotted pixel by
   pixel; the HUD, cards and buttons use Kenney Mini Square, square panels with stepped corners and
-  hard bevels, at least 44 px.
+  hard bevels, at least 44 px; the shared shell's "Leave this level?" question gets the same look.
 - Sound (MP3, from Kenney's audio packs): a flutter when birds lift, a chirp when they walk off, the
   approach chime, a clean-landing thud, the go-around engine, the hour bong, the hold-full alarm, the
   end jingle and a music loop, under the site-wide mute.
@@ -104,14 +104,17 @@ its place, so against `main` the change adds one game and one tile. The game has
   go-around around 60–90 s; the first new element (the second runway) at 75 s. Knobs at the top of
   `game.js`: hour length, landing gaps, approach times, fear radius, the walk/panic speed, walk and
   pull speeds, flight times, flock arrivals, hold size.
-- Landing page: the Shoo! tile is added after Googly Faces, making 8 tiles; its picture,
+- Landing page: the Shoo! tile is added after Walk on Red, making 9 tiles (bringing in `main`, where
+  Walk on Red already sits after Googly Faces and its test pins that place; the owner's brief for
+  this batch, 2026-11-09: "Expect conflicts in `index.html`, `sw.js` and `tests/site.test.mjs`: keep
+  both sides, and make sure the tile count matches"); its picture,
   `assets/tiles/shoo.png`, is a capture of the game and joins `sw.js` `SHELL` (`VERSION` bumped).
 - Not a copy: herding is a genre; the names, airfield and birds are our own, in Kenney's CC0 art.
 
 ## Acceptance items
 
-- **AC-1** The landing page shows 8 tiles, with a playable Shoo! tile linking to `shoo/` after Googly
-  Faces — `tests/site.test.mjs`.
+- **AC-1** The landing page shows 9 tiles, with a playable Shoo! tile linking to `shoo/` after Walk on
+  Red — `tests/site.test.mjs`.
 - **AC-2** Behind the start card the field is alive before any touch: birds move and a plane comes in
   to land; the HUD is hidden — `tests/shoo.test.mjs`.
 - **AC-3** On touch the reticle sits 64 ± 2 CSS px above the finger and follows it; with a mouse it
@@ -155,7 +158,8 @@ its place, so against `main` the change adds one game and one tile. The game has
   `tests/shoo.test.mjs`.
 - **AC-18** Each state shows only its own card and HUD, as in the state table —
   `tests/shoo.test.mjs`.
-- **AC-19** The UI is 8-bit: the HUD, cards and buttons use the pixel font with no rounded corners,
+- **AC-19** The UI is 8-bit: the HUD, cards and buttons, and the shell's "Leave this level?" question,
+  use the pixel font with no rounded corners,
   blur or soft shadows; the canvas is enlarged with no smoothing; the marks drawn over the field in a
   live scene (birds, shadows, reticle, lights, countdown, points) use only the flat alpha values the
   code declares, so nothing has an anti-aliased edge — `tests/shoo.test.mjs`.

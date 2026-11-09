@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Pixel Leap</title>
+    <meta name="description" content="Pixel Leap: build a monster, then run and jump through worlds drawn in different art styles, each redrawing your monster in its own." />
+    <meta name="theme-color" content="#3b8f6a" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="preload" href="fonts/kenney-pixel.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <div class="stage">
+      <canvas id="view" aria-label="A side-scrolling world with your monster in it"></canvas>
+      <div class="deck" data-deck aria-hidden="true">
+        <div class="pad" data-pad>
+          <span class="arrow left"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg></span>
+          <span class="notch"></span>
+          <span class="arrow right"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg></span>
+        </div>
+        <div class="jump" data-jump><svg viewBox="0 0 24 24"><path d="M5 15l7-7 7 7" /></svg></div>
+      </div>
+    </div>
+
+    <div class="hud" data-hud hidden>
+      <span class="hud-stage" data-hud-stage></span>
+      <span class="hud-lives" data-hud-lives aria-label="Lives"></span>
+      <span class="hud-hearts" data-hud-hearts aria-label="Hearts"></span>
+      <span class="hud-coins"><i class="hud-coin-icon" data-hud-coin-icon aria-hidden="true"></i><b data-hud-coins>0</b></span>
+    </div>
+
+    <p class="banner" data-banner aria-live="polite" hidden></p>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <section class="card builder" data-screen="build" hidden>
+      <canvas class="preview" data-preview width="300" height="300" aria-label="Your monster"></canvas>
+      <div class="parts" data-parts></div>
+      <div class="actions">
+        <button class="shuffle" type="button" data-shuffle>Shuffle</button>
+        <button class="go" type="button" data-go>Go</button>
+      </div>
+    </section>
+
+    <section class="card paused" data-screen="paused" hidden>
+      <h2>Paused</h2>
+      <p>Tap to play</p>
+    </section>
+
+    <section class="card tally" data-screen="tally" hidden>
+      <h2 data-tally-title>Meadow</h2>
+      <dl class="tally-rows">
+        <div><dt>Coins</dt><dd data-tally-coins></dd></div>
+        <div><dt>Time</dt><dd data-tally-time></dd></div>
+        <div><dt>Prize</dt><dd data-tally-prize></dd></div>
+        <div><dt>Best</dt><dd data-tally-best></dd></div>
+      </dl>
+      <p class="tally-note" data-tally-note></p>
+      <div class="actions">
+        <button class="shuffle" type="button" data-rebuild hidden>New monster</button>
+        <button class="go" type="button" data-leap>Leap</button>
+      </div>
+    </section>
+  </body>
+</html>

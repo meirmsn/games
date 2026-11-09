@@ -100,7 +100,9 @@ function writeMemory(v) {
 
 // ---------- Sound ----------
 
+// A refresh or a closed tab mid-shift asks first; the back button always asks (the shell's rule).
 const { sound } = mountShell({
+  unsaved: () => mode === 'play',
   sounds: {
     flutter: 'sounds/flutter.mp3',
     chirp: 'sounds/chirp.mp3',
