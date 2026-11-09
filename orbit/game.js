@@ -344,6 +344,7 @@ function fire(angle, power) {
   game.launches++;
   game.mode = 'fly';
   game.skimFlash.clear();
+  fadeIntro();
   sfx('launch', { rate: 0.9 + pw * 0.25 });
 }
 
@@ -668,6 +669,16 @@ function drawSky() {
 // The target's ring (dashed, turning), and a faint parking ring round the probe's planet.
 function drawRings(pos) {
   const leg = legOf();
+  // a moon's path, faintly, so its motion reads before it moves
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  game.level.bodies.forEach((b) => {
+    if (!b.orbit) return;
+    const c = b.orbit.around;
+    ctx.beginPath();
+    ctx.arc(sx(pos[c * 2]), sy(pos[c * 2 + 1]), b.orbit.r * view.s, 0, Math.PI * 2);
+    ctx.stroke();
+  });
   if (game.mode !== 'done') {
     const i = leg.to;
     const b = game.level.bodies[i];
@@ -764,8 +775,8 @@ function drawBody(i, wx, wy) {
 function drawMotes() {
   const motes = game.level.motes;
   for (let i = 0; i < motes.length; i++) {
-    if (game.taken.has(i)) continue;
     const m = motes[i];
+    if (game.taken.has(i) || (m.leg < game.leg && game.mode !== 'done')) continue; // caught, or out of reach
     const current = m.leg === game.leg && game.mode !== 'done';
     const x = sx(m.x);
     const y = sy(m.y + Math.sin(time * 1.6 + i) * 3);
