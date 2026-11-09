@@ -338,6 +338,11 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
     const D = Math.PI / 180;
     const out = {};
     out.dinghyWedge = s.rig().wedge / D;
+    // The spinnaker on its own: downwind gets faster, the wedge stays the dinghy's.
+    S.coins = 130;
+    s.buy('spinnaker');
+    out.spinAlone = { wedge: Math.round(s.rig().wedge / D), runBeatsBeam: s.polarAt(s.rig(), Math.PI) > s.polarAt(s.rig(), Math.PI / 2), coins: S.coins };
+    S.owned.spinnaker = false;
     S.coins = 1000;
     s.buy('keel');
     out.keelWedge = Math.round(s.rig().wedge / D);
@@ -352,6 +357,7 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
     return out;
   });
   assert.equal(Math.round(res.dinghyWedge), 50);
+  assert.deepEqual(res.spinAlone, { wedge: 50, runBeatsBeam: true, coins: 0 });
   assert.equal(res.keelWedge, 38);
   assert.equal(res.coinsAfterKeel, 940);
   assert.equal(res.runBeatsBeam, true);

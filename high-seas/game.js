@@ -290,7 +290,6 @@ function takeCharter() {
 function buy(what) {
   if (S.mode !== 'docked' || S.portAt !== 0) return false;
   if (S.owned[what]) return false;
-  if (what === 'spinnaker' && !S.owned.keel) return false;
   if ((what === 'keel' || what === 'spinnaker') && S.owned.galleon) return false;
   const price = TUNE.prices[what];
   if (S.coins < price) return false;
@@ -911,7 +910,7 @@ function renderPort() {
     yard.style.gridTemplateColumns = `repeat(${items.length}, 1fr)`;
     for (const [what, label] of items) {
       const owned = S.owned[what];
-      const can = !owned && S.coins >= TUNE.prices[what] && !(what === 'spinnaker' && !S.owned.keel);
+      const can = !owned && S.coins >= TUNE.prices[what];
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'buy' + (owned ? ' owned' : '');

@@ -27,8 +27,9 @@ export const BOATS = {
     polar: [[38, 0.72], [60, 0.9], [90, 1.0], [135, 0.85], [180, 0.65]],
   },
   spinnaker: {
-    // The keel's polar, and the spinnaker downwind.
+    // The spinnaker downwind, on the keel's polar or the plain dinghy's.
     polar: [[38, 0.72], [60, 0.9], [90, 1.0], [130, 1.05], [180, 1.15]],
+    plain: [[50, 0.7], [70, 0.9], [90, 1.0], [130, 1.05], [180, 1.15]],
   },
   galleon: {
     top: 1.75,
@@ -46,7 +47,7 @@ export function rig({ galleon, keel, spinnaker }) {
   if (galleon) return { name: 'galleon', ...BOATS.galleon };
   const r = { name: 'dinghy', ...BOATS.dinghy };
   if (keel) Object.assign(r, BOATS.keel);
-  if (spinnaker) r.polar = BOATS.spinnaker.polar;
+  if (spinnaker) r.polar = keel ? BOATS.spinnaker.polar : BOATS.spinnaker.plain;
   r.keel = Boolean(keel);
   r.spinnaker = Boolean(spinnaker);
   return r;
