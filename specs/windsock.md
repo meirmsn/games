@@ -10,7 +10,8 @@ game concept against the guidelines and propose something that works, and then d
 review … so that you have solid concepts of the game and then build them … don't consult with me,
 just start building after following this process."
 
-The concept was checked against `discussion/game-guidelines.md`, then attacked twice by a fresh
+The concept was checked against the game guidelines (`discussion/game-guidelines.md`, on branch
+`claude/tender-knuth-m0cjxj` until its PR merges), then attacked twice by a fresh
 reviewer; the decisions below are what survived. The surface is a new game page, `windsock/`, and a
 new playable tile on the landing page (customer-facing). The game has its own look, the pack's
 pixel palette on a grass field, the same in light and dark, like the other game pages; the landing
@@ -33,23 +34,34 @@ and the planes in the sky have to turn around.
   itself (green rabbit-light chevrons and a lit ring); dead ends are grey and show a cross while a
   line nears them. The windsock is big, beside the runway, and points downwind; clouds, chimney
   smoke and tyre puffs drift with it. Rejected: reading the live end off the sock alone (attack 2).
-- A downwind end refuses on both runways. Rejected: tailwind landings at half points, which made
+- Landing page: the Windsock tile is a playable link, placed after Googly Faces and before the
+  coming-soon tiles (8 tiles). Its picture, `assets/tiles/windsock.png`, is a capture of the game's
+  own field; it joins `SHELL` in `sw.js`, whose `VERSION` is bumped (Claude, 2026-11-09).
+- A downwind end refuses on both runways. "Refuses" means the line doesn't snap to its ring and the
+  ring shows a grey cross while the line's head is near; the strip refuses the same way before 08:00
+  and for heavies. Rejected: tailwind landings at half points, which made
   amber mean two things and needed ground rules no one could read (attack 2).
 - Drift: only planes without a line (and circling ones) are pushed downwind; a plane on a line
   follows it within 2 art px, its nose crabbed into the wind as a look. Rejected: drift on drawn
   lines, which punishes input, not skill (attack 2).
 - Collisions: two airborne planes that touch collide; two planes rolling on the ground collide (the
   two runways cross); a plane in the air and one on the ground never do (the shadow shows height).
-  A collision stops play: slow motion, the two planes ringed, a card naming the hour, "Retry
-  <that hour>" restores the shift exactly as it was when the hour began (all planes, the score
-  banked before it, the wind), or "New shift". Conflict warning: two planes that would touch within
-  2 s get red rings and a red line between them. Red means conflict only; amber means the wind is
+  A collision stops play: about 1 s of slow motion with no input, the two planes ringed, then a
+  card naming the hour on the clock, "Retry <that hour>" or "New shift". The snapshot taken as each
+  hour begins holds the score, landed and diverted counts, the wind, and every plane with its
+  position, fuel and line; Retry restores it, resets the streak to ×1 and rebuilds that hour's
+  arrivals from the seed with the assist's stretch. A swing in progress is restored to the wind of
+  the hour's start. Conflict warning: two planes in the same layer (both in the air, or both on the
+  ground) whose positions, extrapolated along their current velocity, would come within separation
+  (the sum of their hit radii) in the next 2 s get red rings and a red line between them. Red means conflict only; amber means the wind is
   about to change, only (attack 1).
 - Structure: a morning shift of five hours of 45 s, 06:00–11:00, about 4 minutes, short-form. One
   new thing per hour, shown not told: 06:00 small props and the long runway (the strip is closed,
   marked with yellow crosses); 07:00 the first wind swing; 08:00 the strip opens; 09:00 heavies
   (four-engine, slower, worth 3×, long runway only); 10:00 rush hour (shorter gaps, more planes).
-  One swing per hour from 07:00, 90° (one runway flips) or 180° (both), with a 5 s warning (the sock
+  One swing per hour from 07:00, 20 s into the hour, 90° (one runway flips) or 180° (both), picked
+  by the seed (the 07:00 swing always flips the long runway, as the strip is still closed), with a
+  5 s warning (the sock
   shivers, a gust, the soon-live ends blink amber) and a 5 s lull in arrivals after it. Lines to an
   end that just died are dropped and those planes circle until redrawn; planes past the ring are
   committed and land. Rejected: a run that ends on the first crash with nothing to retry, which
@@ -63,17 +75,27 @@ and the planes in the sky have to turn around.
   previous one build a streak that multiplies them, ×2 up to ×5.
 - Arrivals: each shows an arrow at the edge 3 s ahead; an entry that would come within separation
   of another plane in its first 4 s is moved along the edge. The day's seed sets the traffic and the
-  wind: `#day=N` (default: today's day of the year, counted from 2026-01-01 as day 1), shown on the
-  start card; "Another day" picks a random one.
+  wind: `#day=N` (default: the local date's day count from 2026-01-01 as day 1; a
+  `#day` outside 1–9999 falls back to it), shown on the start card as "Day N"; "Another day" picks a
+  random one.
 - Hidden assist: each retry of an hour stretches that hour's arrival gaps by 8%, up to 25%, and
   resets when the hour is passed. Nothing shows it.
-- Small memory, in localStorage `windsock`: the best score per day and the 09:00 start, unlocked by
-  finishing a shift. Losing it costs nothing you'd miss. No save game.
+- Small memory, in localStorage `windsock`: the best score per day (only shifts started at 06:00
+  count) and the 09:00 start, unlocked by finishing a shift started at 06:00. Losing it costs nothing you'd miss. No save game.
+- Edge rules: a plane past its ring, rolling or diverting can't be grabbed; a line being drawn when
+  the swing lands keeps going, but one already snapped to a now-dead end is dropped and the plane
+  circles; during the warning a line may snap to a soon-live end, and a plane that reaches it before
+  the swing circles there instead; a line's points are clamped to the field; a plane that reaches
+  the end of a line that doesn't end in a ring flies straight on and turns back at the field's edge
+  margin; a diverting plane's line is removed; hiding the page cancels a drag; a resize rescales the
+  view while the field keeps its own coordinates (art px), so lines and planes stay put.
+- Simulation: a fixed step of 1/120 s, run as many times as the frame's time needs (capped), so 60
+  and 120 Hz screens play the same game; the pixel ratio is capped at 2.
 - Interruptible: the page hidden pauses play and sound; coming back shows a Resume card, and nothing
   moves until it's tapped.
 - Sound (MP3, from Kenney's audio packs): grab, snap, touchdown thud and tyre squeak, streak, gust
   warning, the swing, conflict alarm, crash, divert, the hour bong, the end jingle and a music loop,
-  under the site-wide mute.
+  under the site-wide mute, with a mute button as in Reef (`createSound`'s `muted`, `aria-pressed`).
 - Targets to tune by playing: the first landing within 10 s of Start; the first new element (the
   first swing) at about 07:00; the first failure, for most players, at 08:00 or later. Knobs at the
   top of `game.js`: hour length, gaps and caps per hour, speeds, turn rates, fuel, warning and lull
@@ -86,8 +108,8 @@ and the planes in the sky have to turn around.
 - **AC-1** The landing page shows 8 tiles, with a playable Windsock tile linking to `windsock/` —
   `tests/site.test.mjs`.
 - **AC-2** Behind the start card the field is alive before any touch: planes and clouds move, and
-  the HUD is hidden; the start card shows the day and its number — `tests/windsock.test.mjs`.
-- **AC-3** A touch drag from near a plane draws its line, with the line's head about 44 CSS px above
+  the HUD is hidden; the start card shows "Day N" — `tests/windsock.test.mjs`.
+- **AC-3** A touch drag from near a plane draws its line, with the line's head 44 ± 2 CSS px above
   the finger once the drag passes 24 px; a mouse drag draws under the pointer; a touch within 22 CSS
   px picks the nearest plane — `tests/windsock.test.mjs`.
 - **AC-4** A line that reaches a live end's ring snaps to it, and the plane lines up, touches down,
@@ -97,7 +119,7 @@ and the planes in the sky have to turn around.
   mirror cases); a line taken to a dead end does not snap — `tests/windsock.test.mjs`.
 - **AC-6** The strip refuses every plane before 08:00 and refuses heavies always; heavies first
   arrive at 09:00 — `tests/windsock.test.mjs`.
-- **AC-7** A wind swing: 5 s before, the warning starts (amber on the soon-live ends, the gust);
+- **AC-7** A wind swing, 20 s into each hour from 07:00: 5 s before, the warning starts (amber on the soon-live ends, the gust);
   then the wind turns by 90° or 180°, lines to now-dead ends are dropped and those planes circle,
   a plane past its ring still lands, and no plane arrives for 5 s after — `tests/windsock.test.mjs`.
 - **AC-8** A plane without a line drifts downwind; a plane on a line stays within 2 art px of it —
@@ -106,7 +128,8 @@ and the planes in the sky have to turn around.
   restores the planes, score and wind as they were at that hour's start; New shift starts at 06:00;
   a plane in the air over one on the ground does not collide; two on the ground do —
   `tests/windsock.test.mjs`.
-- **AC-10** Two planes that would touch within 2 s are both marked as in conflict —
+- **AC-10** Two airborne planes whose extrapolated positions would touch within 2 s are both marked
+  as in conflict; a plane in the air and one on the ground never are —
   `tests/windsock.test.mjs`.
 - **AC-11** Fuel drains; a plane that runs out diverts: no points, the diverted count goes up, and
   it collides with nothing — `tests/windsock.test.mjs`.
@@ -117,7 +140,7 @@ and the planes in the sky have to turn around.
   day's best — `tests/windsock.test.mjs`.
 - **AC-14** The same `#day` gives the same arrivals and starting wind; a different day gives
   different ones; "Another day" changes the day — `tests/windsock.test.mjs`.
-- **AC-15** The day's best is kept and shown; finishing a shift unlocks "Start at 09:00", which
+- **AC-15** The day's best from shifts started at 06:00 is kept and shown; finishing a shift unlocks "Start at 09:00", which
   starts the shift at 09:00; with storage blocked the game still plays — `tests/windsock.test.mjs`.
 - **AC-16** Every arrival shows its arrow at least 3 s before the plane appears, and no plane enters
   on a course that comes within separation of another in its first 4 s — `tests/windsock.test.mjs`.
@@ -126,8 +149,8 @@ and the planes in the sky have to turn around.
 - **AC-18** Hiding the page pauses play; on return the Resume card shows and nothing moves until it
   is tapped — `tests/windsock.test.mjs`.
 - **AC-19** At 360×640 and 390×844 the whole field, all four rings included, sits inside the screen
-  below the HUD, with no scrolling; the simulation gives the same result stepped at 60 Hz and
-  120 Hz — `tests/windsock.test.mjs`.
+  below the HUD, with no scrolling; the same 20 s of play run at 60 Hz and at 120 Hz
+  frames ends with the same landed count and score, and every plane within 0.5 art px — `tests/windsock.test.mjs`.
 - **AC-20** A landing plays the touchdown sound, and the mute button mutes the site-wide sound —
   `tests/windsock.test.mjs`.
 - **AC-21** While one finger draws, a second finger draws nothing and changes no line —
@@ -148,6 +171,7 @@ and the planes in the sky have to turn around.
 | ----- | ---------- | -------------- | --------- | ----------- | ------------------ |
 | Start (the field moves behind) | shown | hidden | hidden | hidden | hidden |
 | Playing | hidden | hidden | hidden | hidden | shown |
+| Crashing (about 1 s of slow motion, no input) | hidden | hidden | hidden | hidden | shown |
 | Collision | hidden | shown, naming the hour | hidden | hidden | shown |
 | Done | hidden | hidden | shown, with score, landed, diverted and best | hidden | shown |
 | Paused (page came back) | hidden | hidden | hidden | shown | shown |
