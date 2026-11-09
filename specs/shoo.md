@@ -16,14 +16,15 @@ Twenty directions were screened against the game guidelines (`discussion/game-gu
 were shortlisted (Pushback, Bird Strike, Skywriter, Air Show) and a fresh reviewer attacked them. Bird
 Strike won: the only one alive before the first touch and new to the site in verb (herding),
 structure (a timed shift of landings) and failure (a holding stack that fills). The decisions below
-are its fixes. The surface is a new game page, `shoo/`, which replaces `windsock/`, and its tile on
-the landing page (customer-facing). The game has its own 8-bit look, the same in light and dark.
+are its fixes. The surface is a new game page, `shoo/`, and its tile on the landing page
+(customer-facing). Windsock was built earlier on this change's branch and never merged; Shoo! takes
+its place, so against `main` the change adds one game and one tile. The game has its own 8-bit look, the same in light and dark.
 
 **Hook:** shoo the birds off the runways before each plane lands.
 
 ## Decisions
 
-- Name and slug: **Shoo!**, `shoo/`; Windsock's page, tile, spec and tests are removed. Rejected:
+- Name and slug: **Shoo!**, `shoo/`; nothing of Windsock (built on this branch, never merged) stays. Rejected:
   "Bird Strike", which promises a crash the game never shows (Claude, 2026-11-09).
 - Verb: herding with a scarer, the pack's reticle. On touch it sits 64 CSS px above the finger and
   moves with it, so the finger never covers the birds; with a mouse it sits at the pointer; the arrow
@@ -103,14 +104,14 @@ the landing page (customer-facing). The game has its own 8-bit look, the same in
   go-around around 60–90 s; the first new element (the second runway) at 75 s. Knobs at the top of
   `game.js`: hour length, landing gaps, approach times, fear radius, the walk/panic speed, walk and
   pull speeds, flight times, flock arrivals, hold size.
-- Landing page: the Shoo! tile replaces Windsock's, after Googly Faces (8 tiles); its picture,
-  `assets/tiles/shoo.png`, is a capture of the game; it replaces Windsock's in `sw.js` `SHELL`.
+- Landing page: the Shoo! tile is added after Googly Faces, making 8 tiles; its picture,
+  `assets/tiles/shoo.png`, is a capture of the game and joins `sw.js` `SHELL` (`VERSION` bumped).
 - Not a copy: herding is a genre; the names, airfield and birds are our own, in Kenney's CC0 art.
 
 ## Acceptance items
 
 - **AC-1** The landing page shows 8 tiles, with a playable Shoo! tile linking to `shoo/` after Googly
-  Faces, and no Windsock tile — `tests/site.test.mjs`.
+  Faces — `tests/site.test.mjs`.
 - **AC-2** Behind the start card the field is alive before any touch: birds move and a plane comes in
   to land; the HUD is hidden — `tests/shoo.test.mjs`.
 - **AC-3** On touch the reticle sits 64 ± 2 CSS px above the finger and follows it; with a mouse it
