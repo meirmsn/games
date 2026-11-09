@@ -1247,6 +1247,13 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
+// Where a mid-play banner's pill sits, in units: on the counter, right of the gun.
+function pillBox() {
+  const w = Math.min(SW * 0.4, 200);
+  const cy = L.C + (orient === 'landscape' ? 44 : 50);
+  return { x: SW - w - 14, y: cy - 18, w, h: 36 };
+}
+
 function bannerShown() {
   if (game.paused || game.turned) return null;
   if (game.resumeT > 0) return { text: 'Ready…', sub: '', t: 1, life: 2, small: false };
@@ -1262,9 +1269,10 @@ function drawBanner() {
   if (b.small) {
     const frenzy = b.text === 'Frenzy!';
     // On the counter's right side, clear of every lane.
-    const w = Math.min(SW * 0.4, 200);
+    const pill = pillBox();
+    const w = pill.w;
     ctx.save();
-    ctx.translate(SW - w / 2 - 14, L.C + (orient === 'landscape' ? 44 : 50));
+    ctx.translate(pill.x + w / 2, pill.y + pill.h / 2);
     ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
     ctx.fillStyle = frenzy ? '#ffe3f1' : '#fff4dc';
     ctx.strokeStyle = frenzy ? '#d63384' : '#b9773a';
@@ -1652,6 +1660,13 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           hud: shown,
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
           timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',
+          // Under the orientation veil the whole booth, HUD included, is greyed by the veil's filter.
+          greyed: !ui.turned.hidden && getComputedStyle(ui.turned).backdropFilter.includes('grayscale'),
+          // A mid-play banner's pill, in CSS px.
+          pill: b && b.small ? (() => {
+            const p = pillBox();
+            return { top: oy + p.y * k, bottom: oy + (p.y + p.h) * k, left: ox + p.x * k, right: ox + (p.x + p.w) * k, counterTop: oy + L.C * k };
+          })() : null,
         };
       },
       // The HUD's drawn bounds in CSS px, from the same numbers the drawing uses.

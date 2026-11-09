@@ -670,14 +670,16 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   await page.evaluate(() => window.__gallery.pause());
   assert.deepEqual(row(await ui()), [false, false, true, false, null, true, 'shown', 'running'], 'paused');
   await page.evaluate(() => window.__gallery.resume());
-  assert.equal((await ui()).banner, 'Ready…', 'resuming');
+  assert.deepEqual(row(await ui()), [false, false, false, false, 'Ready…', true, 'shown', 'running'], 'resuming');
   await page.evaluate(() => (window.__gallery.game.resumeT = 0));
   // The bonus.
   await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
   await page.evaluate(() => window.__gallery.clear());
   const t = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
   await shoot(page, t.x, 4);
-  assert.deepEqual(row(await ui()), [false, false, false, false, 'Bonus!', true, 'gold', 'running'], 'bonus');
+  u = await ui();
+  assert.deepEqual(row(u), [false, false, false, false, 'Bonus!', true, 'gold', 'running'], 'bonus');
+  assert.ok(u.pill.top >= u.pill.counterTop, `the Bonus pill sits on the counter, clear of every lane: ${JSON.stringify(u.pill)}`);
   // Round won: the tally.
   await page.evaluate(() => (window.__gallery.game.time = 0.01));
   await steps(page, 0.05);
@@ -694,7 +696,9 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
     g.frenzyDone = false;
   });
   await steps(page, 0.1);
-  assert.deepEqual(row(await ui()), [false, false, false, false, 'Frenzy!', true, 'shown', 'stopped'], 'frenzy');
+  u = await ui();
+  assert.deepEqual(row(u), [false, false, false, false, 'Frenzy!', true, 'shown', 'stopped'], 'frenzy');
+  assert.ok(u.pill.top >= u.pill.counterTop, 'the Frenzy pill sits on the counter');
   // Over.
   await page.evaluate(() => {
     const g = window.__gallery.game;
@@ -713,7 +717,7 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   await L.page.setViewportSize(LANDSCAPE);
   await L.page.waitForTimeout(600);
   const v = await L.page.evaluate(() => window.__gallery.ui());
-  assert.deepEqual([v.start, v.over, v.pause, v.turned, v.banner, v.hud], [false, false, false, true, null, true], 'turned');
+  assert.deepEqual([v.start, v.over, v.pause, v.turned, v.banner, v.hud, v.greyed], [false, false, false, true, null, true, true], 'turned: the HUD shown, greyed');
   await L.context.close();
 });
 
