@@ -184,6 +184,9 @@ test('orbit AC-12: in System 1, throwing straight at the next planet never catch
 test('orbit AC-9: the assist widens the band by 15% and the limit by 25% at most', () => {
   const sys = SYSTEMS[0];
   const to = sys.legs[0].to;
-  assert.ok(Math.abs(catchLimit(sys, to, 1) / catchLimit(sys, to, 0) - 1.25) < 1e-9);
+  // 3, 4 and 5 misses give the game an assist of 1/3, 2/3 and 1: the limit grows 8.3, 16.7 and 25%
+  for (const [assist, grow] of [[1 / 3, 1 / 12], [2 / 3, 1 / 6], [1, 0.25]]) {
+    assert.ok(Math.abs(catchLimit(sys, to, assist) / catchLimit(sys, to, 0) - (1 + grow)) < 1e-9, `${assist}`);
+  }
   assert.equal(ASSIST_BAND, 0.15);
 });
