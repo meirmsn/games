@@ -153,7 +153,7 @@ goes now, and the people waiting start copying him.
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
   on. While playing, what the level is worth right now ("14 s × 3 = 42") shows above the far kerb.
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
-  the celebrating chime, about 1.6 s in all, while the walk light holds its seconds and the street
+  the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
   speed under its own rules, in one go, through to the tally: the walk light's seconds drain, the car
   lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
@@ -217,7 +217,7 @@ goes now, and the people waiting start copying him.
   pluck when a copier sets off, a rising chime for each copier across, a rising tick as the seconds
   count into points, a soft bump and a horn for a hit, a tick each second for the last 5 s, the
   crossing chirp and a jingle on green, a flush and a chime when he gets into the porta-potty, a jingle at each level's start and at the end of the run,
-  and a siren, all under the site-wide mute. The ambience, horn, siren, chirp and flush (a stand-in until the owner brings a recorded one) are synthesised for
+  and a siren, all under the site-wide mute. The flush is the owner's own recording (made with ElevenLabs, 2026-11-09), trimmed and levelled; the ambience, horn, siren and chirp are synthesised for
   the game; the rest are Kenney's CC0 sounds as MP3 (owner, 2026-11-09: "more of like sounds of being
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
 - **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the game

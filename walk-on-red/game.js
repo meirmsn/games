@@ -73,7 +73,7 @@ const COP_START = 2; // a copier sets off once the player is this many rows out
 const COP_STAGGER = 0.9; // … each one this much after the one before
 const COP_HOP = 0.42; // a copier's pace, one row
 const FF = 20; // once he's in the loo, the game runs this many times faster, through the green light's crossing
-const DOOR_T = 1.6; // in the loo: the door shuts, a flush, a chime, then the fast-forward
+const DOOR_T = 1.8; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
 const COP_LOOK = 0.9; // on safe ground, a copier waits while a car would reach the next cell this soon
 const COP_DARE = 1.2; // in the road, a copier waits at most this long for the next lane
@@ -626,7 +626,7 @@ function updateFinish(dt) {
       game.shut = true;
       sfx('bump', { rate: 0.7, gain: 0.45 }); // the door shuts
     }
-    if (!game.flushed && game.phaseT >= 0.45) {
+    if (!game.flushed && game.phaseT >= 0.35) {
       game.flushed = true;
       sfx('flush', { gain: 0.8 });
     }
@@ -1582,7 +1582,7 @@ function drawLights() {
 const shut = () => player.inside && (game.mode !== 'finish' || game.stage !== 'door' || game.shut);
 function drawToilet() {
   // It rocks a little while it flushes.
-  const flushing = game.mode === 'finish' && game.stage === 'door' && game.phaseT > 0.45 && game.phaseT < 1.2;
+  const flushing = game.mode === 'finish' && game.stage === 'door' && game.phaseT > 0.35 && game.phaseT < 1.4;
   const cx = px(colX(PCOL)) + (flushing ? (Math.floor(game.phaseT * 14) % 2 ? 1 : 0) : 0);
   const w = 13;
   const h = 24;
