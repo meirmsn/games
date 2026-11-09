@@ -31,9 +31,10 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
 - How it teaches: no path preview, and one line of text only on the first level, until the first
   firing. The probe is a small ship pointing the way it would leave; a release toward a
   planet hits it, and the ghost of that flight, with its release point and power, shows why; a
-  release past it swings round into the ring. The brake arrives with a
-  slow-motion moment and a pulsing flame on the probe. Moons first appear where waiting for one is
-  plainly right.
+  release past it swings round into the ring. A ring that doesn't catch the probe says why ("Too
+  fast", "Too steep"). The brake arrives in words, "Too fast to be caught: tap to brake", with a
+  slow-motion moment on its first leg, and the bar reads "Brake" in flight. Moons first appear where
+  waiting for one is plainly right.
 - Three clocks: a flight resolves every 3–8 s; a new system with a new element and new look every
   2–3 minutes; you come back for gold medals, the "one shot" badge and the par.
 - What an expert does differently: brakes at the right moment, threads each leg's line of motes in
@@ -115,7 +116,8 @@ three differ.
   tries (owner, 2026-11-09: "I was able to do like infinity tries ... maybe we should limit it ...
   so that you really need to try, but you can leave it at 10 or something"). The failed flight
   stays as a faint ghost
-  trail with its aim arrow until the next launch. R rewinds by hand; in flight it counts as a launch
+  trail, with a mark at its release point on the orbit and at its power on the bar, until the next
+  launch. R rewinds by hand; in flight it counts as a launch
   and a failed flight (first concept review and spec review, 2026-11-09).
 - The leg clock (where the moons are) starts at the moment the previous leg's probe was caught (0
   for a system's first leg) and runs on, so nothing jumps when a leg begins. A rewind runs the
