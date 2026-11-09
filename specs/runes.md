@@ -58,12 +58,11 @@ changes under the line you draw.
   through boards where the rune only fixed checkerboard parity (concept attack, round 2) (session
   proposal, 2026-11-09).
 - Structure, slice 1: two chapters, **Dawn** (plain stones, then the Rise; no Sink) and **Tide** (the
-  Sink alone first, then both), each with five core levels and two optional **deep** (bonus) levels,
-  harder (shown as a labelled bonus pair, changed after the go). One flat order, levels 1–14: Dawn's core 1–5, its deep 6–7, Tide's core
-  8–12, its deep 13–14. Tide opens once Dawn's core levels are solved; deep levels never block
-  anything. Next goes to the next level in order (it skipped the deep ones until the owner's playtest,
-  changed after the go); the level select shows each level as a stone, with a tick when solved and a
-  lock when locked, the deep ones in a labelled bonus pair. Rejected: two goals per level (the gate, and every rune), which with free undo is an easy
+  Sink alone first, then both), seven levels each, harder toward each chapter's end, in one flat
+  order, levels 1–14. Each level opens once the one before it is solved, and Next goes to the next
+  level; the level select shows each level as a stone, with a tick when solved and a lock when locked
+  (changed twice after the go: first the optional "deep" levels became a labelled bonus pair, then
+  every level opens in order). Rejected: two goals per level (the gate, and every rune), which with free undo is an easy
   and a hard mode rather than a choice (concept attack, round 1) (session proposal, 2026-11-09).
 - Long-form and portrait: a puzzle wants sessions of 10–30 minutes, not runs; one hand holds a phone
   and a tall board. The board fits 360 × 640 CSS px with cells of at least 44 px, 16 px clear of the
@@ -74,9 +73,8 @@ changes under the line you draw.
   so pushing against a wall stores nothing, except toward the previous stone, where 0.8 cell takes
   one step back. The finger never has to sit on the line's head, so it never covers what it acts on. A
   **tap** (under 10 px and 300 ms) on a neighbour stone of the head steps there; on a lit stone, cuts
-  the line back to it. **Restart** clears the line. Every step, step back, cut, Hint and Restart is
-  one action, and **Undo** reverses the last action exactly (Undo after a cut or a Restart brings the
-  whole line back). Keyboard: arrow keys and WASD step or step back, Backspace or Z undo, R restart.
+  the line back to it. **Restart** clears the line; there is no Undo button (changed after the go).
+  Keyboard: arrow keys and WASD step or step back, R restart.
   A second finger is ignored. Input never freezes: a rune's animation takes 150 ms and its state
   changes at once. Rejected: dragging the head under the finger, which hides the head and the
   stones around it (concept attack, rounds 1 and 2) (session proposal, 2026-11-09).
@@ -100,17 +98,17 @@ changes under the line you draw.
   climbs a pentatonic scale with the line's length (retracting plays it falling); a Rise grinds
   stone up with a splash, a Sink gulps; the gate opens with a short jingle; one calm music loop. The
   sound adds to the picture and never replaces it (session proposal, 2026-11-09).
-- Memory: localStorage keeps which levels are solved (losing it re-locks Tide, nothing more); when
-  storage is blocked the game plays as on a fresh browser. The URL carries the level (`runes/#7`),
-  so a bookmark or a shared link opens it, and opens any level, locked or not; solving a level opened
-  that way counts. A hash that names no level opens level 1 and rewrites the hash; changing the hash
-  mid-level opens that level (session proposal, 2026-11-09).
+- Memory: localStorage keeps which levels are solved (losing it re-locks every level after the
+  first); when storage is blocked the game plays as on a fresh browser. The URL carries the level
+  (`runes/#7`), so a bookmark or a shared link opens it if it is open, and otherwise the furthest
+  level open (changed after the go: it opened any level). A hash that names no level opens level 1
+  and rewrites the hash; changing the hash mid-level opens that level (session proposal, 2026-11-09).
 - Interruptible: when the page is hidden, the gesture ends, the line stays, and sound pauses until
   the next touch (session proposal, 2026-11-09).
 - Targets, tuned by playing (play-testing targets, not acceptance items): the first level solved in under 20 s; the first dead end around level 3
   (minute 2); the Rise by minute 2–3 and the Sink about 8 minutes later; a level takes 20 s to 3
   minutes. Knobs in `runes/game.js`: the drag step, axis lead, clamp and back thresholds, the ghost
-  delay, the preview strength, the level order and which levels are deep (session proposal,
+  delay, the preview strength, the level order (session proposal,
   2026-11-09).
 - Tests reach the game through `window.__runes` (the state, a step function, the preview cells,
   whether the gate is dim, the stranded cells, the ghost's state), as Reef's tests use
@@ -127,18 +125,23 @@ changes under the line you draw.
   - **Next goes in order.** "when I was done with level 5, it jumped to level 8, and I don't know how that happened or why." Next opens the next level, bonus ones included; after level 7 it opens level 8 once Tide is open, else the level select.
   - **No arrow on the Rise.** "there's like an arrow, and it's unclear what the direction of the arrow means." The Rise's glyph is now the arch (ᚢ, a bridge rising) and the Sink's the swirl (ᛃ, a whirlpool), so neither reads as a direction.
 
+- Changed after the go, from the owner's second playtest (chat, 2026-11-09), in their words:
+  - **Levels open one at a time.** "I don't think we should allow you to go to further levels unless you finish each one … I think you should lock them, and you do one, then that unlocks the next one." Each level is locked until the one before it is solved; the bonus grouping goes, as nothing is optional now; a link to a locked level opens the furthest level open (so the URL no longer opens any level, and progress lives only in this browser's storage).
+  - **Ask before leaving, in every game.** "The back button on the page should tell you, are you sure you want to leave? You're going to lose your progress. That's not for this game, that's for all games … we can do it on this PR, and then it will be available in all games when this one is merged." The shared shell (`shared/game-shell.js`) asks "Leave the game?" with Stay and Leave before the back button or Escape leaves; a game can say it has nothing to lose (`hasProgress`), and Runes asks only while a line is drawn and unsolved.
+  - **Restart only.** "I don't think we should have an undo on the buttons at the bottom, nor at the end when you lose. Like, it should be restart only." The Undo button, the panel's "Undo last move" and Backspace/Z go; dragging back along the line and tapping a lit stone still take it back, as part of drawing.
+  - **The compass's label.** "the compass, I think it should say guidance, show tiles that become unreachable." Its hover label reads "Guidance: show tiles that become unreachable".
+
 ## Acceptance items
 
 - **AC-1** Opening `runes/` shows level 1's board already moving (two frames 300 ms apart differ
-  before any input), with Undo, Restart, Hint and the level button, and no errors — `tests/runes.test.mjs`.
+  before any input), with Restart, Hint, Guidance and the level button, and no errors — `tests/runes.test.mjs`.
 - **AC-2** A relative drag of 0.6 cell steps the line one stone in the drag's leading direction, from
   anywhere on the screen, also from below the board; 0.8 cell back toward the previous stone takes
   the step back; pushing into water or a lit stone steps nothing and stores nothing; a second finger
   moves nothing — `tests/runes.test.mjs`.
 - **AC-3** A tap (under 10 px of movement) on a neighbour stone of the head steps there; on a lit
-  stone, cuts the line back to it; Undo after a cut restores the whole cut line, and after a Restart
-  the whole line; Undo after a step takes it back — `tests/runes.test.mjs`.
-- **AC-4** Arrow keys step and step back, Backspace and Z undo, R restarts — `tests/runes.test.mjs`.
+  stone, cuts the line back to it; Restart clears the line to the source; there is no Undo button — `tests/runes.test.mjs`.
+- **AC-4** Arrow keys step and step back, R restarts, and Backspace and Z change nothing — `tests/runes.test.mjs`.
 - **AC-5** Entering a Rise raises its water neighbours into stones (never a cell the light holds);
   taking that step back lowers them again — `tests/runes.test.mjs`.
 - **AC-6** Leaving a Sink sinks its unlit plain-stone neighbours except the one the light goes to,
@@ -154,13 +157,13 @@ changes under the line you draw.
   Sink; has 1 to 3 solutions; fails the greedy line when it has a rune; and each of its runes passes
   the generator's checks (a Rise constrains, a Sink is needed, every rune is two-sided), with no
   search cut short. Dawn has no Sink, and the first level with each rune has only that rune — `tests/runes.test.mjs`.
-- **AC-10** There are 14 levels in two chapters, Dawn (core 1–5, bonus 6–7) and Tide (core 8–12, bonus
-  13–14). Tide is locked until levels 1–5 are solved; bonus levels lock nothing; Next opens the next
-  level in order (after level 5, level 6), and after level 7 opens level 8 only once Tide is open; the URL `runes/#<n>` opens level n even when it is locked; `#0`, `#99` and `#abc`
-  open level 1 and rewrite the hash — `tests/runes.test.mjs`.
+- **AC-10** There are 14 levels in two chapters of seven, Dawn (easy) and Tide (challenging). On a
+  fresh browser only level 1 is open; each level opens once the one before it is solved, and a locked
+  one doesn't open from the level select; Next opens the next level, and after level 14 the level
+  select; a URL naming a locked level opens the furthest level open and rewrites the hash; `#0`,
+  `#99` and `#abc` open level 1 and rewrite the hash — `tests/runes.test.mjs`.
 - **AC-11** Hint cuts the line back to the longest start it shares with one of the stored solutions
-  (the one sharing most, the first listed on a tie) and marks that solution's next stone; Undo
-  brings the cut line back — `tests/runes.test.mjs`.
+  (the one sharing most, the first listed on a tie) and marks that solution's next stone — `tests/runes.test.mjs`.
 - **AC-12** Each step plays the chime at a rate that rises with the line's length and a step back at
   a falling one; a Rise and a Sink play their own sounds; solving plays the jingle; with the site
   muted, nothing plays — `tests/runes.test.mjs`.
@@ -178,21 +181,26 @@ changes under the line you draw.
 - **AC-20** A line that ends unsolved (on the gate early, or with nowhere to go) shows the result panel
   below the board, clear of it: "You didn't make it", how many stones are still dark, and a tip for
   why (on level 2's early gate: "Light every stone before you step on the gate"; at a dead end: a way
-  in and a way out); Undo last move takes the step back and the panel away; Try again restarts — `tests/runes.test.mjs`.
+  in and a way out); the panel has no Undo; Try again restarts and takes the panel away — `tests/runes.test.mjs`.
 - **AC-21** With a mouse, the cursor is a hand over the head, a lit stone or a stone the line can step
   to, a closed hand while dragging, and the usual arrow over water and far stones — `tests/runes.test.mjs`.
-- **AC-22** Each button at the bottom (Levels, Undo, Restart, Hint, Guidance) has a hover label that
-  says what it does — `tests/runes.test.mjs`.
+- **AC-22** Each button at the bottom (Levels, Restart, Hint, Guidance) has a hover label that says
+  what it does; Guidance's reads "Guidance: show tiles that become unreachable" — `tests/runes.test.mjs`.
 - **AC-23** The level select reads "Dawn (easy)" and "Tide (challenging)", shows a lock on each level
-  that can't be opened yet and a tick on each solved one, labels each chapter's bonus pair, and is
-  centred on the board, inside the screen — `tests/runes.test.mjs`.
+  that can't be opened yet and a tick on each solved one, and is centred on the board, inside the
+  screen — `tests/runes.test.mjs`.
+- **AC-24** In every game, the back button and Escape ask "Leave the game?" (you'll lose your
+  progress) before leaving: Stay (or a second Escape) keeps you in the game, Leave goes back; a game
+  that says it has nothing to lose leaves without asking — `tests/site.test.mjs`.
+- **AC-25** In Runes, the back button asks only while a line is drawn and unsolved; Stay keeps the
+  line — `tests/runes.test.mjs`.
 
 ## Core flow
 
 1. Tap the Runes tile: level 1's pool is moving, the source pulsing.
 2. Drag: the line of light steps from stone to stone; runes raise and sink stones as it passes.
 3. Light every stone and end on the gate: the gate opens and the next level follows.
-4. Stuck: the panel below the board says you didn't make it and why; Undo or Try again. (With
+4. Stuck: the panel below the board says you didn't make it and why; Try again. (With
    Guidance on, the gate dims as soon as the line is lost.)
 
 ## States
@@ -201,7 +209,7 @@ changes under the line you draw.
 | ----- | ----- | --- | ------------ | ------------ |
 | Playing | shown, takes input | shown | hidden | hidden |
 | Solved | shown above the panel, no input | hidden | "Solved!", with Next | hidden |
-| Didn't make it | shown above the panel, missed stones outlined, no input but Undo | hidden | "You didn't make it", a tip, Try again, Undo | hidden |
+| Didn't make it | shown above the panel, missed stones outlined, no input | hidden | "You didn't make it", a tip, Try again | hidden |
 | Choosing a level | shown behind, no input | shown | as before | shown, on the board |
 
 ## Out of scope

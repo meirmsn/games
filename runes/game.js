@@ -50,6 +50,8 @@ const HUES = { rise: '255, 201, 90', sink: '186, 150, 255', light: '255, 216, 13
 // ---------------------------------------------------------------------------------------------
 // Shell, sound, page parts.
 const { sound } = mountShell({
+  // The back button asks before leaving only while there's a line to lose.
+  hasProgress: () => Boolean(game.s && game.s.path.length > 1 && !game.done),
   sounds: {
     chime: 'sounds/chime.mp3',
     rise: 'sounds/rise.mp3',
@@ -70,7 +72,6 @@ const ui = {
   name: $('[data-name]'),
   mute: $('[data-mute]'),
   levelsBtn: $('[data-levels]'),
-  undo: $('[data-undo]'),
   restart: $('[data-restart]'),
   hint: $('[data-hint]'),
   guidance: $('[data-guidance]'),
@@ -82,7 +83,6 @@ const ui = {
   resultTip: $('[data-result-tip]'),
   next: $('[data-next]'),
   again: $('[data-again]'),
-  resultUndo: $('[data-result-undo]'),
   resultLevels: $('[data-result-levels]'),
   levels: $('[data-screen="levels"]'),
   chapters: $('[data-chapters]'),
@@ -127,7 +127,7 @@ function setGuidance(on) {
     // Blocked storage: the setting lasts until the page reloads.
   }
   ui.guidance.setAttribute('aria-pressed', String(guidance));
-  ui.guidance.title = guidance ? 'Guidance is on: shows when the line can no longer finish' : 'Guidance: show when the line can no longer finish';
+  ui.guidance.title = guidance ? 'Guidance is on: showing tiles that become unreachable' : 'Guidance: show tiles that become unreachable';
   if (guidance) checkDead(game.s.path.join(','));
   else {
     game.dead = false;
@@ -136,14 +136,15 @@ function setGuidance(on) {
 }
 
 const chapterOf = (i) => CHAPTERS.find((c) => i >= c.from && i < c.to);
-const coreOf = (c) => LEVELS.slice(c.from, c.to).map((l, k) => (l.deep ? -1 : c.from + k)).filter((k) => k >= 0);
-function locked(i) {
-  const ch = CHAPTERS.indexOf(chapterOf(i));
-  if (ch <= 0) return false;
-  return !coreOf(CHAPTERS[ch - 1]).every((k) => solvedSet.has(k));
+// Levels open one at a time: each is locked until the one before it is solved.
+const locked = (i) => i > 0 && !solvedSet.has(i - 1);
+// The furthest level open: where a link to a locked level lands.
+function frontier() {
+  let i = 0;
+  while (i + 1 < LEVELS.length && !locked(i + 1)) i++;
+  return i;
 }
-// What Next opens after level i: the next level in order, or -1 (the level select) after the last
-// level or when the next one is still locked.
+// What Next opens after level i: the next level, or -1 (the level select) after the last one.
 function nextAfter(i) {
   const k = i + 1;
   return k < LEVELS.length && !locked(k) ? k : -1;
@@ -156,7 +157,6 @@ const game = {
   level: null,
   s: null,
   solutions: [],
-  actions: [], // undo history: { type, cells }
   done: false, // solved
   failed: false, // the line ended without lighting every stone
   tip: '',
@@ -181,7 +181,6 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   game.level = R.parse(rows || LEVELS[i].rows);
   game.s = R.newState(game.level);
   game.solutions = R.solve(game.level, { max: 3 }).solutions;
-  game.actions = [];
   game.done = false;
   game.failed = false;
   game.tip = '';
@@ -197,7 +196,7 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   document.querySelector('meta[name="theme-color"]').setAttribute('content', game.theme.meta);
   document.body.dataset.chapter = chapterOf(i).id;
   const ch = chapterOf(i);
-  ui.chapter.textContent = LEVELS[i].deep ? `${ch.name} · bonus` : ch.name;
+  ui.chapter.textContent = `${ch.name} (${ch.level})`;
   ui.num.textContent = String(i + 1);
   ui.name.textContent = LEVELS[i].name;
   if (push && location.hash !== `#${i + 1}`) history.replaceState(null, '', `#${i + 1}`);
@@ -206,11 +205,12 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   updateButtons();
 }
 
+// The level a URL names: a bad hash means level 1, a locked level the furthest one open.
 function levelFromHash() {
   const m = /^#(\d{1,3})$/.exec(location.hash);
   const n = m ? Number(m[1]) : NaN;
-  if (n >= 1 && n <= LEVELS.length) return n - 1;
-  return -1;
+  if (!(n >= 1 && n <= LEVELS.length)) return -1;
+  return locked(n - 1) ? frontier() : n - 1;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -251,7 +251,7 @@ function cellAt(x, y) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Moves. Every change to the line is an action, so Undo can reverse it exactly.
+// Moves.
 function totalStones() {
   let n = 0;
   for (let i = 0; i < game.s.up.length; i++) if (game.s.up[i]) n++;
@@ -279,25 +279,23 @@ function applied(st, { quiet = false } = {}) {
   if (st.changes.some(([c]) => !game.s.up[c])) sound.play('sink', { gain: 0.9 });
 }
 
-function stepTo(cell, { record = true } = {}) {
+function stepTo(cell) {
   if (ended()) return false;
   // The player may step onto the gate before every stone is lit: that ends the attempt.
   const st = R.step(game.s, cell, { early: true });
   if (!st) return false;
-  if (record) game.actions.push({ type: 'step' });
   sound.play('chime', { rate: chimeRate(game.s.path.length), gain: 0.7 });
   applied(st);
   afterChange();
   return true;
 }
 
-function stepBack({ record = true } = {}) {
+function stepBack() {
   if (game.done) return false;
   reopen();
   const len = game.s.path.length;
   const st = R.back(game.s);
   if (!st) return false;
-  if (record) game.actions.push({ type: 'back', cells: [st.cell] });
   sound.play('chime', { rate: chimeRate(len) * 0.94, gain: 0.45 });
   for (const [c, was] of st.changes) {
     game.anims.set(c, { t: performance.now(), up: was });
@@ -307,34 +305,24 @@ function stepBack({ record = true } = {}) {
   return true;
 }
 
-// Cut the line back to `cell`; the action remembers the cells cut, so Undo can lay them again.
-function cutTo(cell, type = 'cut') {
+// Cut the line back to `cell` (a tap on a lit stone, Hint, Restart).
+function cutTo(cell) {
   if (game.done) return false;
   const idx = game.s.path.indexOf(cell);
   if (idx < 0 || idx === game.s.path.length - 1) return false;
   reopen();
-  const cells = game.s.path.slice(idx + 1);
   const len = game.s.path.length;
   while (game.s.path.length > idx + 1) {
     const st = R.back(game.s);
     for (const [c, was] of st.changes) game.anims.set(c, { t: performance.now(), up: was });
   }
-  game.actions.push({ type, cells });
   sound.play('chime', { rate: chimeRate(len) * 0.9, gain: 0.4 });
   sound.play('drip', { gain: 0.5 });
   afterChange();
   return true;
 }
 
-function relay(cells) {
-  for (const c of cells) {
-    const st = R.step(game.s, c, { early: true });
-    if (!st) break;
-    applied(st, { quiet: true });
-  }
-}
-
-// After a failed attempt, any change to the line takes the result panel away again.
+// After a failed attempt, any change to the line (Restart, Hint) takes the result panel away again.
 function reopen() {
   if (!game.failed) return;
   game.failed = false;
@@ -342,26 +330,9 @@ function reopen() {
   showResult(null);
 }
 
-function undo() {
-  if (game.done) return false;
-  const a = game.actions.pop();
-  if (!a) return false;
-  reopen();
-  if (a.type === 'step') {
-    stepBack({ record: false });
-  } else if (a.type === 'back') {
-    stepTo(a.cells[0], { record: false });
-  } else {
-    relay(a.cells);
-    sound.play('chime', { rate: chimeRate(game.s.path.length), gain: 0.5 });
-    afterChange();
-  }
-  return true;
-}
-
 function restart() {
   if (game.done || game.s.path.length < 2) return false;
-  return cutTo(game.level.source, 'restart');
+  return cutTo(game.level.source);
 }
 
 // Hint: cut back to the longest start shared with a stored solution, and show its next stone.
@@ -379,7 +350,7 @@ function hint() {
       bestLen = n;
     }
   }
-  if (bestLen < p.length) cutTo(p[bestLen - 1], 'hint');
+  if (bestLen < p.length) cutTo(p[bestLen - 1]);
   game.hintCell = best[bestLen] ?? -1;
   game.hintAt = performance.now();
   sound.play('bell', { gain: 0.3, rate: 1.5 });
@@ -483,7 +454,6 @@ function solvedNow() {
 }
 
 function updateButtons() {
-  ui.undo.disabled = game.done || !game.actions.length;
   ui.restart.disabled = game.done || game.s.path.length < 2;
   ui.hint.disabled = game.done;
 }
@@ -496,7 +466,6 @@ function showResult(kind) {
     ui.result.dataset.kind = kind;
     ui.next.hidden = kind !== 'solved';
     ui.again.hidden = kind !== 'failed';
-    ui.resultUndo.hidden = kind !== 'failed';
   }
   layout();
   if (kind === 'solved') ui.next.focus({ preventScroll: true });
@@ -536,12 +505,6 @@ function buildLevels() {
     h.innerHTML = `${ch.name} <span class="ch-level">(${ch.level})</span>`;
     const row = document.createElement('div');
     row.className = 'ch-row';
-    const bonus = document.createElement('div');
-    bonus.className = 'ch-bonus';
-    const bonusLabel = document.createElement('span');
-    bonusLabel.className = 'ch-bonus-label';
-    bonusLabel.textContent = 'bonus';
-    bonus.appendChild(bonusLabel);
     for (let i = ch.from; i < ch.to; i++) {
       const b = document.createElement('button');
       b.type = 'button';
@@ -558,8 +521,8 @@ function buildLevels() {
       if (isSolved) b.classList.add('is-solved');
       if (i === game.index) b.classList.add('is-current');
       b.setAttribute('aria-disabled', String(isLocked));
-      const name = `Level ${i + 1}, ${LEVELS[i].name}${LEVELS[i].deep ? ', bonus' : ''}`;
-      const state = isLocked ? `locked: solve levels ${coreOf(CHAPTERS[CHAPTERS.indexOf(ch) - 1] || ch).map((k) => k + 1).join(', ')} first` : isSolved ? 'solved' : '';
+      const name = `Level ${i + 1}, ${LEVELS[i].name}`;
+      const state = isLocked ? `locked: solve level ${i} first` : isSolved ? 'solved' : '';
       b.setAttribute('aria-label', state ? `${name}, ${state}` : name);
       b.title = state ? `${name} (${state})` : name;
       b.addEventListener('click', () => {
@@ -569,9 +532,8 @@ function buildLevels() {
         }
         loadLevel(i);
       });
-      (LEVELS[i].deep ? bonus : row).appendChild(b);
+      row.appendChild(b);
     }
-    row.appendChild(bonus);
     wrap.append(h, row);
     ui.chapters.appendChild(wrap);
   }
@@ -586,9 +548,7 @@ ui.next.addEventListener('click', () => {
   else showOverlay('levels');
 });
 ui.again.addEventListener('click', () => restart());
-ui.resultUndo.addEventListener('click', () => undo());
 ui.guidance.addEventListener('click', () => setGuidance(!guidance));
-ui.undo.addEventListener('click', () => undo());
 ui.restart.addEventListener('click', () => restart());
 ui.hint.addEventListener('click', () => hint());
 window.addEventListener('hashchange', () => {
@@ -596,7 +556,8 @@ window.addEventListener('hashchange', () => {
   if (i < 0) {
     history.replaceState(null, '', '#1');
     loadLevel(0, { push: false });
-  } else if (i !== game.index) loadLevel(i, { push: false });
+  } else if (i !== game.index) loadLevel(i);
+  else if (location.hash !== `#${i + 1}`) history.replaceState(null, '', `#${i + 1}`);
 });
 
 function syncMute() {
@@ -741,10 +702,7 @@ window.addEventListener('keydown', (e) => {
     else if (t >= 0 && !stepTo(t)) bump(t);
     return;
   }
-  if (e.key === 'Backspace' || e.key === 'z' || e.key === 'Z') {
-    e.preventDefault();
-    undo();
-  } else if (e.key === 'r' || e.key === 'R') {
+  if (e.key === 'r' || e.key === 'R') {
     e.preventDefault();
     restart();
   }
@@ -1108,7 +1066,7 @@ window.addEventListener('resize', layout);
 // Start, and the test hook.
 const first = levelFromHash();
 if (first < 0 && location.hash) history.replaceState(null, '', '#1');
-loadLevel(first < 0 ? 0 : first);
+loadLevel(first < 0 ? 0 : first); // rewrites the hash to the level it opened
 setGuidance(guidance);
 requestAnimationFrame(frame);
 
@@ -1125,7 +1083,6 @@ window.__runes = {
   dragging: () => drag.id !== null,
   stepTo,
   stepBack,
-  undo,
   restart,
   hint,
   cutTo,

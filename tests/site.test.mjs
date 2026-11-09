@@ -140,15 +140,46 @@ test("the game shell's back button returns to the landing page", async () => {
   assert.ok(box.width >= 44 && box.height >= 44, 'back button is at least 44 px');
   assert.equal(await back.getAttribute('href'), BASE);
   await back.click();
+  // It asks first: leaving loses the game's progress.
+  const ask = page.locator('dialog.shell-leave');
+  await ask.waitFor({ state: 'visible' });
+  assert.match(await ask.textContent(), /Leave the game\?/);
+  assert.match(await ask.textContent(), /lose your progress/);
+  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('Escape in a game goes back to the landing page', async () => {
+test('runes AC-24: before leaving a game, the shell asks; Stay keeps you there, Leave goes back', async () => {
+  const { context, page } = await open('tests/fixtures/game/');
+  const ask = page.locator('dialog.shell-leave');
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-stay]').click();
+  await ask.waitFor({ state: 'hidden' });
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/', 'Stay keeps you in the game');
+  // Escape asks too, and a second Escape stays.
+  await page.keyboard.press('Escape');
+  await ask.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await ask.waitFor({ state: 'hidden' });
+  await page.waitForTimeout(200);
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/');
+  // A game with nothing to lose right now leaves without asking.
+  await page.evaluate(() => {
+    window.shell.hasProgress = () => false;
+  });
+  await page.locator('.shell-back').click();
+  await page.waitForURL(BASE);
+  await context.close();
+});
+
+test('Escape in a game goes back to the landing page, after asking', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   await page.locator('.shell-back').waitFor();
   await page.keyboard.press('Escape');
+  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   await context.close();
 });

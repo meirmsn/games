@@ -55,3 +55,64 @@ body {
   outline: 3px solid #fff;
   outline-offset: 2px;
 }
+
+/* "Leave the game?": asked before the back button or Escape leaves. */
+.shell-leave {
+  width: min(320px, calc(100vw - 48px));
+  box-sizing: border-box;
+  padding: 22px 20px 18px;
+  border: 0;
+  border-radius: 20px;
+  color: #fff;
+  text-align: center;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: rgb(20 22 31 / 92%);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 40%);
+}
+
+.shell-leave::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.shell-leave-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.shell-leave-text {
+  margin: 0 0 16px;
+  font-size: 15px;
+  color: rgb(255 255 255 / 75%);
+}
+
+.shell-leave-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.shell-leave-actions button {
+  flex: 1;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.shell-leave-stay {
+  color: #14161f;
+  background: #fff;
+}
+
+.shell-leave-go {
+  color: #fff;
+  background: rgb(255 255 255 / 14%);
+}
+
+.shell-leave-actions button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}

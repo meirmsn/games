@@ -397,28 +397,6 @@ body[data-chapter='dawn'] .num {
   font-weight: 500;
 }
 
-.ch-bonus {
-  position: relative;
-  margin-left: 4px;
-  padding: 16px 8px 6px;
-  border-radius: 12px;
-  background: rgb(244 239 230 / 8%);
-  display: flex;
-  gap: 8px;
-}
-
-.ch-bonus-label {
-  position: absolute;
-  top: 2px;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
 .lv {
   width: 44px;
   height: 48px;

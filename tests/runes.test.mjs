@@ -37,7 +37,10 @@ after(async () => {
   server?.kill();
 });
 
-async function open({ hash = '1', viewport = { width: 390, height: 844 }, init = null } = {}) {
+// Levels open one at a time, so unless a test sets up its own storage, every level starts solved
+// (and so open), letting a test go straight to the level it needs.
+const ALL_SOLVED = () => localStorage.setItem('runes-solved', JSON.stringify([...Array(14).keys()]));
+async function open({ hash = '1', viewport = { width: 390, height: 844 }, init = ALL_SOLVED } = {}) {
   const context = await browser.newContext({ viewport, hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
   if (init) await context.addInitScript(init);
@@ -89,7 +92,7 @@ test('runes AC-1: the pool is already moving before any input, with its buttons,
   await page.waitForTimeout(300);
   const b = await page.screenshot();
   assert.notDeepEqual(a, b, 'two frames 300 ms apart differ');
-  for (const sel of ['[data-undo]', '[data-restart]', '[data-hint]', '[data-levels]']) {
+  for (const sel of ['[data-restart]', '[data-hint]', '[data-levels]', '[data-guidance]']) {
     assert.ok(await page.locator(sel).isVisible(), sel);
   }
   assert.equal(await page.evaluate(() => window.__runes.game.index), 0);
@@ -135,7 +138,7 @@ test('runes AC-2: a relative drag steps the line, a drag back takes it back, wal
   await context.close();
 });
 
-test('runes AC-3: taps step and cut, Undo restores a cut and a Restart, and takes back a step', async () => {
+test('runes AC-3: taps step and cut; Restart clears the line; there is no Undo button', async () => {
   const { context, page } = await open();
   await tapCell(page, 1);
   await tapCell(page, 2);
@@ -143,18 +146,13 @@ test('runes AC-3: taps step and cut, Undo restores a cut and a Restart, and take
   assert.deepEqual(await path(page), [0, 1, 2, 5], 'taps on neighbours step');
   await tapCell(page, 1);
   assert.deepEqual(await path(page), [0, 1], 'a tap on a lit stone cuts back to it');
-  await page.click('[data-undo]');
-  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Undo lays the whole cut line again');
   await page.click('[data-restart]');
   assert.deepEqual(await path(page), [0], 'Restart clears the line');
-  await page.click('[data-undo]');
-  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Undo brings the line back after a Restart');
-  await page.click('[data-undo]');
-  assert.deepEqual(await path(page), [0, 1, 2], 'Undo after a step takes it back');
+  assert.equal(await page.locator('[data-undo], [data-result-undo]').count(), 0, 'no Undo button anywhere');
   await context.close();
 });
 
-test('runes AC-4: arrow keys step and step back, Backspace and Z undo, R restarts', async () => {
+test('runes AC-4: arrow keys step and step back, R restarts, and Backspace and Z undo nothing', async () => {
   const { context, page } = await open();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
@@ -163,9 +161,8 @@ test('runes AC-4: arrow keys step and step back, Backspace and Z undo, R restart
   await page.keyboard.press('ArrowUp');
   assert.deepEqual(await path(page), [0, 1, 2], 'an arrow toward the previous stone steps back');
   await page.keyboard.press('Backspace');
-  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Backspace undoes the step back');
   await page.keyboard.press('z');
-  assert.deepEqual(await path(page), [0, 1, 2], 'Z undoes');
+  assert.deepEqual(await path(page), [0, 1, 2], 'Backspace and Z change nothing');
   await page.keyboard.press('r');
   assert.deepEqual(await path(page), [0], 'R restarts');
   await context.close();
@@ -208,7 +205,7 @@ test('runes AC-6: leaving a Sink sinks its plain neighbours except the next, nev
 });
 
 test('runes AC-7: the gate solves only as the last stone; then the result panel shows, the mark is remembered, and Next opens the next level', async () => {
-  const { context, page } = await open();
+  const { context, page } = await open({ init: null }); // a fresh browser
   // An early step onto the gate ends the attempt unsolved (AC-20 checks the panel).
   await board(page, ['SoG', 'ooo']);
   await page.evaluate(() => window.__runes.stepTo(1));
@@ -347,48 +344,57 @@ test('runes AC-9: every level is sound: 1–3 solutions, greedy fails, every run
   }
 });
 
-test('runes AC-10: two chapters of five core and two bonus levels; Tide locked until Dawn is done; Next goes in order; the URL opens any level', async () => {
+test('runes AC-10: two chapters of seven levels; each level opens once the one before it is solved; Next goes in order; a link to a locked level opens the furthest one open', async () => {
   assert.deepEqual(
-    CHAPTERS.map((c) => [c.name, LEVELS.slice(c.from, c.to).map((l) => !!l.deep)]),
+    CHAPTERS.map((c) => [c.name, c.level, c.to - c.from]),
     [
-      ['Dawn', [false, false, false, false, false, true, true]],
-      ['Tide', [false, false, false, false, false, true, true]],
+      ['Dawn', 'easy', 7],
+      ['Tide', 'challenging', 7],
     ]
   );
-  const { context, page } = await open();
-  assert.equal(await page.evaluate(() => window.__runes.locked(7)), true, 'Tide starts locked');
-  assert.equal(await page.evaluate(() => window.__runes.nextAfter(4)), 5, 'after level 5, Next opens level 6');
-  assert.equal(await page.evaluate(() => window.__runes.nextAfter(6)), -1, 'after level 7, Next opens the level select while Tide is locked');
+  // A fresh browser: only level 1 is open.
+  const { context, page } = await open({ init: null });
+  const locks = () => page.evaluate(() => [...Array(14).keys()].map((i) => window.__runes.locked(i)));
+  assert.deepEqual(await locks(), [false, ...Array(13).fill(true)]);
   await page.click('[data-levels]');
-  assert.equal(await page.locator('.lv[data-level="8"]').getAttribute('aria-disabled'), 'true');
-  await page.locator('.lv[data-level="8"]').click({ force: true });
+  assert.equal(await page.locator('.lv[data-level="2"]').getAttribute('aria-disabled'), 'true');
+  await page.locator('.lv[data-level="2"]').click({ force: true });
   assert.equal(await page.evaluate(() => window.__runes.game.index), 0, 'a locked level does not open');
+  await page.click('[data-close-levels]');
+  // Solving level 1 opens level 2, and only level 2.
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
+    await page.keyboard.press(k);
+  }
+  assert.deepEqual(await locks(), [false, false, ...Array(12).fill(true)]);
+  assert.equal(await page.evaluate(() => window.__runes.nextAfter(0)), 1, 'Next opens level 2');
+  // A link to a locked level opens the furthest level open, and says so in the URL.
+  await page.goto(`${BASE}runes/#9`);
+  await page.reload();
+  await page.waitForFunction(() => window.__runes);
+  assert.equal(await page.evaluate(() => window.__runes.game.index), 1);
+  assert.equal(new URL(page.url()).hash, '#2');
   await context.close();
 
-  // Dawn's five core levels solved (its deep ones not): Tide opens.
-  const solved = open({ init: () => localStorage.setItem('runes-solved', '[0,1,2,3,4]') });
-  const s = await solved;
-  assert.equal(await s.page.evaluate(() => window.__runes.locked(7)), false);
-  assert.equal(await s.page.evaluate(() => window.__runes.nextAfter(6)), 7, 'after level 7, Next opens level 8 once Tide is open');
-  await s.page.click('[data-levels]');
-  await s.page.locator('.lv[data-level="8"]').click();
-  assert.equal(await s.page.evaluate(() => window.__runes.game.index), 7);
+  // With levels 1 to 7 solved, Next after 7 opens 8; after the last level, the level select.
+  const s = await open({ init: () => localStorage.setItem('runes-solved', '[0,1,2,3,4,5,6]') });
+  assert.equal(await s.page.evaluate(() => window.__runes.nextAfter(6)), 7);
+  assert.equal(await s.page.evaluate(() => window.__runes.locked(8)), true, 'level 9 waits for level 8');
+  assert.equal(await s.page.evaluate(() => window.__runes.nextAfter(13)), -1);
   await s.context.close();
 
-  // The URL opens a locked level; a hash that names no level opens level 1 and is rewritten.
-  const deep = await open({ hash: '13' });
-  assert.equal(await deep.page.evaluate(() => window.__runes.game.index), 12);
-  for (const bad of ['0', '99', 'abc']) {
-    await deep.page.goto(`${BASE}runes/#${bad}`);
-    await deep.page.reload();
-    await deep.page.waitForFunction(() => window.__runes);
-    assert.equal(await deep.page.evaluate(() => window.__runes.game.index), 0, `#${bad}`);
-    assert.equal(new URL(deep.page.url()).hash, '#1', `#${bad} is rewritten`);
+  // A hash that names no level opens level 1 and is rewritten.
+  const bad = await open();
+  for (const h of ['0', '99', 'abc']) {
+    await bad.page.goto(`${BASE}runes/#${h}`);
+    await bad.page.reload();
+    await bad.page.waitForFunction(() => window.__runes);
+    assert.equal(await bad.page.evaluate(() => window.__runes.game.index), 0, `#${h}`);
+    assert.equal(new URL(bad.page.url()).hash, '#1', `#${h} is rewritten`);
   }
-  await deep.context.close();
+  await bad.context.close();
 });
 
-test('runes AC-11: Hint cuts back to the start shared with a solution and marks its next stone; Undo restores', async () => {
+test('runes AC-11: Hint cuts back to the start shared with a solution and marks its next stone', async () => {
   const { context, page } = await open({ hash: '2' });
   const { sol, wrong } = await page.evaluate(() => {
     const r = window.__runes;
@@ -404,8 +410,6 @@ test('runes AC-11: Hint cuts back to the start shared with a solution and marks 
   await page.click('[data-hint]');
   assert.deepEqual(await path(page), sol.slice(0, 3));
   assert.equal(await page.evaluate(() => window.__runes.game.hintCell), sol[3]);
-  await page.click('[data-undo]');
-  assert.deepEqual(await path(page), [...sol.slice(0, 3), wrong]);
   await context.close();
 });
 
@@ -577,7 +581,7 @@ test('runes AC-19: Runes plays offline once it has been played', async () => {
   await context.close();
 });
 
-test('runes AC-20: a line that ends unsolved shows a loud panel below the board with why, and a tip; Undo and Try again carry on', async () => {
+test('runes AC-20: a line that ends unsolved shows a loud panel below the board with why, and a tip; Try again restarts', async () => {
   const { context, page } = await open({ hash: '2' });
   // Level 2: stepping onto the gate with stones still dark.
   const toGate = await page.evaluate(() => {
@@ -631,11 +635,10 @@ test('runes AC-20: a line that ends unsolved shows a loud panel below the board 
     };
   });
   assert.ok(m.boardBottom <= m.panelTop, `board ends at ${m.boardBottom}, panel starts at ${m.panelTop}`);
-  // Undo takes the last step back and the panel away.
-  await page.click('[data-result-undo]');
+  assert.equal(await panel.locator('[data-result-undo]').count(), 0, 'no Undo on the panel');
+  await page.click('[data-again]');
   await panel.waitFor({ state: 'hidden' });
   assert.equal(await page.evaluate(() => window.__runes.game.failed), false);
-  assert.deepEqual(await path(page), toGate.slice(0, -1));
 
   // A dead end away from the gate: the line has nowhere to go.
   const stuck = await page.evaluate(() => {
@@ -714,10 +717,11 @@ test('runes AC-21: with a mouse, the cursor is a hand over stones the line can a
 
 test('runes AC-22: every button at the bottom says what it does on hover', async () => {
   const { context, page } = await open();
-  for (const sel of ['[data-levels]', '[data-undo]', '[data-restart]', '[data-hint]', '[data-guidance]']) {
+  for (const sel of ['[data-levels]', '[data-restart]', '[data-hint]', '[data-guidance]']) {
     const title = await page.locator(sel).getAttribute('title');
     assert.ok(title && title.length > 3, `${sel} has a hover label`);
   }
+  assert.equal(await page.locator('[data-guidance]').getAttribute('title'), 'Guidance: show tiles that become unreachable');
   await context.close();
 });
 
@@ -726,11 +730,9 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   await page.click('[data-levels]');
   const names = await page.locator('.ch-name').allTextContents();
   assert.deepEqual(names, ['Dawn (easy)', 'Tide (challenging)']);
-  assert.equal(await page.locator('.lv.is-locked').count(), 7, 'all of Tide is locked');
-  assert.equal(await page.locator('.lv[data-level="8"] svg').count(), 1, 'a locked level shows a lock');
+  assert.equal(await page.locator('.lv.is-locked').count(), 11, 'levels 4 to 14 are locked');
+  assert.equal(await page.locator('.lv[data-level="4"] svg').count(), 1, 'a locked level shows a lock');
   assert.equal(await page.locator('.lv.is-solved').count(), 2);
-  assert.equal(await page.locator('.ch-bonus').count(), 2, 'each chapter’s bonus pair is labelled');
-  assert.match(await page.locator('.ch-bonus').first().textContent(), /bonus/i);
   await page.waitForTimeout(400); // the card's slide-in
   const m = await page.evaluate(() => {
     const r = window.__runes;
@@ -744,5 +746,20 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   });
   assert.ok(m.top >= 16 && m.bottom <= 844 - 16, 'inside the screen');
   assert.ok(Math.abs(m.card - m.board) <= 2, `card centre ${m.card}, board centre ${m.board}`);
+  await context.close();
+});
+
+test('runes AC-25: in Runes, the back button asks before leaving only while there is a line to lose', async () => {
+  const { context, page } = await open();
+  const ask = page.locator('dialog.shell-leave');
+  await page.keyboard.press('ArrowRight');
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-stay]').click();
+  await ask.waitFor({ state: 'hidden' });
+  assert.deepEqual(await path(page), [0, 1], 'Stay keeps the line');
+  await page.click('[data-restart]');
+  await page.locator('.shell-back').click();
+  await page.waitForURL(BASE);
   await context.close();
 });
