@@ -1,0 +1,205 @@
+/* Windsock: the canvas fills the screen; the HUD and cards float over it. */
+
+body {
+  background: #8cc63f;
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#field {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active {
+  transform: scale(0.92);
+}
+
+.mute:focus-visible,
+.card button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* The clock and the score, centred between the back and mute buttons. */
+.hud {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  font-weight: 800;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.hud[hidden] {
+  display: none;
+}
+
+.hud .clock {
+  letter-spacing: 0.04em;
+}
+
+.hud .clock.tick {
+  animation: tick 600ms ease-out;
+}
+
+@keyframes tick {
+  0% {
+    transform: scale(1.5);
+    color: #ffd23f;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.hud .score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.hud .streak {
+  color: #ffd23f;
+  font-size: 15px;
+}
+
+.hud .streak[hidden] {
+  display: none;
+}
+
+.card {
+  position: fixed;
+  z-index: 8;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 48px));
+  box-sizing: border-box;
+  padding: 18px 20px 20px;
+  border-radius: 20px;
+  background: rgb(20 22 31 / 78%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 30%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.card p {
+  margin: 0;
+}
+
+.card .day {
+  font-weight: 700;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+.card .best,
+.card .detail {
+  font-size: 15px;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.card .score-line {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.card button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 800;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.card .play {
+  color: #1d2230;
+  background: #ffd23f;
+}
+
+.card .alt {
+  color: #fff;
+  background: rgb(255 255 255 / 16%);
+  font-size: 16px;
+}
+
+.card button:active {
+  transform: scale(0.97);
+}
