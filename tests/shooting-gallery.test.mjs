@@ -1524,6 +1524,24 @@ test('shooting-gallery AC-35: the slingshot answers only while the clock runs: o
     await page.keyboard.press('Space');
     assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, `nothing fires in ${mode}`);
   }
+  // Nor while the round is paused, turned or counting back in.
+  for (const hold of ['paused', 'turned', 'resumeT']) {
+    await page.evaluate((h) => {
+      const G = window.__gallery.game;
+      G.mode = 'play';
+      G.paused = h === 'paused';
+      G.turned = h === 'turned';
+      G.resumeT = h === 'resumeT' ? 1 : 0;
+    }, hold);
+    await page.mouse.move(500, 300);
+    await page.mouse.down();
+    await page.mouse.move(530, 360, { steps: 5 });
+    await page.waitForTimeout(50);
+    const r = await page.evaluate(() => ({ active: window.__gallery.aim.active, live: window.__gallery.slingLive() }));
+    await page.mouse.up();
+    assert.deepEqual(r, { active: false, live: false }, `no pull when ${hold}`);
+    assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, `nothing fires when ${hold}`);
+  }
   await context.close();
 });
 
