@@ -102,15 +102,9 @@ test('crumble AC-1: the shore moves behind the start card; Start begins on the p
   assert.equal(await page.isVisible('[data-hud-top]'), false);
   const t0 = await page.evaluate(() => window.__crumble.game.time);
   await page.waitForFunction((t0) => window.__crumble.game.time > t0 + 0.2, t0);
-  // The demo tanks trade shots: step it (no waiting on the clock) until one lands.
-  const landed = await page.evaluate(() => {
-    const c = window.__crumble;
-    c.manual = true;
-    for (let i = 0; i < 60 * 8 && c.terrain.carves === 0; i++) c.step(1 / 60);
-    c.manual = false;
-    return c.terrain.carves;
-  });
-  assert.ok(landed > 0, 'the demo fires before the first touch');
+  // The demo tanks trade shots on the real animation loop (the first lands about 3 s in; the
+  // limit is generous for a slow CI machine).
+  await page.waitForFunction(() => window.__crumble.terrain.carves > 0, null, { timeout: 15000 });
   await page.click('[data-play]');
   const s = await page.evaluate(() => ({ mode: window.__crumble.game.mode, phase: window.__crumble.game.phase, turn: window.__crumble.game.turn, taught: window.__crumble.store.taught }));
   assert.deepEqual(s, { mode: 'battle', phase: 'aim', turn: 0, taught: false }, 'the ghost hand shows until the first aiming touch');
@@ -900,6 +894,7 @@ test('crumble AC-20: each state shows only its own cards and HUD, and the weapon
     document.dispatchEvent(new Event('visibilitychange'));
   });
   assert.deepEqual(await view(), { ...none, paused: true, hud: true, weapons: false }, 'paused');
+  assert.equal((await page.textContent('[data-paused]')).trim(), 'Tap to resume');
   await page.evaluate(() => Object.defineProperty(document, 'hidden', { value: false, configurable: true }));
   await page.mouse.click(400, 200);
   for (const [mine, theirs, label] of [
@@ -920,8 +915,21 @@ test('crumble AC-20: each state shows only its own cards and HUD, and the weapon
     );
     const v = await view();
     assert.deepEqual({ ...v, weapons: undefined }, { ...none, result: true, hud: false, weapons: undefined }, label);
+    const card = await page.evaluate(() => {
+      const shown = (s) => !document.querySelector(s).hidden;
+      return { stars: shown('[data-result-stars]'), next: shown('[data-result-next]'), again: shown('[data-result-again]'), newHill: shown('[data-result-new]') };
+    });
+    if (label === 'won') assert.deepEqual(card, { stars: true, next: true, again: true, newHill: false }, 'won: the stars and Next');
+    else assert.deepEqual(card, { stars: false, next: false, again: true, newHill: true }, 'lost: Again and New hill');
   }
+  // Portrait, over the lost card: the turn card goes on top and the rest stays as it was.
   await page.setViewportSize({ width: 390, height: 844 });
-  assert.equal((await view()).rotate, true, 'portrait: the turn card on top');
+  const p = await view();
+  assert.deepEqual({ ...p, weapons: undefined }, { ...none, result: true, rotate: true, hud: false, weapons: undefined }, 'portrait over the result');
+  const z = await page.evaluate(() => [getComputedStyle(document.querySelector('[data-rotate]')).zIndex, getComputedStyle(document.querySelector('[data-screen="result"]')).zIndex].map(Number));
+  assert.ok(z[0] > z[1], 'the turn card is on top');
+  // Portrait during a battle: the HUD stays under the turn card.
+  await page.evaluate(() => window.__crumble.startBattle(0));
+  assert.deepEqual({ ...(await view()), weapons: undefined }, { ...none, rotate: true, hud: true, weapons: undefined }, 'portrait over a battle');
   await context.close();
 });
