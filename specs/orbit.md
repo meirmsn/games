@@ -123,19 +123,22 @@ three differ.
   worth: session, 2026-11-09).
 - The top bar says what each thing is: "System 2 · Slingshot" (number and name), "Jump 1 of 4"
   with a dot per leg, "Stardust 0/22", and "Slingshots 1" once one is earned. The probes left sit
-  just above the booster bar: "Probes", a small ship per probe (spent ones faint) and "7 left"
-  (owner, 2026-11-09: "it's not clear what the things at the top are ... the number that you are
+  just above the booster bar (owner, 2026-11-09: "it's not clear what the things at the top are ... the number that you are
   throwing should be next to the booster at the bottom so that it's clear ... it should show how
   many of them you have left ... maybe it should say level or L1 out of 22"). "1/22" was the
   stardust, not a level: it is labelled "Stardust", and the leg is "Jump 1 of 4" (session,
-  2026-11-09).
+  2026-11-09). The probes left are a plain number counting down, "Probes 7", like the countdown
+  before a launch; rejected: a small ship per probe (owner, 2026-11-09: "The probes left can be a
+  number. It doesn't have to be that counter that takes a lot of space, and I don't think it looks
+  great, so just do counter. Kind of cool because it's a nod to the reverse countdown before blast
+  off").
 - A flight fails when the probe's body (8 units across its middle) touches a planet, swings more than 200 units past the field's edge, loops
   once around a body other than the target or the target's parent while bound to it, or lasts
   8 s. The probe dims over the
   last 2 s before the time runs out. On a failure it rewinds to the leg's start within 1 s, and moons
   rewind with it. A system has 10 probes, one per launch, counted just above the booster bar
-  (amber when 3 or fewer are left); when the last is spent without finishing, an "Out of probes" card offers "Try
-  again", which restarts the system; medals and reached systems are kept. Rejected: unlimited
+  (amber when 3 or fewer are left); when the last is spent without finishing the system, whether that flight failed
+  or was caught with jumps still to go, an "Out of probes" card offers "Try again", which restarts the system; medals and reached systems are kept. Rejected: unlimited
   tries (owner, 2026-11-09: "I was able to do like infinity tries ... maybe we should limit it ...
   so that you really need to try, but you can leave it at 10 or something"). The failed flight
   stays as a faint ghost
@@ -307,7 +310,7 @@ three differ.
   flight crashes it, and no catch steers it within its size of a surface; every catch settles
   within 3 s.
 - **AC-25** A system has 10 probes, one per launch, shown just above the booster bar (not in the
-  top bar) as a ship per probe, spent ones faint, and the number left; after the 10th fails, an
+  top bar) as a number counting down; after the 10th fails, or is caught with jumps still to go, an
   "Out of probes" card shows, no further launch is possible, and "Try again" restarts the system
   with 10.
 - **AC-26** Crossing a ring's band uncaught shows "Too fast", "Too steep" or "Too close" by the

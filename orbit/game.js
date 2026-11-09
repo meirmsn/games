@@ -67,7 +67,6 @@ const ui = {
   hint: $('[data-hint]'),
   probes: $('[data-probes]'),
   probesBox: $('.probes'),
-  probePips: $('[data-probe-pips]'),
   out: $('[data-screen="out"]'),
   outText: $('[data-out-text]'),
   outRetry: $('[data-out-retry]'),
@@ -494,6 +493,8 @@ function finishCapture() {
   beginLeg();
   buildLegDots();
   updateHud();
+  // the last probe was caught with jumps still to go: nothing left to fly them with
+  if (game.launches >= PROBES) outOfProbes();
 }
 
 // ---------- End of a system ----------
@@ -568,14 +569,18 @@ function updateHud(pop = false) {
   ui.dust.textContent = game.taken.size;
   ui.dustOf.textContent = game.level.motes.length;
   const left = Math.max(0, PROBES - game.launches);
-  ui.probes.textContent = left;
+  // a countdown, like the one before a launch
+  if (ui.probes.textContent !== String(left)) {
+    const drop = Number(ui.probes.textContent) > left;
+    ui.probes.textContent = left;
+    if (drop) {
+      ui.probesBox.classList.remove('tick');
+      void ui.probesBox.offsetWidth;
+      ui.probesBox.classList.add('tick');
+    }
+  }
   ui.probesBox.classList.toggle('low', left <= 3);
   ui.probesBox.setAttribute('aria-label', `${left} probes left`);
-  if (ui.probePips.children.length !== PROBES) {
-    ui.probePips.innerHTML = '';
-    for (let i = 0; i < PROBES; i++) ui.probePips.appendChild(document.createElement('i'));
-  }
-  [...ui.probePips.children].forEach((pip, i) => pip.classList.toggle('spent', i >= left));
   if (pop) {
     ui.dustBox.classList.remove('pop');
     void ui.dustBox.offsetWidth;

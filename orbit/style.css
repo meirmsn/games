@@ -206,32 +206,20 @@ body {
   font-size: 11px;
 }
 
-.probes-left {
-  font-size: 11px;
-  font-weight: 500;
-  color: rgb(233 243 255 / 55%);
+.probes-count {
+  min-width: 1.4em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.probes.low,
-.probes.low .probe-pips i {
+.probes.low {
   color: #ffa64d;
 }
 
-.probe-pips {
-  display: flex;
-  gap: 3px;
-}
-
-.probe-pips i {
-  width: 10px;
-  height: 10px;
-  background: currentColor;
-  clip-path: polygon(100% 50%, 0 100%, 22% 50%, 0 0);
-  transition: opacity 300ms ease;
-}
-
-.probe-pips i.spent {
-  opacity: 0.18;
+/* each launch ticks the countdown down */
+.probes.tick .probes-count {
+  animation: glow 600ms ease-out;
 }
 
 .out-text {
@@ -590,7 +578,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .card,
   .dust.pop,
-  .slings.pop {
+  .slings.pop,
+  .probes.tick .probes-count {
     animation: none;
   }
 }

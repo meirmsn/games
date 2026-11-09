@@ -872,13 +872,12 @@ test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched
   await context.close();
 });
 
-test('orbit AC-25: a system has 10 probes, shown by the booster bar; when they are spent a card says so, and Try again restarts the system', async () => {
+test('orbit AC-25: a system has 10 probes, counted down by the booster bar; when they are spent a card says so, and Try again restarts the system', async () => {
   const { context, page } = await open();
   await manual(page);
   const probes = () => page.locator('[data-probes]').textContent();
   assert.equal(await probes(), '10');
-  const pips = () => page.evaluate(() => [...document.querySelectorAll('[data-probe-pips] i')].map((i) => (i.classList.contains('spent') ? 0 : 1)).join(''));
-  assert.equal(await pips(), '1111111111', 'a ship per probe');
+  assert.equal((await page.locator('.probes').innerText()).replace(/\s+/g, ' ').trim().toUpperCase(), 'PROBES 10', 'a plain countdown');
   // right above the bar, not up in the top bar
   const where = await page.evaluate(() => {
     const p = document.querySelector('.probes').getBoundingClientRect();
@@ -890,7 +889,6 @@ test('orbit AC-25: a system has 10 probes, shown by the booster bar; when they a
   await page.evaluate(() => window.__orbit.fire(1, Math.PI));
   await settle(page);
   assert.equal(await probes(), '9');
-  assert.equal(await pips(), '1111111110');
   assert.equal(await page.locator('.probes').getAttribute('aria-label'), '9 probes left');
   for (let i = 1; i < 10; i++) {
     // from the left of the first planet at full power: down and out of the field, a failed flight
@@ -921,6 +919,19 @@ test('orbit AC-25: a system has 10 probes, shown by the booster bar; when they a
   s = await state(page);
   assert.deepEqual([s.sys, s.leg, s.launches, s.mode], [0, 0, 0, 'idle']);
   assert.equal(await probes(), '10');
+  assert.equal(await page.locator('[data-screen="out"]').isHidden(), true);
+  // the 10th probe caught with jumps still to go: no probe left to fly them, so the card shows too
+  await page.evaluate(() => (window.__orbit.game.launches = 9));
+  assert.equal((await flyGold(page)).result, 'captured');
+  s = await state(page);
+  assert.deepEqual([s.leg, s.launches, s.mode], [1, 10, 'out']);
+  assert.equal(await page.locator('[data-screen="out"]').isVisible(), true, 'out of probes after a catch');
+  // but a 10th probe that finishes the system ends it with the end card, not the out card
+  await page.click('[data-out-retry]');
+  await page.evaluate(() => (window.__orbit.game.launches = 6));
+  for (let i = 0; i < 4; i++) await flyGold(page);
+  s = await state(page);
+  assert.deepEqual([s.launches, s.mode], [10, 'done']);
   assert.equal(await page.locator('[data-screen="out"]').isHidden(), true);
   await context.close();
 });
