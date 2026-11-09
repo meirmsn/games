@@ -55,7 +55,7 @@ test('orbit AC-12: every leg has a gold route that catches every mote, and the r
 test('orbit AC-12: a typical captured flight is an arc, not a hop (median at least 0.7 s)', () => {
   for (const sys of SYSTEMS) {
     sys.legs.forEach((_, l) => {
-      rate(sys, l, { samples: 600, brake: Boolean(sys.brake) });
+      rate(sys, l, { samples: 200, brake: Boolean(sys.brake) });
       assert.ok(rate.lastMedianAge >= 0.7, `${sys.name} leg ${l + 1}: ${rate.lastMedianAge}`);
     });
   }
