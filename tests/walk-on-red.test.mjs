@@ -68,7 +68,7 @@ const hop = async (page, dir) => {
 const finishRun = (page, score = 0) =>
   page.evaluate((score) => {
     const t = window.__walkOnRed;
-    t.startGame(7);
+    t.startGame(t.LEVELS.length - 1);
     t.manual = true;
     t.clearTraffic();
     t.game.score = score;
@@ -282,7 +282,7 @@ test('walk-on-red AC-4: the walk light turns green only once the crossing is cle
 
 test('walk-on-red AC-5: across, the door shuts and it flushes, the game fast-forwards by its own rules into points, and a table shows the score', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 4);
+  await startEmpty(page, 10);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) t.step(1 / 60); };
@@ -349,14 +349,18 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, the game fast-for
   const h = await page.evaluate(() => {
     const t = window.__walkOnRed;
     t.seed(3);
-    t.startGame(4);
+    t.startGame(10);
     t.manual = true;
     t.clearTraffic();
     t.put(t.layout().bottom - 2);
     for (let i = 0; i < 60 * 0.2; i++) t.step(1 / 60);
     t.put(0);
-    for (let i = 0; i < 60 * 3 && t.game.stage !== 'ff'; i++) t.step(1 / 60);
-    const p = t.copiers().find((q) => q.state === 'go' && t.layout().rows[q.row] === 'L');
+    // He is across; a follower still on the way, in the road, can be hit.
+    let p = null;
+    for (let i = 0; i < 60 * 3 && !p; i++) {
+      t.step(1 / 60);
+      p = t.copiers().find((q) => q.state === 'go' && t.layout().rows[q.row] === 'L');
+    }
     if (!p) return { none: true };
     const v = t.spawnVehicle(p.row, 'bus');
     const want = t.colX(p.col);
@@ -365,6 +369,7 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, the game fast-for
     v.v = 0;
     t.step(1 / 60);
     const hit = p.state;
+    t.vehicles().length = 0; // gone before the next one walks the same footsteps
     for (let i = 0; i < 60 * 15 && t.game.mode !== 'green'; i++) t.step(1 / 60);
     const across = t.copiers().filter((q) => q.state === 'across').length;
     const greenScore = t.game.results[t.game.level].score;
@@ -372,7 +377,7 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, the game fast-for
     return { hit, across, relieved: t.game.relieved, score: greenScore, after: t.game.results[t.game.level].score, secs: t.game.closedSecs };
   });
   assert.ok(!h.none, 'a copier was still in the road');
-  assert.equal(h.hit, 'down', 'hit during the fast-forward');
+  assert.equal(h.hit, 'down', 'hit on the way, after he is across');
   assert.equal(h.across, 1);
   assert.equal(h.score, h.secs * (2 + h.relieved), 'the hit copier’s share is gone');
   assert.equal(h.after, h.score, 'crossing on green afterwards adds nothing');
@@ -400,58 +405,71 @@ test('walk-on-red AC-6: if the walk light turns green before he is across, the l
   await context.close();
 });
 
-test('walk-on-red AC-7: copiers set off once he is two rows out, one after another, never pass him, and look before leaving safe ground', async () => {
+test('walk-on-red AC-7: followers stick to him as he steps off and walk his exact path, a lag apart; they catch up when he stops, wait while he is down, and go back with him', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 4);
+  await startEmpty(page, 10);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
-    const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) t.step(1 / 60); };
+    const run = (s, each) => { for (let i = 0; i < Math.round(s * 60); i++) { t.step(1 / 60); if (each) each(); } };
     const b = t.layout().bottom;
     const [a, c] = t.copiers();
+    const before = [a.state, c.state];
+    // His path: up, right, up, up (onto the island), a hop every 0.3 s.
+    const seen = [[], []];
+    const note = () => [a, c].forEach((p, i) => { const k = `${p.row}:${p.col}`; if (seen[i][seen[i].length - 1] !== k) seen[i].push(k); });
     t.move('up');
-    run(1);
-    const oneOut = [a.state, c.state];
+    t.step(1 / 60);
+    const joined = [a.state, c.state];
+    const bang = t.popups().filter((pp) => pp.text === '!').length;
+    run(0.3, note);
+    t.move('right');
+    run(0.3, note);
     t.move('up');
-    run(0.05);
-    const twoOut = [a.state, c.state];
-    run(1);
-    const staggered = [a.state, c.state];
-    run(3);
-    // He stands two rows out: they come up behind him but never past him.
-    const never = [a.row, c.row].every((r) => r > t.player.row);
-    const cols = [a.col, c.col];
-    // On the island, a car about to reach the next lane holds a copier back.
-    t.startGame(4);
-    t.manual = true;
-    t.clearTraffic();
-    const m = t.layout().rows.indexOf('M');
-    t.put(m - 1);
-    const p = t.copiers()[0];
-    p.state = 'go';
-    p.row = m;
-    p.hopT = 0;
-    const v = t.spawnVehicle(m - 1, 'sedan');
-    const x = t.colX(p.col);
-    v.speed = 20;
-    v.v = 20;
-    if (v.dir === 1) v.s = x - 3.5 - 10 + v.w * 0.1 + t.ENTRY + 0.0 + v.w * 0.0 + 0;
-    else v.s = t.PLAY_W + t.ENTRY - (x + 3.5 + 10 - v.w * 0.1);
+    run(0.3, note);
+    t.move('up');
+    run(2, note);
+    const path = [`${b}:${t.PCOL}`, `${b - 1}:${t.PCOL}`, `${b - 1}:${t.PCOL + 1}`, `${b - 2}:${t.PCOL + 1}`, `${b - 3}:${t.PCOL + 1}`];
+    const caught = [a, c].every((p) => p.row === t.player.row && p.col === t.player.col);
+    // Hit in the next lane, with the first follower a step behind him in the road.
+    const m = t.player.row;
+    t.move('up');
     run(0.3);
-    const held = p.row === m;
-    return { oneOut, twoOut, staggered, never, cols, b, held };
+    t.move('up');
+    run(0.25);
+    const at = [a.row, c.row];
+    const v = t.spawnVehicle(t.player.row, 'sedan');
+    const want = t.colX(t.player.col);
+    v.s = v.dir === 1 ? want + v.w / 2 + t.ENTRY : t.PLAY_W + t.ENTRY - (want - v.w / 2);
+    v.speed = 0;
+    v.v = 0;
+    t.step(1 / 60);
+    const down = t.player.down > 0;
+    t.vehicles().length = 0;
+    const frozen = [a.row, c.row];
+    run(1);
+    const still = [a.row, c.row];
+    run(2);
+    return { before, joined, bang, seen, path, caught, m, at, down, frozen, still, back: [a.row, c.row, t.player.row] };
   });
-  assert.deepEqual(r.oneOut, ['wait', 'wait']);
-  assert.deepEqual(r.twoOut, ['go', 'wait'], 'the first sets off when he is two rows out');
-  assert.deepEqual(r.staggered, ['go', 'go'], 'then the next');
-  assert.ok(r.never, 'never past him');
-  assert.ok(!r.cols.includes(5), 'their own columns');
-  assert.ok(r.held, 'waits on the island while a car is coming');
+  assert.deepEqual(r.before, ['wait', 'wait']);
+  assert.deepEqual(r.joined, ['go', 'go'], 'they stick to him as he steps off');
+  assert.equal(r.bang, 2, 'a "!" over each');
+  for (const s of r.seen) {
+    const from = s.indexOf(r.path[0]);
+    assert.ok(from >= 0, `onto his starting cell: ${s}`);
+    assert.deepEqual(s.slice(from), r.path, 'his exact path');
+  }
+  assert.ok(r.caught, 'when he stops they catch up to his cell');
+  assert.ok(r.down);
+  assert.ok(r.at[0] < r.m, `the first follower was in the road behind him: ${r.at}`);
+  assert.deepEqual(r.still, r.frozen, 'they wait while he is down');
+  assert.deepEqual(r.back, [r.m, r.m, r.m], 'back on the island with him');
   await context.close();
 });
 
-test('walk-on-red AC-8: a copier hit by a car goes back to the crowd and no longer counts', async () => {
+test('walk-on-red AC-8: a follower hit by a car goes back to the crowd and no longer counts', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 2);
+  await startEmpty(page, 7);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const run = (s) => { for (let i = 0; i < Math.round(s * 60); i++) t.step(1 / 60); };
@@ -499,7 +517,7 @@ test('walk-on-red AC-9: a hit knocks the player down and back to his last safe s
   await context.close();
 });
 
-test('walk-on-red AC-10: the eight levels bring their things in order', async () => {
+test('walk-on-red AC-10: the 21 levels: nobody follows until level 8, then one, two, three', async () => {
   const { context, page } = await open();
   const levels = await page.evaluate(() =>
     window.__walkOnRed.LEVELS.map((l) => ({
@@ -509,11 +527,12 @@ test('walk-on-red AC-10: the eight levels bring their things in order', async ()
       buses: l.lanes.some((ln) => ln.set.includes('bus') && ln.set.includes('truck')),
     }))
   );
-  assert.equal(levels.length, 8);
-  assert.deepEqual(levels.map((l) => l.copiers), [0, 0, 1, 1, 2, 2, 3, 3]);
-  assert.deepEqual(levels.map((l) => l.medians), [0, 0, 1, 1, 1, 1, 1, 2]);
-  assert.deepEqual(levels.map((l) => l.sirens), [false, false, false, false, false, true, false, true]);
+  assert.equal(levels.length, 21);
+  assert.deepEqual(levels.map((l) => l.copiers), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3]);
+  assert.deepEqual(levels.slice(0, 2).map((l) => l.medians), [0, 0], 'no island on the first two');
+  assert.ok(levels.slice(2).every((l) => l.medians >= 1), 'an island from level 3');
   assert.equal(levels.findIndex((l) => l.buses), 3, 'buses and trucks from level 4');
+  assert.equal(levels.findIndex((l) => l.sirens), 5, 'sirens from level 6');
   await context.close();
 });
 
@@ -561,7 +580,7 @@ test('walk-on-red AC-11: a siren warns 2.5 s ahead', async () => {
   await context.close();
 });
 
-test('walk-on-red AC-12: after level 8 the run ends with the total, the stars and the best', async () => {
+test('walk-on-red AC-12: after level 21 the run ends with the total, the stars and the best', async () => {
   const { context, page } = await open();
   const total = await finishRun(page, 300);
   const s = await page.evaluate(() => ({
@@ -574,7 +593,7 @@ test('walk-on-red AC-12: after level 8 the run ends with the total, the stars an
   assert.ok(s.over);
   assert.ok(total > 300);
   assert.equal(s.score, String(total));
-  assert.match(s.detail, new RegExp(`of 24 stars · Best: ${total}`));
+  assert.match(s.detail, new RegExp(`of 63 stars · Best: ${total}`));
   await page.click('[data-again]');
   assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'title');
   assert.ok(await page.evaluate(() => !document.querySelector('[data-screen="start"]').hidden));
@@ -600,8 +619,8 @@ test('walk-on-red AC-13: the hidden assist rises with a hit, falls with a copier
     const afterHit = t.game.assist;
     t.vehicles().length = 0;
     for (let i = 0; i < 90; i++) t.step(1 / 60);
-    // A copier across.
-    t.startGame(2);
+    // A follower across.
+    t.startGame(7);
     t.manual = true;
     t.clearTraffic();
     t.game.assist = 0.5;
@@ -628,7 +647,7 @@ test('walk-on-red AC-13: the hidden assist rises with a hit, falls with a copier
   assert.ok(r.slow < r.fast * 0.8, `slower with the assist: ${r.slow} vs ${r.fast}`);
   const next = await page.evaluate(() => {
     const t = window.__walkOnRed;
-    t.startGame(7);
+    t.startGame(t.LEVELS.length - 1);
     t.manual = true;
     t.clearTraffic();
     t.put(0);
@@ -875,9 +894,9 @@ test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, 
   await context.close();
 });
 
-test('walk-on-red AC-19: hops, copiers setting off and arriving, hits, the green light and the end have their sounds', async () => {
+test('walk-on-red AC-19: hops, followers sticking and arriving, hits, the green light and the end have their sounds', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 6);
+  await startEmpty(page, 14);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const names = () => t.heard.map((h) => h.name);
@@ -886,10 +905,7 @@ test('walk-on-red AC-19: hops, copiers setting off and arriving, hits, the green
     t.move('up');
     run(0.2);
     const hop = names();
-    t.heard.length = 0;
-    t.move('up');
-    run(0.3);
-    const setOff = names();
+    const setOff = hop;
     t.heard.length = 0;
     t.put(0);
     for (let i = 0; i < 60 * 30 && t.game.mode !== 'tally'; i++) t.step(1 / 60);
@@ -909,7 +925,7 @@ test('walk-on-red AC-19: hops, copiers setting off and arriving, hits, the green
     return { hop, setOff, arrive, green, loo, hit };
   });
   assert.ok(r.hop.some((n) => n === 'step' || n === 'step2'), 'a footstep');
-  assert.ok(r.setOff.includes('join'), 'the pluck as a copier sets off');
+  assert.ok(r.setOff.includes('join'), 'the pluck as followers stick to him');
   assert.ok(r.arrive.length >= 3, `the chime as each copier arrives (${r.arrive})`);
   for (let i = 1; i < 3; i++) assert.ok(r.arrive[i] > r.arrive[i - 1], `each chime higher: ${r.arrive}`);
   assert.ok(r.green.includes('street') && r.green.includes('walk'), 'the green light');
@@ -921,18 +937,17 @@ test('walk-on-red AC-19: hops, copiers setting off and arriving, hits, the green
   await context.close();
 });
 
-test('walk-on-red AC-20: what the level is worth while playing, ×2 as a copier arrives, nothing about points on the start card; the walk light counts down', async () => {
+test('walk-on-red AC-20: what the level is worth while playing, ×2 as a follower arrives, nothing about points on the start card; the walk light counts down', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 3);
+  await startEmpty(page, 7);
   await page.evaluate(() => (window.__walkOnRed.manual = false));
   await page.waitForTimeout(200);
   const label = await page.evaluate(() => {
     const t = window.__walkOnRed;
     return { text: t.drawn.payout, clear: t.drawn.payoutClear, red: Math.ceil(t.game.red), countdown: t.drawn.countdown };
   });
-  // With the words where they fit beside the porta-potty (it depends on the font), without them where not.
-  assert.ok([`${label.red} s × 1 person = ${label.red}`, `${label.red} s × 1 = ${label.red}`].includes(label.text), label.text);
-  assert.ok(label.clear, 'clear of the porta-potty');
+  assert.equal(label.text, `${label.red} s × 1 person = ${label.red}`);
+  assert.ok(label.clear, 'clear of the porta-potty, whatever the font');
   assert.equal(label.countdown, label.red, 'the walk light’s countdown matches');
   // A copier arriving shows the new multiplier.
   const popup = await page.evaluate(() => {
@@ -985,7 +1000,7 @@ test('walk-on-red AC-23: every level starts with traffic and a car passing in fr
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const out = [];
-    for (let level = 0; level < 8; level++) {
+    for (let level = 0; level < t.LEVELS.length; level++) {
       let hits = 0;
       let empty = 0;
       const cars = [];
@@ -1024,18 +1039,18 @@ test('walk-on-red AC-23: every level starts with traffic and a car passing in fr
   await context.close();
 });
 
-test('walk-on-red AC-24: from level 5 one copier needs the loo too: only they and he hop from foot to foot; across, they go in after him, for a bonus', async () => {
+test('walk-on-red AC-24: from level 10 the last follower needs the loo too: only they and he hop from foot to foot; across, they go in after him, for a bonus', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const urgentBy = [];
-    for (let level = 0; level < 8; level++) {
+    for (let level = 0; level < t.LEVELS.length; level++) {
       t.seed(1);
       t.startGame(level);
       urgentBy.push(t.copiers().filter((p) => p.urgent).length);
     }
     t.seed(2);
-    t.startGame(4);
+    t.startGame(10);
     t.manual = true;
     t.clearTraffic();
     const [calm, urgent] = t.copiers();
@@ -1061,9 +1076,9 @@ test('walk-on-red AC-24: from level 5 one copier needs the loo too: only they an
       if (t.game.stage === 'relief' && outBeforeIn === null && urgent.inLoo) outBeforeIn = !t.player.inside;
     }
     const flushes = t.heard.filter((h) => h.name === 'flush').length;
-    return { urgentBy, wiggles, stages, outBeforeIn, inLoo: urgent.inLoo, relieved: t.game.relieved, flushes, score: t.game.results[4].score, secs: t.game.closedSecs };
+    return { urgentBy, wiggles, stages, outBeforeIn, inLoo: urgent.inLoo, relieved: t.game.relieved, flushes, score: t.game.results[10].score, secs: t.game.closedSecs };
   });
-  assert.deepEqual(r.urgentBy, [0, 0, 0, 0, 1, 1, 1, 1], 'one from level 5');
+  assert.deepEqual(r.urgentBy, [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], 'one from level 10');
   assert.deepEqual(r.wiggles, { calm: false, urgent: true }, 'only the copier who needs it hops from foot to foot');
   assert.ok(r.stages.includes('relief'), `stages: ${r.stages}`);
   assert.equal(r.outBeforeIn, true, 'he steps out before they go in');

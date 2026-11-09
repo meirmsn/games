@@ -97,7 +97,16 @@ that says like, uh, 24 seconds left. So that becomes, 24 points. And then … in
 it shows is that a multiplier or adding … extra person relieved … there's still something odd about
 when the NPCs cross when it comes to zero. They seem to be flying … Maybe you can actually slow down
 the time for them to cross. And as they are crossing, you put the overlay of the bonus points
-because they give you zero regardless." This spec is the game after those changes.
+because they give you zero regardless." Then, while that was being built (2026-11-09): "given you
+cannot control who follows you … it feels random that you're gonna gain points or not … if they make
+good or bad choices, you earn points or not. So I think what we should do is go back to the idea that
+randomly they stick to you. But once they do, they follow your footsteps … maybe the first 7 levels
+nobody follows you, and then it gets progressively more harder, and then complexity goes a little bit
+down so that one person follows you and you understand this new mechanic, and again you are starting
+to ramp up … then you can add a second person following you. You don't need to go down on the
+complexity of the level at that point … 20 levels total … maybe 21 … the last 5 levels or so are
+gonna be very hard because a bunch of people are following you. Plus, are the most complex in terms
+of the traffic." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -106,24 +115,26 @@ goes now, and the people waiting start copying him.
 
 - **Verb:** hop one cell: forward (a tap anywhere), back or sideways (a swipe); a hop is instant,
   with a footstep.
-- **A typical 5-second choice:** a bus is coming in the next lane and the countdown says 14: hop now
-  through the gap (more seconds, and the copiers behind you follow into calmer traffic) or wait for it
-  to pass (safer for you, fewer seconds, and your copiers bunch up behind you in the road).
-- **How it teaches:** level 1 is just you, two slow lanes and the countdown; level 2 adds traffic
-  both ways; level 3 brings the island and the first copier, who sets off once you're two lanes out.
-  What the level is worth right now shows at the top before it's earned.
+- **A typical 5-second choice:** you're on the island with two followers behind you, a bus is
+  coming in the next lane and the countdown says 14: run the two lanes now (more seconds, but the
+  last of your followers steps where you were 0.8 s ago, right as the bus arrives) or wait for a
+  gap wide enough for all three of you (safe, fewer seconds).
+- **How it teaches:** level 1 is just you, two slow lanes and the countdown; the traffic builds for
+  seven levels with nobody following; level 8 eases off and brings one follower, who walks in your
+  footsteps; level 11 a second, level 15 a third. The first level's score table shows how points
+  add up.
 - **Three clocks:** each hop and each passing car (seconds); a new level with one new thing every
   half minute, the lights changing and everyone crossing between them (minutes); the best total and
   three stars a level to win (return).
 - **Expert vs beginner:** a beginner waits for gaps and gets few seconds, or dashes and gets hit; an
-  expert reads the traffic, crosses fast in a lull and brings the copiers through it too. A scripted
-  player that takes gaps quickly outscores a careful one on most levels.
-- **Tenth play vs first:** the stars you're missing, and crossing fast enough that your copiers make
-  it.
-- **Form:** short-form: a run is eight levels, about 5 minutes, because it's an arcade crossing game.
+  expert reads the traffic, waits on the kerb or the island for a gap the whole line fits through,
+  then runs the lanes in one go.
+- **Tenth play vs first:** the stars you're missing, and judging gaps long enough for your followers.
+- **Form:** an arcade run of 21 levels, about 12 to 15 minutes (owner, 2026-11-09: "maybe 21");
+  each level is half a minute, so it stops cleanly between any two.
 - **Orientation:** portrait, everywhere: the view is the zebra crossing, edge to edge, the same
   shape on a phone, a phone held sideways and a desktop.
-- **What a failure costs:** a hit costs a few seconds; a copier hit costs their share of the points;
+- **What a failure costs:** a hit costs a few seconds; a follower hit costs their share of the points;
   too slow costs the level's points and a replay of that level (about 30 s). No lives.
 - **Save-game stand-in:** the best total, the best stars per level and the hidden assist, in
   localStorage.
@@ -170,13 +181,13 @@ goes now, and the people waiting start copying him.
   waiting walks across on the zebra; nobody walks while a car is on it. Within a lane, traffic still comes in
   platoons and lulls, now without lights of its own (owner, 2026-11-09, as quoted in the intent).
 - **Score:** reaching the far kerb before the walk light turns green fixes the seconds left (at least
-  1); the level scores those seconds × (1 + copiers across by the time the light turns green). If
+  1); the level scores those seconds × (1 + followers across by the time the light turns green). If
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
   on. The start card says nothing about points: the first level's score table teaches it (owner,
   2026-11-09: "It should be intuitive from you finishing … the first level, and seeing how the points
-  are being computed"). While a level with copiers is played, what it is worth right now ("14 s × 3
-  people = 42", or "14 s × 3 = 42" where the words don't fit beside the porta-potty) shows at the
-  right of the sky; each copier who arrives shows the new multiplier ("×2", "×3") over their head; the
+  are being computed"). While a level with followers is played, what it is worth right now ("14 s × 3
+  people = 42", in a smaller font where it would not fit beside the porta-potty) shows at the
+  right of the sky; each follower who arrives shows the new multiplier ("×2", "×3") over their head; the
   count-up says "× 3 people". When the walk light turns green, the level's **score table** shows over
   the crossing, plain lines that add up: "24 s left 24", "2 people followed you on red +48" (each
   worth the seconds again), "1 person relieved too +24" (below), then the total "+96" and the
@@ -185,10 +196,10 @@ goes now, and the people waiting start copying him.
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
   speed under its own rules, in one go, through to the tally: the walk light's seconds drain, the car
-  lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
+  lights go yellow and red as usual and the cars stop at their lines, and the followers still on the
   way carry on as they would, so they can make it, or be hit. The walk to green is then not fast: The points count up big over the far
-  sidewalk as the seconds drain ("+42", "× 3 people", the multiplier growing as copiers arrive),
-  with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
+  sidewalk as the seconds drain ("+42", "× 3 people", the multiplier growing as followers arrive),
+  with a rising tick and a "▶▶" mark. At 0 the level is scored, followers still in the road stop, and
   once the crossing is clear (and after anyone relieved too, below) the walk light turns green; then,
   at normal speed so they can be seen walking, everyone left crosses on the zebra under the score
   table, and earns nothing; the table stays 1.4 s more, then the next level
@@ -197,22 +208,25 @@ goes now, and the people waiting start copying him.
   points"; then "much faster"; then "slow down the time for them to cross. And as they are crossing,
   you put the overlay"). When he was too slow, the wait for the crossing to clear runs fast in the
   same way, and the green light's crossing shows "Try again".
-- **Relieved too:** from level 5, one of the copiers needs the loo as well: of the crowd, only they
+- **Relieved too:** from level 10, the last of the followers needs the loo as well: of the crowd, only they
   (and he) hop from foot to foot, with a drop of sweat. If they make it across, then once the
   fast-forward ends he steps out of the porta-potty, they go in, the door shuts, a flush, and the
   level gets the seconds once more as a bonus ("+24", and "1 person relieved too" in the table),
-  about 2.4 s at normal speed. A relieved copier still counts as a follower (owner, 2026-11-09: "the
-  NPC should not wiggle … maybe 5 and upwards … you get … extra bonus points").
-- **Copiers walk on their own:** from level 3, people at the kerb beside his column copy him. Each sets
-  off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
-  crossing, a row every 0.42 s. They never go past him (they may share the island or the far kerb
-  with him). From a kerb or the island they wait while a car would reach the next lane's cell within
-  1.1 s; in the road they wait at most 2.2 s for the next lane, and only while their own spot is
-  clear, so in heavy traffic, or if he dawdles and they bunch up behind him in the lanes, they can be
-  hit. A copier hit tumbles, then walks back to the crowd: out for this level, and their share of the
-  points with them. Copiers across queue beside the porta-potty, to its right. Nobody in the crowd
-  hops from foot to foot but a copier who needs the loo too (below) (owner, 2026-11-09: "Walk on their own",
-  "Their points").
+  about 2.4 s at normal speed. A relieved follower still counts as a follower (owner, 2026-11-09: "the
+  NPC should not wiggle … maybe 5 and upwards … you get … extra bonus points"; with nobody following
+  before level 8, it comes in two levels after the first follower).
+- **Followers walk in his footsteps:** from level 8, some of the people waiting beside him (who
+  they are is down to chance) stick to him as he steps off the kerb, a "!" over each, and from then
+  on walk exactly where he walked: the first is where he was 0.4 s ago, the next 0.4 s after that,
+  and so on, catching up a cell every 0.15 s. They don't look at the traffic, they trust him, so
+  whether they make it is down to his timing alone: a gap only he fits through gets the last of them
+  hit. When he stands still they catch up to his cell (a little to the side). While he is down they
+  wait, and when he is put back on the last safe strip his trail goes back with him, so they walk
+  back to it instead of into the car. A follower hit tumbles, then walks back to the crowd: out for
+  this level, and their share of the points with them. Followers across queue beside the
+  porta-potty, to its right. Nobody in the crowd hops from foot to foot but a follower who needs the
+  loo too (above) (owner, 2026-11-09: "randomly they stick to you. But once they do, they follow your
+  footsteps"; this replaces copiers who chose their own moment, which made the points feel random).
 - **Hits:** a vehicle overlapping the player's cell (vehicle boxes 20% narrower than their art, people
   5 art pixels wide) knocks him down for 1.2 s (the pack's fall and lying frames with stars, a bump
   and a horn), then he's back on the last safe strip he stood on. Stepping into a vehicle counts.
@@ -225,32 +239,43 @@ goes now, and the people waiting start copying him.
   you hit; level 1 too, with its own sparse traffic. And on every level a car is passing right in
   front of him, in the first lane, as the level starts (owner, 2026-11-09: "they should start with
   cars in front of you. It shouldn't be open the road").
-- **The eight levels**, getting harder one after another; tuned by playing (owner, 2026-11-09:
-  "the first level is very, very easy to win. The second one is just a little bit harder … The
-  third one is already getting more like a regular level, and they get progressively harder"):
-  1. **Quiet Street:** just you, two slow lanes one way, sparse traffic, 30 s.
-  2. **Both Ways:** two lanes, one each way, nearly twice level 1's speed and much busier (short
-     lulls), 26 s: already a real crossing (owner, 2026-11-09: "the second one should be already
-     harder").
-  3. **Market Avenue:** four lanes, an island in the middle and the first copier, 28 s.
-  4. **Bus Lane:** buses and trucks (long vehicles), faster, one copier, 28 s.
-  5. **Rush Hour:** five lanes, denser, two copiers, 30 s.
+- **The 21 levels**, in three acts (owner, 2026-11-09: "the first 7 levels nobody follows you …
+  complexity goes a little bit down so that one person follows you … then you can add a second … the
+  last 5 levels or so are gonna be very hard"). Each is half a minute of red (26 to 34 s):
+  1. **Quiet Street:** just him, two slow lanes one way, sparse traffic.
+  2. **Both Ways:** two lanes, one each way, nearly twice level 1's speed, short lulls.
+  3. **Market Avenue:** four lanes with an island.
+  4. **Bus Lane:** buses and trucks (long vehicles).
+  5. **Rush Hour:** five lanes, denser.
   6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, driving over the cars in
-     its way, which pull a little aside as it comes up behind them and passes; its lane's edge flashing
-     and a siren 2.5 s before it comes, at 2.5 times the lane's speed), two copiers, 30 s.
-  7. **Old Town:** five fast lanes, three copiers, 32 s.
-  8. **Downtown:** night, two islands, the fastest and densest traffic, three copiers and sirens,
-     32 s.
-  After level 8 the run ends with its total, the stars and the best.
-- **Tuning, measured with a scripted player** (reacting every 0.25 s, reading traffic perfectly,
-  sidestepping, over 6 seeds a level, fast or careful): it never fails a level and is almost never
-  hit, so every level is within reach; the seconds it has to spend waiting go from none on level 1
-  to up to 8 on level 2, and up to about 20 on levels 3–7. A player tapping straight up without
-  looking is hit 3 to 10 times a level from level 2 on; the fast way scores more on most levels; about a third to half of copiers are hit on
-  levels 3–7 (more when the player rushes ahead), and a quarter in Downtown, where the islands give them rest. Knobs: each
-  lane's speed, gaps, platoon and lull lengths, each level's seconds, and the copiers' start, pace,
-  look and wait.
-- **Hidden assist (0–1):** a hit raises it by 0.25 (0.1 for a copier hit); each copier across lowers
+     its way, which pull a little aside as it comes up behind them and passes; its lane's edge
+     flashing and a siren 2.5 s before it comes, at 2.5 times the lane's speed).
+  7. **Old Town:** five fast lanes.
+  8. **Corner Shop:** the first follower, on four calm lanes.
+  9. **School Run:** one follower, school traffic.
+  10. **Lunch Hour:** one follower, five lanes; the follower needs the loo too.
+  11. **Delivery Day:** two followers, heavy vehicles.
+  12. **Evening Commute:** two followers, five lanes.
+  13. **Sunday Drivers:** two followers, sirens.
+  14. **Town Hall:** two followers, faster.
+  15. **Three in Tow:** three followers, four lanes.
+  16. **Stadium Night:** three followers, night, sirens.
+  17. **Downtown:** three followers, night, two islands, fast.
+  18. **Ring Road:** three followers, five fast lanes.
+  19. **Freight Route:** three followers, trucks and buses, sirens.
+  20. **Late Shift:** three followers, night, three lanes in a row, the fastest.
+  21. **Grand Avenue:** three followers, the densest, sirens, 34 s.
+  After level 21 the run ends with its total, the stars and the best.
+- **Tuning, measured with a scripted player** (reading traffic perfectly, waiting on a kerb or
+  island until the whole block of lanes ahead stays clear for him and the time his followers need,
+  then running it a lane every 0.2 s, sidestepping to find a gap; over 6 seeds a level): levels 1–7
+  it never fails, with the seconds it waits growing to up to about 15; levels 8–15 it never fails
+  and almost no follower is hit when it waits for a gap they fit; from level 16, short of time it has
+  to run gaps only it fits, and finishes with a few seconds left while a third to all of its
+  followers are hit, so the last levels are hard. A player tapping straight up without looking is
+  hit 3 to 10 times a level from level 2 on. Knobs: each lane's speed, gaps, platoon and lull
+  lengths, each level's seconds, and the followers' lag.
+- **Hidden assist (0–1):** a hit raises it by 0.25 (0.1 for a follower hit); each follower across lowers
   it by 0.03. It slows traffic by up to 25% and lengthens the lulls by up to 40%. A new run keeps 60%
   of the last run's assist (at most 0.7), and a new player's first run starts at 0.4. It is never
   shown.
@@ -260,7 +285,7 @@ goes now, and the people waiting start copying him.
 - **Sound:** a quiet street ambience in place of music (a low city hum with cars swelling past every
   few seconds, made for the game), footsteps, horns (a car coming within 10 art pixels of him, or just
   missing him, honks once: deep for buses, trucks and vans, high for small and sports cars), a
-  pluck when a copier sets off, a rising chime for each copier across, a rising tick as the seconds
+  pluck as followers stick to him, a rising chime for each follower across, a rising tick as the seconds
   count into points, a soft bump and a horn for a hit, a tick each second for the last 5 s, the
   crossing chirp and a jingle on green, a flush and a chime when he gets into the porta-potty, a jingle at each level's start and at the end of the run,
   and a siren, all under the site-wide mute. The flush is the owner's own recording (made with ElevenLabs, 2026-11-09), trimmed and levelled; the ambience, horn, siren and chirp are synthesised for
@@ -291,28 +316,30 @@ goes now, and the people waiting start copying him.
   green adds nothing, and the next level (or the same one) starts after the tally — `tests/walk-on-red.test.mjs`.
 - **AC-5** Reaching the far kerb fixes the seconds left; he goes in, the door closes and the flush
   plays, then the chime; then the game runs at 20 times speed with its own rules (the car lights
-  change, cars stop at their lines, copiers on the way carry on and can be hit) while the points
-  count up as the seconds drain; the level scores the seconds × (1 + copiers across by the green
-  light), plus the seconds once more for a copier relieved too; on green a score table shows the
+  change, cars stop at their lines, followers on the way carry on and can be hit) while the points
+  count up as the seconds drain; the level scores the seconds × (1 + followers across by the green
+  light), plus the seconds once more for a follower relieved too; on green a score table shows the
   seconds, the followers and anyone relieved, line by line, and the total; from across to the end of
   the fast-forward takes under 6 s — `tests/walk-on-red.test.mjs`.
 - **AC-6** If the walk light turns green before the player is across, the level scores 0 and starts
   again — `tests/walk-on-red.test.mjs`.
-- **AC-7** Copiers set off once the player is two rows out, one after another, hop up their own
-  column, never go past the player, and wait on safe ground while the next lane is about to be hit —
+- **AC-7** Followers stick to him as he steps off the kerb (a "!" over each) and walk his exact
+  path, each where he was 0.4 s before the one ahead; when he stands still they catch up to his
+  cell; while he is down they wait, and a knock back takes them back to the last safe strip too —
   `tests/walk-on-red.test.mjs`.
-- **AC-8** A copier hit by a vehicle tumbles, goes back to the crowd and no longer counts; the level
+- **AC-8** A follower hit by a vehicle tumbles, goes back to the crowd and no longer counts; the level
   carries on — `tests/walk-on-red.test.mjs`.
 - **AC-9** A vehicle hitting the player knocks him down and puts him back on the last safe strip he
   stood on — `tests/walk-on-red.test.mjs`.
-- **AC-10** The eight levels are as in the decisions: copiers 0, 0, 1, 1, 2, 2, 3, 3; an island from
-  level 3, two in level 8; heavy vehicles in level 4; sirens in levels 6 and 8 —
+- **AC-10** The 21 levels are as in the decisions: nobody follows on levels 1–7, one follower on
+  8–10, two on 11–14, three from 15; an island from level 3; heavy vehicles from level 4; sirens from
+  level 6 —
   `tests/walk-on-red.test.mjs`.
 - **AC-11** A siren warns 2.5 s before it comes; a car it comes up behind pulls a little aside,
   and back once it has passed — `tests/walk-on-red.test.mjs`.
 - **AC-12** After level 8 the run ends with the game-over card showing the total, the stars and the
   best; Play again leads back to the start card — `tests/walk-on-red.test.mjs`.
-- **AC-13** A hit raises the hidden assist and a copier across lowers it; a higher assist slows
+- **AC-13** A hit raises the hidden assist and a follower across lowers it; a higher assist slows
   traffic; a new player's first run starts at 0.4 and a later run at 60% of the last run's —
   `tests/walk-on-red.test.mjs`.
 - **AC-14** Hiding the page pauses the game, also during the green light; on return it stays frozen
@@ -328,12 +355,11 @@ goes now, and the people waiting start copying him.
   or between levels; at 390×844 and 360×640 it fits with no scrolling and a person is at least 36 CSS
   px tall, and in landscape (844×390, 1280×720) it fits; turning the device mid-level only rescales
   it and changes no game state — `tests/walk-on-red.test.mjs`.
-- **AC-19** A hop plays a footstep, a copier setting off the pluck, a copier across the chime (higher
+- **AC-19** A hop plays a footstep, followers sticking to him the pluck, a follower across the chime (higher
   for each), a hit the bump and the horn, getting into the porta-potty the flush and then the chime,
   the green light its jingle, and the end of the run the closing jingle — `tests/walk-on-red.test.mjs`.
-- **AC-20** The start card says nothing about points; while a level with copiers is played, what it
-  is worth right now shows as "s s × m people = score", or "s s × m = score" where the words
-  don't fit beside the porta-potty, clear of it; a copier arriving shows the new
+- **AC-20** The start card says nothing about points; while a level with followers is played, what it
+  is worth right now shows as "s s × m people = score", clear of the porta-potty; a follower arriving shows the new
   multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
 - **AC-21** The landing page shows 8 tiles, Walk on Red's playable after Googly Faces —
@@ -342,7 +368,7 @@ goes now, and the people waiting start copying him.
   small ones — `tests/walk-on-red.test.mjs`.
 - **AC-23** Every level starts with traffic in its lanes and a car passing right in front of him;
   from level 2, every lane has traffic and tapping straight up from the start gets him hit — `tests/walk-on-red.test.mjs`.
-- **AC-24** From level 5 one copier needs the loo too: of the crowd only they hop from foot to foot;
+- **AC-24** From level 10 the last follower needs the loo too: of the crowd only they hop from foot to foot;
   across, once the fast-forward ends, he steps out, they go in, a flush, and the seconds count once
   more — `tests/walk-on-red.test.mjs`.
 
@@ -350,11 +376,11 @@ goes now, and the people waiting start copying him.
 
 1. Tap the Walk on Red tile: traffic is driving behind a small start card.
 2. Tap Start: he's on the near kerb, hopping from foot to foot, and the walk light is counting down.
-3. Hop across through the gaps; from level 3, the people waiting start copying you.
+3. Hop across through the gaps; from level 8, people stick to you and follow your footsteps.
 4. Reach the porta-potty: the door closes, a flush, a chime; the street fast-forwards as the seconds
    count into points and the lights change; everyone crosses on green, the tally shows, the next
    level starts.
-5. After level 8, see the total and the stars, and play again.
+5. After level 21, see the total and the stars, and play again.
 
 ## States
 
@@ -370,6 +396,7 @@ goes now, and the people waiting start copying him.
 
 ## Out of scope
 
-- A daily traffic seed ("Today's street"), a level select, and more than eight levels.
+- A daily traffic seed ("Today's street"), a level select or continuing a run, and more than 21
+  levels.
 - Leaderboards, accounts, choosing your character.
 - Music settings beyond the site-wide mute.

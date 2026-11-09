@@ -1,6 +1,6 @@
 // Walk on Red: he really needs the loo, the porta-potty is across the street, and the walk light
 // is red. So he goes now. Make it across before the light turns green, and the sooner the better;
-// the people waiting see him go and start copying him.
+// from level 8, people waiting stick to him and follow in his footsteps.
 //
 // The rules (specs/walk-on-red.md):
 //  - The street is a grid of rows: the near kerb at the bottom, lanes, sometimes a median, the far
@@ -8,13 +8,13 @@
 //  - The walk light counts down. Each lane's car light is green while it does, turns yellow near the
 //    end and then red; the cars stop before the zebra crossing, and once it is clear the walk light
 //    turns green. Cars obey their lights.
-//  - Copiers walk on their own: they set off once you are a couple of lanes out, hop up their own
-//    column at a steady pace, never get ahead of you, look before stepping off safe ground, and
-//    only hesitate briefly in a lane, so in heavy traffic they can be hit.
-//  - Reaching the far kerb before the light turns green scores the seconds left × (1 + copiers
+//  - Followers (from level 8, chosen by chance) stick to you as you step off the kerb and walk
+//    exactly where you walked, each a moment after the one ahead; they don't look at the traffic,
+//    so a gap only you fit through gets them hit.
+//  - Reaching the far kerb before the light turns green scores the seconds left × (1 + followers
 //    across). If the light turns green first, the level scores 0 and you try it again.
-//  - A car hitting you knocks you back to the last safe strip; a copier hit goes home, and their
-//    share of the points with them. There are no lives; a run is eight levels.
+//  - A car hitting you knocks you back to the last safe strip; a follower hit goes home, and their
+//    share of the points with them. There are no lives; a run is 21 levels.
 //  - A hidden assist eases the traffic after hits.
 //
 // Drawing: the street is drawn at its art resolution (1 art px = 1 canvas px) on a small offscreen
@@ -70,19 +70,16 @@ const PERSON_HALF = 2.5; // a person's hitbox is 5 art px wide
 const SHRINK = 0.1; // vehicles' boxes are 20% narrower than their art (10% off each end)
 const YELLOW_AT = 4.5; // seconds of red left when the car lights turn yellow
 const RED_AT = 2; // … and red
-const COP_START = 2; // a copier sets off once the player is this many rows out
-const COP_STAGGER = 0.9; // … each one this much after the one before
-const COP_HOP = 0.42; // a copier's pace, one row
+const FOLLOW_LAG = 0.4; // a follower is where he was this long ago (the next one twice as long, …)
+const FOLLOW_STEP = 0.15; // a follower catching up takes a cell this often
 const FF = 20; // once he's in the loo, the game runs this many times faster, through the green light's crossing
 const DOOR_T = 1.8; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
-const COP_LOOK = 1.1; // on safe ground, a copier waits while a car would reach the next cell this soon
-const COP_DARE = 2.2; // in the road, a copier waits at most this long for the next lane
 const DOWN_T = 1.2; // a hit player lies flat this long
 const GREEN_T = 3.6; // the green light's crossing, at normal speed, under the level's score table
 const TALLY_T = 1.4; // the table stays this much longer after the crossing
 const RELIEF_T = 2.4; // a copier who needed the loo too: he steps out, they go in, a flush, a bonus
-const LEVELS_N = 8;
+const RELIEF_FROM = 9; // from level 10, the last follower needs the loo too
 
 const CARS = ['sedan', 'sedan_blue', 'rounded_green', 'rounded_red', 'rounded_yellow', 'station', 'suv', 'suv_green', 'convertible', 'vintage', 'sports_red', 'sports_yellow', 'van_small', 'taxi'];
 const CITY = ['van', 'van_large', 'van_flat', 'taxi', 'bus', 'truckdelivery', 'vendor', 'hotdog', 'suv_large', 'truckdark', 'sedan', 'station', 'taxi'];
@@ -105,18 +102,38 @@ const PAL = {
   night: { sky: '#1d2240', far: '#2c3160', build: ['#3a3f6b', '#2f3459', '#463f6b'], walk: '#8d8a9a', edge: '#6f6c7d', road: '#3a3c4a', line: '#d8d6e6', mid: '#ffc93f', verge: '#4a5a52', dark: 0.35 },
 };
 
-// The eight levels: rows from the far kerb (top) down to the near kerb; 'K' kerb, 'L' lane,
-// 'M' median. Each brings one new thing.
+// The levels: rows from the far kerb (top) down to the near kerb; 'K' kerb, 'L' lane, 'M' median.
+// Levels 1–7 build up the traffic with nobody following; level 8 eases off and brings the first
+// follower; 11 a second, 15 a third; the last five are the hardest.
 const LEVELS = [
+  // Just him.
   { name: 'Quiet Street', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(1, 11, CARS, [50, 100], [2, 3], [5, 7]), L(1, 13, CARS, [50, 100], [2, 3], [5, 7])], pal: PAL.maple },
   { name: 'Both Ways', red: 26, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(-1, 20, CARS, [18, 46], [3, 6], [2, 4]), L(1, 22, CARS, [18, 46], [3, 6], [2, 4])], pal: PAL.maple },
-  { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 16, CITY, [30, 70]), L(-1, 18, CITY, [30, 70]), L(1, 17, CITY, [30, 70]), L(1, 15, CITY, [30, 70])], pal: PAL.market },
-  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 19, HEAVY, [24, 60]), L(-1, 21, CITY, [24, 60]), L(1, 20, CITY, [24, 60]), L(1, 18, HEAVY, [24, 60])], pal: PAL.market },
-  { name: 'Rush Hour', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 20, CITY, [20, 54]), L(-1, 22, CARS, [20, 54]), L(-1, 19, HEAVY, [20, 54]), L(1, 21, CARS, [20, 54]), L(1, 23, CITY, [20, 54])], pal: PAL.school },
-  { name: 'Siren Boulevard', red: 30, copiers: 2, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING, [20, 52]), L(-1, 20, EVENING, [20, 52]), L(-1, 24, EVENING, [20, 52]), L(1, 21, EVENING, [20, 52]), L(1, 23, EVENING, [20, 52])], pal: PAL.evening },
-  { name: 'Old Town', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [20, 54]), L(-1, 24, CARS, [20, 54]), L(-1, 21, CITY, [20, 54]), L(1, 23, CITY, [20, 54]), L(1, 25, CARS, [20, 54])], pal: PAL.school },
+  { name: 'Market Avenue', red: 28, copiers: 0, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 16, CITY, [30, 70]), L(-1, 18, CITY, [30, 70]), L(1, 17, CITY, [30, 70]), L(1, 15, CITY, [30, 70])], pal: PAL.market },
+  { name: 'Bus Lane', red: 28, copiers: 0, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 19, HEAVY, [24, 60]), L(-1, 21, CITY, [24, 60]), L(1, 20, CITY, [24, 60]), L(1, 18, HEAVY, [24, 60])], pal: PAL.market },
+  { name: 'Rush Hour', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 20, CITY, [20, 54]), L(-1, 22, CARS, [20, 54]), L(-1, 19, HEAVY, [20, 54]), L(1, 21, CARS, [20, 54]), L(1, 23, CITY, [20, 54])], pal: PAL.school },
+  { name: 'Siren Boulevard', red: 30, copiers: 0, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING, [20, 52]), L(-1, 20, EVENING, [20, 52]), L(-1, 24, EVENING, [20, 52]), L(1, 21, EVENING, [20, 52]), L(1, 23, EVENING, [20, 52])], pal: PAL.evening },
+  { name: 'Old Town', red: 32, copiers: 0, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [20, 54]), L(-1, 24, CARS, [20, 54]), L(-1, 21, CITY, [20, 54]), L(1, 23, CITY, [20, 54]), L(1, 25, CARS, [20, 54])], pal: PAL.school },
+  // One follower: the traffic eases off for the new idea, then builds again.
+  { name: 'Corner Shop', red: 30, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 15, CARS, [34, 74]), L(-1, 17, CARS, [34, 74]), L(1, 16, CARS, [34, 74]), L(1, 14, CARS, [34, 74])], pal: PAL.maple },
+  { name: 'School Run', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 18, SCHOOL, [26, 62]), L(-1, 20, SCHOOL, [26, 62]), L(1, 19, SCHOOL, [26, 62]), L(1, 17, SCHOOL, [26, 62])], pal: PAL.school },
+  { name: 'Lunch Hour', red: 30, copiers: 1, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 19, CITY, [22, 58]), L(-1, 21, CARS, [22, 58]), L(-1, 18, CITY, [22, 58]), L(1, 20, CARS, [22, 58]), L(1, 22, CITY, [22, 58])], pal: PAL.market },
+  // Two followers.
+  { name: 'Delivery Day', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 20, HEAVY, [22, 56]), L(-1, 22, CITY, [22, 56]), L(1, 21, CITY, [22, 56]), L(1, 19, HEAVY, [22, 56])], pal: PAL.market },
+  { name: 'Evening Commute', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, EVENING, [24, 60]), L(-1, 23, EVENING, [24, 60]), L(-1, 20, EVENING, [24, 60]), L(1, 22, EVENING, [24, 60]), L(1, 24, EVENING, [24, 60])], pal: PAL.evening },
+  { name: 'Sunday Drivers', red: 30, copiers: 2, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, SUNDAY, [20, 52]), L(-1, 24, SUNDAY, [20, 52]), L(-1, 21, SUNDAY, [20, 52]), L(1, 23, SUNDAY, [20, 52]), L(1, 25, SUNDAY, [20, 52])], pal: PAL.maple },
+  { name: 'Town Hall', red: 32, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 23, CITY, [18, 50]), L(-1, 25, CARS, [18, 50]), L(-1, 22, HEAVY, [18, 50]), L(1, 24, CARS, [18, 50]), L(1, 26, CITY, [18, 50])], pal: PAL.school },
+  // Three followers.
+  { name: 'Three in Tow', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, CARS, [22, 56]), L(-1, 23, CARS, [22, 56]), L(1, 22, CITY, [22, 56]), L(1, 20, CITY, [22, 56])], pal: PAL.market },
+  { name: 'Stadium Night', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 23, NIGHT, [18, 50]), L(-1, 25, NIGHT, [18, 50]), L(-1, 22, NIGHT, [18, 50]), L(1, 24, NIGHT, [18, 50]), L(1, 26, NIGHT, [18, 50])], pal: PAL.night },
+  // The hardest five.
   { name: 'Downtown', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'M', 'L', 'L', 'M', 'L', 'K'], lanes: [L(-1, 27, NIGHT, [14, 44]), L(-1, 25, NIGHT, [14, 44]), L(1, 26, NIGHT, [14, 44]), L(1, 28, NIGHT, [14, 44])], pal: PAL.night },
+  { name: 'Ring Road', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 25, CARS, [20, 52]), L(-1, 27, CITY, [20, 52]), L(-1, 24, HEAVY, [20, 52]), L(1, 26, CITY, [20, 52]), L(1, 28, CARS, [20, 52])], pal: PAL.evening },
+  { name: 'Freight Route', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 24, HEAVY, [20, 52]), L(-1, 26, HEAVY, [20, 52]), L(-1, 25, CITY, [20, 52]), L(1, 27, HEAVY, [20, 52]), L(1, 25, HEAVY, [20, 52])], pal: PAL.market },
+  { name: 'Late Shift', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'L', 'K'], lanes: [L(-1, 28, NIGHT, [18, 48]), L(-1, 26, NIGHT, [18, 48]), L(1, 27, NIGHT, [18, 48]), L(1, 29, NIGHT, [18, 48]), L(1, 26, NIGHT, [18, 48])], pal: PAL.night },
+  { name: 'Grand Avenue', red: 34, copiers: 3, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 28, CITY, [18, 48]), L(-1, 30, CARS, [18, 48]), L(-1, 27, HEAVY, [18, 48]), L(1, 29, CARS, [18, 48]), L(1, 30, CITY, [18, 48])], pal: PAL.evening },
 ];
+const LEVELS_N = LEVELS.length;
 
 
 // Shirt colours for the crowd: [light, shade].
@@ -284,7 +301,7 @@ function walkTo(p, x, y, dur) {
   p.walkFrame ^= 1;
 }
 
-// Copiers stand beside his starting column; the crowd waits on the rest of the crossing.
+// Followers stand beside his starting column; the crowd waits on the rest of the crossing.
 const copierCols = () => [PCOL - 1, PCOL + 1, PCOL + 2];
 const crowdCols = () => [CROSS_C0, CROSS_C1 - 1, PCOL - 1, PCOL + 1, PCOL + 2]; // clear of the walk light
 
@@ -307,6 +324,8 @@ function setupLevel(idx) {
   game.greenWalk = false;
   game.relieved = 0;
   game.out = false;
+  game.trail = [{ t: -Infinity, col: PCOL, row: layout.bottom }]; // where he has stood, and since when
+  game.stuck = false;
   // Lanes start staggered: neighbours never in the same phase.
   layout.lanes.forEach((ln, i) => {
     ln.phase = i % 2 === 0 ? 'on' : 'off';
@@ -326,10 +345,16 @@ function setupLevel(idx) {
   player.vy = player.fy = f.y;
   player.tw = 1;
   // The copiers stand at the kerb's edge beside him; the crowd waits behind.
+  // Who follows him is down to chance: any of the people beside him.
+  const cols = copierCols().slice();
+  for (let i = cols.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [cols[i], cols[j]] = [cols[j], cols[i]];
+  }
   for (let i = 0; i < s.copiers; i++) {
-    const p = makePerson('copier', copierCols()[i], layout.bottom);
+    const p = makePerson('copier', cols[i], layout.bottom);
     p.order = i;
-    p.urgent = idx >= 4 && i === s.copiers - 1; // from level 5, the last copier needs the loo too
+    p.urgent = idx >= RELIEF_FROM && i === s.copiers - 1; // from level 10, the last follower needs the loo too
     const g = cellFeet(p.col, p.row);
     place(p, g.x, g.y);
     people.push(p);
@@ -380,28 +405,44 @@ function laneBusy(col, row, t) {
   return false;
 }
 
-// A copier may go to a row the player has reached, never past him (copying, not leading); they
-// may share a safe strip with him.
-function copierMayEnter(row) {
-  if (player.row === 0 || player.inside) return true;
-  if (row > player.row) return true;
-  return row === player.row && isSafe(row);
+// Where he stood `ago` seconds ago.
+function trailAt(ago) {
+  const t = game.time - ago;
+  let at = game.trail[0];
+  for (const e of game.trail) {
+    if (e.t > t) break;
+    at = e;
+  }
+  return at;
 }
 
+// Every move he makes goes on his trail; a knock back to the last safe strip takes the trail back
+// there too, so his followers walk back with him instead of into the car.
+function markTrail(back = false) {
+  if (back) {
+    let i = game.trail.length - 1;
+    while (i > 0 && game.trail[i].row !== player.row) i--; // the last time he was on that strip
+    game.trail.length = Math.max(1, i + 1);
+  }
+  game.trail.push({ t: game.time, col: player.col, row: player.row });
+}
+
+// Followers: as he steps off the kerb, the people beside him stick to him and from then on walk
+// in his footsteps, each where he was FOLLOW_LAG s before the one ahead of them. They don't look
+// at the traffic: they trust him. While he is down they wait.
 function updateCopiers(dt) {
-  const out = layout.bottom - player.row; // how far out the player is
+  if (!game.stuck && player.row < layout.bottom) {
+    game.stuck = true;
+    for (const p of people) {
+      if (p.kind !== 'copier' || p.state !== 'wait') continue;
+      p.state = 'go';
+      p.hopT = 0;
+      popups.push({ x: colX(p.col), y: cellFeet(p.col, p.row).y - 22, text: '!', t: 0, color: '#ffffff', big: true });
+    }
+    sfx('join', { rate: rand(0.95, 1.1), gain: 0.6 });
+  }
   for (const p of people) {
     if (p.kind !== 'copier') continue;
-    if (p.state === 'wait') {
-      // They see you go and copy you, one after another.
-      if (out >= COP_START && p.startAt === Infinity) p.startAt = game.time + p.order * COP_STAGGER;
-      if (game.time >= p.startAt) {
-        p.state = 'go';
-        p.hopT = 0;
-        sfx('join', { rate: rand(0.95, 1.1), gain: 0.6 });
-      }
-      continue;
-    }
     if (p.state === 'down') {
       p.downT -= dt;
       if (p.downT <= 0) {
@@ -413,34 +454,22 @@ function updateCopiers(dt) {
       }
       continue;
     }
-    if (p.state !== 'go') continue;
+    if (p.state !== 'go' || player.down > 0) continue;
     p.hopT -= dt;
     if (p.hopT > 0) continue;
-    const next = p.row - 1;
-    if (!copierMayEnter(next)) {
-      p.hopT = 0.1;
-      continue;
-    }
-    if (isLane(next) && (game.mode === 'play' || game.mode === 'finish')) {
-      // Looking before stepping: careful from safe ground; in the road, they wait a little while
-      // the next lane is about to be hit and their own spot isn't, then go anyway.
-      if (isSafe(p.row)) {
-        if (laneBusy(p.col, next, COP_LOOK)) {
-          p.hopT = 0.1;
-          continue;
-        }
-      } else if (laneBusy(p.col, next, COP_HOP + 0.15) && !laneBusy(p.col, p.row, 0.4) && p.dare < COP_DARE) {
-        p.dare += 0.1;
-        p.hopT = 0.1;
-        continue;
-      }
-    }
-    p.dare = 0;
-    p.row = next;
-    const g = cellFeet(p.col, next);
-    walkTo(p, g.x, g.y, COP_HOP * 0.6);
-    p.hopT = COP_HOP;
-    if (next === 0) arrive(p);
+    const want = trailAt(FOLLOW_LAG * (p.order + 1));
+    if (want.col === p.col && want.row === p.row) continue;
+    // One cell at a time towards where he was: along the row first on a kerb or island, else up or down.
+    let col = p.col;
+    let row = p.row;
+    if (want.row !== row && !(isSafe(row) && want.col !== col)) row += Math.sign(want.row - row);
+    else col += Math.sign(want.col - col);
+    p.col = col;
+    p.row = row;
+    const g = cellFeet(col, row);
+    walkTo(p, g.x + [-4, 4, -7][p.order % 3], g.y, HOP_TWEEN); // a little to the side, so they don't hide behind him
+    p.hopT = FOLLOW_STEP;
+    if (row === 0) arrive(p);
   }
 }
 
@@ -504,6 +533,7 @@ function movePlayer(row, col = player.col) {
   player.tw = 0;
   player.walkFrame ^= 1;
   if (isSafe(row)) player.lastSafe = row;
+  markTrail();
 }
 
 function bump() {
@@ -525,6 +555,7 @@ function updatePlayer(dt) {
       // Back on the last safe strip.
       player.down = 0;
       player.row = player.lastSafe;
+      markTrail(true);
       const f = cellFeet(player.col, player.row);
       player.fx = player.vx = f.x;
       player.fy = player.vy = f.y;
@@ -1840,11 +1871,15 @@ function drawText() {
   if (game.mode === 'play' && street().copiers > 0) {
     const m = 1 + acrossCount() + onTheWayCount();
     const secs = Math.max(0, Math.ceil(game.red));
-    ctx.font = `800 ${Math.round(12 * dpr)}px system-ui, sans-serif`;
-    // As much as fits between the porta-potty and the right edge.
+    // Between the porta-potty and the right edge: a smaller font where the words would not fit.
     const room = right - (offX + (colX(LOO_COL) + 8 + originX) * k);
-    let text = `${secs} s × ${headcount(m)} = ${m * secs}`;
-    if (ctx.measureText(text).width + 12 * dpr > room) text = `${secs} s × ${m} = ${m * secs}`;
+    const text = `${secs} s × ${headcount(m)} = ${m * secs}`;
+    let size = 12;
+    ctx.font = `800 ${Math.round(size * dpr)}px system-ui, sans-serif`;
+    while (size > 8 && ctx.measureText(text).width + 12 * dpr > room) {
+      size -= 0.5;
+      ctx.font = `800 ${Math.round(size * dpr)}px system-ui, sans-serif`;
+    }
     const yk = rowY(0) - WAIT_H - 12;
     const w = ctx.measureText(text).width + 12 * dpr;
     const h = 20 * dpr;
@@ -1983,7 +2018,8 @@ sheet.decode().then(
       DOOR_T,
       YELLOW_AT,
       RED_AT,
-      COP_START,
+      FOLLOW_LAG,
+      trailAt,
       startGame,
       startLevel,
       showStart,
@@ -2010,6 +2046,7 @@ sheet.decode().then(
       put: (row) => {
         player.row = row;
         if (isSafe(row)) player.lastSafe = row;
+        markTrail();
         player.tw = 1;
         const f = cellFeet(player.col, row);
         player.vx = player.fx = f.x;
