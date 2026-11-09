@@ -475,12 +475,14 @@ let musicName = '';
 // celebrates as loudly as the lights do.
 const MUSIC_GAIN = { music: 0.24, frenzy: 0.6 };
 let musicSpeed = 1;
+let musicGain = 0; // the gain the playing loop was started with (for the tests)
 function music(name) {
   if (musicName === name) return;
   if (stopMusic) stopMusic();
   musicName = name;
   musicSpeed = 1;
-  stopMusic = name ? sound.loop(name, { gain: MUSIC_GAIN[name] }) : null;
+  musicGain = name ? MUSIC_GAIN[name] : 0;
+  stopMusic = name ? sound.loop(name, { gain: musicGain }) : null;
 }
 // The waltz speeds up as the round runs out: a little at 10 s, more at 5 s, most in the last 3.
 function musicTempo() {
@@ -2461,7 +2463,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, MUSIC_GAIN, frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

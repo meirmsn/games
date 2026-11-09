@@ -1531,16 +1531,20 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
       g.step(1 / 60);
       out[key] = g.musicSpeed();
     }
+    out.waltz = g.musicNow();
     g.game.time = 2.5;
     g.startFrenzy();
     g.step(1 / 60);
     out.frenzy = g.musicSpeed();
-    return { ...out, gains: g.MUSIC_GAIN };
+    out.galop = g.musicNow();
+    return out;
   });
   assert.equal(r.at20, 1, 'the usual tempo');
   assert.ok(r.at10 > 1 && r.at5 > r.at10 && r.at3 > r.at5, `faster at 10, 5 and 3 s: ${r.at10}, ${r.at5}, ${r.at3}`);
   assert.equal(r.frenzy, 1, 'the galop at its own tempo');
-  assert.ok(r.gains.frenzy >= 2 * r.gains.music, `the galop is louder: ${JSON.stringify(r.gains)}`);
+  assert.equal(r.waltz.name, 'music');
+  assert.equal(r.galop.name, 'frenzy');
+  assert.ok(r.galop.gain >= 2 * r.waltz.gain, `the galop is started louder: ${JSON.stringify([r.waltz, r.galop])}`);
   // A new round starts the waltz at its usual tempo again.
   const next = await page.evaluate(() => {
     const g = window.__gallery;
@@ -1557,9 +1561,15 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
     const stop = s.loop('tune');
     stop.setRate(1.3);
     await new Promise((res) => setTimeout(res, 600));
+    const startedAt = window.__played.filter((p) => p.rate !== 1).map((p) => p.rate);
+    // And one already playing changes speed at once.
+    const src = window.__sources[window.__sources.length - 1];
+    stop.setRate(1.45);
+    const playing = src.playbackRate.value;
     stop();
-    return window.__played.filter((p) => p.rate !== 1).map((p) => p.rate);
+    return { startedAt, playing };
   });
-  assert.ok(rate.includes(1.3), `the loop plays at 1.3: ${rate}`);
+  assert.ok(rate.startedAt.includes(1.3), `a loop set faster starts at that rate: ${rate.startedAt}`);
+  assert.equal(rate.playing, 1.45, 'a playing loop changes speed');
   await context.close();
 });
