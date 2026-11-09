@@ -21,6 +21,7 @@
 // canvas, then scaled up with smoothing off; text goes on the full-resolution canvas on top.
 import { mountShell } from '../shared/game-shell.js';
 import { FRAMES } from './atlas.js';
+import { GLYPHS, STAR } from './pixel-font.js';
 
 const { sound } = mountShell({
   sounds: {
@@ -1647,21 +1648,8 @@ function drawPerson(p, isPlayer = false) {
   }
 }
 
-// A 3×5 pixel font: the countdown's digits, and the letters for the score table.
-const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
-const GLYPHS = {
-  A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
-  F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010',
-  K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010',
-  P: '110101110100100', '>': '100010001010100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
-  U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010',
-  Z: '111001010100111', '+': '000010111010000', '-': '000000111000000', '.': '000000000000010', '!': '010010010000010',
-};
-const STAR = ['00100', '01110', '11111', '01110', '01010'];
-function glyphOf(c) {
-  if (c >= '0' && c <= '9') return DIGITS[+c];
-  return GLYPHS[c.toUpperCase()] || null;
-}
+// The 3×5 pixel font (walk-on-red/pixel-font.js): the countdown, the score table, the labels.
+const glyphOf = (c) => GLYPHS[c.toUpperCase()] || null;
 const pixWidth = (text, k = 1) => text.length * 4 * k - k;
 function pixText(text, x, y, color, k = 1) {
   lctx.fillStyle = color;
@@ -1748,7 +1736,7 @@ function drawDigits(n, x, y, color) {
   const s = String(n);
   lctx.fillStyle = color;
   for (let i = 0; i < s.length; i++) {
-    const d = DIGITS[+s[i]];
+    const d = GLYPHS[s[i]];
     for (let k = 0; k < 15; k++) if (d[k] === '1') lctx.fillRect(x + i * 4 + (k % 3), y + Math.floor(k / 3), 1, 1);
   }
 }
@@ -1900,6 +1888,7 @@ function draw() {
     lctx.fillStyle = `rgba(10,12,40,${pal.dark * 0.5})`;
     lctx.fillRect(0, 0, LW, py(rowY(0)) - WAIT_H - 30);
   }
+  drawWorth();
   drawPopups();
   drawResult();
   if (game.paused) {
@@ -1920,54 +1909,33 @@ function draw() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   ctx.drawImage(low, 0, 0, LW, LH, offX + sx, sy, LW * scale * dpr, LH * scale * dpr);
-  drawText();
 }
 
-function drawText() {
-  const k = scale * dpr;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  const right = offX + LW * k - 6 * dpr;
-  // What the level is worth right now: the seconds left × (1 + copiers across or on the way).
-  if (game.mode === 'play' && street().copiers > 0) {
-    const m = 1 + acrossCount() + onTheWayCount();
-    const secs = Math.max(0, Math.ceil(game.red));
-    // Between the porta-potty and the right edge: a smaller font where the words would not fit.
-    const room = right - (offX + (colX(LOO_COL) + 8 + originX) * k);
-    const text = `${secs} s × ${headcount(m)} = ${m * secs}`;
-    let size = 12;
-    ctx.font = `800 ${Math.round(size * dpr)}px system-ui, sans-serif`;
-    while (size > 8 && ctx.measureText(text).width + 12 * dpr > room) {
-      size -= 0.5;
-      ctx.font = `800 ${Math.round(size * dpr)}px system-ui, sans-serif`;
-    }
-    const yk = rowY(0) - WAIT_H - 12;
-    const w = ctx.measureText(text).width + 12 * dpr;
-    const h = 20 * dpr;
-    const x = right + 2 * dpr - w / 2; // at the right edge, clear of the porta-potty
-    const y = (yk + originY) * k;
-    ctx.fillStyle = 'rgba(20,22,31,0.62)';
-    roundRect(x - w / 2, y - h / 2, w, h, h / 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffd23f';
-    ctx.fillText(text, x, y + dpr);
-    drawn.payout = text;
-    drawn.payoutClear = x - w / 2 >= right - room; // its left end clear of the porta-potty
-  } else drawn.payout = null;
+// What the level is worth right now, in pixels at the top right of the sky, above the walk light:
+// the seconds left × (1 + followers across or on the way).
+function drawWorth() {
+  if (!(game.mode === 'play' && street().copiers > 0)) {
+    drawn.payout = null;
+    return;
+  }
+  const m = 1 + acrossCount() + onTheWayCount();
+  const secs = Math.max(0, Math.ceil(game.red));
+  const lines = [`${secs} S`, `X ${headcount(m).toUpperCase()}`, `= ${m * secs}`];
+  const w = Math.max(...lines.map((l) => pixWidth(l))) + 4;
+  const h = lines.length * 7 + 3;
+  const x = LW - 2 - w;
+  const y = py(rowY(0)) - WAIT_H - 5 - h;
+  lctx.fillStyle = '#1b1e29';
+  lctx.fillRect(x, y, w, h);
+  lctx.fillStyle = '#3a3f55';
+  lctx.fillRect(x, y + h, w, 1);
+  lines.forEach((l, i) => pixText(l, x + w - 2 - pixWidth(l), y + 2 + i * 7, i === 2 ? '#ffd23f' : '#f4f1e8'));
+  drawn.payout = `${secs} s × ${headcount(m)} = ${m * secs}`;
+  drawn.payoutClear = x >= px(colX(LOO_COL)) + 7; // clear of the porta-potty
 }
 
 const headcount = (n) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
 
 // ---------- HUD ----------
 

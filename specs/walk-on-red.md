@@ -110,7 +110,9 @@ of the traffic." After playing that, the owner said (2026-11-09): "It's feeling 
 the amount of people that follow you and all those points, that should also look 8-bit … if they
 hit you in the middle … You should start from the beginning … if they hit an NPC, that NPC should
 disappear. It shouldn't go back. If the game restarts because they hit you, then okay, they all
-start from the bottom." This spec is the game after those changes.
+start from the bottom." Then (2026-11-09): "The UI showing you on the beginning of the game and also
+showing you the level names, those should also be 8-bit … if we have anything else that is not
+8-bit, we should also make it." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -190,8 +192,8 @@ goes now, and the people waiting start copying him.
   on. The start card says nothing about points: the first level's score table teaches it (owner,
   2026-11-09: "It should be intuitive from you finishing … the first level, and seeing how the points
   are being computed"). While a level with followers is played, what it is worth right now ("14 s × 3
-  people = 42", in a smaller font where it would not fit beside the porta-potty) shows at the
-  right of the sky; each follower who arrives shows the new multiplier ("×2", "×3") over their head; the
+  people = 42") shows at the top right of the sky, above the walk light, in three pixel lines
+  ("14 S", "X 3 PEOPLE", "= 42"); each follower who arrives shows the new multiplier ("×2", "×3") over their head; the
   count-up says "× 3 people". When the walk light turns green, the level's **score table** shows over
   the crossing, plain lines that add up: "24 SECONDS 24", "2 FOLLOWED YOU +48" (each worth the
   seconds again), "1 RELIEVED TOO +24" (below), then the total "+96" and the level's stars (owner,
@@ -199,6 +201,15 @@ goes now, and the people waiting start copying him.
   pop-ups ("!", "×2", "+24") are drawn on the street in its own pixels, in a 3×5 pixel font with a
   square box and a one-pixel border, not in smooth type; the table's words stay in the page for
   screen readers (owner, 2026-11-09: "that should also look 8-bit").
+- **The 8-bit look, everywhere:** the page's own text and boxes (the start card, the level's
+  banner, the HUD, the paused and game-over cards, the mute button, and, for this game, the shared
+  back button and "Leave this level?" question) use the same 3×5 pixel alphabet as the street,
+  built into a font (`walk-on-red/fonts/pixel.otf`, from `walk-on-red/pixel-font.js` by
+  `scripts/walk-on-red/make-font.mjs`), at whole-pixel sizes, in square boxes with a solid border
+  and a hard shadow, with no blur or rounding; animations step rather than glide; the mute and
+  back icons are pixel art. They stay page text and buttons, so taps, keys and screen readers work
+  as before (owner, 2026-11-09: "those should also be 8-bit … if we have anything else that is not
+  8-bit, we should also make it").
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
@@ -381,6 +392,9 @@ goes now, and the people waiting start copying him.
 - **AC-24** From level 10 the last follower needs the loo too: of the crowd only they hop from foot to foot;
   across, once the fast-forward ends, he steps out, they go in, a flush, and the seconds count once
   more — `tests/walk-on-red.test.mjs`.
+- **AC-25** The page's text and boxes are 8-bit like the street: the pixel font loads, and the start
+  and paused cards, the banner, the HUD, the Start, mute and back buttons use it, square, with no
+  blur — `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 

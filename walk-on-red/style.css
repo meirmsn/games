@@ -1,9 +1,33 @@
-/* Walk on Red: the street canvas fills the screen; the HUD and cards float over it. */
+/* Walk on Red: the street canvas fills the screen; the HUD and cards float over it. Everything is
+   in the street's own 8-bit look: the game's pixel font (fonts/pixel.otf, made from pixel-font.js),
+   square boxes with solid borders and hard shadows, no blur and no rounding. The font's pixel is
+   1/8 em, so sizes are multiples of 8px to keep every pixel whole. */
+
+@font-face {
+  font-family: 'Walk on Red Pixel';
+  src: url('fonts/pixel.otf') format('opentype');
+  font-display: block;
+}
+
+:root {
+  --ink: #1b1e29;
+  --line: #f4f1e8;
+  --shade: #000;
+  --gold: #ffd23f;
+  --gold-dark: #b38a00;
+  --dim: #c9ccd6;
+  --go: #5ae17c;
+}
 
 body {
   background: #2b2f3a;
-  color: #fff;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--line);
+  font-family: 'Walk on Red Pixel', ui-monospace, monospace;
+  font-size: 16px;
+  line-height: 1;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
 }
 
 #street {
@@ -16,6 +40,21 @@ body {
   cursor: pointer;
 }
 
+/* A pixel box: solid fill, a light border and a hard shadow. */
+.mute,
+.hud,
+.banner,
+.card,
+.shell-back,
+.shell-leave {
+  border: 3px solid var(--line);
+  border-radius: 0;
+  background: var(--ink);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 3px 3px 0 var(--shade);
+}
+
 .mute {
   position: fixed;
   z-index: 10;
@@ -26,13 +65,8 @@ body {
   display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
-  border-radius: 999px;
-  color: #fff;
-  background: rgb(20 22 31 / 55%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  font: inherit;
+  color: var(--line);
   cursor: pointer;
 }
 
@@ -40,10 +74,7 @@ body {
   width: 22px;
   height: 22px;
   fill: currentColor;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  shape-rendering: crispEdges;
 }
 
 .mute .i-off,
@@ -55,8 +86,58 @@ body {
   display: block;
 }
 
-.mute:active {
-  transform: scale(0.92);
+.mute:active,
+.shell-back:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--shade);
+}
+
+/* The shared back button, in this game's look: a pixel arrow instead of the smooth one. */
+.shell-back {
+  box-sizing: border-box;
+  color: var(--line);
+  transition: none;
+}
+
+.shell-back svg {
+  display: none;
+}
+
+.shell-back::before {
+  content: '<';
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* The shared "Leave this level?" question, in this game's look. */
+.shell-leave {
+  color: var(--line);
+  font-family: 'Walk on Red Pixel', ui-monospace, monospace;
+}
+
+.shell-leave-title {
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.shell-leave-text {
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+
+.shell-leave-actions button {
+  border: 3px solid var(--shade);
+  border-radius: 0;
+  font-size: 16px;
+  font-weight: 400;
+  box-shadow: 3px 3px 0 var(--shade);
+}
+
+.shell-leave-stay {
+  color: var(--ink);
+  background: var(--line);
 }
 
 /* HUD: between the back and mute buttons, clear of the notch. */
@@ -69,16 +150,12 @@ body {
   max-width: 460px;
   margin: 0 auto;
   height: 44px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: rgb(20 22 31 / 55%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  padding: 0 10px;
   pointer-events: none;
-  font-variant-numeric: tabular-nums;
 }
 
 .hud[hidden] {
@@ -92,33 +169,29 @@ body {
 
 .street-name {
   overflow: hidden;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 16px;
   white-space: nowrap;
-  text-overflow: ellipsis;
-  opacity: 0.92;
+  text-overflow: clip;
 }
 
 .quota {
   height: 6px;
-  margin-top: 4px;
+  margin-top: 5px;
   overflow: hidden;
-  border-radius: 999px;
-  background: rgb(255 255 255 / 22%);
+  border: 1px solid var(--dim);
+  background: transparent;
 }
 
 .quota-fill {
   display: block;
   width: 0;
   height: 100%;
-  border-radius: 999px;
-  background: #5ae17c;
-  transition: width 200ms ease;
+  background: var(--go);
 }
 
 .score {
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 24px;
+  color: var(--gold);
 }
 
 .banner {
@@ -127,14 +200,10 @@ body {
   left: 50%;
   top: 38%;
   transform: translate(-50%, -50%);
-  padding: 16px 28px;
+  padding: 14px 20px;
   text-align: center;
-  border-radius: 20px;
-  background: rgb(20 22 31 / 66%);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   pointer-events: none;
-  animation: pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: pop 240ms steps(3, end);
 }
 
 .banner[hidden] {
@@ -147,6 +216,8 @@ body {
   height: 1px;
   padding: 0;
   overflow: hidden;
+  border: 0;
+  box-shadow: none;
   clip-path: inset(50%);
   white-space: nowrap;
   animation: none;
@@ -157,20 +228,15 @@ body {
 }
 
 .banner-num {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  opacity: 0.8;
+  font-size: 16px;
+  color: var(--dim);
 }
 
-/* The level's score: what it was made of, line by line, then the total below. */
+/* The level's score, for screen readers (it is drawn on the street). */
 .tally {
   margin: 10px auto 2px;
   border-collapse: collapse;
-  font-size: 15px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  font-size: 16px;
 }
 
 .tally[hidden] {
@@ -184,16 +250,15 @@ body {
 }
 
 .tally td + td {
-  padding-left: 18px;
+  padding-left: 16px;
   text-align: right;
-  color: #ffd23f;
+  color: var(--gold);
 }
 
 .banner-name {
-  margin-top: 4px !important;
-  font-size: 30px;
-  font-weight: 800;
-  color: #ffd23f;
+  margin-top: 8px !important;
+  font-size: 32px;
+  color: var(--gold);
   white-space: nowrap;
 }
 
@@ -205,14 +270,9 @@ body {
   transform: translate(-50%, -50%);
   width: min(320px, calc(100vw - 32px));
   box-sizing: border-box;
-  padding: 22px 20px 18px;
+  padding: 20px 16px 16px;
   text-align: center;
-  border-radius: 24px;
-  background: rgb(20 22 31 / 66%);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgb(0 0 0 / 30%);
-  animation: rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: rise 240ms steps(3, end);
 }
 
 .card[hidden] {
@@ -221,26 +281,26 @@ body {
 
 .card h1,
 .card h2 {
-  margin: 0 0 10px;
-  font-size: 34px;
+  margin: 0 0 14px;
+  font-size: 32px;
+  font-weight: 400;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: #ffd23f;
+  color: var(--gold);
+  text-shadow: 3px 3px 0 var(--shade);
 }
 
 .card p {
-  margin: 0 0 12px;
-  line-height: 1.4;
+  margin: 0 0 14px;
+  line-height: 1.5;
 }
 
 .detail {
-  font-size: 14px;
-  opacity: 0.85;
+  font-size: 16px;
+  color: var(--dim);
 }
 
 .score-line {
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
 }
 
 /* The start card sits low, so the street stays in view above it. */
@@ -255,63 +315,39 @@ body {
   min-width: 160px;
   min-height: 52px;
   margin: 4px 0;
-  padding: 0 28px;
-  border: 0;
-  border-radius: 999px;
+  padding: 0 24px;
+  border: 3px solid var(--shade);
+  border-radius: 0;
   font: inherit;
-  font-size: 19px;
-  font-weight: 700;
-  color: #3b2a00;
-  background: #ffd23f;
-  box-shadow: 0 4px 0 #d9a800;
+  font-size: 24px;
+  color: var(--ink);
+  background: var(--gold);
+  box-shadow: 0 4px 0 var(--gold-dark), 3px 7px 0 var(--shade);
   cursor: pointer;
-  transition: transform 100ms ease, box-shadow 100ms ease;
 }
 
 .play:active {
   transform: translateY(3px);
-  box-shadow: 0 1px 0 #d9a800;
+  box-shadow: 0 1px 0 var(--gold-dark), 3px 4px 0 var(--shade);
+}
+
+.play:focus-visible,
+.mute:focus-visible,
+.shell-back:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
 }
 
 .lead {
-  margin: 0 0 12px !important;
-  font-size: 15px;
-  opacity: 0.9;
+  margin: 0 0 16px !important;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .best {
-  margin: 10px 0 0 !important;
-  font-size: 14px;
-  opacity: 0.85;
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.chips[hidden] {
-  display: none;
-}
-
-.chip {
-  min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid rgb(255 255 255 / 35%);
-  border-radius: 999px;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  background: rgb(255 255 255 / 10%);
-  cursor: pointer;
-}
-
-.chip:active {
-  transform: scale(0.95);
+  margin: 12px 0 0 !important;
+  font-size: 16px;
+  color: var(--dim);
 }
 
 @keyframes rise {

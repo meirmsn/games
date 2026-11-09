@@ -1094,3 +1094,32 @@ test('walk-on-red AC-24: from level 10 the last follower needs the loo too: only
   assert.equal(r.score, r.secs * 4, 'the seconds once more for them');
   await context.close();
 });
+
+test('walk-on-red AC-25: the page is 8-bit too: the game’s pixel font, square boxes, no blur', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => document.fonts.ready);
+  const r = await page.evaluate(() => {
+    window.__walkOnRed.startGame(0);
+    window.__walkOnRed.pause();
+    const look = (sel) => {
+      const cs = getComputedStyle(document.querySelector(sel));
+      return { font: cs.fontFamily.includes('Walk on Red Pixel'), radius: cs.borderTopLeftRadius, blur: cs.backdropFilter };
+    };
+    return {
+      loaded: document.fonts.check('16px "Walk on Red Pixel"'),
+      start: look('[data-screen="start"]'),
+      paused: look('[data-screen="paused"]'),
+      banner: look('[data-banner]'),
+      hud: look('[data-hud]'),
+      play: look('[data-play]'),
+      mute: look('[data-mute]'),
+      back: look('.shell-back'),
+    };
+  });
+  assert.ok(r.loaded, 'the pixel font loads');
+  for (const [what, l] of Object.entries(r)) {
+    if (what === 'loaded') continue;
+    assert.deepEqual(l, { font: true, radius: '0px', blur: 'none' }, what);
+  }
+  await context.close();
+});

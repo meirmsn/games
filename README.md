@@ -19,7 +19,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 | `reef/` | **Reef**, the fish game. Its sprite atlas is built from the Fish Pack SVGs by `scripts/reef/build-atlas.mjs` |
 | `runes/` | **Runes**, the puzzle (`specs/runes.md`). `rules.js` holds the rules and the solver; `levels.js` the levels, picked from `scripts/runes/generate.mjs` and checked with `scripts/runes/lab.mjs`; `scripts/runes/make-tile.mjs` draws its landing tile |
 | `orbit/` | **Orbit**, the gravity game. `orbit/physics.js` is shared with `scripts/orbit/solve.mjs`, which measures every leg headless while tuning; `scripts/orbit/make-tile.mjs` draws its tile from the game |
-| `walk-on-red/` | **Walk on Red**, the lane-crossing game on the Pixel Vehicle Pack. Its frame list comes from the pack's spritesheet (`scripts/walk-on-red/build-atlas.mjs`), and its tile is drawn from the game (`scripts/walk-on-red/make-tile.mjs`) |
+| `walk-on-red/` | **Walk on Red**, the lane-crossing game on the Pixel Vehicle Pack. Its frame list comes from the pack's spritesheet (`scripts/walk-on-red/build-atlas.mjs`), its tile is drawn from the game (`scripts/walk-on-red/make-tile.mjs`), and its pixel font (`walk-on-red/fonts/pixel.otf`) is built from `walk-on-red/pixel-font.js` by `scripts/walk-on-red/make-font.mjs` |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
