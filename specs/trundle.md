@@ -117,6 +117,11 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   neither kick passes on its own; one star glints near the demo kick's path. Each room's recorded
   solution is the three-star layout that most often still takes all three when one part is moved a
   step or turned 15° (Claude, 2026-11-09).
+- Changed after the go, approved by the owner in the session's chat on 2026-11-09 ("Approve
+  both"): AC-8's room 4 has a blue flap hinged at its top that swings when the ball hits it, in
+  place of a spinner that turns (a centre-pinned spinner didn't resist the ball, so the room held
+  no choice); AC-1's test is in `tests/trundle.test.mjs` instead of `tests/site.test.mjs`, which
+  keeps the batch's shared edits small (owner, 2026-11-09).
 - Sound: Kenney's impact, interface, digital and jingle sounds, converted to MP3 (Safari plays no
   OGG), under the site-wide mute; an impact sounds at most once per pair of bodies every 100 ms
   (Claude, 2026-11-09).
