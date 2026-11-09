@@ -1004,13 +1004,12 @@ function drawGround(range, items) {
 }
 
 
-function drawBlock(i, j, tt) {
-  const w = S.world;
+function drawBlock(i, j, tt, at = (x, y) => tileAt(S.world, x, y)) {
   const z = LIFT[tt];
   const top = tt === GRASS ? C.grass : C.sand;
   // Side faces where the neighbour in front is lower.
-  const right = tileAt(w, i + 1.5, j + 0.5);
-  const left = tileAt(w, i + 0.5, j + 1.5);
+  const right = at(i + 1.5, j + 0.5);
+  const left = at(i + 0.5, j + 1.5);
   const zr = right >= SAND ? LIFT[right] : -3;
   const zl = left >= SAND ? LIFT[left] : -3;
   if (zr < z) {
@@ -1703,7 +1702,75 @@ const safeTop = () => safe.top;
 const safeRight = () => safe.right;
 void cssVar;
 
+// The landing tile's picture (scripts/high-seas/make-tile.mjs): an islet with palms, the galleon,
+// and the dinghy running under its spinnaker, on a pool of sea, with the page's background clear.
+function drawVignette() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const z = (cam.w / 330) * 0.66;
+  const centre = iso.toScreen(4.6, 4.0);
+  ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (cam.w / 2 - centre.x * z), dpr * (cam.h / 2 - centre.y * z - 14));
+  // A pool of sea that fades out at its rim.
+  const c = iso.toScreen(4.7, 4.4);
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(1, 0.5);
+  const grad = ctx.createRadialGradient(0, 0, 60, 0, 0, 215);
+  grad.addColorStop(0, C.deep);
+  grad.addColorStop(0.75, 'rgba(74,159,208,0.9)');
+  grad.addColorStop(1, 'rgba(74,159,208,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, 215, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  const land = { '3,2': SAND, '4,2': SAND, '2,3': SAND, '3,3': GRASS, '4,3': SAND, '3,4': SAND, '2,4': SAND };
+  const at = (x, y) => land[`${Math.floor(x)},${Math.floor(y)}`] ?? DEEP;
+  for (let j = 1; j <= 5; j++)
+    for (let i = 1; i <= 5; i++) {
+      const t = at(i + 0.5, j + 0.5);
+      if (t !== DEEP) continue;
+      let nearLand = false;
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) nearLand = nearLand || at(i + di + 0.5, j + dj + 0.5) >= SAND;
+      if (!nearLand) continue;
+      tilePath(i, j, 0);
+      ctx.fillStyle = C.shallow;
+      ctx.fill();
+      ctx.strokeStyle = C.shallow;
+      ctx.stroke();
+    }
+  const items = [];
+  for (const [k, t] of Object.entries(land)) {
+    const [i, j] = k.split(',').map(Number);
+    items.push({ depth: iso.depth(i + 0.5, j + 0.5), draw: () => drawBlock(i, j, t, at) });
+  }
+  items.push({ depth: onTile(3.4, 3.3, 1), draw: () => sprite('tree168', 3.4, 3.3, 0.62, LIFT[GRASS]) });
+  items.push({ depth: onTile(3.8, 2.4, 1), draw: () => sprite('tree167', 3.8, 2.4, 0.55, LIFT[SAND]) });
+  items.push({ depth: onTile(2.5, 4.4, 1), draw: () => sprite('tree169', 2.5, 4.4, 0.5, LIFT[SAND]) });
+  items.push({ depth: iso.depth(6.4, 2.6, 1), draw: () => drawGalleon(6.6, 3.0, Math.PI) });
+  const b = { x: 5.0, y: 6.2 };
+  items.push({
+    depth: iso.depth(b.x, b.y, 1),
+    draw: () => {
+      for (let k = 1; k <= 7; k++) {
+        const w = { x: b.x - k * 0.22, y: b.y + k * 0.05, h: -0.25, age: k * 0.18, v: 1 };
+        const spread = 0.1 + w.age * 0.35;
+        const a = iso.toScreen(w.x - Math.sin(w.h) * spread, w.y + Math.cos(w.h) * spread);
+        const q = iso.toScreen(w.x + Math.sin(w.h) * spread, w.y - Math.cos(w.h) * spread);
+        ctx.fillStyle = `rgba(255,255,255,${0.6 * (1 - k / 8)})`;
+        ctx.beginPath();
+        ctx.ellipse(a.x, a.y, 2.2, 1.2, 0, 0, Math.PI * 2);
+        ctx.ellipse(q.x, q.y, 2.2, 1.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      drawDinghy(ctx, iso, b.x, b.y, { heading: -0.25, heel: 0.12, boom: 1.25, fill: 1, luff: 0, t: 0, keel: true, spinnaker: true, spinFill: 1, cargo: [{ colour: '#e8604c' }], vane: { x: 0.9, y: -0.3 } }, ZS);
+    },
+  });
+  for (const it of sortByDepth(items)) it.draw();
+}
+
 function draw() {
+  if (S.mode === 'tile') return drawVignette();
   if (!S.world) return;
   const b = S.boat;
   // Follow the boat, a little ahead of where it's going.
@@ -1942,5 +2009,10 @@ const api = {
   },
   knockDown,
   makeContract,
+  pose: () => {
+    S.mode = 'tile';
+    for (const el of Object.values(screens)) el.hidden = true;
+    hud.hidden = true;
+  },
 };
 window.__seas = api;

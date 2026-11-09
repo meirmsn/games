@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [High Seas](high-seas/), sail a dinghy by the wind between islands and earn the galleon.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
@@ -14,9 +14,10 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 |---|---|
 | `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
 | `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, and offline play once a page has loaded |
-| `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
+| `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link). For isometric games, `iso.js`: the tile grid, depth sorting, screen↔tile picking, and a camera that pans and zooms by touch, mouse and wheel |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 | `reef/` | **Reef**, the fish game. Its sprite atlas is built from the Fish Pack SVGs by `scripts/reef/build-atlas.mjs` |
+| `high-seas/` | **High Seas**, the isometric sailing game (`specs/high-seas.md`). Its atlas and sounds are built from the Kenney packs by `scripts/high-seas/build-assets.py`, its tile by `scripts/high-seas/make-tile.mjs` |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 
