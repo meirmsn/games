@@ -72,7 +72,7 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   and parts at least 0.4 units thick, so a layout plays the same run at 60 and 120 Hz without
   tunnelling. A run ends 0.75 s after the ball comes to rest or leaves the room, or after 12 s. A frame
   takes at most 8 steps, so after a long stall the run slows down rather than jumps.
-  Rejected: a hand-rolled engine, which can't topple a crate or spin a free spinner well (Claude,
+  Rejected: a hand-rolled engine, which can't push a crate or swing a hinged flap well (Claude,
   2026-11-09).
 - The floor run plays back the recorded winning run of each room (the poses of the ball and the
   moving parts, kept at 30 Hz), with the camera following the ball down through all six rooms, and
@@ -104,8 +104,19 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   demo kick and a stopped run aren't misses. The recorded solutions pass without it. No pull force, so nothing visibly steers the
   ball; stars never get it (adversarial review, 2026-11-09).
 - Floor 1, "The Workshop", is six rooms, each adding one thing: 1 a gap and one plank; 2 two planks,
-  a zig-zag; 3 the wedge; 4 a blue spinner (push); 5 a wooden crate on the exit (a breather); 6 a
+  a zig-zag; 3 the wedge; 4 a blue flap (push); 5 a wooden crate on the exit (a breather); 6 a
   locked exit and a gold key (push) (Claude, 2026-11-09).
+- Room 4's blue part is a flap hinged at its top, not a spinner pinned at its centre: a centred
+  spinner doesn't resist the ball, so it held no choice; the flap swings open only for a ball
+  arriving at about 6 units a second, so the soft kick on its own fails and the hard kick or a steep
+  plank gets through. The crate is tuned to the same speed. The ball slides without friction (the
+  drawing spins it), because Matter's friction stopped a rolling ball within a unit or two (Claude,
+  2026-11-09, found while building).
+- The rooms' stars were placed with a solver (`scripts/trundle/design.mjs`): it searches part
+  placements for winning runs and puts the three stars where only a few of them pass together and
+  neither kick passes on its own; one star glints near the demo kick's path. Each room's recorded
+  solution is the three-star layout that most often still takes all three when one part is moved a
+  step or turned 15° (Claude, 2026-11-09).
 - Sound: Kenney's impact, interface, digital and jingle sounds, converted to MP3 (Safari plays no
   OGG), under the site-wide mute; an impact sounds at most once per pair of bodies every 100 ms
   (Claude, 2026-11-09).
@@ -119,14 +130,14 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
 
 ## Acceptance items
 
-- **AC-1** The landing page shows 8 tiles, Trundle's playable and linking to `trundle/` — `tests/site.test.mjs`.
+- **AC-1** The landing page shows 8 tiles, Trundle's playable and linking to `trundle/` — `tests/trundle.test.mjs`.
 - **AC-2** On a fresh browser a room opens with Trundle's demo kick before any touch: the ball runs with no parts placed, misses the exit, and leaves its trail; a room with a saved layout opens still, with that layout; no errors — `tests/trundle.test.mjs`.
 - **AC-3** Dragging a part from the tray puts it on the board, snapped to 0.25 units; dragging a placed part moves it by the finger's movement; ⟲ and ⟳ turn the selected part by 15°; dragging it back onto the tray returns it; a drop or turn that overlaps a fixed part, the exit or another part is refused; a drag stays inside the board; a second finger moves nothing and the first finger's drag carries on — `tests/trundle.test.mjs`.
 - **AC-4** Go runs the room; a ball that reaches the exit completes the room, Trundle cheers, and the stars it touched are counted and kept as the room's best — `tests/trundle.test.mjs`.
 - **AC-5** A missed run ends on its own within 1 s of the ball resting or leaving the room (12 s at most); the trail and the near-miss marker stay; Go or any edit after it clears the marker — `tests/trundle.test.mjs`.
 - **AC-6** Every room's recorded solution reaches the exit with all three stars, with no assist, and the ball's pose at every step is the same when the page's frame loop is driven at 60 Hz, at 120 Hz and with uneven frames of 7–40 ms; with no parts placed, every room's ball misses the exit — `tests/trundle.test.mjs`.
 - **AC-7** Tapping Trundle switches between the soft nudge and the hard kick, and the hard kick launches the ball faster — `tests/trundle.test.mjs`.
-- **AC-8** Each room brings its new thing: room 3's tray has a wedge, room 4 a spinner that turns when the ball hits it, room 5 a crate that the ball can knock off the exit, and room 6 an exit that stays locked until the ball touches the key — `tests/trundle.test.mjs`.
+- **AC-8** Each room brings its new thing: room 3's tray has a wedge, room 4 a blue flap that swings when the ball hits it, room 5 a crate that the ball can knock off the exit, and room 6 an exit that stays locked until the ball touches the key — `tests/trundle.test.mjs`.
 - **AC-9** Solving the floor's last unsolved room, in any order (room 6 first included), plays the floor run: it plays back each room's best run in order with the camera following the ball, without stepping the physics, then shows the floor's star total; after a reload the rooms list plays it again — `tests/trundle.test.mjs`.
 - **AC-10** Every room is open on a fresh browser; the browser keeps each room's best stars, last layout and best run, and solving again with fewer stars keeps the best; with storage blocked or a room's saved data unreadable the game still plays; `#1-4` opens room 4 and `#1-9` or `#x` opens room 1 — `tests/trundle.test.mjs`.
 - **AC-11** Hiding the page pauses a run, the demo kick or the floor run; it stays paused when the page comes back and resumes on a tap — `tests/trundle.test.mjs`.

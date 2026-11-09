@@ -75,6 +75,23 @@ async function solve(page, i) {
   }, i);
 }
 
+test('trundle AC-1: the landing page shows 8 tiles, Trundle playable and linking to its game', async () => {
+  const context = await browser.newContext({ viewport: { width: 1024, height: 700 } });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto(BASE);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Trundle' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+  assert.equal(await tile.getAttribute('href'), 'trundle/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  await tile.click();
+  await page.waitForFunction(() => window.__trundle);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('trundle AC-2: a fresh room opens with the demo kick, which misses and leaves its trail', async () => {
   const { context, page, errors } = await open('#1-1');
   await manual(page);

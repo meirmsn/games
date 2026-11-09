@@ -50,9 +50,9 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('reef AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
+test('reef AC-11: landing page lists eight games, Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   const reef = page.locator('.tiles > li').first().locator('.tile');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
@@ -114,7 +114,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
