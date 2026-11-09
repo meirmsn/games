@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Orbit</title>
+    <meta name="description" content="Orbit: fling a probe off one planet, let gravity bend it around the others, and catch the next planet's orbit ring." />
+    <meta name="theme-color" content="#000000" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="space" aria-label="Planets in dark space, and a probe circling one of them"></canvas>
+
+    <div class="hud" data-hud>
+      <p class="sys-name" data-sys-name></p>
+      <p class="jump"><span data-jump></span><span class="legs" data-legs aria-hidden="true"></span></p>
+      <div class="hud-row">
+        <p class="dust"><span class="mote-icon" aria-hidden="true"></span><span class="hud-label">Stardust</span><span data-dust>0</span><span class="dust-of">/<span data-dust-of>0</span></span></p>
+        <p class="slings" hidden><span class="sling-icon" aria-hidden="true"></span><span class="hud-label">Slingshots</span><span data-slings>0</span></p>
+      </div>
+    </div>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <section class="intro" data-screen="intro" hidden>
+      <p class="intro-num" data-intro-num></p>
+      <h2 data-intro-name></h2>
+      <p class="intro-par">Par <span data-intro-par></span><span class="intro-best" data-intro-best></span></p>
+    </section>
+
+    <section class="card" data-screen="done" hidden>
+      <div class="medal" data-medal aria-hidden="true"></div>
+      <h2 data-done-title></h2>
+      <dl class="stats">
+        <div><dt>Stardust</dt><dd data-done-dust></dd></div>
+        <div><dt>Launches</dt><dd data-done-launches></dd></div>
+        <div><dt>Slingshots</dt><dd data-done-slings></dd></div>
+      </dl>
+      <p class="badge" data-badge hidden>One shot</p>
+      <div class="actions">
+        <button class="secondary" type="button" data-retry>Fly it again</button>
+        <button class="play" type="button" data-next>Next</button>
+      </div>
+    </section>
+
+    <section class="card" data-screen="out" hidden>
+      <h2>Out of probes</h2>
+      <p class="out-text" data-out-text></p>
+      <div class="actions">
+        <button class="play" type="button" data-out-retry>Try again</button>
+      </div>
+    </section>
+
+    <p class="probes" aria-label="10 probes left"><span class="hud-label">Probes</span><span class="probes-count" data-probes>10</span></p>
+
+    <div class="boost" data-boost role="slider" aria-label="Booster power" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
+      <span class="boost-label">Boost</span>
+      <div class="boost-track" data-boost-track>
+        <div class="boost-rail"></div>
+        <div class="boost-fill"></div>
+        <div class="boost-ghost" data-boost-ghost hidden></div>
+        <div class="boost-edge"></div>
+      </div>
+      <span class="boost-value" data-boost-value>25%</span>
+    </div>
+
+    <p class="hint" data-hint hidden></p>
+
+    <button class="resume" type="button" data-resume hidden aria-label="Resume">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>
+    </button>
+  </body>
+</html>
