@@ -570,6 +570,21 @@ test('walk-on-red AC-13: hiding the page pauses; the resuming tap doesn’t hop 
   assert.equal(r.row, r.lane, 'the tap that resumed did not hop');
   assert.equal(r.during, false);
   assert.equal(r.afterwards, true);
+  // It pauses during the green light and the tally too.
+  const later = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.startGame(0);
+    t.manual = true;
+    t.game.red = 0.01;
+    t.step(1 / 60);
+    const mode = t.game.mode;
+    t.pause();
+    const paused = t.game.paused;
+    const phase = t.game.phaseT;
+    for (let i = 0; i < 60; i++) t.step(1 / 60);
+    return { mode, paused, frozen: t.game.phaseT === phase };
+  });
+  assert.deepEqual(later, { mode: 'green', paused: true, frozen: true });
   await context.close();
 });
 

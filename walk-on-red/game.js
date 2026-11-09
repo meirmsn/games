@@ -977,7 +977,7 @@ function updateTraffic(dt, quiet = false) {
 // ---------- Pause ----------
 
 function pause() {
-  if (game.mode !== 'play' && game.mode !== 'change') return;
+  if (game.mode !== 'play' && game.mode !== 'green' && game.mode !== 'tally') return;
   game.paused = true;
   input.queued = null;
   ui.paused.hidden = false;
