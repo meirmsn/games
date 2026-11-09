@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Runes</title>
+    <meta name="description" content="Runes: draw one line of light through every stone; each rune you pass raises stones from the water or sinks them." />
+    <meta name="theme-color" content="#1f3f4a" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="pool" aria-label="A pool of rune stones; drag to draw the line of light"></canvas>
+
+    <header class="title" aria-live="polite">
+      <p class="chapter" data-chapter>Dawn</p>
+      <h1 class="name"><span class="num" data-num>1</span> <span data-name>First Light</span></h1>
+    </header>
+
+    <button class="round mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <nav class="bar" aria-label="Level controls">
+      <button class="round" type="button" data-levels aria-label="Levels" title="Levels: choose a level">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>
+      </button>
+      <button class="round" type="button" data-restart aria-label="Restart" title="Restart this level">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" /><path d="M5 4v4h4" /></svg>
+      </button>
+      <button class="round" type="button" data-hint aria-label="Hint" title="Hint: show the next stone">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></svg>
+      </button>
+      <button class="round" type="button" data-guidance aria-pressed="false" aria-label="Guidance" title="Guidance: show tiles that become unreachable">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
+      </button>
+    </nav>
+
+    <section class="result" data-result hidden aria-live="assertive">
+      <p class="result-kicker" data-result-kicker></p>
+      <h2 class="result-title" data-result-title></h2>
+      <p class="result-text" data-result-text></p>
+      <p class="result-tip" data-result-tip hidden></p>
+      <div class="result-actions">
+        <button class="play" type="button" data-next>Next</button>
+        <button class="play" type="button" data-again>Try again</button>
+        <button class="soft" type="button" data-result-levels>All levels</button>
+      </div>
+    </section>
+
+    <section class="card levels" data-screen="levels" hidden aria-label="Levels">
+      <h2>Levels</h2>
+      <div data-chapters></div>
+      <button class="link" type="button" data-close-levels>Back to the pool</button>
+    </section>
+  </body>
+</html>
