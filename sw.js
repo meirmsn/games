@@ -28,7 +28,7 @@ const SHELL = [
   'assets/icons/icon-192.png',
   'assets/tiles/reef.png',
   'assets/tiles/googly-faces.png',
-  'assets/tiles/windsock.png',
+  'assets/tiles/shoo.png',
   'assets/tiles/pixel-leap.png',
   'assets/tiles/shooting-gallery.png',
   'assets/tiles/high-seas.png',

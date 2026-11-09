@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Windsock</title>
-    <meta name="description" content="Windsock: draw each plane's path to the runway, land into the wind, and keep the sky clear when the windsock swings." />
-    <meta name="theme-color" content="#7fb83d" />
+    <title>Shoo!</title>
+    <meta name="description" content="Shoo!: shoo the birds off the runways before each plane lands." />
+    <meta name="theme-color" content="#8cc63f" />
     <link rel="manifest" href="../manifest.webmanifest" />
     <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
@@ -15,11 +15,12 @@
     <script type="module" src="game.js"></script>
   </head>
   <body>
-    <canvas id="field" aria-label="An airfield seen from above, with planes circling"></canvas>
+    <canvas id="field" aria-label="An airfield seen from above, with birds on the grass and planes coming in to land"></canvas>
 
     <div class="hud" data-hud hidden>
       <span class="clock" data-clock>06:00</span>
       <span class="score"><span data-score>0</span><span class="streak" data-streak hidden></span></span>
+      <span class="hold" data-hold aria-label="Planes in the hold: 0 of 3"><i></i><i></i><i></i></span>
     </div>
 
     <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
@@ -28,15 +29,15 @@
     </button>
 
     <section class="card" data-screen="start" hidden>
-      <p class="day" data-day>Day 1</p>
+      <h2>Shoo!</h2>
       <button class="play" type="button" data-play>Start</button>
-      <button class="alt" type="button" data-play9 hidden>Start at 09:00</button>
+      <button class="alt" type="button" data-from hidden>From 08:00</button>
       <p class="best" data-best-start hidden></p>
     </section>
 
-    <section class="card" data-screen="crash" hidden>
-      <h2>Collision</h2>
-      <p class="detail" data-crash-detail></p>
+    <section class="card" data-screen="full" hidden>
+      <h2>The hold is full</h2>
+      <p class="detail" data-full-detail></p>
       <button class="play" type="button" data-retry>Retry 06:00</button>
       <button class="alt" type="button" data-new>New shift</button>
     </section>
@@ -46,7 +47,6 @@
       <p class="score-line"><span data-final-score>0</span> points</p>
       <p class="detail" data-final-detail></p>
       <button class="play" type="button" data-again>Play again</button>
-      <button class="alt" type="button" data-another>Another day</button>
     </section>
 
     <section class="card" data-screen="paused" hidden>

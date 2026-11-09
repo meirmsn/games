@@ -1,4 +1,4 @@
-/* Windsock: the canvas fills the screen; the HUD and cards float over it.
+/* Shoo!: the canvas fills the screen; the HUD and cards float over it.
    Everything here is 8-bit, like the art: a pixel font (Kenney Mini Square), square edges with
    stepped corners, flat colours from the pack's palette, hard pixel bevels, no blur, no rounding,
    no soft shadows, no smooth transitions. One UI pixel is 4 CSS px (2 art px). */
@@ -285,4 +285,21 @@ body {
   box-shadow:
     inset 0 var(--p) 0 var(--navy),
     inset 0 calc(-1 * var(--p)) 0 #7d8398;
+}
+
+/* The hold: three slots, filled as planes go round. */
+.hud .hold {
+  display: flex;
+  gap: 4px;
+}
+
+.hud .hold i {
+  width: 8px;
+  height: 8px;
+  background: #2a2d3c;
+  box-shadow: inset 0 0 0 2px #1e2130;
+}
+
+.hud .hold i.on {
+  background: #ff3b30;
 }

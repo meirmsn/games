@@ -63,14 +63,15 @@ test('reef AC-11: landing page lists the games, Reef first and playable, with no
   await context.close();
 });
 
-test('windsock AC-1: the landing page shows 8 tiles, with Windsock playable after Googly Faces', async () => {
+test('shoo AC-1: the landing page shows 8 tiles, with Shoo! playable after Googly Faces and no Windsock', async () => {
   const { context, page } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names[2], 'Windsock');
+  assert.equal(names[2], 'Shoo!');
+  assert.ok(!names.includes('Windsock'));
   const tile = page.locator('.tiles > li').nth(2).locator('.tile');
   assert.equal(await tile.evaluate((el) => el.tagName), 'A');
-  assert.equal(await tile.getAttribute('href'), 'windsock/');
+  assert.equal(await tile.getAttribute('href'), 'shoo/');
   assert.ok(await tile.locator('img').evaluate((img) => img.complete && img.naturalWidth === 640));
   await context.close();
 });

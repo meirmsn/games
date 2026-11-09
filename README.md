@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Windsock](windsock/), draw each plane down to a runway, into the wind, and turn them all when the windsock swings.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Shoo!](shoo/), shoo the birds off the runways before each plane lands.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
