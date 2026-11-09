@@ -96,6 +96,7 @@ export function createTerrain(w, h, { scale = 1 } = {}) {
           ctx.fill();
         }
         ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = '#000';
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.fill();
@@ -139,46 +140,49 @@ export function createTerrain(w, h, { scale = 1 } = {}) {
   return t;
 }
 
-// Heights for a battlefield shape: a sum of soft waves, with optional water gaps (islands) and a
-// flat-ish pad under each tank's start so nobody starts on a cliff.
-export function makeHeights(w, h, { seed = 1, base = 0.62, rough = 1, islands = 0, pads = [], valley = 0 } = {}) {
+// Heights for a battlefield's hill: a sum of soft waves, cliffs into the sea at both ends, a level
+// pad where each tank starts, and an optional valley in the middle and slope down to the right.
+// mirror: the broad shape is the same on both sides, before a little noise that isn't.
+export function makeHeights(w, h, { seed = 1, base = 0.6, rough = 1, mirror = true, pads = [], valley = 0, slope = 0, shore = 70 } = {}) {
   const r = rng(seed);
   const heights = new Float32Array(w);
   const waves = [];
-  for (let i = 0; i < 5; i++) {
-    waves.push({ f: (0.6 + i * 1.1 + r() * 0.8) / w, p: r() * Math.PI * 2, a: (h * 0.11 * rough) / (1 + i * 0.9) });
+  for (let i = 0; i < 4; i++) {
+    waves.push({ f: (1 + i * 1.3 + r() * 0.9) / w, p: r() * Math.PI * 2, a: (h * 0.07 * rough) / (1 + i * 0.8) });
   }
-  for (let x = 0; x < w; x++) {
+  const broad = (x) => {
     let y = h * base;
     for (const wv of waves) y -= Math.sin(x * wv.f * Math.PI * 2 + wv.p) * wv.a;
-    // A valley in the middle (a gap the girders can bridge).
     if (valley) {
-      const d = (x - w / 2) / (w * 0.12);
+      const d = (x - w / 2) / (w * 0.1);
       y += valley * h * Math.exp(-d * d * 2);
     }
-    heights[x] = y;
+    return y;
+  };
+  for (let x = 0; x < w; x++) {
+    const xb = mirror && x >= w / 2 ? w - 1 - x : x;
+    heights[x] = broad(xb) + slope * h * (x / w - 0.5);
   }
-  // Islands: cut channels down below the water.
-  if (islands) {
-    for (let k = 1; k <= islands; k++) {
-      const cx = (w * k) / (islands + 1) + (r() - 0.5) * w * 0.06;
-      const half = w * (0.035 + r() * 0.02);
-      for (let x = Math.max(0, Math.floor(cx - half * 1.8)); x < Math.min(w, cx + half * 1.8); x++) {
-        const d = Math.abs(x - cx) / half;
-        const dip = d < 1 ? 1 : Math.max(0, 1 - (d - 1) / 0.8);
-        heights[x] = heights[x] * (1 - dip) + h * 0.97 * dip;
-      }
-    }
-  }
+  // Small noise that isn't mirrored, so the two sides don't look stamped.
+  const n1 = r() * 10, n2 = r() * 10;
+  for (let x = 0; x < w; x++) heights[x] += Math.sin(x * 0.031 + n1) * 2.5 + Math.sin(x * 0.083 + n2) * 1.5;
   // Pads: level ground where a tank starts.
   for (const p of pads) {
     const y = heights[Math.round(p)];
-    for (let x = Math.max(0, Math.round(p - 60)); x < Math.min(w, p + 60); x++) {
-      const d = Math.abs(x - p) / 60;
+    for (let x = Math.max(0, Math.round(p - 70)); x < Math.min(w, p + 70); x++) {
+      const d = Math.abs(x - p) / 70;
       const k = d < 0.5 ? 1 : 1 - (d - 0.5) / 0.5;
       heights[x] = heights[x] * (1 - k) + y * k;
     }
   }
-  for (let x = 0; x < w; x++) heights[x] = Math.max(h * 0.2, Math.min(h * 0.97, heights[x]));
+  // Cliffs down into the sea at both ends.
+  for (let x = 0; x < w; x++) {
+    const e = Math.min(x, w - 1 - x);
+    if (e < shore) {
+      const k = 1 - e / shore;
+      heights[x] = heights[x] * (1 - k * k) + h * 1.05 * k * k;
+    }
+  }
+  for (let x = 0; x < w; x++) heights[x] = Math.max(h * 0.18, Math.min(h * 1.05, heights[x]));
   return heights;
 }

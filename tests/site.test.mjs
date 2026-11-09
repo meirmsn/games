@@ -50,9 +50,8 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('reef AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
+test('reef AC-11: landing page lists Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   const reef = page.locator('.tiles > li').first().locator('.tile');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
@@ -107,6 +106,21 @@ test('the manifest is valid and its icons load', async () => {
   for (const icon of m.icons) assert.ok((await fetch(BASE + icon.src)).ok, icon.src);
 });
 
+test('crumble AC-16: the landing page shows 8 tiles, with Crumble playable after Googly Faces', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const tile = page.locator('.tiles > li').nth(2).locator('.tile');
+  assert.equal(await tile.locator('h2').textContent(), 'Crumble');
+  assert.equal(await page.locator('.tiles > li').nth(1).locator('h2').textContent(), 'Googly Faces');
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+  assert.equal(await tile.getAttribute('href'), 'crumble/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.ok(await tile.locator('img').evaluate((img) => img.complete && img.naturalWidth > 0));
+  await page.waitForLoadState('networkidle');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('works offline once loaded', async () => {
   const { context, page } = await open();
   assert.ok(await swReady(page), 'service worker registered');
@@ -114,7 +128,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
