@@ -36,6 +36,20 @@ body {
   text-shadow: 0 1px 6px rgb(0 0 0 / 35%);
 }
 
+/* Dawn's sky is pale: its title is in dark ink. */
+body[data-chapter='dawn'] .title {
+  color: #24363c;
+  text-shadow: 0 1px 8px rgb(255 240 225 / 60%);
+}
+
+body[data-chapter='dawn'] .chapter {
+  color: rgb(36 54 60 / 72%);
+}
+
+body[data-chapter='dawn'] .num {
+  color: var(--ink);
+}
+
 .chapter {
   margin: 0;
   font-size: 12px;

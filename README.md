@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Runes](runes/), draw one line of light through every stone while runes raise and sink stones around it; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
@@ -17,6 +17,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 | `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 | `reef/` | **Reef**, the fish game. Its sprite atlas is built from the Fish Pack SVGs by `scripts/reef/build-atlas.mjs` |
+| `runes/` | **Runes**, the puzzle (`specs/runes.md`). `rules.js` holds the rules and the solver; `levels.js` the levels, picked from `scripts/runes/generate.mjs` and checked with `scripts/runes/lab.mjs`; `scripts/runes/make-tile.mjs` draws its landing tile |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 

@@ -17,7 +17,7 @@ const KNOBS = {
   tapMs: 300, // ... and lasts less than this
   ghostDelay: 4000, // level 1: the ghost light first shows after this long without input
   ghostRepeat: 8000, // ... and again this long after
-  previewAlpha: 0.32, // how strongly a rune's coming effect shows
+  previewAlpha: 0.4, // how strongly a rune's coming effect shows
   deadBudget: 2e5, // the search that decides whether the line can still finish
   riseMs: 420, // a stone rising or sinking
   chimeLow: 0.5, // the chime's rate on the source; it climbs a pentatonic scale to the gate
@@ -162,6 +162,7 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   game.ghost = { shows: 0, t: -1 };
   game.theme = THEMES[chapterOf(i).id];
   document.querySelector('meta[name="theme-color"]').setAttribute('content', game.theme.meta);
+  document.body.dataset.chapter = chapterOf(i).id;
   const ch = chapterOf(i);
   ui.chapter.textContent = LEVELS[i].deep ? `${ch.name} · deep` : ch.name;
   ui.num.textContent = String(i + 1);
@@ -757,7 +758,15 @@ function draw(now) {
     if (p <= 0.01) {
       if (pvSet.has(i) && pv.kind === 'rise') {
         // A ghost of the stone the Rise would bring up.
-        tile('stone', 'grey', x + c * 0.06, y0 + c * 0.16, c * 0.88, KNOBS.previewAlpha + 0.08 * Math.sin(t * 5));
+        tile('stone', 'grey', x + c * 0.06, y0 + c * 0.1, c * 0.88, KNOBS.previewAlpha + 0.1 * Math.sin(t * 5));
+        ctx.save();
+        ctx.setLineDash([c * 0.08, c * 0.06]);
+        ctx.strokeStyle = `rgba(${HUES.rise}, ${0.55 + 0.25 * Math.sin(t * 5)})`;
+        ctx.lineWidth = Math.max(1.5, c * 0.035);
+        ctx.beginPath();
+        ctx.roundRect(x + c * 0.08, y0 + c * 0.1, c * 0.84, c * 0.84, c * 0.1);
+        ctx.stroke();
+        ctx.restore();
       }
       continue;
     }
@@ -775,10 +784,10 @@ function draw(now) {
       ctx.fillRect(xx + c * 0.06, y + c * 0.06, c * 0.88, c * 0.88);
     }
     if (strandedSet.has(i)) {
-      ctx.fillStyle = 'rgba(10, 12, 20, 0.5)';
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.32)';
       ctx.fillRect(xx + c * 0.04, y + c * 0.04, c * 0.92, c * 0.96);
-      ctx.strokeStyle = 'rgba(20, 20, 26, 0.85)';
-      ctx.lineWidth = Math.max(1.5, c * 0.03);
+      ctx.strokeStyle = 'rgba(30, 30, 40, 0.6)';
+      ctx.lineWidth = Math.max(1.2, c * 0.022);
       ctx.beginPath();
       ctx.moveTo(xx + c * 0.3, y + c * 0.12);
       ctx.lineTo(xx + c * 0.48, y + c * 0.42);
