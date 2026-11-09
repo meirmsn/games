@@ -157,10 +157,11 @@ body {
   position: fixed;
   z-index: 5;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 9dvh);
+  top: calc(env(safe-area-inset-top) + 88px);
   transform: translateX(-50%);
   text-align: center;
   pointer-events: none;
+  text-shadow: 0 1px 12px #000, 0 0 2px #000;
   transition: opacity 500ms ease;
   white-space: nowrap;
 }

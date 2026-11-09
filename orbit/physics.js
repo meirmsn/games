@@ -14,7 +14,7 @@ export const MOTE_RADIUS = 30; // how close the probe must pass to pick up a mot
 export const SKIM = 1.35; // passing within SKIM × a body's radius without touching is a skim
 export const BRAKE = 0.35; // a brake takes this fraction off the current speed (relative to the target)
 export const LAUNCH_MIN = 120; // slowest launch, world units per second (at the dead zone's edge)
-export const LAUNCH_MAX = 760; // fastest launch (full drag)
+export const LAUNCH_MAX = 660; // fastest launch (full drag)
 export const MAX_SPEED = 1400; // speed is clamped here, so a close pass never tunnels
 export const CATCH_WIDTH = 26; // the capture band reaches this far outside the drawn ring
 export const CATCH_SPEED = 1.75; // capture needs speed (relative to the target) under this × escape speed at the ring
@@ -135,7 +135,7 @@ export function launch(level, legIndex, angle, power, t0 = 0, assist = 0) {
 // The target ring's speed limit (relative to the target), with the assist.
 export function catchLimit(level, to, assist = 0) {
   const b = level.bodies[to];
-  return (level.catchSpeed ?? CATCH_SPEED) * (1 + ASSIST_SPEED * Math.min(1, assist)) * escapeSpeed(b, b.ring);
+  return (b.catchSpeed ?? level.catchSpeed ?? CATCH_SPEED) * (1 + ASSIST_SPEED * Math.min(1, assist)) * escapeSpeed(b, b.ring);
 }
 
 // The probe's speed relative to the target, and whether it's under the ring's limit: the trail and
