@@ -44,8 +44,8 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
   leg. Later slices lengthen it.
 - Orientation: portrait. One thumb: the booster bar sits at the bottom, and a tap anywhere fires,
   so the hand stays below the action; a tall field gives long arcs. Desktop shows the same field centred, with stars filling the sides.
-- What a failure costs: a few seconds. The probe rewinds to the leg's start; motes already caught
-  stay caught; only the par counts the extra launch.
+- What a failure costs: a few seconds and one of the system's 10 probes. The probe rewinds to the
+  leg's start; motes already caught stay caught; spending all 10 restarts the system.
 - What stands in for save games: the URL (`#s2`, `#s3`) starts at a system; medals and bests sit in
   localStorage, and losing them costs at most a few minutes of replay.
 - Riskiest technical part: tuning gravity so arcs are expressive yet controllable. It is proven
@@ -109,7 +109,12 @@ three differ.
   once around a body other than the target or the target's parent while bound to it, or lasts
   8 s. The probe dims over the
   last 2 s before the time runs out. On a failure it rewinds to the leg's start within 1 s, and moons
-  rewind with it. There are no lives and no game over. The failed flight stays as a faint ghost
+  rewind with it. A system has 10 probes, one per launch, counted in the top bar (amber when 3 or
+  fewer are left); when the last is spent without finishing, an "Out of probes" card offers "Try
+  again", which restarts the system; medals and reached systems are kept. Rejected: unlimited
+  tries (owner, 2026-11-09: "I was able to do like infinity tries ... maybe we should limit it ...
+  so that you really need to try, but you can leave it at 10 or something"). The failed flight
+  stays as a faint ghost
   trail with its aim arrow until the next launch. R rewinds by hand; in flight it counts as a launch
   and a failed flight (first concept review and spec review, 2026-11-09).
 - The leg clock (where the moons are) starts at the moment the previous leg's probe was caught (0
@@ -133,9 +138,16 @@ three differ.
   band widens, inside the ring's glow, by 15% × assist of the ring's radius, and the speed limit
   rises by 25% × assist: after 3 misses 5% and 8.3%, after 5 the full 15% and 25%. The drawn ring
   never changes, and a capture resets it (both reviews and spec review, 2026-11-09).
-- The brake is taught without text. On System 2's first leg, until the player first brakes, time
-  slows to 0.4× for 0.6 s when the probe is near the ring too fast with its brake unused, and the
-  probe's flame pulses (second concept review, 2026-11-09).
+- Why a ring didn't catch the probe is said, by the ring: crossing its band uncaught shows "Too
+  fast", "Too steep" or "Too close" there for a moment, once per pass. The brake is taught in words:
+  from System 2, until the player first brakes, being too fast in the band with the brake unused
+  shows the hint line "Too fast to be caught: tap to brake"; on System 2's first leg, time also
+  slows to 0.4× for 0.6 s as the probe nears the ring too fast. In flight, while the brake is
+  unused, the bar's label reads "Brake" in amber; braking hides the hint. Rejected: a glowing light
+  on the probe's nose for the unused brake, and a silent slow-motion lesson (owner, 2026-11-09: "I
+  don't know why ... on its way, it will slow down and accelerate ... I also don't understand why it
+  shows some glowing at the tip on the front ... I was on the orbit, but it seemed like it will never
+  pick it up").
 - Controls: the booster bar at the bottom sets the power: tap a point on it, or drag along it. It
   is a tall strip, like a spacecraft's control strip in the game's plain style: a label, a fill in
   zone colours (slate up to 30%, green to 70%, orange to 90% and red for the last tenth), the zones
@@ -225,7 +237,7 @@ three differ.
   steeper than 30°, is not caught.
 - **AC-5** Hitting a body, swinging out of the field, looping around a non-target body or flying 8 s
   is a failed flight: within 1 s the probe is back at the leg's start with the moons rewound, a ghost
-  trail of the failed flight shows, and play goes on with no lives lost and no game over. R in
+  trail of the failed flight shows, and play goes on while the system has probes left. R in
   flight counts as a launch and a failed flight. A body's surface, or the target's band, never
   meets the parking ring at any leg time.
 - **AC-6** Motes caught on a failed flight stay caught; a skim is counted apart from motes.
@@ -270,6 +282,12 @@ three differ.
 - **AC-24** Touching a planet is always a crash: the probe's body reaching a planet's surface in
   flight crashes it, and no catch steers it within its size of a surface; every catch settles
   within 3 s.
+- **AC-25** A system has 10 probes, one per launch, shown in the top bar; after the 10th fails, an
+  "Out of probes" card shows, no further launch is possible, and "Try again" restarts the system
+  with 10.
+- **AC-26** Crossing a ring's band uncaught shows "Too fast", "Too steep" or "Too close" by the
+  ring; too fast in a brake system with the brake unused and not yet learned also shows "Too fast
+  to be caught: tap to brake" and the bar's label reads "Brake"; braking hides the hint.
 
 ## Core flow
 
@@ -292,6 +310,7 @@ three differ.
 | Captured (steered in) | hidden | hidden | steered into the ring |
 | System done | hidden | shown, with Next | parked on the last planet |
 | Paused (page hidden, then back) | hidden | hidden | at the leg's start, waiting for a touch |
+| Out of probes | hidden | hidden; the "Out of probes" card shows, with Try again | at the leg's start |
 
 ## Out of scope
 

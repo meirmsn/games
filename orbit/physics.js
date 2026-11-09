@@ -308,7 +308,8 @@ export function step(f, level, taken = null) {
   const tx = f.pos[f.to * 2];
   const ty = f.pos[f.to * 2 + 1];
   const d = Math.sqrt((f.x - tx) * (f.x - tx) + (f.y - ty) * (f.y - ty));
-  if (d < tb.ring * (1 + ASSIST_BAND * Math.min(1, f.assist)) + CATCH_WIDTH) {
+  f.inBand = d < tb.ring * (1 + ASSIST_BAND * Math.min(1, f.assist)) + CATCH_WIDTH;
+  if (f.inBand) {
     bodyVel(bodies, f.to, f.t, tv);
     const rvx = f.vx - tv.x;
     const rvy = f.vy - tv.y;
@@ -325,6 +326,8 @@ export function step(f, level, taken = null) {
       f.noSettleUntil = f.age + 0.05; // it would touch the planet; look again a moment later
     }
     f.fastPass = true;
+    // why it wasn't caught here, for the game to say: too fast first, then the angle, then the planet
+    f.missWhy = rel >= catchLimit(level, f.to, f.assist) ? 'fast' : !along ? 'steep' : 'close';
   }
 
   // Stuck: bound to one body (not the target, nor the body the target circles) and swept a full

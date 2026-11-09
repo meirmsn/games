@@ -120,6 +120,37 @@ body {
   border-color: #fff;
 }
 
+.hud-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.probes {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #e9f3ff;
+}
+
+.probes.low {
+  color: #ffa64d;
+}
+
+.ship-icon {
+  width: 11px;
+  height: 11px;
+  background: currentColor;
+  clip-path: polygon(100% 50%, 0 100%, 22% 50%, 0 0);
+}
+
+.out-text {
+  margin: -4px 0 16px;
+  color: rgb(233 243 255 / 70%);
+}
+
 .dust {
   display: flex;
   align-items: center;
@@ -357,6 +388,21 @@ body {
 
 .boost.is-off {
   opacity: 0.4;
+}
+
+/* in flight, while the brake is unused, the bar's label says so */
+.boost.brake-ready {
+  opacity: 1;
+}
+
+.boost.brake-ready .boost-track,
+.boost.brake-ready .boost-value {
+  opacity: 0.35;
+}
+
+.boost.brake-ready .boost-label {
+  color: #ffa64d;
+  animation: breathe 1.2s ease-in-out infinite;
 }
 
 .boost-label,

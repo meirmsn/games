@@ -856,6 +856,72 @@ test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched
   await context.close();
 });
 
+test('orbit AC-25: a system has 10 probes; when they are spent a card says so, and Try again restarts the system', async () => {
+  const { context, page } = await open();
+  await manual(page);
+  const probes = () => page.locator('[data-probes]').textContent();
+  assert.equal(await probes(), '10');
+  for (let i = 0; i < 10; i++) {
+    // from the left of the first planet at full power: down and out of the field, a failed flight
+    await page.evaluate(() => window.__orbit.fire(1, Math.PI));
+    await settle(page);
+  }
+  let s = await state(page);
+  assert.deepEqual([s.launches, s.fails, s.mode], [10, 10, 'out']);
+  assert.equal(await probes(), '0');
+  assert.equal(await page.locator('[data-screen="out"]').isVisible(), true, 'the out-of-probes card');
+  assert.match(await page.locator('[data-out-text]').textContent(), /10 probes/);
+  await page.evaluate(() => window.__orbit.fire(0.5));
+  assert.equal((await state(page)).mode, 'out', 'no eleventh launch');
+  await page.click('[data-out-retry]');
+  s = await state(page);
+  assert.deepEqual([s.sys, s.leg, s.launches, s.mode], [0, 0, 0, 'idle']);
+  assert.equal(await probes(), '10');
+  assert.equal(await page.locator('[data-screen="out"]').isHidden(), true);
+  await context.close();
+});
+
+test('orbit AC-26: crossing a ring uncaught says why by the ring; too fast with the brake unused says to tap to brake', async () => {
+  const { context, page } = await open({ hash: '#s2' });
+  await manual(page);
+  const r = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    g.braked = false;
+    g.park.dir = -1;
+    o.fire(0.9, (66 * Math.PI) / 180); // a release that reaches the ring too fast
+    let n = 0;
+    while (g.mode === 'fly' && !g.miss && n++ < 4000) o.update(1 / 240);
+    const out = {
+      miss: g.miss && g.miss.text,
+      hint: document.querySelector('[data-hint]').hidden ? '' : document.querySelector('[data-hint]').textContent,
+      label: document.querySelector('[data-boost-label]').textContent,
+    };
+    o.tap(); // brake
+    out.afterHint = document.querySelector('[data-hint]').hidden;
+    out.afterLabel = document.querySelector('[data-boost-label]').textContent;
+    return out;
+  });
+  assert.equal(r.miss, 'Too fast');
+  assert.match(r.hint, /tap to brake/);
+  assert.equal(r.label, 'Brake', 'the bar says the brake is ready');
+  assert.equal(r.afterHint, true, 'braking hides the hint');
+  assert.equal(r.afterLabel, 'Boost');
+  // too steep: in the band, slow enough, but heading into the planet
+  const steep = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    o.startSystem(0);
+    o.fire(0.5);
+    const b = g.level.bodies[g.level.legs[0].to];
+    Object.assign(g.flight, { x: b.x + b.ring, y: b.y, vx: -150, vy: -40 });
+    o.update(1 / 240);
+    return g.miss && g.miss.text;
+  });
+  assert.equal(steep, 'Too steep');
+  await context.close();
+});
+
 test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolling, clear of the buttons', async () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const { context, page } = await open({ viewport });

@@ -20,7 +20,10 @@
     <div class="hud" data-hud>
       <p class="sys-name" data-sys-name></p>
       <div class="legs" data-legs aria-hidden="true"></div>
-      <p class="dust"><span class="mote-icon" aria-hidden="true"></span><span data-dust>0</span><span class="dust-of">/<span data-dust-of>0</span></span></p>
+      <div class="hud-row">
+        <p class="dust"><span class="mote-icon" aria-hidden="true"></span><span data-dust>0</span><span class="dust-of">/<span data-dust-of>0</span></span></p>
+        <p class="probes" aria-label="Probes left"><span class="ship-icon" aria-hidden="true"></span><span data-probes>10</span></p>
+      </div>
     </div>
 
     <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
@@ -48,8 +51,16 @@
       </div>
     </section>
 
+    <section class="card" data-screen="out" hidden>
+      <h2>Out of probes</h2>
+      <p class="out-text" data-out-text></p>
+      <div class="actions">
+        <button class="play" type="button" data-out-retry>Try again</button>
+      </div>
+    </section>
+
     <div class="boost" data-boost role="slider" aria-label="Booster power" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
-      <span class="boost-label">Boost</span>
+      <span class="boost-label" data-boost-label>Boost</span>
       <div class="boost-track" data-boost-track>
         <div class="boost-rail"></div>
         <div class="boost-fill"></div>

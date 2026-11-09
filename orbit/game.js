@@ -61,6 +61,12 @@ const ui = {
   boostValue: $('[data-boost-value]'),
   boostGhost: $('[data-boost-ghost]'),
   hint: $('[data-hint]'),
+  probes: $('[data-probes]'),
+  probesBox: $('.probes'),
+  out: $('[data-screen="out"]'),
+  outText: $('[data-out-text]'),
+  outRetry: $('[data-out-retry]'),
+  boostLabel: $('[data-boost-label]'),
 };
 
 // ---------- Images ----------
@@ -98,6 +104,7 @@ const store = {
   },
 };
 const MEDALS = ['', 'bronze', 'silver', 'gold'];
+const PROBES = 10; // launches per system; when they're spent, the system starts over
 
 // ---------- Layout ----------
 
@@ -300,6 +307,7 @@ function setPower(p) {
 // Fire the boosters: the probe leaves along its orbit, the way it's moving, at this power. Tests
 // can pass `at` (an angle on the orbit) to release from a chosen point.
 function fire(power = input.power, at) {
+  if (game.launches >= PROBES) return;
   if (at !== undefined) {
     // put the probe at `at` now
     game.park.phase = at - game.park.dir * ((2 * Math.PI * (game.clock - game.legStart)) / game.park.period);
@@ -318,6 +326,8 @@ function fire(power = input.power, at) {
   fadeIntro();
   hideHint(true);
   syncBoost();
+  updateHud();
+  game.missShown = false;
   sfx('launch', { rate: 0.9 + power * 0.25 });
 }
 
@@ -347,6 +357,19 @@ function simStep() {
     game.skimFlash.set(f.skims[k], 0.8);
     sfx('skim');
   }
+  // Crossing the ring without being caught: say why, once per pass.
+  if (f.inBand && f.missWhy && !f.result && !game.missShown) {
+    game.missShown = true;
+    const tp = bodyPos(f.to, f.t);
+    const a = Math.atan2(f.y - tp.y, f.x - tp.x);
+    const rr = game.level.bodies[f.to].ring + 34;
+    game.miss = { text: { fast: 'Too fast', steep: 'Too steep', close: 'Too close' }[f.missWhy], x: tp.x + Math.cos(a) * rr, y: tp.y + Math.sin(a) * rr, t: 0 };
+    if (f.missWhy === 'fast' && game.level.brake && f.brakeLeft > 0 && !game.braked) {
+      ui.hint.textContent = 'Too fast to be caught: tap to brake';
+      ui.hint.hidden = false;
+    }
+  }
+  if (!f.inBand) game.missShown = false;
   // The brake's first lesson: near the ring, too fast, brake unused.
   if (
     game.sys === 1 &&
@@ -361,6 +384,8 @@ function simStep() {
     if (Math.hypot(f.x - tp.x, f.y - tp.y) < tb.ring * 2.2 && !ok) {
       f.slowmoDone = true;
       game.slowmo = 0.6;
+      ui.hint.textContent = 'Too fast to be caught: tap to brake';
+      ui.hint.hidden = false;
     }
   }
   game.clock = f.t;
@@ -411,8 +436,23 @@ function updateRewind(dt) {
     game.trail = [];
     game.mode = 'idle';
     game.idleAge = 0;
+    if (game.launches >= PROBES) outOfProbes();
   }
 }
+
+// All the system's probes are spent: a card, and the system starts over.
+function outOfProbes() {
+  game.mode = 'out';
+  ui.outText.textContent = `All ${PROBES} probes are spent in ${game.level.name}.`;
+  ui.out.hidden = false;
+  ui.hint.hidden = true;
+  sfx('lost', { rate: 0.8 });
+  setTimeout(() => ui.outRetry.focus({ preventScroll: true }), 50);
+}
+ui.outRetry.addEventListener('click', () => {
+  ui.out.hidden = true;
+  startSystem(game.sys);
+});
 
 function updateCapture(dt) {
   const c = game.capture;
@@ -490,6 +530,7 @@ function finishSystem() {
 
 function hideDone() {
   ui.done.hidden = true;
+  ui.out.hidden = true;
 }
 
 ui.next.addEventListener('click', () => {
@@ -514,6 +555,9 @@ function updateHud(pop = false) {
   ui.sysName.textContent = game.level.name;
   ui.dust.textContent = game.taken.size;
   ui.dustOf.textContent = game.level.motes.length;
+  const left = Math.max(0, PROBES - game.launches);
+  ui.probes.textContent = left;
+  ui.probesBox.classList.toggle('low', left <= 3);
   if (pop) {
     ui.dustBox.classList.remove('pop');
     void ui.dustBox.offsetWidth;
@@ -550,9 +594,10 @@ function update(dt) {
   if (game.mode !== lastMode) {
     lastMode = game.mode;
     syncBoost(); // the bar dims while the probe isn't on its orbit
-    if (game.mode !== 'idle') ui.hint.hidden = true;
+    if (game.mode !== 'idle' && game.mode !== 'fly') ui.hint.hidden = true;
   }
   for (const b of game.burst) b.t += dt;
+  if (game.miss) game.miss.t += dt;
   game.burst = game.burst.filter((b) => b.t < 1.2);
   for (const [k, v] of game.skimFlash) {
     if (v - dt <= 0) game.skimFlash.delete(k);
@@ -610,6 +655,7 @@ function draw() {
   drawTrail();
   drawProbe();
   drawBursts();
+  drawMiss();
 }
 
 function drawSky() {
@@ -881,15 +927,25 @@ function drawProbe() {
   ctx.lineTo(L * 0.02, -L * 0.08);
   ctx.closePath();
   ctx.fill();
-  // the brake, while it's unused: a small amber light at the nose (pulsing in its first lesson)
-  if (f && game.mode === 'fly' && f.brakeLeft > 0) {
-    const big = game.slowmo > 0 ? 1.7 + 0.6 * Math.sin(time * 18) : 1;
-    ctx.fillStyle = `rgba(${AMBER}, 0.9)`;
-    ctx.beginPath();
-    ctx.arc(L * 0.62, 0, Math.max(1.4, L * 0.09) * big, 0, Math.PI * 2);
-    ctx.fill();
-  }
   ctx.restore();
+}
+
+// "Too fast" / "Too steep" by the ring, fading out
+function drawMiss() {
+  const m = game.miss;
+  if (!m) return;
+  const k = m.t / 1.6;
+  if (k >= 1) {
+    game.miss = null;
+    return;
+  }
+  ctx.globalAlpha = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
+  ctx.fillStyle = '#ffa64d';
+  ctx.font = '600 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(m.text, Math.max(40, Math.min(W - 40, sx(m.x))), sy(m.y) - k * 8);
+  ctx.globalAlpha = 1;
 }
 
 function drawBursts() {
@@ -931,6 +987,8 @@ function onDown(e) {
     if (game.level.brake && game.flight && brake(game.flight, game.level)) {
       sfx('brake');
       game.slowmo = 0;
+      ui.hint.hidden = true;
+      syncBoost();
       if (!game.braked) {
         game.braked = true;
         store.set('orbit.braked', true);
@@ -991,6 +1049,9 @@ function syncBoost() {
   ui.boost.setAttribute('aria-valuenow', String(pct));
   ui.boostValue.textContent = `${pct}%`;
   ui.boost.classList.toggle('is-off', game.mode !== 'idle');
+  const brakeReady = game.mode === 'fly' && game.flight && game.level.brake && game.flight.brakeLeft > 0;
+  ui.boost.classList.toggle('brake-ready', Boolean(brakeReady));
+  ui.boostLabel.textContent = brakeReady ? 'Brake' : 'Boost';
   if (game.ghost && game.mode === 'idle') {
     ui.boostGhost.hidden = false;
     ui.boostGhost.style.left = `${game.ghost.power * 100}%`;
@@ -1195,6 +1256,7 @@ window.__orbit = {
   orbitAngle,
   probeHeading,
   zoneColour,
+  PROBES,
   rewindByHand,
   set manual(v) {
     manual = v;
