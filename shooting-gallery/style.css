@@ -289,3 +289,73 @@ body {
     background: linear-gradient(#e0553b, #b53822);
   }
 }
+
+/* Lettering: Rye, a fairground woodtype (SIL Open Font License, fonts/OFL.txt), its paint worn in
+   specks so the wood shows through, with a dark edge below. */
+@font-face {
+  font-family: 'Rye';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/rye.woff2') format('woff2');
+}
+
+.card,
+.card-like,
+.play {
+  font-family: 'Rye', 'Rockwell', 'Georgia', serif;
+  font-weight: 400;
+  font-synthesis: none;
+}
+
+.card h2,
+.score-line,
+.turned p {
+  color: transparent;
+  background: url('img/wear-cream.png') 0 0 / 64px 64px repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(1px 2px 0 rgb(30 12 2 / 80%));
+}
+
+.card h2 {
+  background-image: url('img/wear-gold.png');
+  font-weight: 400;
+}
+
+.score-line span {
+  font-weight: 400;
+}
+
+/* The button and the pause sign keep their painted board behind the worn lettering. */
+.pause .card-like {
+  color: transparent;
+  background:
+    url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+    #b9773a url('img/wood.png') 0 0 / 128px 128px repeat;
+  -webkit-background-clip: text, border-box;
+  background-clip: text, border-box;
+  text-shadow: none;
+}
+
+.play {
+  color: transparent;
+  background:
+    url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+    linear-gradient(#d4462f, #a8301c);
+  -webkit-background-clip: text, border-box;
+  background-clip: text, border-box;
+  filter: none;
+  text-shadow: none;
+}
+
+@media (hover: hover) {
+  .play:hover {
+    background:
+      url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+      linear-gradient(#e0553b, #b53822);
+    -webkit-background-clip: text, border-box;
+    background-clip: text, border-box;
+  }
+}

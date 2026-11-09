@@ -709,7 +709,7 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   u = await ui();
   assert.deepEqual(row(u), [false, false, false, false, 'Frenzy!', true, 'shown', 'stopped'], 'frenzy');
   assert.ok(u.pill.top >= u.pill.counterTop, 'the Frenzy pill sits on the counter');
-  assert.equal(u.timerColour, 'pink');
+  assert.ok(['yellow', 'dark'].includes(u.timerColour), `the stopped timer flashes yellow and dark: ${u.timerColour}`);
   // Over.
   await page.evaluate(() => {
     const g = window.__gallery.game;
@@ -844,7 +844,7 @@ test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits
   }
 });
 
-test('shooting-gallery AC-23: the timer counts whole seconds on its badge; it chimes and swells at half time, chimes at 10 s and warms to yellow, orange and red, ticking the last 3', async () => {
+test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, an alarm bell at 10 s, a bell at 5 s and a klaxon at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
   const { context, page } = await open();
   await ready(page);
   const ui = () => page.evaluate(() => window.__gallery.ui());
@@ -866,7 +866,15 @@ test('shooting-gallery AC-23: the timer counts whole seconds on its badge; it ch
   await steps(page, 0.1);
   u = await ui();
   assert.deepEqual([u.timerText, u.timerColour], ['10', 'yellow']);
-  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('warn')), 'a chime at 10 s');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard), ['alert10'], 'the alarm bell at 10 s, and nothing else');
+  await page.evaluate(() => {
+    window.__gallery.game.time = 5.05;
+    window.__gallery.heard.length = 0;
+    window.__gallery.game.pulse = 0;
+  });
+  await steps(page, 0.1);
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard), ['alert5'], 'the bell at 5 s');
+  assert.ok(await page.evaluate(() => window.__gallery.game.pulse > 0.5), 'the board swells at 5 s');
   await page.evaluate(() => (window.__gallery.game.time = 4.5));
   assert.equal((await ui()).timerColour, 'orange');
   await page.evaluate(() => {
@@ -876,7 +884,27 @@ test('shooting-gallery AC-23: the timer counts whole seconds on its badge; it ch
   await steps(page, 2.1);
   u = await ui();
   assert.equal(u.timerColour, 'red');
-  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'tock')), ['tock', 'tock', 'tock'], 'a tick at 3, 2 and 1 s');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'alarm')), ['alarm', 'alarm', 'alarm'], 'a klaxon at 3, 2 and 1 s');
+  // The half-time chime, the 10 s bell, the 5 s bell and the klaxon are four different sounds.
+  const files = await page.evaluate(async () => {
+    const names = ['chime', 'alert10', 'alert5', 'alarm'];
+    const sizes = await Promise.all(names.map((n) => fetch(`sounds/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => b.byteLength)));
+    return sizes;
+  });
+  assert.equal(new Set(files).size, 4, `four distinct sound files: ${files}`);
+  // In a frenzy the stopped timer's bulbs flash yellow and dark, never pink.
+  const seen = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 20;
+    g.startFrenzy();
+    const out = new Set();
+    for (let i = 0; i < 60; i++) {
+      g.step(1 / 60);
+      out.add(g.timerColour());
+    }
+    return [...out].sort();
+  });
+  assert.deepEqual(seen, ['dark', 'yellow']);
   await context.close();
 });
 
@@ -1100,7 +1128,7 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
     g.step(0.05);
     g.game.time = 10.02;
     g.step(0.05);
-    return { chime: g.heardOpts.chime.gain, warn: g.heardOpts.warn.gain };
+    return { chime: g.heardOpts.chime.gain, warn: g.heardOpts.alert10.gain };
   });
   assert.ok(gains.warn > gains.chime, `the 10 s ring is louder: ${JSON.stringify(gains)}`);
   // And louder than every other sound the game plays: a hit, a bullseye, a miss, the quota, the
@@ -1134,9 +1162,9 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
     g.step(0.05);
     return Object.fromEntries(Object.entries(g.heardOpts).map(([k, v]) => [k, v.gain]));
   });
-  const others = Object.entries(all).filter(([k]) => k !== 'warn');
+  const others = Object.entries(all).filter(([k]) => k !== 'alert10');
   assert.ok(others.length >= 8, `sounds compared: ${Object.keys(all)}`);
-  for (const [name, gain] of others) assert.ok(all.warn > gain, `the 10 s ring is louder than ${name}: ${all.warn} vs ${gain}`);
+  for (const [name, gain] of others) assert.ok(all.alert10 > gain, `the 10 s bell is louder than ${name}: ${all.alert10} vs ${gain}`);
   await context.close();
 });
 
@@ -1271,5 +1299,40 @@ test('shooting-gallery AC-32: a target’s stick stays in the background: its to
   });
   assert.ok(r.stick < 70, `the stick’s tones are soft: a range of ${r.stick.toFixed(0)}`);
   assert.ok(r.stick < r.face * 0.4, `far less contrasting than the target: ${r.stick.toFixed(0)} vs ${r.face.toFixed(0)}`);
+  await context.close();
+});
+
+test('shooting-gallery AC-33: the score, the signs and the cards are lettered in Rye, a fairground woodtype, with worn paint', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => document.fonts.load('20px Rye'));
+  const css = await page.evaluate(() => {
+    const cs = (sel) => getComputedStyle(document.querySelector(sel));
+    return {
+      loaded: document.fonts.check('20px Rye'),
+      h2: cs('[data-over-title]').fontFamily,
+      play: cs('[data-play]').fontFamily,
+      h2Paint: cs('[data-over-title]').backgroundImage,
+      scorePaint: cs('.score-line').backgroundImage,
+      clip: cs('.score-line').backgroundClip,
+    };
+  });
+  assert.ok(css.loaded, 'Rye loads from the game’s own folder');
+  assert.match(css.h2, /^"?Rye/);
+  assert.match(css.play, /^"?Rye/);
+  assert.match(css.h2Paint, /wear-gold\.png/);
+  assert.match(css.scorePaint, /wear-cream\.png/);
+  assert.equal(css.clip, 'text');
+  await ready(page);
+  // On the canvas: the score's sign is lettered in Rye, and its paint is chipped (some of the
+  // letters' pixels are see-through).
+  const r = await page.evaluate(async () => {
+    const g = window.__gallery;
+    g.game.score = 480;
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    return { font: g.SIGN_FONT, worn: g.signsWorn(), chipped: g.chipped('480', 26) };
+  });
+  assert.match(r.font, /^"Rye"/);
+  assert.ok(r.worn >= 3, `the score, the round and the quota are painted: ${r.worn}`);
+  assert.ok(r.chipped > 0.02 && r.chipped < 0.4, `the lettering is worn in specks: ${r.chipped}`);
   await context.close();
 });

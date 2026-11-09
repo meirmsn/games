@@ -37,4 +37,4 @@ CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 - `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
-Art and sound by [Kenney](https://www.kenney.nl) (CC0). Code is under the [MIT License](LICENSE).
+Art and sound by [Kenney](https://www.kenney.nl) (CC0). Shooting Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](shooting-gallery/fonts/OFL.txt). Code is under the [MIT License](LICENSE).

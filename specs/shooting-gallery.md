@@ -19,6 +19,26 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's seventh playtest (owner, 2026-11-09)
+
+Where they differ from the playtests below, these win.
+
+- **No pink on the timer.** "during the frenzy mode, the pink on the light bulb should go out …
+  keep it with the other colors … maybe … alternate between … black and yellow." In a frenzy the
+  stopped timer's bulbs flash yellow and dark, three times a second.
+- **Alarms you can't miss.** "when there's 10 seconds left, the chime doesn't sound particularly
+  different than the rest, so make something that is like … hey, alert, it's happening. And then on
+  the last five, do another chime. And then on the last 3, 2, 1 … sound already like an alarm."
+  At 10 s an electric alarm bell rattles for a second; at 5 s a big bell strikes three falling
+  notes; at 3, 2 and 1 a klaxon blares. The board swells with each. All three are synthesised
+  (`scripts/shooting-gallery/make-alarms.py`) and sound nothing like the half-time chime; they
+  replace the triple ring and the ticks.
+- **Analog lettering.** "if by any chance you have a font that looks more analog … on the points at
+  the top and then the dialogue that you get at the end … nice texture." The score, every painted
+  sign, the floating points and the cards are lettered in Rye, a fairground woodtype (Sorkin Type,
+  SIL Open Font License, kept in the game's folder), its paint chipped in specks so the wood shows
+  through.
+
 ### The owner's sixth playtest (owner, 2026-11-09)
 
 Where they differ from the fifth playtest below, these win.
@@ -292,7 +312,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   as MP3: the band's twang on each shot, a wet splat on landing (two variants, varied pitch), a wood
   knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
   empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
-  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time and a louder triple ring at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
+  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time, an alarm bell at 10 s, a big bell's three falling notes at 5 s, a klaxon at each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
 - **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
   targets, sticks, from which the slingshot is built) and its Splat Pack's; the slingshot's band and pouch, the timer badge, the ropes
   and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
@@ -388,9 +408,10 @@ moment 8–18 s into rounds 2 to 6.
   score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
   target — `tests/shooting-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
-  half time it chimes and swells; at 10 s it plays its louder triple ring and its bulbs turn yellow, at 5 s orange
-  and at 3 s red, ticking each of the last 3 seconds; in a frenzy they are pink and it stops —
-  `tests/shooting-gallery.test.mjs`.
+  half time it chimes and swells; at 10 s an alarm bell rattles and its bulbs turn yellow; at 5 s a
+  bell strikes and they turn orange; at 3 s they turn red and a klaxon blares at 3, 2 and 1, each a
+  different sound from the half-time chime; in a frenzy it stops and its bulbs flash yellow and
+  dark, never pink — `tests/shooting-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
   in round 1 a big one rising in the nearest lane for 3.5 s, in round 2 one crossing a middle lane,
   from round 3 one crossing the farthest lane at 1.8× its speed — `tests/shooting-gallery.test.mjs`.
@@ -415,6 +436,8 @@ moment 8–18 s into rounds 2 to 6.
   edge — `tests/shooting-gallery.test.mjs`.
 - **AC-32** A target's stick is drawn in soft tones: across its width they span less than 70 levels
   of luminance and less than 0.4 of what the target's face spans — `tests/shooting-gallery.test.mjs`.
+- **AC-33** The score, the painted signs and the cards are lettered in Rye, a fairground woodtype
+  served from the game's folder, its paint chipped in specks — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 
@@ -432,7 +455,7 @@ moment 8–18 s into rounds 2 to 6.
 | Round intro (about 1.2 s) | hidden | the round's number and name | hidden | hidden | hidden | shown |
 | Playing | hidden | hidden | hidden | hidden | hidden | shown |
 | Bonus (quota met) | hidden | "Bonus!" briefly, a pill on the counter | hidden | hidden | hidden | shown, the pips lit gold |
-| Frenzy (7 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer pink and stopped |
+| Frenzy (7 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer stopped, its bulbs flashing yellow and dark |
 | Round won (about 1.5 s) | hidden | "Round cleared" and the round's score | hidden | hidden | hidden | shown |
 | Paused (page was hidden) | hidden | hidden | shown | hidden | hidden | shown |
 | Turned (the screen's orientation changed) | hidden | hidden | hidden | shown, offering a restart | hidden | shown, greyed |

@@ -30,8 +30,9 @@ const { sound } = mountShell({
     frenzy: 'sounds/frenzy.mp3',
     frenzyhit: 'sounds/frenzyhit.mp3',
     chime: 'sounds/chime.mp3',
-    warn: 'sounds/warn.mp3',
-    tock: 'sounds/tock.mp3',
+    alert10: 'sounds/alert10.mp3',
+    alert5: 'sounds/alert5.mp3',
+    alarm: 'sounds/alarm.mp3',
   },
 });
 
@@ -909,8 +910,8 @@ function spawnStep(dt, cfg) {
   }
 }
 
-// The timer's cues: a chime and a swell at half time, a double chime at 10 s, a tick in each of the
-// last 3 seconds.
+// The timer's cues: a chime and a swell at half time; at 10 s an alarm bell rattles; at 5 s a big
+// bell strikes three falling notes; at 3, 2 and 1 s a klaxon blares. Each later cue swells the board.
 function timerCues(before, now) {
   const half = ROUND_TIME / 2;
   if (before > half && now <= half) {
@@ -918,21 +919,31 @@ function timerCues(before, now) {
     game.pulse = 1;
   }
   if (before > 10 && now <= 10) {
-    sfx('warn', { gain: 1.6 });
+    sfx('alert10', { gain: 1.6 });
     game.pulse = 1;
   }
-  for (const s of [3, 2, 1]) if (before > s && now <= s) sfx('tock');
+  if (before > 5 && now <= 5) {
+    sfx('alert5', { gain: 1.5 });
+    game.pulse = 1;
+  }
+  for (const s of [3, 2, 1]) {
+    if (before > s && now <= s) {
+      sfx('alarm', { gain: 1.3 });
+      game.pulse = 1;
+    }
+  }
 }
-// The timer badge's background: plain, then yellow from 10 s, orange from 5 s, red from 3 s; pink
-// in a frenzy.
+// The timer's bulbs: warm white, then yellow from 10 s, orange from 5 s, red from 3 s. In a frenzy
+// the clock is stopped and its bulbs flash yellow and dark, three times a second.
+const FRENZY_FLASH = 3;
 function timerColour() {
-  if (game.frenzy > 0) return 'pink';
+  if (game.frenzy > 0) return Math.floor(game.T * FRENZY_FLASH * 2) % 2 === 0 ? 'yellow' : 'dark';
   if (game.time <= 3) return 'red';
   if (game.time <= 5) return 'orange';
   if (game.time <= 10) return 'yellow';
   return 'plain';
 }
-const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', pink: '#ff6ec7' };
+const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', dark: null };
 // The bulbs of a seven-segment digit: segments a (top) to g (middle), three bulbs each.
 const SEGMENTS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcfgd'];
 
@@ -984,15 +995,105 @@ function nail(x, y) {
   ctx.arc(x - 0.5, y - 0.5, 0.7, 0, Math.PI * 2);
   ctx.fill();
 }
-// Painted lettering: cream paint with a dark edge below, as if brushed onto the wood.
+// Painted lettering: Rye, a fairground woodtype, in cream paint with a dark edge below, worn in
+// specks where the paint has chipped, as if brushed onto the wood years ago. Each piece of
+// lettering is drawn once into its own canvas and reused while it doesn't change.
+const SIGN_FONT = '"Rye", "Rockwell", "Georgia", serif';
+const signFont = (px) => `${px}px ${SIGN_FONT}`;
+let wear = null;
+function wearPattern() {
+  if (wear) return wear;
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d');
+  let seed = 7;
+  const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 260; i++) {
+    g.fillStyle = `rgba(0, 0, 0, ${0.25 + r() * 0.6})`;
+    g.beginPath();
+    g.ellipse(r() * 96, r() * 96, 0.3 + r() * 1.3, 0.2 + r() * 0.7, r() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  // A few longer scratches along the grain.
+  g.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  g.lineWidth = 0.6;
+  for (let i = 0; i < 10; i++) {
+    const x = r() * 96;
+    const y = r() * 96;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + 5 + r() * 12, y + (r() - 0.5) * 2);
+    g.stroke();
+  }
+  wear = c;
+  return c;
+}
+const signCache = new Map();
+// Lettering drawn before Rye arrived used a stand-in: draw it again once the font is in.
+if (document.fonts) document.fonts.load(signFont(20)).then(() => signCache.clear(), () => {});
+let signsWorn = 0; // pieces of lettering drawn worn in the last frame (for the tests)
+function signImage(text, px, color, scale, shadow = true) {
+  const key = `${text}|${px}|${color}|${scale}|${shadow}`;
+  let img = signCache.get(key);
+  if (img) return img;
+  const m = document.createElement('canvas').getContext('2d');
+  m.font = signFont(px);
+  const w = Math.ceil(m.measureText(text).width + px * 0.4);
+  const h = Math.ceil(px * 1.6);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  const g = c.getContext('2d');
+  g.scale(scale, scale);
+  g.font = signFont(px);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = color;
+  g.fillText(text, w / 2, h / 2);
+  // Chip the paint: the specks take paint away, then the shadow goes under what's left.
+  g.globalCompositeOperation = 'destination-out';
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = g.createPattern(wearPattern(), 'repeat');
+  g.fillRect(0, 0, c.width, c.height);
+  if (shadow) {
+    g.globalCompositeOperation = 'destination-over';
+    g.setTransform(scale, 0, 0, scale, 0, 0);
+    g.fillStyle = 'rgba(30, 12, 2, 0.8)';
+    g.fillText(text, w / 2 + px * 0.05, h / 2 + px * 0.08);
+  }
+  img = { c, w, h };
+  if (signCache.size > 160) signCache.delete(signCache.keys().next().value);
+  signCache.set(key, img);
+  return img;
+}
+// How much of a piece of lettering's paint is chipped away, 0 to 1 (for the tests).
+function chipped(text, px) {
+  const opaque = (c) => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) n += d[i];
+    return n;
+  };
+  const worn = signImage(text, px, '#fff1d6', 2, false).c;
+  const clean = document.createElement('canvas');
+  clean.width = worn.width;
+  clean.height = worn.height;
+  const g = clean.getContext('2d');
+  g.scale(2, 2);
+  g.font = signFont(px);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#fff1d6';
+  g.fillText(text, worn.width / 4, worn.height / 4);
+  return 1 - opaque(worn) / opaque(clean);
+}
 function painted(text, x, y, px, align = 'center', color = '#fff1d6') {
-  ctx.font = `800 ${px}px "Rockwell", "Georgia", "Times New Roman", serif`;
-  ctx.textAlign = align;
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(30, 12, 2, 0.75)';
-  ctx.fillText(text, x + 0.8, y + 1.4);
-  ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
+  const scale = Math.max(1, Math.round(dpr * k * 2) / 2);
+  const img = signImage(String(text), px, color, scale);
+  const pad = px * 0.2;
+  const left = align === 'left' ? x - pad : align === 'right' ? x - img.w + pad : x - img.w / 2;
+  ctx.drawImage(img.c, left, y - img.h / 2, img.w, img.h);
+  signsWorn++;
 }
 // A recessed groove in the wood, and a brass bar sliding in it.
 function groove(x, y, w, h) {
@@ -1453,7 +1554,7 @@ function drawHud() {
   const H = hudLayout();
   // The score, painted on a small sign hanging under the valance.
   const sc = game.score.toLocaleString('en-US');
-  ctx.font = `800 ${H.score.font}px "Rockwell", "Georgia", serif`;
+  ctx.font = signFont(H.score.font);
   const sw = Math.max(48, ctx.measureText(sc).width + 22);
   plank(SW / 2 - sw / 2, H.score.y - H.score.font * 0.75, sw, H.score.font * 1.5, { tone: 0.05 });
   painted(sc, SW / 2, H.score.y + 1, H.score.font);
@@ -1461,7 +1562,7 @@ function drawHud() {
   drawTimerBoard(H.timer);
   // The round, painted on a nailed sign.
   const rt = `Round ${game.round} · ${cfg.name}`;
-  ctx.font = '800 13px "Rockwell", "Georgia", serif';
+  ctx.font = signFont(13);
   const rw = ctx.measureText(rt).width + 20;
   plank(H.label.x - 6, H.label.y - 10, rw, 20, { tone: 0.08 });
   painted(rt, H.label.x + 4, H.label.y + 1, 13, 'left');
@@ -1785,7 +1886,7 @@ function drawBalls() {
 }
 
 function label(text, x, y, px, align = 'center', color = '#fff') {
-  ctx.font = `800 ${px}px "Trebuchet MS", "Arial Rounded MT Bold", system-ui, sans-serif`;
+  ctx.font = signFont(px);
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
@@ -1943,6 +2044,7 @@ function drawLamps() {
 function draw() {
   polesDrawn = 0;
   paintClipped = 0;
+  signsWorn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2215,7 +2317,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
