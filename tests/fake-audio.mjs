@@ -13,6 +13,10 @@ export const FAKE_AUDIO = () => {
       this.state = 'running';
       return Promise.resolve();
     }
+    suspend() {
+      this.state = 'suspended';
+      return Promise.resolve();
+    }
     createGain() {
       return { gain: { value: 1 }, connect: (n) => n };
     }

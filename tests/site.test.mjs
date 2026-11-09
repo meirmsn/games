@@ -63,6 +63,19 @@ test('reef AC-11: landing page lists seven games, Reef first and playable, with 
   await context.close();
 });
 
+test('shooting-gallery AC-20: the Shooting Gallery tile is playable and opens the game', async () => {
+  const { context, page, errors } = await open();
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Shooting Gallery' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'the tile is a link');
+  assert.equal(await tile.getAttribute('href'), 'shooting-gallery/');
+  assert.equal(await tile.locator('.badge').count(), 0, 'no coming-soon badge');
+  await tile.click();
+  await page.waitForURL(/shooting-gallery\/$/);
+  await page.waitForFunction(() => window.__gallery);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('a coming-soon tile nudges and does not navigate', async () => {
   const { context, page } = await open();
   const tile = page.locator('.tile.is-soon').first();
