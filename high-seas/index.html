@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>High Seas</title>
+    <meta name="description" content="High Seas: sail a little dinghy by the wind across an isometric archipelago, run cargo between ports, and earn the galleon." />
+    <meta name="theme-color" content="#4a9fd0" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="sea" aria-label="An isometric sea with islands, ports and a little sailing boat"></canvas>
+
+    <div class="hud" data-hud hidden>
+      <div class="coins" aria-label="Coins"><span class="coin-icon" aria-hidden="true"></span><strong data-coins>0</strong></div>
+      <div class="hold" data-hold aria-label="Cargo aboard"></div>
+    </div>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <section class="card start" data-screen="start" hidden>
+      <h1>High Seas</h1>
+      <p class="sea-name">Sea <strong data-sea-name></strong> <span data-sea-best></span></p>
+      <button class="play" type="button" data-continue hidden>Continue</button>
+      <button class="play" type="button" data-start>Set sail</button>
+      <button class="link" type="button" data-new-sea>A different sea</button>
+    </section>
+
+    <section class="sheet" data-screen="port" hidden>
+      <header class="sheet-head">
+        <span class="port-flag" data-port-flag></span>
+        <h2 data-port-name>Port</h2>
+        <button class="cast" type="button" data-cast>Cast off</button>
+      </header>
+      <p class="paid" data-paid hidden></p>
+      <div class="offers" data-offers></div>
+      <div class="yard" data-yard hidden></div>
+    </section>
+
+    <section class="card" data-screen="pause" hidden>
+      <h2>Hove to</h2>
+      <button class="play" type="button" data-resume>Sail on</button>
+    </section>
+
+    <section class="card" data-screen="over" hidden>
+      <h2>Voyage done</h2>
+      <p class="time-line" data-final-time>0:00</p>
+      <p class="detail" data-final-detail></p>
+      <button class="play" type="button" data-again>A new sea</button>
+      <button class="link" type="button" data-same>Sail this sea again</button>
+    </section>
+  </body>
+</html>
