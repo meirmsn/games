@@ -24,18 +24,19 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
 
 - Verb: pull back and release, watch a readable arc bend around a planet, and the settle: the probe
   spirals into the ring with a chord.
-- A typical 5-second choice: thread the close line of motes past a planet (risking a crash) or swing
-  the wide line; brake early (fall inward) or late (slow enough to be caught).
+- A typical 5-second choice: chase the leg's line of motes, a close pass by a planet (risking a crash)
+  or a wide arc (risking drifting away), or take the plain capture; brake early (fall inward) or
+  late (slow enough to be caught).
 - How it teaches: no text. System 1's first ring is caught by any roughly aimed flick. The preview
   thread shows the first bend and is amber while the probe is too fast to be caught. The brake
   arrives with a slow-motion moment and a pulsing flame on the probe. Moons first appear where
   waiting for one is plainly right.
 - Three clocks: a flight resolves every 3–8 s; a new system with a new element and new look every
   2–3 minutes; you come back for gold medals, the "one shot" badge and the par.
-- What an expert does differently: brakes at the right moment, threads the close lines, takes most
-  motes in one flight, finishes within par.
-- Why the tenth play differs from the first: going for gold means choosing each leg's route (close
-  or wide line, brake timing, waiting for a moon) within a par of launches.
+- What an expert does differently: brakes at the right moment, threads each leg's line of motes in
+  one flight, waits for the moon, finishes within par.
+- Why the tenth play differs from the first: going for gold means finding each leg's mote route (a
+  close pass or a wide arc, the brake's moment, the moon's timing) within a par of launches.
 - Form: short-to-long. This slice is a 6–9 minute tour (3 systems of 4 legs), interruptible at any
   leg. Later slices lengthen it.
 - Orientation: portrait. One thumb; launches mostly upward, so the hand stays below the action; a
@@ -89,8 +90,11 @@ three differ.
   for a system's first leg) and runs on, so nothing jumps when a leg begins. A rewind runs the
   clock visibly back to the leg's start. No body's surface or the target's band ever meets the
   parking ring, at any leg time (spec review, 2026-11-09).
-- Motes, in two lines per leg: a close line hugging a planet and a wide line on an outer arc. Motes
-  caught on any flight count, so failure pays. Skims (passing inside 1.35 × a body's radius, drawn
+- Motes: each leg has one line, laid along a captured route the solver found. Some legs' line is a
+  close pass by a planet, others' a wide arc; each leg 4 has a shower of 7. A plain capture takes
+  few of them. Each leg keeps its gold route (aim, power and brake moment) in `orbit/levels.js`,
+  which the test flies. Motes caught on any flight count, so failure pays. Rejected: two lines per
+  leg, which one flight can't both take, so gold would be out of reach (tuning, 2026-11-09). Skims (passing inside 1.35 × a body's radius, drawn
   as its atmosphere glow) flare, roar and are counted on the end card. The end card shows motes x
   of y, launches against the par (legs + 2) and skims, and a medal: bronze for finishing, silver
   for 70% of the motes within 2 × par launches, gold for 90% within par. A "one shot" badge is for
@@ -111,8 +115,8 @@ three differ.
   width, so it matches on every screen. A small dead zone applies, dragging back to the start
   cancels, and a second finger is ignored. A cancelled pointer, or a resize or rotation, cancels a
   drag without launching; a flight carries on through a resize in world units. The leg's clock
-  (moons) pauses while a drag is held. A tap during flight brakes (from System 2; in System 1 it
-  does nothing); a drag during flight does nothing. Keyboard: left and right turn the aim, up and
+  (moons) pauses while a drag is held. A touch during flight brakes the moment it lands (from
+  System 2; in System 1 it does nothing), and dragging it aims nothing. Keyboard: left and right turn the aim, up and
   down set the power (the preview shows and the clock pauses, as in a drag), Space launches and
   brakes in flight, R rewinds. The mouse drags like a finger. In landscape the field letterboxes
   and stays playable (first concept review and spec review, 2026-11-09).
@@ -139,10 +143,12 @@ three differ.
   Recorded for the owner to rename if they want (session, 2026-11-09).
 - Tuning targets, pinned by `tests/orbit-levels.test.mjs`, measured over roughly aimed flicks
   (within 35° of the straight line to the target, any power above a quarter) and, where moons
-  move, over leg start times across a full moon period. System 1's first leg captures at least 60%
-  at leg time 0. Every leg can be captured. In each system, leg 3 has the lowest capture rate and
-  leg 4 a higher one than legs 2 and 3. Each system has a gold route: the best single captured
-  flights per leg add up to at least 90% of its motes. System 2's first leg captures under 20%
+  move, over leg start times across a full moon period; where there's a brake, a flick counts if
+  braking at some moment catches it. System 1's first leg captures at least 60% at leg time 0. Every
+  leg can be captured. In each system leg 3 captures less often than leg 2, and leg 4 most often of
+  legs 2–4: leg 1 brings the system's new thing, so it is tuned by its own target. Each leg's
+  stored gold route captures and takes every mote of its leg, so a par-length gold run exists.
+  Typical captured flights take about 1–2 s, so a leg is an arc, not a hop. System 2's first leg captures under 20%
   without the brake and at least 40% with it. On System 3's first moon leg the best start time
   captures at least twice as often as the worst (session and spec review, 2026-11-09).
 

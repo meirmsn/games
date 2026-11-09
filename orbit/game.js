@@ -200,6 +200,7 @@ const game = {
   skimFlash: new Map(), // body index → seconds of flare left
   paused: false,
   intro: false,
+  acc: 0, // fixed steps owed to the flight
 };
 const input = { active: false, id: null, x0: 0, y0: 0, angle: -Math.PI / 2, power: 0, keyboard: false, lastTick: 0 };
 let manual = false; // tests own the clock
@@ -336,8 +337,10 @@ function fire(angle, power) {
   game.flight = launch(game.level, game.leg, angle, pw, game.clock, assistNow());
   game.flight.angle = angle;
   game.flight.power = power;
+  game.lastLaunch = { angle, power, x: game.flight.x, y: game.flight.y, vx: game.flight.vx, vy: game.flight.vy, t: game.clock };
   game.flight.slowmoDone = false;
   game.trail = [];
+  game.acc = 0;
   game.launches++;
   game.mode = 'fly';
   game.skimFlash.clear();
@@ -399,6 +402,7 @@ function simStep() {
 
 function endFlight() {
   const f = game.flight;
+  game.lastResult = { result: f.result, why: f.why, x: f.x, y: f.y, age: f.age, caught: f.caught.length };
   if (f.result === 'captured') {
     sfx('capture');
     const tp = bodyPos(f.to, f.t);
@@ -510,7 +514,6 @@ function finishSystem() {
   ui.badge.hidden = game.fails > 0;
   ui.next.textContent = last ? 'Play again' : 'Next';
   ui.done.hidden = false;
-  ui.done.dataset.medal = MEDALS[medal];
   sfx('done');
   buildLegDots();
   setTimeout(() => ui.next.focus({ preventScroll: true }), 50);
@@ -593,9 +596,10 @@ function update(dt) {
         game.slowmo -= dt;
         scale = 0.4;
       }
-      game.acc = (game.acc || 0) + dt * scale;
-      while (game.acc >= DT && game.mode === 'fly') {
-        game.acc -= DT;
+      // whole fixed steps, counted in steps so 60 and 120 Hz frames never drift apart
+      game.acc += (dt * scale) / DT;
+      while (game.acc >= 1 - 1e-6 && game.mode === 'fly') {
+        game.acc -= 1;
         simStep();
       }
       break;
@@ -997,7 +1001,10 @@ function drawBursts() {
 // ---------- Input ----------
 
 function onDown(e) {
-  if (game.paused) return;
+  if (game.paused) {
+    resumeGame();
+    return;
+  }
   if (input.id !== null && e.pointerId !== input.id) return; // a second finger
   if (e.clientY > H - insets.bottom - EDGE) return; // the phone's swipe strip
   if (game.mode === 'fly') {
@@ -1012,7 +1019,11 @@ function onDown(e) {
     return;
   }
   if (game.mode !== 'idle') return;
-  canvas.setPointerCapture?.(e.pointerId);
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch (err) {
+    // a synthetic or already-lifted pointer: the drag still works without capture
+  }
   startAim(e.clientX, e.clientY, e.pointerId);
 }
 
@@ -1210,6 +1221,9 @@ window.__orbit = {
   medalFor,
   probeWorld,
   launchPoint,
+  timeoutDim,
+  resize,
+  tap: (y = 100) => onDown({ pointerId: -3, clientY: y }),
   rewindByHand,
   set manual(v) {
     manual = v;

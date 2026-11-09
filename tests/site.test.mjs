@@ -63,6 +63,17 @@ test('reef AC-11: landing page lists seven games, Reef first and playable, with 
   await context.close();
 });
 
+test('orbit AC-16: the Orbit tile is a playable link, and the page still shows seven tiles', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 7);
+  const orbit = page.locator('.tile', { has: page.locator('h2', { hasText: /^Orbit$/ }) });
+  assert.equal(await orbit.evaluate((el) => el.tagName), 'A');
+  assert.equal(await orbit.getAttribute('href'), 'orbit/');
+  assert.equal(await orbit.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.equal(await orbit.locator('.badge').count(), 0);
+  await context.close();
+});
+
 test('a coming-soon tile nudges and does not navigate', async () => {
   const { context, page } = await open();
   const tile = page.locator('.tile.is-soon').first();
