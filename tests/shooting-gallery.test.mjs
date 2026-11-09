@@ -1530,10 +1530,14 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
   const r = await page.evaluate(() => {
     const g = window.__gallery;
     const out = {};
+    // The waltz's own playing source, as the fake audio made it.
+    const loopSource = () => window.__sources.filter((x) => x.loop).pop();
+    out.rates = [];
     for (const [t, key] of [[20, 'at20'], [9.5, 'at10'], [4.5, 'at5'], [2.5, 'at3']]) {
       g.game.time = t;
       g.step(1 / 60);
       out[key] = g.musicSpeed();
+      out.rates.push(loopSource() ? loopSource().playbackRate.value : null);
     }
     out.waltz = g.musicNow();
     g.game.time = 2.5;
@@ -1545,6 +1549,7 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
   });
   assert.equal(r.at20, 1, 'the usual tempo');
   assert.ok(r.at10 > 1 && r.at5 > r.at10 && r.at3 > r.at5, `faster at 10, 5 and 3 s: ${r.at10}, ${r.at5}, ${r.at3}`);
+  assert.deepEqual(r.rates, [r.at20, r.at10, r.at5, r.at3], 'the playing waltz itself plays at those speeds');
   assert.equal(r.frenzy, 1, 'the galop at its own tempo');
   assert.equal(r.waltz.name, 'music');
   assert.equal(r.galop.name, 'frenzy');
@@ -1599,6 +1604,24 @@ test('shooting-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a fr
   assert.ok(moved.at10 > moved.calm * 1.2, `faster from 10 s: ${moved.at10}`);
   assert.ok(moved.at5 > moved.at10 * 1.2, `faster again from 5 s: ${moved.at5}`);
   assert.ok(moved.at3 > moved.at5 * 1.2, `fastest in the last 3: ${moved.at3}`);
+  // Pop-ups keep their timing: one is up and gone in the same time with the clock at 25 s or 2.9 s.
+  const popLife = await page.evaluate(() => {
+    const g = window.__gallery;
+    const life = (t) => {
+      g.clear();
+      g.game.time = t;
+      const p = g.launchPop(2, 1.8);
+      let n = 0;
+      while (p.state === 'live' && n < 600) {
+        g.step(1 / 60);
+        g.game.time = t; // hold the clock in its band
+        n++;
+      }
+      return n;
+    };
+    return { calm: life(25), rush: life(2.9) };
+  });
+  assert.equal(popLife.rush, popLife.calm, `a pop-up's timing is unchanged: ${JSON.stringify(popLife)}`);
   // A frenzy opens with the snare roll, alone, and the galop comes in after it.
   const f = await page.evaluate(() => {
     const g = window.__gallery;
