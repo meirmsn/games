@@ -40,6 +40,23 @@ export function createIso({ tileW = 64, tileH = 32 } = {}) {
       const t = this.toTile(sx, sy);
       return { x: Math.floor(t.x), y: Math.floor(t.y) };
     },
+    // The tile under an iso-plane point when tiles stand at different heights: heightAt(i, j) is a
+    // tile's top in screen px (0 for the ground, or undefined/null for nothing there). Tiles are
+    // tried front to back, so a raised tile in front wins over the ground tile behind it.
+    pickTileAt(sx, sy, heightAt, maxHeight = 256) {
+      const reach = Math.ceil(maxHeight / hh / 2) + 1;
+      const base = this.pickTile(sx, sy);
+      for (let k = 2 * reach; k >= 0; k--) {
+        // Candidates on the diagonal below the ground pick, nearest the viewer first.
+        for (const [i, j] of [[base.x + Math.ceil(k / 2), base.y + Math.floor(k / 2)], [base.x + Math.floor(k / 2), base.y + Math.ceil(k / 2)]]) {
+          const z = heightAt(i, j);
+          if (z === undefined || z === null) continue;
+          const t = this.toTile(sx, sy + z);
+          if (Math.floor(t.x) === i && Math.floor(t.y) === j) return { x: i, y: j };
+        }
+      }
+      return null;
+    },
     // A direction drawn on screen (dx, dy) to the grid direction that looks like it, unit length.
     screenDirToGrid(dx, dy) {
       const a = dx / hw;
@@ -60,6 +77,12 @@ export function createIso({ tileW = 64, tileH = 32 } = {}) {
     // optional layer breaks ties (ground 0, then things standing on it).
     depth(x, y, layer = 0) {
       return x + y + layer * 1e-3;
+    },
+    // Sort key for something covering a footprint of w × h tiles from (x, y): its centre, so a 2×2
+    // building or a long hull sorts against 1×1 things beside it. Draw the flat ground in its own
+    // pass first; sort only what stands up.
+    depthOf({ x, y, w = 1, h = 1 }, layer = 0) {
+      return x + w / 2 + y + h / 2 + layer * 1e-3;
     },
     // Which of n sprite headings (0..n-1, counted clockwise on screen from `first`, in radians,
     // where 0 points right and π/2 down) best shows a grid direction.
@@ -92,6 +115,7 @@ export function createCamera({ x = 0, y = 0, zoom = 1, minZoom = 0.25, maxZoom =
     w: 1,
     h: 1,
     bounds: null, // { minX, minY, maxX, maxY } in the iso plane, or null
+    clampEdges: false, // false: keep the view's centre in bounds; true: keep its edges in
     resize(w, h) {
       cam.w = Math.max(1, w);
       cam.h = Math.max(1, h);
@@ -130,12 +154,20 @@ export function createCamera({ x = 0, y = 0, zoom = 1, minZoom = 0.25, maxZoom =
       cam.y += before.y - after.y;
       cam.clamp();
     },
-    // Keep the view's centre inside the bounds.
+    // Keep the view's centre (or, with clampEdges, its edges) inside the bounds. A view wider than
+    // the bounds centres on them.
     clamp() {
       const b = cam.bounds;
       if (!b) return;
-      cam.x = Math.min(b.maxX, Math.max(b.minX, cam.x));
-      cam.y = Math.min(b.maxY, Math.max(b.minY, cam.y));
+      const mx = cam.clampEdges ? cam.w / 2 / cam.zoom : 0;
+      const my = cam.clampEdges ? cam.h / 2 / cam.zoom : 0;
+      const fit = (v, lo, hi) => (lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v)));
+      cam.x = fit(cam.x, b.minX + mx, b.maxX - mx);
+      cam.y = fit(cam.y, b.minY + my, b.maxY - my);
+    },
+    // The zoom at which a box in the iso plane fills the view (for a minZoom that shows it all).
+    fitZoom(b, pad = 0) {
+      return Math.min((cam.w - 2 * pad) / (b.maxX - b.minX), (cam.h - 2 * pad) / (b.maxY - b.minY));
     },
     // The canvas transform for this view, at a device pixel ratio.
     transform(dpr = 1) {
@@ -176,22 +208,40 @@ export function createCamera({ x = 0, y = 0, zoom = 1, minZoom = 0.25, maxZoom =
 }
 
 // Touch, mouse and wheel gestures on an element, for a camera.
-//   - Two fingers: pinch to zoom and drag to pan, together. A second finger cancels the first
-//     finger's gesture (onCancel), so a pinch never also steers or taps.
-//   - One finger or the mouse: pans when `onePointerPans` is true; otherwise it is the game's
-//     own gesture: onDown(p), onMove(p), onUp(p), with p = { x, y, dx, dy } in view px, (dx, dy)
-//     measured from where it went down. A press that moves less than `tapSlop` px is a tap: onTap(p).
-//   - Wheel: zoom at the pointer.
+//   - Two or more fingers: pinch to zoom and drag to pan, together; the world stays under the
+//     fingers. A second finger cancels the first finger's gesture (onCancel), so a pinch never
+//     also steers or taps.
+//   - One finger or the left mouse button: pans when `onePointerPans` is true (once it has moved
+//     past `tapSlop`, so a tap doesn't jiggle the view); otherwise it is the game's own gesture:
+//     onDown(p), onMove(p), onUp(p), with p = { x, y, dx, dy } in view px, (dx, dy) measured from
+//     where it went down. A press that moves less than `tapSlop` px and lifts within `tapMs` is a
+//     tap: onTap(p). One held still for `longPressMs` is a long press: onLongPress(p), and no tap.
+//   - Wheel: zoom at the pointer. Other mouse buttons are ignored.
 // Returns detach().
 export function attachGestures(
   el,
   camera,
-  { onePointerPans = false, tapSlop = 10, onDown, onMove, onUp, onTap, onCancel, onZoom } = {}
+  {
+    onePointerPans = false,
+    tapSlop = 20,
+    tapMs = 350,
+    longPressMs = 550,
+    onDown,
+    onMove,
+    onUp,
+    onTap,
+    onLongPress,
+    onCancel,
+    onZoom,
+  } = {}
 ) {
   const pts = new Map(); // pointerId -> { x, y, x0, y0 }
-  let primary = null; // the pointer the game's one-finger gesture follows
+  let primary = null; // the pointer the one-finger gesture follows
   let moved = false;
+  let downAt = 0;
+  let pressTimer = null;
   let pinch = null; // { dist, mx, my }
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
   const local = (e) => {
     const r = el.getBoundingClientRect ? el.getBoundingClientRect() : { left: 0, top: 0 };
@@ -201,8 +251,13 @@ export function attachGestures(
     const [a, b] = [...pts.values()];
     return { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
   };
+  const clearPress = () => {
+    if (pressTimer) clearTimeout(pressTimer);
+    pressTimer = null;
+  };
 
   function down(e) {
+    if (e.pointerType === 'mouse' && e.button !== undefined && e.button !== 0) return;
     const p = local(e);
     pts.set(e.pointerId, { x: p.x, y: p.y, x0: p.x, y0: p.y });
     if (el.setPointerCapture) {
@@ -213,8 +268,20 @@ export function attachGestures(
     if (pts.size === 1) {
       primary = e.pointerId;
       moved = false;
+      downAt = now();
       if (!onePointerPans && onDown) onDown({ x: p.x, y: p.y, dx: 0, dy: 0 });
-    } else if (pts.size === 2) {
+      if (onLongPress) {
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          const q = pts.get(primary);
+          if (q && !moved) {
+            moved = true; // no tap after a long press
+            onLongPress({ x: q.x, y: q.y, dx: q.x - q.x0, dy: q.y - q.y0 });
+          }
+        }, longPressMs);
+      }
+    } else {
+      clearPress();
       if (primary !== null && !onePointerPans && onCancel) onCancel();
       primary = null;
       pinch = pinchState();
@@ -230,19 +297,28 @@ export function attachGestures(
     q.x = p.x;
     q.y = p.y;
     if (pts.size >= 2 && pinch) {
-      const now = pinchState();
-      camera.zoomAt(now.dist / pinch.dist, now.mx, now.my);
-      camera.panBy(now.mx - pinch.mx, now.my - pinch.my);
-      pinch = now;
+      const s = pinchState();
+      // The world point under the old midpoint ends up under the new one, scaled by the spread.
+      camera.zoomAt(s.dist / pinch.dist, pinch.mx, pinch.my);
+      camera.panBy(s.mx - pinch.mx, s.my - pinch.my);
+      pinch = s;
       if (onZoom) onZoom(camera.zoom);
       return;
     }
     if (e.pointerId !== primary) return;
     const dx = p.x - q.x0;
     const dy = p.y - q.y0;
-    if (Math.hypot(dx, dy) > tapSlop) moved = true;
-    if (onePointerPans) camera.panBy(p.x - px, p.y - py);
-    else if (onMove) onMove({ x: p.x, y: p.y, dx, dy });
+    if (!moved && Math.hypot(dx, dy) > tapSlop) {
+      moved = true;
+      clearPress();
+      if (onePointerPans) {
+        camera.panBy(dx, dy); // catch up the slop, so the world stays under the finger
+        return;
+      }
+    }
+    if (onePointerPans) {
+      if (moved) camera.panBy(p.x - px, p.y - py);
+    } else if (onMove) onMove({ x: p.x, y: p.y, dx, dy });
   }
 
   function up(e) {
@@ -250,16 +326,26 @@ export function attachGestures(
     if (!q) return;
     pts.delete(e.pointerId);
     if (e.pointerId === primary) {
+      clearPress();
       const p = { x: q.x, y: q.y, dx: q.x - q.x0, dy: q.y - q.y0 };
       primary = null;
       if (e.type === 'pointercancel') {
         if (!onePointerPans && onCancel) onCancel();
       } else {
         if (!onePointerPans && onUp) onUp(p);
-        if (!moved && onTap) onTap(p);
+        if (!moved && onTap && now() - downAt <= tapMs) onTap(p);
       }
     }
-    if (pts.size < 2) pinch = null;
+    if (pts.size >= 2) pinch = pinchState(); // a third finger lifted: carry on from the two left
+    else pinch = null;
+    if (pts.size === 1 && onePointerPans && primary === null) {
+      // After a pinch, the finger left on the glass pans on from where it is.
+      const [id, r] = [...pts.entries()][0];
+      primary = id;
+      moved = true;
+      r.x0 = r.x;
+      r.y0 = r.y;
+    }
   }
 
   function wheel(e) {
@@ -275,6 +361,7 @@ export function attachGestures(
   el.addEventListener('pointercancel', up);
   el.addEventListener('wheel', wheel, { passive: false });
   return () => {
+    clearPress();
     el.removeEventListener('pointerdown', down);
     el.removeEventListener('pointermove', move);
     el.removeEventListener('pointerup', up);

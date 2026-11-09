@@ -167,3 +167,92 @@ test('high-seas AC-3: gestures: one finger is the game\'s, a tap is a tap, two f
   el2.fire('pointerup', 1, 140, 130);
   assert.deepEqual([cam2.x, cam2.y], [-40, -30]);
 });
+
+test('high-seas AC-3: a two-finger drag keeps the world under the fingers; a third finger lifting carries on smoothly; a leftover finger pans', () => {
+  const cam = createCamera({ zoom: 1, minZoom: 0.25, maxZoom: 8 });
+  cam.resize(400, 800);
+  const el = fakeElement();
+  attachGestures(el, cam, { onePointerPans: true });
+  el.fire('pointerdown', 1, 100, 300);
+  el.fire('pointerdown', 2, 200, 300);
+  const under = cam.toWorld(150, 300); // the world point under the midpoint
+  // Both fingers slide 60 px right and 40 px down, and spread apart 1.5×.
+  el.fire('pointermove', 1, 135, 340);
+  el.fire('pointermove', 2, 285, 340);
+  const mid = cam.toView(under.x, under.y);
+  near(mid.x, 210, 1e-6);
+  near(mid.y, 340, 1e-6);
+  near(cam.zoom, 1.5, 1e-6);
+  // A third finger comes and goes: lifting it doesn't jump the view.
+  el.fire('pointerdown', 3, 50, 50);
+  const before = { x: cam.x, y: cam.y, zoom: cam.zoom };
+  el.fire('pointerup', 3, 50, 50);
+  el.fire('pointermove', 2, 285, 340); // no actual movement
+  assert.deepEqual({ x: cam.x, y: cam.y, zoom: cam.zoom }, before);
+  // Lift one: the other pans on.
+  el.fire('pointerup', 2, 285, 340);
+  const w = cam.toWorld(135, 340);
+  el.fire('pointermove', 1, 165, 300);
+  const v = cam.toView(w.x, w.y);
+  near(v.x, 165, 1e-6);
+  near(v.y, 300, 1e-6);
+});
+
+test('high-seas AC-3: a slow press is not a tap, a still hold is a long press, the right mouse button is ignored, and a one-finger pan waits for the slop', async () => {
+  const cam = createCamera();
+  cam.resize(400, 800);
+  const el = fakeElement();
+  const log = [];
+  attachGestures(el, cam, { tapMs: 30, longPressMs: 60, onTap: () => log.push('tap'), onLongPress: () => log.push('long'), onDown: () => log.push('down') });
+  el.fire('pointerdown', 1, 10, 10, { pointerType: 'mouse', button: 2 });
+  assert.deepEqual(log, []);
+  el.fire('pointerdown', 1, 10, 10);
+  await new Promise((r) => setTimeout(r, 45));
+  el.fire('pointerup', 1, 10, 10);
+  assert.deepEqual(log, ['down']); // too slow for a tap, too quick for a long press
+  log.length = 0;
+  el.fire('pointerdown', 1, 10, 10);
+  await new Promise((r) => setTimeout(r, 90));
+  el.fire('pointerup', 1, 10, 10);
+  assert.deepEqual(log, ['down', 'long']);
+  const cam2 = createCamera();
+  cam2.resize(400, 800);
+  const el2 = fakeElement();
+  attachGestures(el2, cam2, { onePointerPans: true, tapSlop: 20 });
+  el2.fire('pointerdown', 1, 100, 100);
+  el2.fire('pointermove', 1, 108, 106); // within the slop: no jiggle
+  assert.deepEqual([cam2.x, cam2.y], [0, 0]);
+  el2.fire('pointerup', 1, 108, 106);
+});
+
+test('high-seas AC-1: picking with heights finds a raised tile in front before the ground behind it', () => {
+  const iso = createIso({ tileW: 64, tileH: 32 });
+  // Tile (5,5) is a block 32 px tall; the rest is flat ground.
+  const heightAt = (i, j) => (i === 5 && j === 5 ? 32 : 0);
+  // A point on the block's top face, which on flat ground would be tile (4,4).
+  const top = iso.toScreen(5.5, 5.5, 32);
+  assert.deepEqual(iso.pickTile(top.x, top.y), { x: 4, y: 4 });
+  assert.deepEqual(iso.pickTileAt(top.x, top.y, heightAt), { x: 5, y: 5 });
+  // Away from the block, it is the ground pick.
+  const g = iso.toScreen(2.5, 8.5);
+  assert.deepEqual(iso.pickTileAt(g.x, g.y, heightAt), { x: 2, y: 8 });
+  // Holes pick nothing.
+  assert.equal(iso.pickTileAt(g.x, g.y, () => null), null);
+});
+
+test('high-seas AC-2: a footprint sorts by its centre, and the camera can keep its edges inside the bounds and fit them', () => {
+  const iso = createIso();
+  const house = { depth: iso.depthOf({ x: 4, y: 4, w: 2, h: 2 }, 1) }; // centre (5,5)
+  const behind = { depth: iso.depthOf({ x: 4, y: 5 }, 1) }; // centre (4.5,5.5): same row, tie → order
+  const front = { depth: iso.depthOf({ x: 6, y: 5 }, 1) };
+  assert.ok(front.depth > house.depth);
+  assert.ok(iso.depthOf({ x: 3, y: 3 }, 1) < house.depth);
+  assert.ok(Math.abs(behind.depth - house.depth) < 1e-9);
+  const cam = createCamera({ zoom: 1 });
+  cam.resize(400, 800);
+  cam.bounds = { minX: 0, minY: 0, maxX: 1000, maxY: 2000 };
+  cam.clampEdges = true;
+  cam.lookAt({ x: 0, y: 0 });
+  assert.deepEqual([cam.x, cam.y], [200, 400]);
+  assert.equal(cam.fitZoom({ minX: 0, minY: 0, maxX: 800, maxY: 800 }), 0.5);
+});
