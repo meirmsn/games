@@ -357,7 +357,7 @@ function makeTarget(kind, opts = {}) {
     face: faceFor(kind, opts.face),
     state: 'live', // live | knocked | gone
     anim: 0,
-    dir: opts.dir ?? lane.dir,
+    dir: opts.dir ?? laneDir(lane.i),
     speed: opts.speed ?? 40,
     x: opts.x ?? SW / 2,
     y: lane.line,
@@ -418,6 +418,11 @@ function turnState(t) {
   return { back: true, sx: Math.abs(Math.cos(Math.PI * p)), showBack: p < 0.5 };
 }
 
+// Which way each lane runs this round: drawn afresh every round, so the far lane doesn't always come
+// from the left. Within a round a lane keeps one way, so its targets never pass through each other.
+function laneDir(i) {
+  return (game.dirs && game.dirs[i]) || L.lanes[i].dir;
+}
 function laneSpeed(cfg, i) {
   const n = L.n;
   return lerp(cfg.vNear, cfg.vFar, n === 1 ? 0 : (n - 1 - i) / (n - 1));
@@ -452,20 +457,24 @@ function launchPop(i, upFor = 1.8) {
   t.x = freeSpot(i, dims(t)[0] * 1.2);
   return t;
 }
-// The frenzy target: easy in round 1 (big, rising in the nearest lane for 3.5 s), harder in round 2
-// (crossing a middle lane), hard from round 3 (crossing the farthest lane at 1.8× its speed).
+// The frenzy target: easy in round 1 (big, rising in one of the two nearest lanes for 3.5 s, anywhere
+// along it), harder in round 2 (crossing one of the middle lanes), hard from round 3 (crossing one of
+// the two farthest lanes at 1.8× its speed). Which lane, where and which way are drawn each time.
 function launchFrenzyTarget() {
   const n = L.n;
   const cfg = game.cfg;
   if (game.round === 1) {
-    const t = makeTarget('frenzy', { lane: n - 1, face: 'target_colored', turn: false, big: 1.15, upFor: 3.5 });
+    const i = n - 1 - (n > 2 && rng() < 0.5 ? 1 : 0);
+    const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, big: 1.15, upFor: 3.5 });
     t.motion = 'pop';
     t.y = hiddenY(t);
-    t.x = freeSpot(n - 1, dims(t)[0] * 1.2);
+    t.x = freeSpot(i, dims(t)[0] * 1.2);
     return t;
   }
-  const i = game.round === 2 ? Math.floor((n - 1) / 2) : 0;
-  const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, speed: laneSpeed(cfg, i) * (game.round === 2 ? 1 : 1.8) });
+  const middle = L.lanes.map((l) => l.i).filter((i) => i > 0 && i < n - 1);
+  const far = n > 3 ? [0, 1] : [0];
+  const i = game.round === 2 ? pick(middle.length ? middle : [0]) : pick(far);
+  const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, dir: rng() < 0.5 ? 1 : -1, speed: laneSpeed(cfg, i) * (game.round === 2 ? 1 : 1.8) });
   t.motion = 'mover';
   const [w] = dims(t);
   t.x = t.dir > 0 ? -w / 2 - 4 : SW + w / 2 + 4;
@@ -551,12 +560,13 @@ function startRound(n) {
   game.elapsed = 0;
   game.frenzy = 0;
   game.frenzyDone = false;
-  // The frenzy target comes 5–9 s in, and again at 17–22 s if no frenzy has come.
-  game.frenzyTimes = cfg.frenzy ? [rand(5, 9), rand(17, 22)] : [];
+  // The frenzy target comes 4–10 s in, and again at 16–22 s if no frenzy has come.
+  game.frenzyTimes = cfg.frenzy ? [rand(4, 10), rand(16, 22)] : [];
   game.halfDone = false;
   game.tenDone = false;
   game.missRow = 0;
-  game.spawn = { movers: L.lanes.map(() => rand(0.2, 1.8)), pop: rand(1.5, 3), drop: rand(2.5, 4), gold: [] };
+  game.dirs = L.lanes.map(() => (rng() < 0.5 ? 1 : -1));
+  game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
   if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
@@ -567,8 +577,8 @@ function startRound(n) {
     // A big, slow target crosses the middle of the nearest lane, where a short straight pull lands.
     const i = L.n - 1;
     const t = makeTarget(L.lanes[i].kind === 'water' ? 'duck' : 'target', { lane: i, speed: 26, big: 1.15, face: L.lanes[i].kind === 'water' ? 'duck_target_yellow' : 'target_colored', turn: false });
-    // It crosses the middle, where a straight pull lands.
-    t.x = SW / 2 - t.dir * 60;
+    // It crosses the middle, where a straight pull lands, a little off it either way.
+    t.x = SW / 2 - t.dir * rand(30, 90);
     game.spawn.movers[i] = 3.5;
   }
 }
@@ -2483,7 +2493,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

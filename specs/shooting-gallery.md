@@ -19,6 +19,21 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's twelfth playtest (owner, 2026-11-09)
+
+Where they differ from the playtests below, these win.
+
+- **Every game different.** "it doesn't feel random. Like every time that I start a new game, there
+  is the one that comes from the top left, and then one from the right, and then the frenzy is gonna
+  show up somewhere on the right, and then on the next level the frenzy comes somewhere on the left.
+  It's always about the same progression." Each run already drew new numbers, but the lanes' ways
+  and the frenzy target's lane were fixed. Now each round draws which way every lane runs (a lane
+  keeps one way within a round, so its targets never pass through each other), the first targets'
+  delays spread wider (0.2–2.6 s), and the frenzy target comes 4–10 s in (again at 16–22 s): in round
+  1 rising in one of the two nearest lanes, in round 2 crossing any middle lane, from round 3 crossing
+  one of the two farthest lanes, each time from a side drawn afresh. Round 1's first big target
+  starts a little off the middle, on a side drawn too.
+
 ### The owner's eleventh playtest (owner, 2026-11-09)
 
 Where they differ from the playtests below, these win.
@@ -259,7 +274,8 @@ for these changes. Where they differ from the decisions further down, these win.
   round from round 1; hitting it starts the frenzy, at most one a round. Round 1: a big one rises in
   the nearest lane and stays 3.5 s. Round 2: it crosses a middle lane at the lane's speed. Round 3
   on: it crosses the farthest lane at 1.8× the speed. It comes about 5–9 s into a round and, if
-  missed, again at 17–22 s.
+  missed, again at 17–22 s. (Since the twelfth playtest: 4–10 s and 16–22 s, in a lane and from a
+  side drawn each time; since the ninth, bulbs instead of the pink glow.)
 - **Fixes:** the tile was squeezed (its picture is now cropped at the tile's own 16:10 before
   scaling); the gun's sprite carried a speck of its neighbour (the gun is gone); the trees floated
   (their trunks now go down behind the far lane's water).
@@ -489,9 +505,10 @@ moment 8–18 s into rounds 2 to 6.
   strikes in climbing pairs and they turn orange; at 3 s they turn red and a klaxon blares at 3, 2
   and 1, each a different sound from the half-time chime; in a frenzy it stops and its bulbs flash
   yellow and dark, never pink — `tests/shooting-gallery.test.mjs`.
-- **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
-  in round 1 a big one rising in the nearest lane for 3.5 s, in round 2 one crossing a middle lane,
-  from round 3 one crossing the farthest lane at 1.8× its speed — `tests/shooting-gallery.test.mjs`.
+- **AC-24** A frenzy target comes 4–10 s into every round and again at 16–22 s if no frenzy has
+  come: in round 1 a big one rising in one of the two nearest lanes for 3.5 s, in round 2 one
+  crossing a middle lane, from round 3 one crossing one of the two farthest lanes at 1.8× its speed —
+  `tests/shooting-gallery.test.mjs`.
 
 - **AC-25** Every target stands on a stick down behind its strip (a drop-down hangs on its rope)
   and rocks a few degrees about the stick's foot, each at its own pace; a shot is judged in the
@@ -529,6 +546,9 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-37** Crossing targets move faster from 10 s left, faster again from 5 s and fastest in the
   last 3; a frenzy opens with a snare roll, alone, before the galop, which carries drums —
   `tests/shooting-gallery.test.mjs`.
+- **AC-38** Each round draws which way every lane runs, so across games the lanes' ways differ and
+  change between rounds; the frenzy target's time spreads over more than 4 s, it comes from both
+  sides and in more than one lane — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

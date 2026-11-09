@@ -912,7 +912,7 @@ test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime a
   await context.close();
 });
 
-test('shooting-gallery AC-24: a frenzy target comes 5–9 s in and again 17–22 s if missed; easy in round 1, harder in round 2, hard from round 3', async () => {
+test('shooting-gallery AC-24: a frenzy target comes 4–10 s in and again 16–22 s if missed; easy in round 1, harder in round 2, hard from round 3', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const g = window.__gallery;
@@ -934,28 +934,31 @@ test('shooting-gallery AC-24: a frenzy target comes 5–9 s in and again 17–22
         const t = g.targets().find((x) => x.kind === 'frenzy');
         if (t && first === null) {
           first = g.game.elapsed;
-          target = { lane: t.lane, motion: t.motion, speed: t.speed, big: t.big, upFor: t.upFor };
+          target = { lane: t.lane, motion: t.motion, speed: t.speed, big: t.big, upFor: t.upFor, laneSpeed: g.laneSpeed(g.game.cfg, t.lane) };
           t.state = 'gone'; // missed
         } else if (t && first !== null && second === null && g.game.elapsed > first + 1) {
           second = g.game.elapsed;
           t.state = 'gone';
         }
       }
-      out.push({ times, first, second, target, laneSpeed: g.ROUNDS[n].vFar });
+      out.push({ times, first, second, target });
     }
     return { out, n: window.__gallery.L.n };
   });
   for (const [i, x] of r.out.entries()) {
-    assert.ok(x.times[0] >= 5 && x.times[0] <= 9 && x.times[1] >= 17 && x.times[1] <= 22, `round ${i + 1}: ${x.times}`);
+    assert.ok(x.times[0] >= 4 && x.times[0] <= 10 && x.times[1] >= 16 && x.times[1] <= 22, `round ${i + 1}: ${x.times}`);
     assert.ok(x.first !== null && Math.abs(x.first - x.times[0]) < 0.05, `round ${i + 1} first at ${x.first}`);
     assert.ok(x.second !== null && Math.abs(x.second - x.times[1]) < 0.05, `round ${i + 1} again at ${x.second}`);
   }
   const [r1, r2, r3] = r.out.map((x) => x.target);
-  assert.deepEqual([r1.lane, r1.motion, r1.upFor, r1.big], [r.n - 1, 'pop', 3.5, 1.15], 'round 1: big, rising in the nearest lane for 3.5 s');
-  assert.deepEqual([r2.lane, r2.motion], [2, 'mover'], 'round 2: crossing a middle lane');
-  assert.deepEqual([r3.lane, r3.motion], [0, 'mover'], 'from round 3: crossing the farthest lane');
-  assert.ok(near(r3.speed, r.out[2].laneSpeed * 1.8, 0.01), 'at 1.8× its speed');
-  for (const x of r.out.slice(3)) assert.equal(x.target.lane, 0);
+  assert.deepEqual([r1.motion, r1.upFor, r1.big], ['pop', 3.5, 1.15], 'round 1: big, rising for 3.5 s');
+  assert.ok([r.n - 1, r.n - 2].includes(r1.lane), `round 1: in one of the two nearest lanes: ${r1.lane}`);
+  assert.equal(r2.motion, 'mover');
+  assert.ok(r2.lane > 0 && r2.lane < r.n - 1, `round 2: crossing a middle lane: ${r2.lane}`);
+  assert.equal(r3.motion, 'mover');
+  assert.ok([0, 1].includes(r3.lane), `from round 3: crossing one of the two farthest lanes: ${r3.lane}`);
+  assert.ok(near(r3.speed, r3.laneSpeed * 1.8, 0.01), 'at 1.8× its speed');
+  for (const x of r.out.slice(3)) assert.ok([0, 1].includes(x.target.lane));
   await context.close();
 });
 
@@ -1653,5 +1656,42 @@ test('shooting-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a fr
   });
   assert.ok(bright.frenzy > bright.music * 1.3, `drums in the galop: ${JSON.stringify(bright)}`);
   assert.ok(bright.roll > bright.music * 2, `the roll is a snare: ${JSON.stringify(bright)}`);
+  await context.close();
+});
+
+test('shooting-gallery AC-38: no two games run alike: each round draws which way every lane runs, and the frenzy target’s time, lane and side', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    const runs = [];
+    for (let k = 0; k < 24; k++) {
+      g.startRun({ seed: 1000 + k * 7919 });
+      const round = (n) => {
+        if (n > 1) g.startRound(n);
+        const dirs = g.L.lanes.map((l) => g.laneDir(l.i)).join('');
+        const time = g.game.frenzyTimes[0];
+        g.clear();
+        const t = g.launchFrenzyTarget();
+        return { dirs, time, lane: t.lane, side: t.motion === 'mover' ? t.dir : Math.sign(t.x - g.stage().SW / 2) };
+      };
+      runs.push({ r1: round(1), r2: round(2), r3: round(3) });
+    }
+    return { runs, n: g.L.n };
+  });
+  const distinct = (f) => new Set(r.runs.map(f)).size;
+  // Lane directions: many patterns across games, and a lane's way changes between rounds of a game.
+  assert.ok(distinct((x) => x.r1.dirs) >= 8, `round 1's lane directions vary: ${distinct((x) => x.r1.dirs)} patterns in 24 games`);
+  assert.ok(r.runs.some((x) => x.r1.dirs !== x.r2.dirs), 'and change from round to round');
+  // The far lane comes from both sides across games.
+  assert.equal(new Set(r.runs.map((x) => x.r1.dirs[0])).size, 2, 'the far lane runs both ways');
+  // The frenzy target: its time spreads out, and it comes from both sides and in more than one lane.
+  const times = r.runs.map((x) => x.r1.time);
+  assert.ok(Math.max(...times) - Math.min(...times) > 4, `its time spreads: ${Math.min(...times).toFixed(1)}–${Math.max(...times).toFixed(1)} s`);
+  for (const key of ['r1', 'r2', 'r3']) {
+    assert.equal(new Set(r.runs.map((x) => x[key].side)).size, 2, `${key}: it comes on both sides`);
+  }
+  assert.ok(distinct((x) => x.r1.lane) >= 2 && distinct((x) => x.r3.lane) >= 2, 'and in more than one lane');
+  if (r.n === 5) assert.ok(distinct((x) => x.r2.lane) >= 2, 'round 2: more than one middle lane');
   await context.close();
 });
