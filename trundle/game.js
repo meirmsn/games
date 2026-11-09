@@ -163,9 +163,11 @@ const snap = (v, s = 0.25) => Math.round(v / s) * s;
 // ---------------------------------------------------------------------------------------------
 // Rooms
 
+// The hash opens a room you've reached; a locked room, a bad hash or none opens the furthest one.
 function roomFromHash() {
   const m = /^#1-([1-6])$/.exec(location.hash);
-  return m ? +m[1] - 1 : 0;
+  const i = m ? +m[1] - 1 : -1;
+  return i >= 0 && unlocked(i) ? i : furthest();
 }
 
 function openRoom(i) {
@@ -419,9 +421,19 @@ function showDone(stars) {
 
 // The next room: the one after this, or the first not yet solved once at the end.
 function nextRoom() {
-  if (G.ri < ROOMS.length - 1) return G.ri + 1;
-  const open = ROOMS.findIndex((_, i) => bestStars(i) < 0);
-  return open >= 0 ? open : null;
+  return G.ri < ROOMS.length - 1 ? G.ri + 1 : null;
+}
+
+// Rooms open one by one: a room opens once the room before it is solved.
+function unlocked(i) {
+  return i === 0 || bestStars(i - 1) >= 0;
+}
+
+// The furthest room open: the first one not yet solved, or the last.
+function furthest() {
+  let i = 0;
+  while (i < ROOMS.length - 1 && bestStars(i) >= 0) i++;
+  return i;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1338,9 +1350,13 @@ function showRooms() {
     b.type = 'button';
     b.className = i === G.ri ? 'current' : '';
     const s = bestStars(i);
-    b.innerHTML = `<b>${i + 1}</b><span class="mini">${starImgs(Math.max(0, s), 16)}</span>`;
-    b.setAttribute('aria-label', `Room ${i + 1}, ${room.name}: ${s < 0 ? 'not solved' : `${s} of 3 stars`}`);
-    b.addEventListener('click', () => openRoom(i));
+    const open = unlocked(i);
+    b.disabled = !open;
+    b.innerHTML = open
+      ? `<b>${i + 1}</b><span class="mini">${starImgs(Math.max(0, s), 16)}</span>`
+      : `<b>${i + 1}</b><svg class="lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" /></svg>`;
+    b.setAttribute('aria-label', `Room ${i + 1}, ${room.name}: ${!open ? 'locked' : s < 0 ? 'not solved' : `${s} of 3 stars`}`);
+    if (open) b.addEventListener('click', () => openRoom(i));
     ui.roomGrid.appendChild(b);
   });
   ui.floorRun.hidden = !floorComplete();

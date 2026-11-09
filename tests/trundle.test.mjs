@@ -406,9 +406,10 @@ test('trundle AC-7: tapping Trundle switches the kick; the hard kick launches th
 });
 
 test('trundle AC-8: each room brings its new thing: the wedge, the flap, the crate and the key', async () => {
-  const { context, page } = await open('#1-3');
+  const { context, page } = await open('#1-1');
   await manual(page);
   await runOut(page);
+  await page.evaluate(() => window.__trundle.openRoom(2));
   assert.ok(await page.locator('.part[data-part="wedge"]').count(), 'room 3 has a wedge in its tray');
   const r = await page.evaluate(() => {
     const T = window.__trundle;
@@ -462,14 +463,14 @@ test('trundle AC-8: each room brings its new thing: the wedge, the flap, the cra
   await context.close();
 });
 
-test('trundle AC-9: solving the last unsolved room, in any order, plays the floor run without stepping the physics; the rooms list plays it again after a reload', async () => {
-  const { context, page, errors } = await open('#1-6');
+test('trundle AC-9: solving room 6, the last, plays the floor run without stepping the physics; the rooms list plays it again after a reload', async () => {
+  const { context, page, errors } = await open('#1-1');
   await manual(page);
   await runOut(page);
-  for (const i of [5, 0, 1, 2, 3]) assert.equal(await solve(page, i), 3);
+  for (const i of [0, 1, 2, 3, 4]) assert.equal(await solve(page, i), 3);
   assert.equal(await page.evaluate(() => window.__trundle.G.mode), 'done');
   await page.waitForTimeout(300);
-  await solve(page, 4); // the last unsolved room
+  await solve(page, 5); // the last room
   await page.waitForFunction(() => window.__trundle.G.mode === 'floor', null, { timeout: 4000 });
   const r = await page.evaluate(() => {
     const T = window.__trundle;
@@ -501,16 +502,20 @@ test('trundle AC-9: solving the last unsolved room, in any order, plays the floo
   await context.close();
 });
 
-test('trundle AC-10: rooms open on a fresh browser; progress is kept; fewer stars keep the best; the hash opens a room', async () => {
+test('trundle AC-10: rooms unlock one by one; progress is kept; fewer stars keep the best; the hash opens a room reached', async () => {
   const { context, page, errors } = await open('#1-1');
   await manual(page);
+  await runOut(page);
   await page.click('[data-rooms]');
   assert.equal(await page.locator('.room-grid button').count(), 6);
-  assert.equal(await page.locator('.room-grid button:disabled').count(), 0, 'every room is open');
-  await page.click('.room-grid button:nth-child(4)');
-  assert.equal(await page.evaluate(() => window.__trundle.G.ri), 3);
-  await runOut(page);
+  assert.equal(await page.locator('.room-grid button:disabled').count(), 5, 'only room 1 is open on a fresh browser');
+  await page.click('[data-close-rooms]');
   assert.equal(await solve(page, 0), 3);
+  await page.click('[data-rooms]');
+  assert.equal(await page.locator('.room-grid button:disabled').count(), 4, 'solving room 1 opens room 2');
+  await page.click('.room-grid button:nth-child(2)');
+  assert.equal(await page.evaluate(() => window.__trundle.G.ri), 1);
+  await runOut(page);
   // a worse solve keeps the best
   const worse = await page.evaluate(() => {
     const T = window.__trundle;
@@ -532,7 +537,8 @@ test('trundle AC-10: rooms open on a fresh browser; progress is kept; fewer star
   assert.deepEqual(kept.layout, [{ type: 'plank', x: 5.25, y: 6, a: 0 }]);
   assert.equal(kept.mode, 'edit');
   // hashes
-  for (const [h, ri] of [['#1-4', 3], ['#1-9', 0], ['#x', 0], ['#2-1', 0]]) {
+  // room 2 is the furthest reached: a link to a locked room, a bad one or none opens it
+  for (const [h, ri] of [['#1-1', 0], ['#1-2', 1], ['#1-4', 1], ['#1-9', 1], ['#x', 1], ['', 1]]) {
     await page.goto(BASE + 'trundle/' + h);
     await page.reload();
     await page.waitForFunction(() => window.__trundle);

@@ -40,8 +40,8 @@ the ball runs through every room you built in one long take.
 - Short-form: a room is 30 s–3 min, a floor about 10 min; stop any time.
 - Portrait: gravity runs down the long side, so a tall phone shows more machine, one-handed.
 - A failure costs one run of 3–8 s; the parts stay put, and the trail and near-miss mark show why.
-- Save games: every room is open from the start; the browser keeps stars and the last layout per
-  room; `#1-4` in the URL opens a room.
+- Save games: rooms open one by one, as each is solved; the browser keeps stars and the last
+  layout per room; `#1-4` in the URL opens a room you've reached.
 - Riskiest part: deterministic, stable physics at 60 and 120 Hz without tunnelling, proved first by
   a test that replays every room's recorded solution at both rates.
 
@@ -78,8 +78,8 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   moving parts, kept at 30 Hz), with the camera following the ball down through all six rooms, and
   ends on floor 2's locked door. It never re-simulates, so it can't fail, whatever engine a browser
   has. Each room keeps the recording of its best run (most stars; a tie goes to the latest). The
-  floor run plays by itself when the floor's last unsolved room is solved, in whatever order the
-  rooms were done, and again from the rooms list. Rejected: re-simulating the saved
+  floor run plays by itself when room 6, the last, is first solved, and again from the rooms
+  list. Rejected: re-simulating the saved
   layouts, which can miss after an edit or on another JS engine (adversarial review, 2026-11-09).
 - Placement: a part dragged from the tray lands where it's dropped; a placed part moves by the
   finger's movement (relative drag), so the finger never hides it; positions snap to 0.25 units and
@@ -96,8 +96,8 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   key; every read and write is guarded, so with storage blocked progress lasts until the page
   reloads, and a room whose saved data is unreadable starts fresh without touching the others
   (adversarial spec review, 2026-11-09).
-- The URL hash `#1-1` to `#1-6` opens that room, and opening a room sets it; anything else opens
-  room 1. A rooms button at the top right opens the rooms list: the six rooms with their stars, and
+- The URL hash `#1-1` to `#1-6` opens that room once you've reached it, and opening a room sets
+  it; a locked room, anything else or no hash opens the furthest room reached. A rooms button at the top right opens the rooms list: the six rooms with their stars, and
   the floor run once it has been earned (adversarial spec review, 2026-11-09).
 - Hidden assist: from the 4th run in a room that misses the exit, its capture area grows by 5% per
   miss (5, 10, 15, 20%), to at most 20%, and resets when the room is done or the page reloads. The
@@ -122,6 +122,11 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
   place of a spinner that turns (a centre-pinned spinner didn't resist the ball, so the room held
   no choice); AC-1's test is in `tests/trundle.test.mjs` instead of `tests/site.test.mjs`, which
   keeps the batch's shared edits small (owner, 2026-11-09).
+- Changed after the go, by the owner on 2026-11-09 after playing the preview: rooms are locked and
+  open one by one, each once the room before it is solved ("you should also lock the levels and
+  only allow you to proceed to the next one. And once you clear one level, then you unlock the
+  next one"). This replaces every room being open from the start, and changes AC-9 and AC-10 to
+  match (owner, 2026-11-09).
 - Sound: Kenney's impact, interface, digital and jingle sounds, converted to MP3 (Safari plays no
   OGG), under the site-wide mute; an impact sounds at most once per pair of bodies every 100 ms
   (Claude, 2026-11-09).
@@ -143,8 +148,8 @@ kick, and room 1 without its plank); first new element by about 2 minutes (room 
 - **AC-6** Every room's recorded solution reaches the exit with all three stars, with no assist, and the ball's pose at every step is the same when the page's frame loop is driven at 60 Hz, at 120 Hz and with uneven frames of 7–40 ms; with no parts placed, every room's ball misses the exit — `tests/trundle.test.mjs`.
 - **AC-7** Tapping Trundle switches between the soft nudge and the hard kick, and the hard kick launches the ball faster — `tests/trundle.test.mjs`.
 - **AC-8** Each room brings its new thing: room 3's tray has a wedge, room 4 a blue flap that swings when the ball hits it, room 5 a crate that the ball can knock off the exit, and room 6 an exit that stays locked until the ball touches the key — `tests/trundle.test.mjs`.
-- **AC-9** Solving the floor's last unsolved room, in any order (room 6 first included), plays the floor run: it plays back each room's best run in order with the camera following the ball, without stepping the physics, then shows the floor's star total; after a reload the rooms list plays it again — `tests/trundle.test.mjs`.
-- **AC-10** Every room is open on a fresh browser; the browser keeps each room's best stars, last layout and best run, and solving again with fewer stars keeps the best; with storage blocked or a room's saved data unreadable the game still plays; `#1-4` opens room 4 and `#1-9` or `#x` opens room 1 — `tests/trundle.test.mjs`.
+- **AC-9** Solving room 6, the last, plays the floor run: it plays back each room's best run in order with the camera following the ball, without stepping the physics, then shows the floor's star total; after a reload the rooms list plays it again — `tests/trundle.test.mjs`.
+- **AC-10** On a fresh browser only room 1 is open, and solving a room opens the next; the browser keeps each room's best stars, last layout and best run, and solving again with fewer stars keeps the best; with storage blocked or a room's saved data unreadable the game still plays; a hash opens a room reached, and one for a locked room, `#1-9` or `#x` opens the furthest room reached — `tests/trundle.test.mjs`.
 - **AC-11** Hiding the page pauses a run, the demo kick or the floor run; it stays paused when the page comes back and resumes on a tap — `tests/trundle.test.mjs`.
 - **AC-12** After 3 missed runs in a room the exit's capture area grows 5% a miss up to 20%, and is back to normal once the room is done — `tests/trundle.test.mjs`.
 - **AC-13** At 360×640, 390×844 and 1280×720 the board and the bottom bar fit with no scrolling and the board keeps its portrait shape, and every button is at least 44 px — `tests/trundle.test.mjs`.
