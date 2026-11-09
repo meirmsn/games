@@ -303,6 +303,15 @@ item.
   is, then climb back. A flyer can be stomped. Stomp chains pay extra: in Pico, each stomp after the
   first before you land again pays coins (the second +1, the third +2, up to +4 each), shown by a
   "+n" over the stomp.
+- **Music prompts for all eight worlds, and layered music** (owner, 2026-11-09: "give me the
+  prompts for the music for all the levels … 8 prompts. It's gonna go to 11 labs music generator.
+  Hopefully they're not like 15-second loop … maybe 1 minute long or 3 minutes long is actually not
+  that big of a deal … something like the parallax effect, but for sound, where you actually
+  generate … one track and another one that you can lay out on top at random intervals"). Each
+  world gets a prompt for a bed (about 2 minutes, instrumental, made to loop) and for three short
+  accents (4–8 s, free-time, no drums, so they sit on any bar) that play over the bed at random
+  every 15–40 s, never twice in a row. The prompts are given in the chat; the files are the owner's
+  to generate, and wiring them in follows when they arrive. Until then the worlds keep Kenney loops.
 - **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name readable.
