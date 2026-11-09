@@ -63,7 +63,7 @@ test('reef AC-11: landing page lists eight games, Reef first and playable, with 
   await context.close();
 });
 
-test('walk-on-red AC-20: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
+test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const names = await page.locator('.tile h2').allTextContents();

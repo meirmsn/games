@@ -1,5 +1,5 @@
 // Draws Walk on Red's landing-page tile (assets/tiles/walk-on-red.png, 640×400) from the game itself:
-// Market Avenue at a red light, the player on the median and a copier on the way. Serve the site
+// Sunday Morning at a red light: him on the island with the copiers, cars either side of the crossing. Serve the site
 // first, then:
 //   PORT=8000 scripts/local-run.sh &
 //   node scripts/walk-on-red/make-tile.mjs http://127.0.0.1:8000/
@@ -19,15 +19,17 @@ await page.evaluate(() => {
   t.game.grace = 99;
   t.clearTraffic();
   const m = t.layout().rows.indexOf('M');
+  t.put(t.layout().bottom - 2);
+  for (let i = 0; i < 60 * 0.5; i++) t.step(1 / 60);
   t.put(m);
-  for (let i = 0; i < 60 * 1.2; i++) t.step(1 / 60); // the first copier sets off
-  for (let i = 0; i < 20; i++) t.step(1 / 60);
-  t.spawnVehicle(1, 'taxi', 150);
-  t.spawnVehicle(1, 'sedan_blue', 215);
-  t.spawnVehicle(2, 'bus', 120);
-  t.spawnVehicle(4, 'van', 165);
+  for (let i = 0; i < 60 * 3; i++) t.step(1 / 60); // the copiers join him on the island
+  // Cars on either side of the crossing, none on it.
+  t.spawnVehicle(1, 'taxi', 70);
+  t.spawnVehicle(1, 'sedan_blue', 230);
+  t.spawnVehicle(2, 'bus', 100);
+  t.spawnVehicle(4, 'van', 95);
   t.spawnVehicle(5, 'sports_yellow', 60);
-  t.spawnVehicle(5, 'rounded_red', 205);
+  t.spawnVehicle(5, 'rounded_red', 240);
   for (let i = 0; i < 6; i++) t.step(1 / 60);
   t.game.mode = 'title'; // no score label
   for (const sel of ['[data-hud]', '[data-banner]', '.shell-back', '[data-mute]']) {

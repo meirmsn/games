@@ -1,18 +1,20 @@
-// Walk on Red: you're late, on the phone, and the light is red, so you go now. Each time you make it
-// to safe ground and stop there a moment, the people waiting trust you a little more and follow.
+// Walk on Red: he really needs the loo, the café's toilet is across the street, and the walk light
+// is red. So he goes now. Make it across before the light turns green, and the sooner the better;
+// the people waiting see him go and start copying him.
 //
 // The rules (specs/walk-on-red.md):
 //  - The street is a grid of rows: the near kerb at the bottom, lanes, sometimes a median, the far
-//    kerb at the top. You hop one lane forward (a tap) or back (a swipe down), always in one column.
-//  - Copiers wait on the near kerb. They only move from one safe strip (a kerb or a median) to the
-//    next, after you have stood on that next strip for PROVE_T. They set off only when the lanes on
-//    their way are clear; if no gap comes within HOLD_AFTER, those lanes' lights hold the cars for
-//    them. Cars always brake for a copier in their lane: copiers are never hit.
-//  - A level is one red light. It closes when you are on the far kerb and no copier is on the way:
-//    its score is (1 + copiers across, the grandpa counting 2) × the whole seconds of red left.
-//    Then the light turns green, the cars stop and everyone crosses together.
-//  - A car hitting you costs time and the trust of one copier, who goes back to the crowd. There
-//    are no lives: a level always ends in green, and a run is eight levels.
+//    kerb at the top. You hop one lane forward (a tap) or back (a swipe down), in your own column.
+//  - The walk light counts down. Each lane's car light is green while it does, turns yellow near the
+//    end and then red; the cars stop before the zebra crossing, and once it is clear the walk light
+//    turns green. Cars obey their lights.
+//  - Copiers walk on their own: they set off once you are a couple of lanes out, hop up their own
+//    column at a steady pace, never get ahead of you, look before stepping off safe ground, and
+//    only hesitate briefly in a lane, so in heavy traffic they can be hit.
+//  - Reaching the far kerb before the light turns green scores the seconds left × (1 + copiers
+//    across). If the light turns green first, the level scores 0 and you try it again.
+//  - A car hitting you knocks you back to the last safe strip; a copier hit goes home, and their
+//    share of the points with them. There are no lives; a run is eight levels.
 //  - A hidden assist eases the traffic after hits.
 //
 // Drawing: the street is drawn at its art resolution (1 art px = 1 canvas px) on a small offscreen
@@ -57,11 +59,15 @@ const HOP_TWEEN = 0.12;
 const PERSON_HALF = 2.5; // a person's hitbox is 5 art px wide
 const SHRINK = 0.1; // vehicles' boxes are 20% narrower than their art (10% off each end)
 const PCOL = 5; // the player's column
-const PROVE_T = 0.6; // standing this long on a strip shows the copiers it is safe
-const SEE_DELAY = 0.45; // a copier's glance before setting off
-const HOLD_AFTER = 6; // a copier waiting this long for a gap gets the lanes held for them
-const COP_HOP = 0.32;
-const GRANDPA_HOP = 0.7;
+const CROSS_C0 = 3; // the zebra crossing's columns
+const CROSS_C1 = 8;
+const YELLOW_AT = 4.5; // seconds of red left when the car lights turn yellow
+const RED_AT = 2; // … and red
+const COP_START = 2; // a copier sets off once the player is this many rows out
+const COP_STAGGER = 0.9; // … each one this much after the one before
+const COP_HOP = 0.42; // a copier's pace, one row
+const COP_LOOK = 0.9; // on safe ground, a copier waits while a car would reach the next cell this soon
+const COP_DARE = 1.2; // in the road, a copier waits at most this long for the next lane
 const DOWN_T = 1.2; // a hit player lies flat this long
 const GREEN_T = 3.6; // the green light's crossing
 const TALLY_T = 2.2;
@@ -94,16 +100,13 @@ const LEVELS = [
   { name: 'Quiet Street', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(1, 13, CARS, [30, 70]), L(1, 15, CARS, [30, 70])], pal: PAL.maple },
   { name: 'Both Ways', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'L', 'L', 'K'], lanes: [L(-1, 17, CARS), L(-1, 20, CARS), L(1, 18, CARS), L(1, 16, CARS)], pal: PAL.maple },
   { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 16, CITY, [34, 80], [2, 4], [4, 6]), L(-1, 18, CITY, [34, 80], [2, 4], [4, 6]), L(1, 17, CITY, [34, 80], [2, 4], [4, 6]), L(1, 15, CITY, [34, 80], [2, 4], [4, 6])], pal: PAL.market },
-  { name: 'Bus Lane', red: 28, copiers: 2, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 18, HEAVY, [24, 60]), L(-1, 21, CITY), L(1, 20, CITY), L(1, 16, HEAVY, [24, 60])], pal: PAL.market },
-  { name: 'Sunday Morning', red: 28, copiers: 3, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 15, SUNDAY, [30, 70], [2, 4], [4, 6]), L(-1, 17, SUNDAY, [30, 70], [2, 4], [4, 6]), L(1, 16, SUNDAY, [30, 70], [2, 4], [4, 6]), L(1, 14, SUNDAY, [30, 70], [2, 4], [4, 6])], pal: PAL.school },
-  { name: 'Siren Boulevard', red: 30, copiers: 3, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING), L(-1, 19, EVENING), L(-1, 24, EVENING), L(1, 20, EVENING), L(1, 23, EVENING)], pal: PAL.evening },
-  { name: 'Old Town', red: 32, copiers: 2, grandpa: true, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'L', 'K'], lanes: [L(-1, 20, CARS), L(-1, 23, CARS), L(1, 21, CITY), L(1, 18, CITY), L(1, 24, CARS)], pal: PAL.school },
-  { name: 'Downtown', red: 34, copiers: 4, sirens: true, rows: ['K', 'L', 'M', 'L', 'L', 'M', 'L', 'K'], lanes: [L(-1, 24, NIGHT), L(-1, 21, NIGHT), L(1, 23, NIGHT), L(1, 26, NIGHT)], pal: PAL.night },
+  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 18, HEAVY, [24, 60]), L(-1, 21, CITY), L(1, 20, CITY), L(1, 16, HEAVY, [24, 60])], pal: PAL.market },
+  { name: 'Sunday Morning', red: 28, copiers: 2, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 15, SUNDAY, [30, 70], [2, 4], [4, 6]), L(-1, 17, SUNDAY, [30, 70], [2, 4], [4, 6]), L(1, 16, SUNDAY, [30, 70], [2, 4], [4, 6]), L(1, 14, SUNDAY, [30, 70], [2, 4], [4, 6])], pal: PAL.school },
+  { name: 'Siren Boulevard', red: 30, copiers: 2, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING), L(-1, 19, EVENING), L(-1, 24, EVENING), L(1, 20, EVENING), L(1, 23, EVENING)], pal: PAL.evening },
+  { name: 'Old Town', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'L', 'K'], lanes: [L(-1, 20, CARS), L(-1, 23, CARS), L(1, 21, CITY), L(1, 18, CITY), L(1, 24, CARS)], pal: PAL.school },
+  { name: 'Downtown', red: 34, copiers: 3, sirens: true, rows: ['K', 'L', 'M', 'L', 'L', 'M', 'L', 'K'], lanes: [L(-1, 24, NIGHT), L(-1, 21, NIGHT), L(1, 23, NIGHT), L(1, 26, NIGHT)], pal: PAL.night },
 ];
 
-// What the player says into the phone, now and then.
-const CALL = ['Yes, yes, two minutes!', 'I’m nearly there!', 'Start without me!', 'No, I’m crossing now…', 'Can you hear me?'];
-const OUCH = ['I’m fine, I’m fine!', 'No, all good!', 'Just a bus. Go on.'];
 
 // Shirt colours for the crowd: [light, shade].
 const SHIRTS = [
@@ -155,31 +158,32 @@ if (!Array.isArray(saved.stars)) saved.stars = [];
 // ---------- State ----------
 
 const game = {
-  mode: 'title', // title | play | green | tally | over
+  mode: 'title', // title | play | finish | wait | green | tally | over
   paused: false,
   level: 0,
-  red: 30, // seconds of red left
+  red: 30, // seconds of red left on the walk light
   score: 0, // the run's total
   levelScore: 0,
+  failed: false,
   results: [], // per level: { score, stars, across }
   assist: 0.4,
   grace: 0, // after a resume: input ignored and the player can't be hit
   time: 0,
-  phaseT: 0, // time in the green or tally phase
+  phaseT: 0,
   siren: null, // { lane, t, name } while warning
   sirenIn: 0,
   lastTick: 0,
   shake: 0,
-  callIn: 3,
+  closedSecs: 0,
+  tries: 0,
 };
 
 let layout = null; // the current level's rows, lanes and geometry
 let vehicles = [];
 let people = []; // copiers and the crowd
 let popups = []; // floating text: { x, y, text, t, color, big }
-let proven = new Set(); // safe rows the player has stood on long enough
 let nextId = 1;
-const player = { col: PCOL, row: 0, lastSafe: 0, standT: 0, face: 1, vx: 0, vy: 0, fx: 0, fy: 0, tw: 1, down: 0, walkFrame: 0, auto: false, autoT: 0 };
+const player = { col: PCOL, row: 0, lastSafe: 0, face: 1, vx: 0, vy: 0, fx: 0, fy: 0, tw: 1, down: 0, walkFrame: 0, auto: false, autoT: 0, inside: false };
 
 function street() {
   return LEVELS[game.level];
@@ -193,7 +197,7 @@ function buildLayout(idx) {
   const lanes = [];
   let li = 0;
   rows.forEach((kind, r) => {
-    if (kind === 'L') lanes.push({ row: r, ...s.lanes[li++], phase: 'on', t: 0, spawnIn: 0, light: 'green', holdCol: null, holdBy: null });
+    if (kind === 'L') lanes.push({ row: r, ...s.lanes[li++], phase: 'on', t: 0, spawnIn: 0, light: 'green' });
   });
   return { s, rows, lanes, bottom: rows.length - 1 };
 }
@@ -203,12 +207,6 @@ const isSafe = (r) => layout.rows[r] === 'K' || layout.rows[r] === 'M';
 const isLane = (r) => layout.rows[r] === 'L';
 const laneAt = (r) => layout.lanes.find((l) => l.row === r);
 const colX = (c) => c * CW + CW / 2; // a column's centre, in world x (0 = the play area's left edge)
-
-// The next safe strip above a row (toward the far kerb), or -1.
-function nextStrip(row) {
-  for (let r = row - 1; r >= 0; r--) if (isSafe(r)) return r;
-  return -1;
-}
 
 function rowY(r) {
   return WAIT_H + r * ROW; // world y; the top wait strip sits above row 0
@@ -222,23 +220,27 @@ function stripFeet(col, row) {
   return { x: colX(col), y: rowY(row) + ROW + WAIT_H - 1 };
 }
 
+// The car lights, all lanes together: green while the walk light counts down, then yellow, then red.
+function carLight() {
+  if (game.mode === 'title') return 'green';
+  if (game.mode === 'green' || game.mode === 'tally' || game.mode === 'wait') return 'red';
+  return game.red > YELLOW_AT ? 'green' : game.red > RED_AT ? 'yellow' : 'red';
+}
+
 // ---------- People ----------
 
 function makePerson(kind, col, row) {
-  const p = {
+  return {
     id: nextId++,
-    kind, // copier | grandpa | crowd
-    weight: kind === 'grandpa' ? 2 : 1,
-    hop: kind === 'grandpa' ? GRANDPA_HOP : COP_HOP,
+    kind, // copier | crowd
     col,
     row,
-    state: 'wait', // wait | cross | across | home | walk
-    path: [],
-    seeT: 0,
-    waitT: 0,
+    state: 'wait', // wait | go | across | down | home | walk
     hopT: 0,
+    dare: 0,
+    startAt: Infinity,
     shirt: Math.floor(rnd() * SHIRTS.length),
-    woman: kind === 'grandpa' ? false : rnd() < 0.5,
+    woman: rnd() < 0.5,
     face: 1,
     vx: 0,
     vy: 0,
@@ -250,8 +252,8 @@ function makePerson(kind, col, row) {
     twDur: 0.2,
     t: rnd() * 3,
     walkFrame: 0,
+    downT: 0,
   };
-  return p;
 }
 
 function place(p, x, y) {
@@ -271,7 +273,8 @@ function walkTo(p, x, y, dur) {
   p.walkFrame ^= 1;
 }
 
-const COPIER_COLS = [3, 8, 2, 9, 7];
+const COPIER_COLS = [4, 6, 7];
+const CROWD_COLS = [3, 8, 4, 6, 7];
 
 // ---------- Level set-up ----------
 
@@ -282,14 +285,14 @@ function setupLevel(idx) {
   vehicles = [];
   people = [];
   popups = [];
-  proven = new Set();
   game.red = s.red;
   game.levelScore = 0;
+  game.failed = false;
   game.lastTick = 0;
   game.siren = null;
   game.sirenIn = rand(7, 11);
-  game.callIn = 2.5;
   game.phaseT = 0;
+  game.greenWalk = false;
   // Lanes start staggered: neighbours never in the same phase.
   layout.lanes.forEach((ln, i) => {
     ln.phase = i % 2 === 0 ? 'on' : 'off';
@@ -300,27 +303,26 @@ function setupLevel(idx) {
   player.col = PCOL;
   player.row = layout.bottom;
   player.lastSafe = layout.bottom;
-  player.standT = 0;
   player.down = 0;
   player.auto = false;
+  player.inside = false;
   player.face = 1;
   const f = cellFeet(player.col, player.row);
   player.vx = player.fx = f.x;
   player.vy = player.fy = f.y;
   player.tw = 1;
-  // The copiers stand at the kerb's edge, the crowd behind them.
-  const n = s.copiers + (s.grandpa ? 1 : 0);
-  for (let i = 0; i < n; i++) {
-    const kind = s.grandpa && i === n - 1 ? 'grandpa' : 'copier';
-    const p = makePerson(kind, COPIER_COLS[i], layout.bottom);
+  // The copiers stand at the kerb's edge beside him; the crowd waits behind.
+  for (let i = 0; i < s.copiers; i++) {
+    const p = makePerson('copier', COPIER_COLS[i], layout.bottom);
+    p.order = i;
     const g = cellFeet(p.col, p.row);
     place(p, g.x, g.y);
     people.push(p);
   }
-  for (const col of [1, 4, 6, 10]) {
+  for (const col of CROWD_COLS.slice(0, 4 - Math.min(2, s.copiers))) {
     const p = makePerson('crowd', col, layout.bottom);
     const g = stripFeet(col, layout.bottom);
-    place(p, g.x + rand(-3, 3), g.y);
+    place(p, g.x + rand(-2, 2), g.y);
     people.push(p);
   }
   resize();
@@ -330,113 +332,114 @@ function setupLevel(idx) {
 
 // ---------- Copiers ----------
 
-// Is a lane cell clear of vehicles from t0 to t1 seconds from now (with a margin in art px)?
-function laneClear(col, row, t0, t1, margin = 3) {
+// Would a vehicle reach a lane cell within t seconds (or is one on it now)?
+function laneBusy(col, row, t) {
   const x = colX(col);
-  const a = x - PERSON_HALF - margin;
-  const b = x + PERSON_HALF + margin;
+  const a = x - PERSON_HALF - 1;
+  const b = x + PERSON_HALF + 1;
   const mul = speedMul();
-  const ln = laneAt(row);
   for (const v of vehicles) {
     if (v.lane !== row) continue;
-    // A car held before this column won't reach it.
-    if (ln && ln.holdCol === col && v.s <= stopLine(v, col) + 0.5) continue;
-    const [x0, x1] = boxOf(v);
-    const sp = v.siren ? v.speed : v.speed * mul;
-    const d0 = v.dir * sp * t0;
-    const d1 = v.dir * sp * t1;
-    const lo = Math.min(x0 + d0, x0 + d1);
-    const hi = Math.max(x1 + d0, x1 + d1);
-    if (lo < b && hi > a) return false;
+    let [x0, x1] = boxOf(v);
+    const reach = (v.v || 0) * (v.siren ? 1 : mul) * t;
+    if (v.dir === 1) x1 += reach;
+    else x0 -= reach;
+    if (x0 < b && x1 > a) return true;
   }
-  return true;
+  return false;
 }
 
-function releaseHolds(p) {
-  for (const ln of layout.lanes) {
-    if (ln.holdBy === p.id) {
-      ln.holdCol = null;
-      ln.holdBy = null;
-    }
-  }
+// A copier may go to a row the player has reached, never past him (copying, not leading); they
+// may share a safe strip with him.
+function copierMayEnter(row) {
+  if (player.row === 0 || player.inside) return true;
+  if (row > player.row) return true;
+  return row === player.row && isSafe(row);
 }
 
 function updateCopiers(dt) {
+  const out = layout.bottom - player.row; // how far out the player is
   for (const p of people) {
-    if (p.kind === 'crowd') continue;
+    if (p.kind !== 'copier') continue;
     if (p.state === 'wait') {
-      const ns = nextStrip(p.row);
-      if (ns < 0 || !proven.has(ns)) {
-        p.seeT = 0;
-        p.waitT = 0;
-        continue;
-      }
-      if (p.seeT < SEE_DELAY) {
-        p.seeT += dt; // a glance: they've seen you make it
-        continue;
-      }
-      if (game.siren) continue; // nobody steps out while a siren is coming
-      p.waitT += dt;
-      const lanes = [];
-      for (let r = p.row - 1; r > ns; r--) lanes.push(r);
-      const clear = lanes.every((r, k) => laneClear(p.col, r, k * p.hop - 0.2, (k + 1) * p.hop + 0.8, 6));
-      if (clear) {
-        releaseHolds(p);
-        p.state = 'cross';
-        p.path = [...lanes, ns];
+      // They see you go and copy you, one after another.
+      if (out >= COP_START && p.startAt === Infinity) p.startAt = game.time + p.order * COP_STAGGER;
+      if (game.time >= p.startAt) {
+        p.state = 'go';
         p.hopT = 0;
-        sfx('join', { rate: p.kind === 'grandpa' ? 0.8 : rand(0.95, 1.1), gain: 0.6 });
-        popups.push({ x: colX(p.col), y: rowY(p.row) - 8, text: '!', t: 0, color: '#ffffff', big: false });
-      } else if (p.waitT > HOLD_AFTER) {
-        // No gap came: the lanes' lights hold the cars for them.
-        for (const r of lanes) {
-          const ln = laneAt(r);
-          if (ln.holdCol == null) {
-            ln.holdCol = p.col;
-            ln.holdBy = p.id;
-          }
-        }
+        sfx('join', { rate: rand(0.95, 1.1), gain: 0.6 });
       }
-    } else if (p.state === 'cross') {
-      p.hopT -= dt;
-      if (p.hopT > 0) continue;
-      const r = p.path.shift();
-      p.row = r;
-      const g = cellFeet(p.col, r);
-      walkTo(p, g.x, g.y, p.hop * 0.8);
-      p.hopT = p.hop;
-      if (!p.path.length) {
-        releaseHolds(p);
-        if (r === 0) arrive(p);
-        else {
-          p.state = 'wait';
-          p.seeT = 0;
-          p.waitT = 0;
+      continue;
+    }
+    if (p.state === 'down') {
+      p.downT -= dt;
+      if (p.downT <= 0) {
+        // Shaken, they walk back to the crowd: out for this level.
+        p.state = 'home';
+        p.row = layout.bottom;
+        const g = stripFeet(p.col, layout.bottom);
+        walkTo(p, g.x, g.y, 0.9);
+      }
+      continue;
+    }
+    if (p.state !== 'go') continue;
+    p.hopT -= dt;
+    if (p.hopT > 0) continue;
+    const next = p.row - 1;
+    if (!copierMayEnter(next)) {
+      p.hopT = 0.1;
+      continue;
+    }
+    if (isLane(next) && (game.mode === 'play' || game.mode === 'finish')) {
+      // Looking before stepping: careful from safe ground; in the road, they wait a little while
+      // the next lane is about to be hit and their own spot isn't, then go anyway.
+      if (isSafe(p.row)) {
+        if (laneBusy(p.col, next, COP_LOOK)) {
+          p.hopT = 0.1;
+          continue;
         }
+      } else if (laneBusy(p.col, next, COP_HOP + 0.15) && !laneBusy(p.col, p.row, 0.4) && p.dare < COP_DARE) {
+        p.dare += 0.1;
+        p.hopT = 0.1;
+        continue;
       }
     }
+    p.dare = 0;
+    p.row = next;
+    const g = cellFeet(p.col, next);
+    walkTo(p, g.x, g.y, COP_HOP * 0.6);
+    p.hopT = COP_HOP;
+    if (next === 0) arrive(p);
   }
 }
 
 function arrive(p) {
   p.state = 'across';
-  const n = people.filter((q) => q.state === 'across' && q.kind !== 'crowd').reduce((s, q) => s + q.weight, 0);
+  const n = acrossCount();
   game.assist = Math.max(0, game.assist - 0.03);
-  popups.push({ x: colX(p.col), y: rowY(0) - 14, text: p.weight > 1 ? '+2' : '+1', t: 0, color: '#ffd23f', big: true });
-  sfx('arrive', { rate: Math.min(2, 1 + 0.08 * (n - 1)), gain: 0.7 });
-  // Off the kerb's edge, into the strip behind it.
+  popups.push({ x: colX(p.col), y: rowY(0) - 12, text: '+1', t: 0, color: '#ffd23f', big: true });
+  sfx('arrive', { rate: Math.min(2, 1 + 0.1 * (n - 1)), gain: 0.7 });
+  // They queue at the toilet door too.
   setTimeout(() => {
     if (p.state !== 'across' || !layout) return;
-    const g = stripFeet(p.col, 0);
-    walkTo(p, g.x, g.y, 0.3);
+    const g = stripFeet(PCOL + (p.col < PCOL ? -1 : 1) * (1 + (p.order || 0)), 0);
+    walkTo(p, g.x, g.y, 0.4);
   }, 250);
 }
 
-function acrossWeight() {
-  return people.filter((q) => q.state === 'across' && q.kind !== 'crowd').reduce((s, q) => s + q.weight, 0);
+function acrossCount() {
+  return people.filter((q) => q.kind === 'copier' && q.state === 'across').length;
 }
-function onTheWayWeight() {
-  return people.filter((q) => q.state === 'cross' && q.kind !== 'crowd').reduce((s, q) => s + q.weight, 0);
+function onTheWayCount() {
+  return people.filter((q) => q.kind === 'copier' && q.state === 'go').length;
+}
+
+function hitCopier(p) {
+  p.state = 'down';
+  p.downT = 1;
+  game.assist = Math.min(1, game.assist + 0.1);
+  sfx('hit', { gain: 0.6, rate: 1.15 });
+  sfx('horn', { gain: 0.35, rate: rand(1, 1.1) });
 }
 
 // ---------- The player ----------
@@ -466,7 +469,6 @@ function movePlayer(row) {
   player.row = row;
   player.tw = 0;
   player.walkFrame ^= 1;
-  player.standT = 0;
   if (isSafe(row)) player.lastSafe = row;
 }
 
@@ -478,7 +480,7 @@ function bump() {
 function updatePlayer(dt) {
   if (player.tw < 1) {
     player.tw = Math.min(1, player.tw + dt / HOP_TWEEN);
-    const f = cellFeet(player.col, player.row);
+    const f = player.inside ? doorFeet() : cellFeet(player.col, player.row);
     player.vx = player.fx + (f.x - player.fx) * player.tw;
     player.vy = player.fy + (f.y - player.fy) * player.tw;
   }
@@ -493,19 +495,10 @@ function updatePlayer(dt) {
       player.fx = player.vx = f.x;
       player.fy = player.vy = f.y;
       player.tw = 1;
-      player.standT = 0;
     }
     return;
   }
-  if (game.mode === 'play' && isSafe(player.row) && player.tw >= 1 && player.row !== layout.bottom) {
-    player.standT += dt;
-    if (player.standT >= PROVE_T && !proven.has(player.row)) {
-      proven.add(player.row);
-      // The copiers who can follow now look up.
-      for (const p of people) if (p.state === 'wait' && p.kind !== 'crowd' && nextStrip(p.row) === player.row) p.seeT = 0;
-    }
-  }
-  // On the green light, everyone still on the way walks across, the player too.
+  // On the green light after running out of time, he crosses with everyone.
   if (player.auto && player.row > 0) {
     player.autoT -= dt;
     if (player.autoT <= 0) {
@@ -515,18 +508,25 @@ function updatePlayer(dt) {
   }
 }
 
-function checkHit() {
-  if (game.mode !== 'play' || game.grace > 0 || player.down || !isLane(player.row)) return;
-  const x = colX(player.col);
-  const a = x - PERSON_HALF;
-  const b = x + PERSON_HALF;
-  for (const v of vehicles) {
-    if (v.lane !== player.row) continue;
-    const [x0, x1] = boxOf(v);
-    if (x0 < b && x1 > a) {
-      hitPlayer();
-      return;
-    }
+function doorFeet() {
+  return { x: colX(PCOL), y: rowY(0) - WAIT_H + 1 };
+}
+
+function checkHits() {
+  if (game.grace > 0) return;
+  const hitAt = (col, row) => {
+    const x = colX(col);
+    const a = x - PERSON_HALF;
+    const b = x + PERSON_HALF;
+    return vehicles.some((v) => {
+      if (v.lane !== row) return false;
+      const [x0, x1] = boxOf(v);
+      return x0 < b && x1 > a;
+    });
+  };
+  if (game.mode === 'play' && !player.down && isLane(player.row) && hitAt(player.col, player.row)) hitPlayer();
+  for (const p of people) {
+    if (p.kind === 'copier' && p.state === 'go' && isLane(p.row) && hitAt(p.col, p.row)) hitCopier(p);
   }
 }
 
@@ -536,52 +536,63 @@ function hitPlayer() {
   game.shake = 0.25;
   sfx('hit', { gain: 0.8 });
   sfx('horn', { gain: 0.45, rate: rand(0.95, 1.08) });
-  popups.push({ x: colX(player.col), y: rowY(player.row) - 10, text: pick(OUCH), t: 0, color: '#ffffff', big: false, long: true });
-  // One copier who saw it shakes their head and goes back to the crowd.
-  const doubter = people.find((p) => p.kind !== 'crowd' && p.state === 'wait');
-  if (doubter) {
-    doubter.state = 'home';
-    releaseHolds(doubter);
-    popups.push({ x: colX(doubter.col), y: rowY(doubter.row) - 8, text: 'nope', t: 0, color: '#ffb3b3', big: false });
-    const g = stripFeet(doubter.col, layout.bottom);
-    walkTo(doubter, g.x, g.y, Math.max(0.4, (layout.bottom - doubter.row) * 0.35));
-    doubter.row = layout.bottom;
-  }
 }
 
 // ---------- Level flow ----------
 
-function closeLevel() {
-  const n = acrossWeight();
-  const secs = Math.max(0, Math.ceil(game.red - 1e-9));
-  game.levelScore = (1 + n) * secs;
-  beginGreen();
-}
-
 function maxScore(s) {
-  return s.red * (1 + s.copiers + (s.grandpa ? 2 : 0));
+  return s.red * (1 + s.copiers);
 }
 function starsFor(score, s) {
   const f = score / maxScore(s);
   return f >= 0.45 ? 3 : f >= 0.28 ? 2 : f >= 0.12 ? 1 : 0;
 }
 
+// He's across: the seconds left are his. The light runs on while copiers are still on the way (each
+// one across before it turns green multiplies them), then runs out fast.
+function closeLevel() {
+  game.closedSecs = Math.max(1, Math.ceil(game.red - 1e-9));
+  game.mode = 'finish';
+  game.phaseT = 0;
+  // In through the toilet door.
+  player.inside = true;
+  player.fx = player.vx;
+  player.fy = player.vy;
+  player.tw = 0;
+  sfx('join', { rate: 0.75, gain: 0.7 }); // in through the door
+}
+
+function scoreLevel() {
+  game.levelScore = game.closedSecs * (1 + acrossCount());
+}
+
+// The walk light has run out: the cars stop before the crossing, and once it is clear, green.
+function beginWait() {
+  game.mode = 'wait';
+  game.phaseT = 0;
+}
+
+function crossingClear() {
+  const x0 = CROSS_C0 * CW - 1;
+  const x1 = (CROSS_C1 + 1) * CW + 1;
+  return !vehicles.some((v) => {
+    const x = vxOf(v);
+    return x < x1 && x + v.w > x0;
+  });
+}
+
 function beginGreen() {
   game.mode = 'green';
   game.phaseT = 0;
   game.siren = null;
-  for (const ln of layout.lanes) {
-    ln.holdCol = null;
-    ln.holdBy = null;
-  }
   sfx('walk', { gain: 0.5 });
   sfx('street', { gain: 0.7 });
 }
 
 function updateGreen(dt) {
   game.phaseT += dt;
-  // After a beat, everyone still on this side crosses: copiers left behind, the crowd, the player.
-  if (game.phaseT >= 0.8 && !game.greenWalk) {
+  // After a beat, everyone still on this side crosses on the zebra; so does he if he didn't make it.
+  if (game.phaseT >= 0.5 && !game.greenWalk) {
     game.greenWalk = true;
     for (const p of people) {
       if (p.state === 'across') continue;
@@ -589,7 +600,7 @@ function updateGreen(dt) {
       p.walkRow = p.row;
       p.hopT = rand(0, 0.4);
     }
-    if (player.row > 0 && !player.down) {
+    if (!player.inside && player.row > 0 && !player.down) {
       player.auto = true;
       player.autoT = 0;
     }
@@ -619,32 +630,38 @@ function beginTally() {
   game.phaseT = 0;
   game.greenWalk = false;
   const s = street();
+  if (game.failed) {
+    ui.bannerNum.textContent = 'The light turned green';
+    ui.bannerName.textContent = 'Try again';
+    ui.banner.hidden = false;
+    sfx('bump', { rate: 0.8, gain: 0.6 });
+    return;
+  }
   const stars = starsFor(game.levelScore, s);
-  const across = acrossWeight();
+  const across = acrossCount();
   game.results[game.level] = { score: game.levelScore, stars, across };
   game.score += game.levelScore;
   const prev = saved.stars[game.level] || 0;
   if (stars > prev) saved.stars[game.level] = stars;
-  saved.reached = Math.max(saved.reached || 0, Math.min(LEVELS_N - 1, game.level + 1));
   save();
-  ui.bannerNum.textContent = `${1 + across} × ${Math.ceil(game.closedRed || 0)} s · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
+  ui.bannerNum.textContent = `${game.closedSecs} s × ${1 + across} · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
   ui.bannerName.textContent = `+${game.levelScore}`;
   ui.banner.hidden = false;
-  sfx(stars ? 'arrive' : 'bump', { rate: 1.2, gain: 0.6 });
+  sfx('arrive', { rate: 1.2, gain: 0.6 });
 }
 
 function updateTally(dt) {
   game.phaseT += dt;
   if (game.phaseT < TALLY_T) return;
   ui.banner.hidden = true;
-  if (game.level + 1 >= LEVELS_N) endRun();
+  if (game.failed) startLevel(game.level); // the same level again
+  else if (game.level + 1 >= LEVELS_N) endRun();
   else startLevel(game.level + 1);
 }
 
 function startLevel(idx) {
   setupLevel(idx);
   game.mode = 'play';
-  game.closedRed = 0;
   showBanner();
   sfx('start', { gain: 0.6 });
   syncHud();
@@ -724,15 +741,27 @@ function update(dt) {
   popups = popups.filter((pp) => pp.t < (pp.long ? 1.8 : 1.1));
   if (game.mode === 'green') return updateGreen(dt);
   if (game.mode === 'tally') return updateTally(dt);
+  if (game.mode === 'wait') {
+    // Wait for the crossing to clear, at most a few seconds.
+    game.phaseT += dt;
+    if (crossingClear() || game.phaseT > 6) beginGreen();
+    return;
+  }
+  if (game.mode === 'finish') {
+    // Copiers still on the way get the rest of the red; then it runs out quickly.
+    const fast = !onTheWayCount() && game.red > YELLOW_AT + 0.5; // the yellow and red always run in real time
+    game.red = Math.max(0, game.red - dt * (fast ? 8 : 1));
+    updateCopiers(dt);
+    checkHits();
+    if (game.red <= 0) {
+      scoreLevel();
+      beginWait();
+    }
+    return;
+  }
   if (game.mode !== 'play') return;
   updateCopiers(dt);
-  checkHit();
-  // The phone call.
-  game.callIn -= dt;
-  if (game.callIn <= 0 && !player.down) {
-    game.callIn = rand(6, 10);
-    popups.push({ x: colX(player.col), y: rowY(player.row) - 12, text: pick(CALL), t: 0, color: '#ffffff', big: false, long: true, follow: true });
-  }
+  checkHits();
   game.red -= dt;
   const whole = Math.ceil(game.red);
   if (game.red <= 5 && game.red > 0 && whole !== game.lastTick) {
@@ -740,19 +769,17 @@ function update(dt) {
     sfx('tick', { gain: 0.6 });
   }
   if (game.red <= 0) {
+    // Too slow: the light turns green before he is across. No points, and the level again.
     game.red = 0;
-    game.closedRed = 0;
+    game.failed = true;
     game.levelScore = 0;
-    beginGreen();
+    game.tries += 1;
+    beginWait();
     return;
   }
-  // Across, and nobody on the way or about to set off: the level closes.
-  if (player.row === 0 && player.standT >= PROVE_T) {
-    const pending = people.some((p) => p.kind !== 'crowd' && (p.state === 'cross' || (p.state === 'wait' && proven.has(nextStrip(p.row)))));
-    if (!pending) {
-      game.closedRed = Math.ceil(game.red - 1e-9);
-      closeLevel();
-    }
+  if (player.row === 0 && player.tw >= 1 && !player.down) {
+    closeLevel();
+    return;
   }
   if (input.queued && player.tw >= 1) {
     const d = input.queued;
@@ -879,34 +906,28 @@ function updateLaneCycle(ln, dt, frozen) {
     }
   }
   ln.light = ln.phase === 'on' ? 'green' : 'red';
-  if (ln.holdCol != null || game.mode === 'green' || game.mode === 'tally') ln.light = 'hold';
   if (game.siren && game.siren.lane === ln.row) ln.light = 'siren';
 }
 
-// Where a vehicle's front must stop to keep clear of a column (in s along its lane).
-function stopLine(v, col) {
-  const x0 = colX(col) - CW / 2 - 1;
-  const x1 = colX(col) + CW / 2 + 1;
-  return v.dir === 1 ? x0 + ENTRY : PLAY_W + ENTRY - x1;
+// Where a vehicle's front stops: its stop line, just before the zebra crossing (in s along its lane).
+function crossingStop(v) {
+  const x = v.dir === 1 ? CROSS_C0 * CW - 3 : (CROSS_C1 + 1) * CW + 3;
+  return v.dir === 1 ? x + ENTRY : PLAY_W + ENTRY - x;
 }
 
-// The furthest a vehicle's front may go this frame: before a copier crossing its lane (cars always
-// brake for them), before a column its lane's light holds, and, on the green light, before the
-// street.
+// The furthest a vehicle's front may go this frame: on red it stops at its stop line, on yellow
+// too if it can still stop in time; past the line it drives on.
 function stopLineS(v) {
-  let lim = Infinity;
-  const stopAt = (sNear) => {
-    if (v.s <= sNear + 0.5) lim = Math.min(lim, sNear);
-  };
-  if (game.mode === 'green' || game.mode === 'tally') stopAt(ENTRY - 2);
-  const ln = laneAt(v.lane);
-  if (ln && ln.holdCol != null) stopAt(stopLine(v, ln.holdCol));
-  for (const p of people) {
-    if (p.state === 'cross' && p.row === v.lane) stopAt(stopLine(v, p.col));
-    if (p.state === 'walk' && p.walkRow === v.lane) stopAt(stopLine(v, p.col));
-  }
-  if (player.auto && player.row === v.lane) stopAt(stopLine(v, player.col));
-  return lim;
+  const light = carLight();
+  if (light === 'green') return Infinity;
+  const sStop = crossingStop(v);
+  const margin = light === 'yellow' ? -6 : 0.5; // on yellow, only a car well short of the line stops
+  return v.s <= sStop + margin ? sStop : Infinity;
+}
+
+// A car caught past its stop line on yellow or red hurries to clear the crossing.
+function hurrying(v) {
+  return carLight() !== 'green' && v.s > crossingStop(v) + 0.5;
 }
 
 function updateTraffic(dt, quiet = false) {
@@ -958,7 +979,7 @@ function updateTraffic(dt, quiet = false) {
     list.sort((a, b) => b.s - a.s);
     let aheadBack = Infinity;
     for (const v of list) {
-      const want = v.speed * mul;
+      const want = v.speed * mul * (hurrying(v) ? 1.8 : 1);
       v.v = Math.min(want, v.v + want * 3 * dt);
       let limit = stopLineS(v);
       if (!v.siren) limit = Math.min(limit, aheadBack - 3);
@@ -977,7 +998,7 @@ function updateTraffic(dt, quiet = false) {
 // ---------- Pause ----------
 
 function pause() {
-  if (game.mode !== 'play' && game.mode !== 'green' && game.mode !== 'tally') return;
+  if (game.mode === 'title' || game.mode === 'over') return;
   game.paused = true;
   input.queued = null;
   ui.paused.hidden = false;
@@ -1312,99 +1333,163 @@ function personSprite(p, isPlayer) {
   let pose = '';
   const moving = isPlayer ? player.tw < 1 : p.tw < 1;
   if (isPlayer && player.down > 0) pose = player.down > DOWN_T - 0.4 ? '_fall' : '_down';
+  else if (!isPlayer && p.state === 'down') pose = p.downT > 0.6 ? '_fall' : '_down';
   else if (moving) pose = p.walkFrame ? '_walk1' : '_walk2';
-  else if (!isPlayer && p.kind !== 'crowd' && p.state === 'across' && Math.floor(p.t * 3) % 2 === 0) pose = '_point';
-  else if (!isPlayer && p.kind !== 'crowd' && p.state === 'wait' && p.seeT > 0 && p.seeT < SEE_DELAY) pose = '_point';
-  const key = isPlayer ? 'suit' : p.kind === 'grandpa' ? 'grandpa' : `s${p.shirt}`;
+  const key = isPlayer ? 'suit' : `s${p.shirt}`;
   return sprites[`${sex}${pose}:${key}`];
 }
 
+// He needs the loo: standing still, he hops from foot to foot.
+function urgentJiggle(p, isPlayer) {
+  if (game.mode === 'title' && !isPlayer) return 0;
+  const still = isPlayer ? player.tw >= 1 && !player.down : p.tw >= 1;
+  const urgent = isPlayer ? !player.inside : p.kind === 'copier' && p.state !== 'down' && p.state !== 'home';
+  if (!still || !urgent) return 0;
+  return Math.floor(game.time * 7 + (p.id || 0)) % 2 === 0 ? -1 : 1;
+}
+
 function drawPerson(p, isPlayer = false) {
+  if (isPlayer && player.inside && player.tw >= 1) return; // in the loo
   const spr = personSprite(p, isPlayer);
   if (!spr) return;
   const tw = isPlayer ? player.tw : p.tw;
   const img = p.face === 1 ? spr[0] : spr[1];
   const hopY = tw < 1 ? Math.sin(Math.PI * tw) * 2 : 0;
-  let x = px(p.vx - img.width / 2);
+  let x = px(p.vx - img.width / 2) + urgentJiggle(p, isPlayer);
   if (isPlayer && player.nudge > 0) x += Math.round(Math.sin(player.nudge * 60));
   const y = py(p.vy - img.height - hopY);
+  if (!isPlayer && p.state === 'home') lctx.globalAlpha = 0.7;
   lctx.drawImage(img, x, y);
-  if (isPlayer && !player.down) {
-    // The phone at his ear.
-    lctx.fillStyle = '#1b1d24';
-    lctx.fillRect(x + (p.face === 1 ? img.width - 3 : 1), y + 2, 2, 4);
+  lctx.globalAlpha = 1;
+  // A drop of sweat, now and then.
+  if (isPlayer && !player.down && !player.inside && game.mode !== 'title') {
+    const ph = (game.time * 1.3) % 1;
+    if (ph < 0.6) {
+      const sx = x + (p.face === 1 ? 1 : img.width - 2);
+      const sy = y - 1 + Math.round(ph * 6);
+      lctx.fillStyle = '#7fd0ff';
+      lctx.fillRect(sx, sy, 1, 2);
+      lctx.fillRect(sx - 1, sy + 1, 3, 1);
+    }
   }
-  if (!isPlayer && p.kind === 'grandpa' && !(p.tw < 1)) {
-    // A cane.
-    lctx.fillStyle = '#7a5a3a';
-    lctx.fillRect(x + img.width, y + 8, 1, 7);
+  // Knocked down: stars.
+  if ((isPlayer && player.down > 0) || (!isPlayer && p.state === 'down')) {
+    const a = game.time * 6;
+    lctx.fillStyle = '#ffd23f';
+    for (let i = 0; i < 3; i++) {
+      const ang = a + (i * Math.PI * 2) / 3;
+      lctx.fillRect(Math.round(x + img.width / 2 + Math.cos(ang) * 5), Math.round(y - 2 + Math.sin(ang) * 2), 1, 1);
+    }
   }
-  // A copier still waiting watches you: a small eye above their head.
-  if (!isPlayer && p.kind !== 'crowd' && p.state === 'wait') {
-    const ex = x + Math.floor(img.width / 2) - 2;
-    const ey = y - 5 + Math.round(Math.sin(game.time * 3 + p.id) * 0.6);
-    const ready = proven.has(nextStrip(p.row));
-    lctx.fillStyle = ready ? '#ffd23f' : 'rgba(255,255,255,0.92)';
-    lctx.fillRect(ex, ey + 1, 5, 1);
-    lctx.fillRect(ex + 1, ey, 3, 3);
-    lctx.fillStyle = '#20232b';
-    lctx.fillRect(ex + 2, ey + 1, 1, 1);
+}
+
+// A 3×5 pixel font for the countdown.
+const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
+function drawDigits(n, x, y, color) {
+  const s = String(n);
+  lctx.fillStyle = color;
+  for (let i = 0; i < s.length; i++) {
+    const d = DIGITS[+s[i]];
+    for (let k = 0; k < 15; k++) if (d[k] === '1') lctx.fillRect(x + i * 4 + (k % 3), y + Math.floor(k / 3), 1, 1);
+  }
+}
+
+// The zebra crossing and each lane's stop line, under the traffic.
+function drawCrossing() {
+  const x0 = px(CROSS_C0 * CW);
+  const w = (CROSS_C1 - CROSS_C0 + 1) * CW;
+  for (let r = 1; r < layout.bottom; r++) {
+    if (!isLane(r)) continue;
+    const y = py(rowY(r));
+    lctx.fillStyle = 'rgba(245,245,240,0.82)';
+    for (let sx = x0 + 2; sx < x0 + w - 1; sx += 6) lctx.fillRect(sx, y + 3, 3, ROW - 6);
+    const ln = laneAt(r);
+    lctx.fillStyle = 'rgba(245,245,240,0.9)';
+    const lx = ln.dir === 1 ? x0 - 3 : x0 + w + 2;
+    lctx.fillRect(lx, y + 2, 1, ROW - 4);
   }
 }
 
 function drawLights() {
-  // A light at each lane's entry: green while its platoon comes, red in a lull or a hold.
+  // Each lane's car light at its stop line: green, then yellow, then red with the walk light.
+  const light = carLight();
   for (const ln of layout.lanes) {
-    const y = py(rowY(ln.row) + 3);
-    const x = ln.dir === 1 ? 1 : LW - 5; // at the screen's edge, where the lane's traffic comes in
+    const y = py(rowY(ln.row)) + 1;
+    const x = ln.dir === 1 ? px(CROSS_C0 * CW) - 8 : px((CROSS_C1 + 1) * CW) + 4;
     lctx.fillStyle = '#20232b';
-    lctx.fillRect(x, y, 4, 9);
-    if (ln.light === 'siren') {
+    lctx.fillRect(x, y, 4, 10);
+    lctx.fillStyle = light === 'red' ? '#ff4b4b' : '#3a1515';
+    lctx.fillRect(x + 1, y + 1, 2, 2);
+    lctx.fillStyle = light === 'yellow' ? '#ffcf3f' : '#3a3010';
+    lctx.fillRect(x + 1, y + 4, 2, 2);
+    lctx.fillStyle = light === 'green' ? '#5ae17c' : '#14301c';
+    lctx.fillRect(x + 1, y + 7, 2, 2);
+    if (game.siren && game.siren.lane === ln.row) {
+      // A siren is coming: the lane's edge flashes.
       const on = Math.floor(game.time * 8) % 2 === 0;
-      lctx.fillStyle = on ? '#ff3b3b' : '#3b8bff';
-      lctx.fillRect(x + 1, y + 1, 2, 7);
-      lctx.fillStyle = on ? 'rgba(255,59,59,0.35)' : 'rgba(59,139,255,0.35)';
+      lctx.fillStyle = on ? 'rgba(255,59,59,0.4)' : 'rgba(59,139,255,0.4)';
       const ex = ln.dir === 1 ? 0 : LW - 6;
       lctx.fillRect(ex, py(rowY(ln.row)), 6, ROW);
-    } else {
-      const red = ln.light === 'red' || ln.light === 'hold';
-      lctx.fillStyle = red ? '#ff4b4b' : '#3a1515';
-      lctx.fillRect(x + 1, y + 1, 2, 3);
-      lctx.fillStyle = ln.light === 'green' ? '#5ae17c' : '#14301c';
-      lctx.fillRect(x + 1, y + 5, 2, 3);
     }
   }
-  // The pedestrian signal on both kerbs, beside the player's column: the red man, then the green.
+  // The walk light on both kerbs, beside the crossing, with its countdown.
   const green = game.mode === 'green' || game.mode === 'tally';
+  const secs = Math.max(0, Math.ceil(game.red));
   for (const r of [0, layout.bottom]) {
-    const x = px(colX(PCOL) + CW / 2 + 3);
-    const y = r === 0 ? py(rowY(0)) - 12 : py(rowY(r) + ROW) + 1;
+    const x = px((CROSS_C1 + 1) * CW) + 2;
+    const y = r === 0 ? py(rowY(0)) - 16 : py(rowY(r) + ROW) + 1;
     lctx.fillStyle = '#c8e0ff';
-    lctx.fillRect(x + 3, y + 8, 1, 6);
+    lctx.fillRect(x + 4, y + 14, 1, 6);
     lctx.fillStyle = '#20232b';
-    lctx.fillRect(x, y, 7, 9);
+    lctx.fillRect(x, y, 9, 15);
     lctx.fillStyle = green ? '#5ae17c' : '#ff4b4b';
     if (green) {
-      // Walking.
-      lctx.fillRect(x + 3, y + 1, 1, 1);
-      lctx.fillRect(x + 2, y + 2, 3, 3);
-      lctx.fillRect(x + 2, y + 5, 1, 3);
-      lctx.fillRect(x + 4, y + 5, 1, 2);
-      lctx.fillRect(x + 5, y + 7, 1, 1);
+      lctx.fillRect(x + 4, y + 1, 1, 1);
+      lctx.fillRect(x + 3, y + 2, 3, 3);
+      lctx.fillRect(x + 3, y + 5, 1, 2);
+      lctx.fillRect(x + 5, y + 5, 1, 1);
+      lctx.fillRect(x + 6, y + 6, 1, 1);
     } else {
-      // Standing.
-      lctx.fillRect(x + 3, y + 1, 1, 1);
-      lctx.fillRect(x + 2, y + 2, 3, 3);
-      lctx.fillRect(x + 2, y + 5, 1, 3);
-      lctx.fillRect(x + 4, y + 5, 1, 3);
+      lctx.fillRect(x + 4, y + 1, 1, 1);
+      lctx.fillRect(x + 3, y + 2, 3, 3);
+      lctx.fillRect(x + 3, y + 5, 1, 2);
+      lctx.fillRect(x + 5, y + 5, 1, 2);
+      if (game.mode !== 'title') {
+        drawDigits(Math.min(99, secs), x + (secs >= 10 ? 1 : 3), y + 9, '#ffb03f');
+        drawn.countdown = secs;
+      }
     }
   }
+}
+
+// The café's toilet across the street: a door and a WC sign, above his column.
+function drawToilet() {
+  const x = px(colX(PCOL)) - 4;
+  const y = py(rowY(0)) - WAIT_H - 14;
+  lctx.fillStyle = '#6b4a2e';
+  lctx.fillRect(x, y, 9, 14);
+  lctx.fillStyle = player.inside ? '#2a1d12' : '#8a6340';
+  lctx.fillRect(x + 1, y + 1, 7, 13);
+  lctx.fillStyle = '#ffd23f';
+  lctx.fillRect(x + 6, y + 8, 1, 1);
+  // WC sign.
+  const sx = x - 1;
+  const sy = y - 9;
+  lctx.fillStyle = '#2f6fd6';
+  lctx.fillRect(sx, sy, 11, 7);
+  lctx.fillStyle = '#ffffff';
+  const W = ['10001', '10001', '10101', '01010'];
+  const C = ['011', '100', '100', '011'];
+  W.forEach((row, j) => [...row].forEach((c, i) => c === '1' && lctx.fillRect(sx + 1 + i, sy + 1 + j + (j > 0 ? 0 : 0), 1, 1)));
+  C.forEach((row, j) => [...row].forEach((c, i) => c === '1' && lctx.fillRect(sx + 7 + i, sy + 1 + j, 1, 1)));
 }
 
 function draw() {
   if (!layout || !PERSON_KEYS.ready) return;
   const pal = street().pal;
   drawBackground();
+  drawToilet();
+  drawCrossing();
   // Everyone is drawn by where their feet are: the top strip, then row by row (vehicles, then
   // people), then the bottom strip, so nearer things cover farther ones.
   const band = (y) => (y < WAIT_H ? -1 : y > rowY(layout.bottom) + ROW ? layout.bottom + 1 : Math.floor((y - WAIT_H - 1) / ROW));
@@ -1428,7 +1513,7 @@ function draw() {
   drawBand(layout.bottom + 1);
   if (pal.dark > 0) {
     lctx.fillStyle = `rgba(10,12,40,${pal.dark * 0.5})`;
-    lctx.fillRect(0, 0, LW, py(rowY(0)) - WAIT_H - 1);
+    lctx.fillRect(0, 0, LW, py(rowY(0)) - WAIT_H - 30);
   }
   if (game.paused) {
     lctx.fillStyle = 'rgba(20,22,31,0.45)';
@@ -1461,12 +1546,10 @@ function drawText() {
   for (const pp of popups) {
     const life = pp.long ? 1.8 : 1.1;
     const a = Math.min(1, (life - pp.t) * 2.5);
-    const wx = pp.follow ? player.vx : pp.x;
-    const wy = pp.follow ? player.vy - 22 : pp.y;
     ctx.font = `800 ${Math.round((pp.big ? 20 : 12) * dpr)}px system-ui, sans-serif`;
     const w = ctx.measureText(pp.text).width;
-    const x = Math.max(left + w / 2, Math.min(right - w / 2, (wx + originX) * k + offX));
-    const y = (wy + originY - (pp.long ? 0 : pp.t * 10)) * k;
+    const x = Math.max(left + w / 2, Math.min(right - w / 2, (pp.x + originX) * k + offX));
+    const y = (pp.y + originY - pp.t * 10) * k;
     ctx.globalAlpha = Math.max(0, a);
     ctx.lineWidth = 4 * dpr;
     ctx.strokeStyle = 'rgba(20,22,31,0.75)';
@@ -1475,13 +1558,12 @@ function drawText() {
     ctx.fillText(pp.text, x, y);
   }
   ctx.globalAlpha = 1;
-  // The level's score so far, shown at the far kerb before it is earned: × the people across
-  // (and on their way), times the seconds of red left.
-  if (game.mode === 'play' && street().copiers > 0) {
-    const m = 1 + acrossWeight() + onTheWayWeight();
-    const secs = Math.max(0, Math.ceil(game.red));
-    const text = `×${m} · ${secs} s = ${m * secs}`;
-    const yk = rowY(0) - WAIT_H - 10;
+  // What the level is worth right now: the seconds left × (1 + copiers across or on the way).
+  if ((game.mode === 'play' || game.mode === 'finish') && street().copiers > 0) {
+    const m = 1 + acrossCount() + onTheWayCount();
+    const secs = game.mode === 'finish' ? game.closedSecs : Math.max(0, Math.ceil(game.red));
+    const text = `${secs} s × ${m} = ${m * secs}`;
+    const yk = rowY(0) - WAIT_H - 34;
     ctx.font = `800 ${Math.round(14 * dpr)}px system-ui, sans-serif`;
     const w = ctx.measureText(text).width + 16 * dpr;
     const h = 22 * dpr;
@@ -1613,8 +1695,11 @@ sheet.decode().then(
       drawn,
       view,
       LEVELS,
-      PROVE_T,
-      HOLD_AFTER,
+      CROSS_C0,
+      CROSS_C1,
+      YELLOW_AT,
+      RED_AT,
+      COP_START,
       startGame,
       startLevel,
       showStart,
@@ -1632,14 +1717,13 @@ sheet.decode().then(
       people: () => people,
       copiers: () => people.filter((p) => p.kind !== 'crowd'),
       vehicles: () => vehicles,
-      proven: () => proven,
-      nextStrip,
-      laneClear,
+      carLight,
+      crossingClear,
+      laneBusy,
       // Put the player on a row, standing (for tests).
       put: (row) => {
         player.row = row;
         if (isSafe(row)) player.lastSafe = row;
-        player.standT = 0;
         player.tw = 1;
         const f = cellFeet(player.col, row);
         player.vx = player.fx = f.x;
