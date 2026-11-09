@@ -56,7 +56,7 @@ body {
   outline-offset: 2px;
 }
 
-/* "Are you sure you want to leave?": asked before the back button or Escape leaves. */
+/* "Leave this level?": asked before the back button or Escape leaves. */
 .shell-leave {
   width: min(320px, calc(100vw - 48px));
   box-sizing: border-box;

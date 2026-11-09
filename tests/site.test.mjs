@@ -143,15 +143,15 @@ test("the game shell's back button returns to the landing page", async () => {
   // It asks first: leaving loses the game's progress.
   const ask = page.locator('dialog.shell-leave');
   await ask.waitFor({ state: 'visible' });
-  assert.match(await ask.textContent(), /Are you sure you want to leave\?/);
-  assert.match(await ask.textContent(), /lose any progress you may have made/);
+  assert.match(await ask.textContent(), /Leave this level\?/);
+  assert.match(await ask.textContent(), /Your progress on this level will be lost\./);
   await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('runes AC-24: before leaving a game, the shell always asks; Stay keeps you there, Leave goes back', async () => {
+test('runes AC-24: before leaving any game, the shell always asks "Leave this level?"; Stay keeps you there, Leave goes back', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   const ask = page.locator('dialog.shell-leave');
   await page.locator('.shell-back').click();

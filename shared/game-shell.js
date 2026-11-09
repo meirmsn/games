@@ -11,12 +11,10 @@
 // The back button sits in the top-left corner, clear of the notch, and plays a short sound before
 // going back. The game draws everywhere else. Escape also goes back on desktop, except while a text
 // field or an open dialog has focus, or when the game calls event.preventDefault() on that keydown.
-// Before leaving, the shell asks (Stay / Leave). A game that knows what it would lose says so:
-//   mountShell({ unsaved: () => bool, leaveTitle, leaveText })
-// Then the shell asks only while unsaved() is true, in the game's own words, and the browser also
-// warns before a refresh or closing the tab while it is true. Without unsaved(), the shell always
-// asks "Are you sure you want to leave? You'll lose any progress you may have made." and leaves
-// refreshes alone.
+// Before leaving, the shell always asks "Leave this level? Your progress on this level will be
+// lost." (Stay / Leave), in every game, so leaving the game is never a surprise. A game that knows
+// when it holds unsaved progress can pass mountShell({ unsaved: () => bool }); the browser then also
+// warns before a refresh or closing the tab while it is true.
 import { createSound } from './sound.js';
 
 const BACK_SOUND = new URL('../assets/sounds/back.mp3', import.meta.url).href;
@@ -43,10 +41,10 @@ function keepForOffline() {
     .catch(() => {});
 }
 
-const ASK_TITLE = 'Are you sure you want to leave?';
-const ASK_TEXT = 'You’ll lose any progress you may have made.';
+const ASK_TITLE = 'Leave this level?';
+const ASK_TEXT = 'Your progress on this level will be lost.';
 
-export function mountShell({ sounds = {}, home = HOME, unsaved = null, leaveTitle = ASK_TITLE, leaveText = ASK_TEXT } = {}) {
+export function mountShell({ sounds = {}, home = HOME, unsaved = null } = {}) {
   const sound = createSound({ back: BACK_SOUND, ...sounds });
   const shell = { sound, back: null };
 
@@ -68,8 +66,8 @@ export function mountShell({ sounds = {}, home = HOME, unsaved = null, leaveTitl
     '<button type="button" class="shell-leave-stay" data-shell-stay autofocus>Stay</button>' +
     '<button type="button" class="shell-leave-go" data-shell-leave>Leave</button>' +
     '</div>';
-  ask.querySelector('.shell-leave-title').textContent = leaveTitle;
-  ask.querySelector('.shell-leave-text').textContent = leaveText;
+  ask.querySelector('.shell-leave-title').textContent = ASK_TITLE;
+  ask.querySelector('.shell-leave-text').textContent = ASK_TEXT;
   ask.querySelector('[data-shell-stay]').addEventListener('click', () => ask.close());
   ask.querySelector('[data-shell-leave]').addEventListener('click', () => leave());
   ask.addEventListener('click', (e) => {
@@ -88,12 +86,8 @@ export function mountShell({ sounds = {}, home = HOME, unsaved = null, leaveTitl
   function goBack(e) {
     if (e) e.preventDefault();
     if (leaving || ask.open) return;
-    if (typeof unsaved === 'function' && !unsaved()) {
-      leave(); // nothing would be lost
-      return;
-    }
     if (typeof ask.showModal === 'function') ask.showModal();
-    else if (window.confirm(`${leaveTitle} ${leaveText}`)) leave();
+    else if (window.confirm(`${ASK_TITLE} ${ASK_TEXT}`)) leave();
   }
   // A refresh or closing the tab: the browser's own warning, while the game has unsaved progress.
   if (typeof unsaved === 'function') {
