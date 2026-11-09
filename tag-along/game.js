@@ -53,7 +53,8 @@ const WAIT_H = 12; // the strip behind each kerb where people wait
 const STEP_TWEEN = 0.09;
 const HOLD_DELAY = 0.22;
 const HOLD_REPEAT = 0.16;
-const START_CLOCK = 40;
+const START_CLOCK = 45;
+const STREET_BONUS = 10; // a new street adds this to the clock
 const NEAR = 6; // half a cell: a close call
 const PERSON_HALF = 2.5; // a person's hitbox is 5 art px wide
 const SHRINK = 0.1; // vehicles' boxes are 20% narrower than their art (10% off each end)
@@ -66,7 +67,7 @@ const NIGHT = ['sports_red', 'sports_yellow', 'sports_green', 'sports_convertibl
 const SIRENS = ['ambulance', 'police', 'firetruck', 'riot'];
 
 // A lane: [direction (1 = to the right), speed (art px/s), vehicle set, gap range, platoon range, lull range]
-const L = (dir, speed, set, gap = [8, 34], on = [4, 7], off = [2.5, 4.5]) => ({ dir, speed, set, gap, on, off });
+const L = (dir, speed, set, gap = [16, 50], on = [3, 6], off = [3, 5]) => ({ dir, speed, set, gap, on, off });
 
 // Rows from the top kerb down: 'K' kerb, 'L' lane, 'M' median.
 const STREETS = [
@@ -381,8 +382,8 @@ function spawnVehicle(ln, name, { siren = false } = {}) {
   return v;
 }
 
-function updateLaneCycle(ln, dt) {
-  ln.t -= dt;
+function updateLaneCycle(ln, dt, frozen) {
+  if (!frozen) ln.t -= dt;
   if (ln.t <= 0) {
     if (ln.phase === 'on') {
       ln.phase = 'off';
@@ -422,7 +423,7 @@ function personOnCell(col, row) {
 function updateTraffic(dt, quiet = false) {
   const mul = speedMul();
   for (const ln of layout.lanes) {
-    updateLaneCycle(ln, dt);
+    updateLaneCycle(ln, dt, quiet); // filling the road at the start keeps the lanes' staggered phases
     if (ln.phase === 'on' && !(game.siren && game.siren.lane === ln.row)) {
       ln.spawnIn -= dt;
       if (ln.spawnIn <= 0) {
@@ -675,7 +676,7 @@ function arrive(p, i) {
   game.crossing += 1;
   const n = game.crossing;
   game.score += n;
-  game.clock += 0.5 * n;
+  game.clock += 0.5 + 0.5 * n;
   game.arrived += 1;
   game.assist = Math.max(0, game.assist - 0.03);
   p.kind = 'leaving';
@@ -961,6 +962,8 @@ function updateChange(dt) {
     saved.reached = Math.max(saved.reached || 0, next);
     save();
     setupStreet(next);
+    game.clock += STREET_BONUS;
+    popups.push({ x: PLAY_W / 2, y: rowY(layout.bottom) - 4, text: `+${STREET_BONUS} s`, t: -0.6, color: '#5ae17c', big: true });
     showBanner();
   }
   if (game.changeT <= 0) {
@@ -1390,6 +1393,34 @@ function drawBackground() {
   for (let c = -20; c < LW; c += CW) g.fillRect(c + (originX % CW), yb + 2, 1, ROW + WAIT_H);
   g.fillStyle = pal.verge;
   g.fillRect(0, yb + ROW + WAIT_H + 2, LW, LH);
+  // Trees and hedges along the verge, the same for a street whatever the screen.
+  const treeRng = mulberry(game.street * 31 + 5);
+  const vy = yb + ROW + WAIT_H + 2;
+  const leaf = shade(pal.verge, -0.22);
+  const leafLight = shade(pal.verge, 0.12);
+  for (let tx = (originX % 26) - 26; tx < LW + 26; tx += 26) {
+    const kind = treeRng();
+    const ox = Math.floor(treeRng() * 8);
+    if (kind < 0.55) {
+      // A round tree.
+      g.fillStyle = '#7a5a3a';
+      g.fillRect(tx + ox + 6, vy + 12, 2, 8);
+      g.fillStyle = leaf;
+      g.fillRect(tx + ox + 1, vy + 3, 12, 10);
+      g.fillRect(tx + ox + 3, vy + 1, 8, 14);
+      g.fillStyle = leafLight;
+      g.fillRect(tx + ox + 3, vy + 3, 4, 3);
+    } else {
+      g.fillStyle = leaf;
+      g.fillRect(tx + ox, vy + 14, 16, 6);
+      g.fillRect(tx + ox + 2, vy + 12, 12, 2);
+    }
+  }
+  // Lamp posts on the sidewalks, at the play area's edges and beyond.
+  for (let lx = -36; lx < PLAY_W + 72; lx += 72) {
+    lamp(g, px(lx), yTop + 2, pal);
+    lamp(g, px(lx), yb + ROW + WAIT_H - 24, pal);
+  }
   // Crosswalk stripes.
   const w = game.walk;
   if (w) {
@@ -1407,6 +1438,22 @@ function drawBackground() {
   g.fillRect(px(PLAY_W), yTop, 1, WAIT_H + ROW - 2);
   g.fillRect(px(-1), yb + 2, 1, ROW + WAIT_H);
   g.fillRect(px(PLAY_W), yb + 2, 1, ROW + WAIT_H);
+}
+
+function lamp(g, x, yFoot, pal) {
+  // A lamp post 24 px tall, its feet at yFoot + 24.
+  if (x < -4 || x > LW + 4) return;
+  g.fillStyle = '#5b6170';
+  g.fillRect(x, yFoot, 1, 24);
+  g.fillRect(x, yFoot, 5, 1);
+  g.fillStyle = pal.dark > 0.3 ? '#ffe9a0' : '#e8ecf2';
+  g.fillRect(x + 3, yFoot + 1, 3, 2);
+}
+
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = (c) => Math.max(0, Math.min(255, Math.round(k < 0 ? c * (1 + k) : c + (255 - c) * k)));
+  return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
 }
 
 function mulberry(a) {
@@ -1433,9 +1480,8 @@ function drawVehicle(v) {
   }
   // Headlights at night.
   if (street().pal.dark > 0.3) {
-    lctx.fillStyle = 'rgba(255,240,170,0.35)';
-    const hx = v.dir === 1 ? x + v.w : x - 10;
-    lctx.fillRect(hx, y + v.h - 7, 10, 3);
+    lctx.fillStyle = '#fff3b0';
+    lctx.fillRect(v.dir === 1 ? x + v.w - 1 : x, y + v.h - 8, 2, 2);
   }
 }
 
@@ -1509,7 +1555,7 @@ function drawLights() {
   // A light at each lane's entry: green while its platoon comes, red in the lull.
   for (const ln of layout.lanes) {
     const y = py(rowY(ln.row) + 3);
-    const x = ln.dir === 1 ? Math.max(1, px(-4) - 4) : Math.min(LW - 5, px(PLAY_W + 4));
+    const x = ln.dir === 1 ? 1 : LW - 5; // at the screen's edge, where the lane's traffic comes in
     lctx.fillStyle = '#20232b';
     lctx.fillRect(x, y, 4, 9);
     if (ln.light === 'siren') {
@@ -1576,6 +1622,12 @@ function draw() {
   drawLights();
   drawRope();
   drawBand(layout.bottom + 1);
+  // Outside the 12 columns you can walk, the street is dimmed a little.
+  const y0 = py(0);
+  const y1 = py(rowY(layout.bottom) + ROW + WAIT_H);
+  lctx.fillStyle = 'rgba(15,18,30,0.16)';
+  lctx.fillRect(0, y0, Math.max(0, px(0)), y1 - y0);
+  lctx.fillRect(px(PLAY_W), y0, LW - px(PLAY_W), y1 - y0);
   if (pal.dark > 0) {
     lctx.fillStyle = `rgba(10,12,40,${pal.dark * 0.5})`;
     // Dim only the scenery above the street; people and the road stay lit.

@@ -85,13 +85,18 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   into a lane; the median never resets it, and neither does a hit): the 1st arrival of a crossing scores 1, the 2nd 2, the nth n, so a line of n pays
   n(n+1)/2. While the line is in the road its payout ("×4 · +10") shows at the leader's destination
   kerb (Claude, 2026-11-09, from the review).
-- **The clock:** a run starts with 40 s. It runs down in real time; the nth arrival of a crossing
-  adds 0.5 × n s (a line of n adds n(n+1)/4 s). One person at a time loses time; three or four about
-  hold steady; longer lines gain. A close call (a vehicle passing within half a cell of a follower or
-  the leader without hitting: the horizontal gap between them in the same lane, once per vehicle and
-  person, at most 1 s per crossing) adds 0.3 s. The clock starts with the first step. The run ends at zero. Tuning targets: a beginner's run lasts
-  1.5–3 minutes; a good run reaches street 4 in about 4 minutes (Claude, 2026-11-09, from the
-  review's "real clock numbers").
+- **The clock:** a run starts with 45 s. It runs down in real time from the first step; the nth
+  arrival of a crossing adds 0.5 + 0.5 × n s, and each new street adds 10 s (the release after a
+  street's push). One person at a time loses time; four or five about hold steady; longer lines gain.
+  A close call (a vehicle passing within half a cell of a follower or the leader without hitting: the
+  horizontal gap between them in the same lane, once per vehicle and person, at most 1 s per crossing)
+  adds 0.3 s. The run ends at zero. Tuning targets: a beginner's run lasts 1–3 minutes and reaches
+  street 2; a good run reaches street 4 in about 4 minutes; gathering more people before a crossing
+  scores more than ferrying them one by one. Measured before the PR with a scripted player that reacts
+  every 0.25–0.4 s and doesn't plan its tail: runs of 70–110 s reaching street 2, and 10 points
+  ferrying one at a time against 78 gathering eight. The knobs are `START_CLOCK`, `STREET_BONUS`, the
+  arrival formula, and each lane's speed, gaps, platoon and lull lengths (Claude, 2026-11-09, tuned
+  after the review's "real clock numbers" by playing).
 - **Hits:** a vehicle overlapping a person's cell (vehicle boxes 20% narrower than their art, people
   5 art pixels wide) hits them. A hit follower tumbles (the pack's fall and down frames), then walks
   back to the kerb they came from and waits again; the line closes up. A hit leader tumbles and the
@@ -143,13 +148,14 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 - **Kept in localStorage:** the best score, the assist and the furthest street reached. The start
   card has Start and, once reached, a chip for each later street to start there (Claude, 2026-11-09).
 - **Sound:** footsteps, a pluck when someone joins, a rising chime for each arrival (higher for each
-  in the crossing), a soft bump and a horn for a hit, a crosswalk chirp, a siren, a whoosh-free tick
+  in the crossing), a soft bump and a horn for a hit, a crosswalk chirp, a siren, a tick each second
   for the last 5 s of the clock, jingles for start, new street and the end, and a light music loop,
   all under the site-wide mute. Horn, siren and chirp are made for the game (synthesised); the rest
   are Kenney's CC0 sounds as MP3 (Claude, 2026-11-09).
 - **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the
   game itself, which makes 8 tiles on today's `main`; games built in parallel add theirs, so the count
-  is set when this rebases (Claude, 2026-11-09). The atlas is the pack's own spritesheet, its frame
+  is set when this rebases; the picture is made by `scripts/tag-along/make-tile.mjs` (Claude,
+  2026-11-09). On a wide screen the street outside the 12 walkable columns is dimmed a little. The atlas is the pack's own spritesheet, its frame
   list made by `scripts/tag-along/build-atlas.mjs`.
 - **Tests** drive the game through `window.__tagAlong` (its state, a seeded random source and a
   `step(dt)` that advances the simulation), as Reef's tests do (Claude, 2026-11-09).
@@ -157,7 +163,7 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 ## Acceptance items
 
 - **AC-1** The page opens with traffic driving and people waiting behind the start card, with no
-  errors; Start begins street 1 with the clock at 40 s — `tests/tag-along.test.mjs`.
+  errors; Start begins street 1 with the clock at 45 s — `tests/tag-along.test.mjs`.
 - **AC-2** A step moves the leader one cell, and each follower moves into the cell the one ahead of
   it held; when the leader doesn't step, no follower moves — `tests/tag-along.test.mjs`.
 - **AC-3** The leader can't step onto its own line or past the edge columns; with no other step
@@ -167,7 +173,7 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   tail adds is a kerb or median cell, never a lane; a person knocked down or walking back can't be
   picked up — `tests/tag-along.test.mjs`.
 - **AC-5** A follower stepping onto their destination kerb arrives and leaves the line; the nth
-  arrival of a crossing scores n and adds 0.5 × n s to the clock; the count resets when the leader
+  arrival of a crossing scores n and adds 0.5 + 0.5 × n s to the clock; the count resets when the leader
   steps from a kerb into a lane, not on the median or after a hit — `tests/tag-along.test.mjs`.
 - **AC-6** A vehicle hitting a follower sends that follower back to where they waited while the
   others keep their cells; a vehicle hitting the leader scatters the whole line and returns the leader
@@ -181,8 +187,8 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   platoon and red during a lull, and no two neighbouring lanes start in the same phase —
   `tests/tag-along.test.mjs`.
 - **AC-10** Meeting a street's quota (8, 10, 12, 14, then 16) moves to the next street once nobody in
-  the line is in a lane or on the median, with the clock stopped during the change and the score
-  kept; each round of Downtown is 4% faster — `tests/tag-along.test.mjs`.
+  the line is in a lane or on the median, with the clock stopped during the change, the score kept
+  and 10 s added; each round of Downtown is 4% faster — `tests/tag-along.test.mjs`.
 - **AC-11** Each street brings its rule: Market Avenue and Downtown have a median; School Run and
   Downtown a crosswalk whose walk light stops the cars before it (and a car waits for a person on it
   when walk ends, for at most 2 s); Siren Boulevard and Downtown sirens that warn at least 2.5 s

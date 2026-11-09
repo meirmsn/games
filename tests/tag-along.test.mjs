@@ -73,7 +73,7 @@ const cells = (page) =>
     return { leader: [t.leader.col, t.leader.row], line: t.line().map((p) => [p.col, p.row]) };
   });
 
-test('tag-along AC-1: traffic drives behind the start card; Start begins street 1 with 40 s', async () => {
+test('tag-along AC-1: traffic drives behind the start card; Start begins street 1 with 45 s', async () => {
   const { context, page, errors } = await open();
   await page.waitForTimeout(500);
   const s = await page.evaluate(() => {
@@ -95,7 +95,7 @@ test('tag-along AC-1: traffic drives behind the start card; Start begins street 
   assert.ok(moved.some((v, i) => s.s0[i] !== undefined && v !== s.s0[i]), 'the vehicles move');
   await page.click('[data-play]');
   const after = await page.evaluate(() => ({ mode: window.__tagAlong.game.mode, street: window.__tagAlong.game.street, clock: window.__tagAlong.game.clock }));
-  assert.deepEqual(after, { mode: 'play', street: 0, clock: 40 });
+  assert.deepEqual(after, { mode: 'play', street: 0, clock: 45 });
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -164,7 +164,7 @@ test('tag-along AC-4: someone waiting joins only when the cell the tail adds is 
   await context.close();
 });
 
-test('tag-along AC-5: arrivals score 1, 2, 3 … in a crossing and add half that in seconds', async () => {
+test('tag-along AC-5: arrivals score 1, 2, 3 … in a crossing and add 0.5 + 0.5 × n seconds', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -185,7 +185,7 @@ test('tag-along AC-5: arrivals score 1, 2, 3 … in a crossing and add half that
   const s2 = await page.evaluate(() => ({ score: window.__tagAlong.game.score, clock: window.__tagAlong.game.clock, line: window.__tagAlong.line().length }));
   assert.equal(s2.score, 3);
   assert.equal(s2.line, 0);
-  assert.ok(Math.abs(s2.clock - (c1 + 1 - 0.15)) < 0.02, `clock ${s2.clock} vs ${c1}`);
+  assert.ok(Math.abs(s2.clock - (c1 + 1.5 - 0.15)) < 0.02, `clock ${s2.clock} vs ${c1}`);
   // Stepping from the kerb into a lane starts a new crossing.
   await move(page, 'down');
   assert.equal(await page.evaluate(() => window.__tagAlong.game.crossing), 0);
@@ -361,10 +361,13 @@ test('tag-along AC-10: meeting the quota changes the street once the line is off
   await run(page, 0.1);
   let s = await page.evaluate(() => ({ mode: window.__tagAlong.game.mode, clock: window.__tagAlong.game.clock }));
   assert.equal(s.mode, 'change');
-  await run(page, 1);
+  await run(page, 0.8);
   const mid = await page.evaluate(() => window.__tagAlong.game.clock);
   assert.ok(Math.abs(mid - s.clock) < 1e-9, 'the clock stops during the change');
-  await run(page, 1.2);
+  await run(page, 1.05);
+  const added = await page.evaluate(() => window.__tagAlong.game.clock);
+  assert.ok(Math.abs(added - s.clock - 10) < 1e-9, `the new street adds 10 s: ${added - s.clock}`);
+  await run(page, 0.3);
   s = await page.evaluate(() => ({ mode: window.__tagAlong.game.mode, street: window.__tagAlong.game.street, score: window.__tagAlong.game.score }));
   assert.deepEqual(s, { mode: 'play', street: 1, score: 51 });
   // Quotas, and a pending change waits while someone is still in a lane.
