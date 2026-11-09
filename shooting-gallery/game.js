@@ -29,6 +29,7 @@ const { sound } = mountShell({
     music: 'sounds/music.mp3',
     frenzy: 'sounds/frenzy.mp3',
     frenzyhit: 'sounds/frenzyhit.mp3',
+    roll: 'sounds/roll.mp3',
     chime: 'sounds/chime.mp3',
     alert10: 'sounds/alert10.mp3',
     alert5: 'sounds/alert5.mp3',
@@ -61,6 +62,15 @@ const FLIGHT_NEAR = 0.18;
 const FLIGHT_FAR = 0.45;
 const FRENZY_LEN = 7;
 const FRENZY_SPEED = 1.6;
+// As a round runs out, the targets cross faster: 1.3x from 10 s left, 1.7x from 5 s, 2.2x for the
+// last 3 (not in a frenzy, whose own speed holds). Only their crossing: pop-ups keep their timing.
+function rushNow() {
+  if (game.mode !== 'play' || game.frenzy > 0) return 1;
+  if (game.time <= 3) return 2.2;
+  if (game.time <= 5) return 1.7;
+  if (game.time <= 10) return 1.3;
+  return 1;
+}
 const MULT_CAP = 8;
 const PAINT_KEEP = 70;
 // Blues, purples, pinks and greens: never the gold or red that mark bullseyes and the gold duck.
@@ -618,16 +628,22 @@ function showStart() {
   ui.best.textContent = `Best ${best.toLocaleString('en-US')} · round ${memory.bestRound[orient] || 0}`;
 }
 
+// A frenzy opens with a snare roll swelling into a cymbal crash, alone; the galop, with its marching
+// drums, comes in on the crash.
+const ROLL_LEN = 1.1;
 function startFrenzy() {
   game.frenzy = FRENZY_LEN;
   game.frenzyDone = true;
   game.spawn.frenzy = 0;
   banner('Frenzy!', '', FRENZY_LEN, true);
-  music('frenzy');
+  music('');
+  sfx('roll', { gain: 0.9 });
+  game.galopAt = game.T + ROLL_LEN;
 }
 function endFrenzy() {
-  const was = game.frenzy > 0 || musicName === 'frenzy';
+  const was = game.frenzy > 0 || musicName === 'frenzy' || game.galopAt > 0;
   game.frenzy = 0;
+  game.galopAt = 0;
   if (game.banner && game.banner.text === 'Frenzy!') game.banner = null;
   if (was && (game.mode === 'play' || game.mode === 'won')) music('music');
 }
@@ -1287,6 +1303,10 @@ function attractStep(dt) {
 }
 
 function update(dt) {
+  if (game.galopAt > 0 && game.T >= game.galopAt) {
+    game.galopAt = 0;
+    if (game.frenzy > 0) music('frenzy');
+  }
   updateMusicTempo();
   game.T += dt;
   game.modeT += dt;
@@ -1351,7 +1371,7 @@ function update(dt) {
       t.y = from + (lane.line - from) * e;
       if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
     } else {
-      t.x += t.dir * t.speed * dt * speed;
+      t.x += t.dir * t.speed * dt * speed * rushNow();
       t.y = lane.line + (t.isDuck ? 2.5 * Math.sin(game.T * 2.4 + t.phase) : 0);
       const [w] = dims(t);
       if ((t.dir > 0 && t.x > SW + w / 2 + 8) || (t.dir < 0 && t.x < -w / 2 - 8)) t.state = 'gone';
@@ -2463,7 +2483,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

@@ -19,6 +19,22 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's eleventh playtest (owner, 2026-11-09)
+
+Where they differ from the playtests below, these win.
+
+- **Drums for the frenzy.** "during the frenzy, there should be percussion so that you feel even
+  more the faster nature … start with some repique … right when it starts the frenzy, and then
+  definitely have the percussion or drums." A frenzy opens with a snare roll (1.1 s, its strokes
+  closing in and swelling into a cymbal crash and a bass drum), alone; the galop comes in on the
+  crash, now over a marching kit: the bass drum on every beat, the snare on the off-beats, a tick on
+  every eighth and a snare fill closing every fourth bar. Both are synthesised in
+  `scripts/shooting-gallery/make-music.py`; the waltz is unchanged.
+- **Targets rush at the end.** "the translation speed of the targets. At 10 seconds, they should
+  start moving faster. At 5 seconds, much faster, and in the last 3 seconds, much faster as well."
+  Crossing targets move 1.3× as fast from 10 s left, 1.7× from 5 s and 2.2× in the last 3 (not in
+  a frenzy, which keeps its own 1.6×); pop-ups and drop-downs keep their timing.
+
 ### The owner's tenth playtest (owner, 2026-11-09)
 
 Where they differ from the playtests below, these win.
@@ -509,6 +525,9 @@ moment 8–18 s into rounds 2 to 6.
   runs out is dropped and fires nothing — `tests/shooting-gallery.test.mjs`.
 - **AC-36** The waltz plays faster from 10 s left, faster again from 5 s and fastest from 3 s, at its
   usual tempo otherwise; the frenzy's galop plays at least twice as loud as the waltz —
+  `tests/shooting-gallery.test.mjs`.
+- **AC-37** Crossing targets move faster from 10 s left, faster again from 5 s and fastest in the
+  last 3; a frenzy opens with a snare roll, alone, before the galop, which carries drums —
   `tests/shooting-gallery.test.mjs`.
 
 ## Core flow

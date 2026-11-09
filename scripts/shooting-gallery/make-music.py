@@ -2,7 +2,8 @@
 """Synthesises Shooting Gallery's two carnival tunes into shooting-gallery/sounds/:
 
   music.mp3   a calliope waltz (3/4, oom-pah-pah), the booth's music
-  frenzy.mp3  a fast galop (2/4), for frenzy
+  frenzy.mp3  a fast galop (2/4), for frenzy, driven by a marching drum kit
+  roll.mp3    a snare roll that speeds up and swells into a cymbal crash, as a frenzy starts
 
 Both tunes are original. A calliope is a row of steam whistles: here each note is a few detuned
 pipes (a sine with a little second and third harmonic and some breath), with a fast tremolo.
@@ -66,6 +67,65 @@ def drum(dur, vol=1.0, bright=False):
     return np.sin(2 * np.pi * (70 + 60 * np.exp(-t * 30)) * t) * np.exp(-t * 9) * vol
 
 
+def snare(dur, vol=1.0):
+    """A snare drum: a burst of bright noise (the wires) over a short low thump (the head)."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    noise = rng.normal(0, 1, n)
+    noise = noise - np.convolve(noise, np.ones(6) / 6, 'same')
+    head = np.sin(2 * np.pi * 190 * t) * np.exp(-t * 35)
+    return (noise * np.exp(-t * 20) * 0.8 + head * 0.6) * vol
+
+
+def kick(dur, vol=1.0):
+    """A marching bass drum: a deep, quickly falling thump."""
+    t = np.arange(int(dur * SR)) / SR
+    return np.sin(2 * np.pi * (55 + 90 * np.exp(-t * 40)) * t) * np.exp(-t * 7) * vol
+
+
+def crash(dur, vol=1.0):
+    """A cymbal crash: bright noise with a long, shimmering decay."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    noise = rng.normal(0, 1, n)
+    noise = noise - np.convolve(noise, np.ones(3) / 3, 'same')
+    return noise * np.exp(-t * 2.6) * (1 + 0.2 * np.sin(2 * np.pi * 9 * t)) * vol
+
+
+def drum_kit(buf, bars, beat, meter):
+    """A marching kit under a 2/4 tune: the bass drum on every beat, the snare on the off-beat and on
+    every second eighth, a bright tick on every eighth, and a snare fill in sixteenths closing every
+    fourth bar."""
+    for b in range(bars):
+        start = b * meter * beat
+        for k in range(meter):
+            place(buf, kick(0.35, 0.75), start + k * beat)
+            place(buf, drum(0.08, 0.08, True), start + k * beat)
+            place(buf, drum(0.06, 0.06, True), start + (k + 0.5) * beat)
+        place(buf, snare(0.18, 0.42), start + beat)
+        place(buf, snare(0.12, 0.22), start + 1.5 * beat)
+        if b % 4 == 3:
+            for i in range(4):
+                place(buf, snare(0.1, 0.25 + 0.08 * i), start + beat + i * beat / 4)
+
+
+def roll():
+    """A snare roll, 1.1 s, its strokes closing in and swelling, into a crash and a bass drum."""
+    buf = np.zeros(int(2.6 * SR))
+    at = 0.0
+    gap = 0.075
+    while at < 1.1:
+        f = at / 1.1
+        place(buf, snare(0.09, 0.25 + 0.6 * f + rng.uniform(-0.05, 0.05)), at)
+        at += gap
+        gap = max(0.028, gap * 0.94)
+    place(buf, crash(1.5, 0.75), 1.12)
+    place(buf, kick(0.5, 1.0), 1.12)
+    place(buf, snare(0.2, 0.9), 1.12)
+    out = np.tanh(buf * 1.2)
+    return out / np.max(np.abs(out)) * 0.85
+
+
 CHORDS = {
     'C': ['C4', 'E4', 'G4'],
     'F': ['C4', 'F4', 'A4'],
@@ -83,10 +143,12 @@ def place(buf, sig, at):
     buf[i:j] += sig[: j - i]
 
 
-def render(bars, beat, meter, chord_of):
-    """bars: a list of melody bars, each a list of (note or None, beats)."""
+def render(bars, beat, meter, chord_of, kit=False):
+    """bars: a list of melody bars, each a list of (note or None, beats); kit adds the marching drums."""
     total = len(bars) * meter * beat
     buf = np.zeros(int((total + 1.0) * SR))
+    if kit:
+        drum_kit(buf, len(bars), beat, meter)
     t = 0.0
     for b, bar in enumerate(bars):
         chord = chord_of[b]
@@ -153,8 +215,9 @@ G = [
     [('E5', E), ('D#5', E), ('E5', E), ('G5', E)], [('C6', 1), (None, 1)],
 ]
 GC = ['C', 'C', 'C', 'C', 'G7', 'G7', 'C', 'C']
-galop = render(G + G, 60 / 168, 2, GC + GC)
+galop = render(G + G, 60 / 168, 2, GC + GC, kit=True)
 
 os.makedirs(OUT, exist_ok=True)
 write_mp3('music.mp3', waltz)
 write_mp3('frenzy.mp3', galop)
+write_mp3('roll.mp3', roll())

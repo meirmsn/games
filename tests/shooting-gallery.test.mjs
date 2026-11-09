@@ -474,9 +474,13 @@ test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the g
   assert.equal((await shoot(page, ft.x + ft.w * 0.3, ft.lane)).kind, 'frenzy');
   let s = await state(page);
   assert.ok(s.frenzy > 0);
-  assert.equal(await page.evaluate(() => window.__gallery.music()), 'frenzy');
   const t0 = s.time;
   const before = await page.evaluate(() => window.__gallery.targets().length);
+  // It opens with a snare roll, alone; the galop comes in on its crash.
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('roll')), 'a snare roll as the frenzy starts');
+  assert.equal(await page.evaluate(() => window.__gallery.music()), '', 'the roll plays alone');
+  await steps(page, await page.evaluate(() => window.__gallery.ROLL_LEN + 0.05));
+  assert.equal(await page.evaluate(() => window.__gallery.music()), 'frenzy');
   const mover = await place(page, 'target', { lane: 2, x: 100, speed: 50, dir: 1, face: 'target_red1' });
   await steps(page, 1);
   const moved = await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).x, mover.id);
@@ -1534,7 +1538,7 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
     out.waltz = g.musicNow();
     g.game.time = 2.5;
     g.startFrenzy();
-    g.step(1 / 60);
+    for (let i = 0; i < 72; i++) g.step(1 / 60);
     out.frenzy = g.musicSpeed();
     out.galop = g.musicNow();
     return out;
@@ -1571,5 +1575,60 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
   });
   assert.ok(rate.startedAt.includes(1.3), `a loop set faster starts at that rate: ${rate.startedAt}`);
   assert.equal(rate.playing, 1.45, 'a playing loop changes speed');
+  await context.close();
+});
+
+test('shooting-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a frenzy opens with a snare roll, and its galop carries drums', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  // How far a still-speed target crosses in a second, with the clock at each mark.
+  const moved = await page.evaluate(() => {
+    const g = window.__gallery;
+    const out = {};
+    for (const [t, key] of [[25, 'calm'], [9.5, 'at10'], [4.9, 'at5'], [2.9, 'at3']]) {
+      g.clear();
+      const m = g.makeTarget('target', { lane: 2, x: 60, speed: 40, dir: 1, turn: false, face: 'target_red1' });
+      g.game.time = t; // the clock runs half a second while it moves, staying within the band
+      const x0 = m.x;
+      for (let i = 0; i < 30; i++) g.step(1 / 60);
+      out[key] = (m.x - x0) / 0.5;
+    }
+    return out;
+  });
+  assert.ok(Math.abs(moved.calm - 40) < 1, `its own speed at first: ${moved.calm}`);
+  assert.ok(moved.at10 > moved.calm * 1.2, `faster from 10 s: ${moved.at10}`);
+  assert.ok(moved.at5 > moved.at10 * 1.2, `faster again from 5 s: ${moved.at5}`);
+  assert.ok(moved.at3 > moved.at5 * 1.2, `fastest in the last 3: ${moved.at3}`);
+  // A frenzy opens with the snare roll, alone, and the galop comes in after it.
+  const f = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 20;
+    g.heard.length = 0;
+    g.startFrenzy();
+    const first = { heard: [...g.heard], music: g.music() };
+    for (let i = 0; i < 72; i++) g.step(1 / 60);
+    return { first, then: g.music() };
+  });
+  assert.ok(f.first.heard.includes('roll'), 'the roll');
+  assert.equal(f.first.music, '');
+  assert.equal(f.then, 'frenzy');
+  // The galop carries drums: snares and ticks make it much brighter, for its loudness, than the waltz.
+  const bright = await page.evaluate(async () => {
+    const ac = new OfflineAudioContext(1, 44100, 44100);
+    const out = {};
+    for (const n of ['music', 'frenzy', 'roll']) {
+      const d = (await ac.decodeAudioData(await fetch(`sounds/${n}.mp3`).then((r) => r.arrayBuffer()))).getChannelData(0);
+      let e = 0;
+      let de = 0;
+      for (let i = 1; i < d.length; i++) {
+        e += d[i] * d[i];
+        de += (d[i] - d[i - 1]) ** 2;
+      }
+      out[n] = Math.sqrt(de / e);
+    }
+    return out;
+  });
+  assert.ok(bright.frenzy > bright.music * 1.3, `drums in the galop: ${JSON.stringify(bright)}`);
+  assert.ok(bright.roll > bright.music * 2, `the roll is a snare: ${JSON.stringify(bright)}`);
   await context.close();
 });
