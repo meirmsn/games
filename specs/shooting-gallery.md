@@ -50,9 +50,10 @@ keeps the site's tokens.
     leave the tray untouched on the way in, during and on the way out.
   - **Pips.** Each round has a quota of pips, shown as a row on the counter. A near target is worth
     1 pip, a duck 2, a far tin target 3, the gold duck 2.
-  - **Bullseye.** The innermost painted disc of a target, or the painted target on a target-duck
-    (plain ducks have none): ×2 points, and the shell flies back into the tray. Bullseye discs shrink
-    6% each round.
+  - **Bullseye.** A target's painted centre with the first ring around it, or the whole painted
+    target on a target-duck (plain ducks have none): ×2 points, and the shell flies back into the
+    tray. It is exactly what's painted, never smaller: an earlier draft shrank it 6% a round, which
+    would have made the hit zone smaller than the paint with nothing on screen to show it.
   - **Stick shot.** Hitting the wooden stick under a far or near target (ducks' sticks are hidden
     by the water) snaps it and the target falls: the target's pips + 1, ×3 points, no shell back.
   - A hit is one of: stick, bullseye or body, decided in that order. Multipliers multiply: a tin
@@ -92,8 +93,7 @@ keeps the site's tokens.
   that only get faster, the weakness the guidelines name in Reef (Claude, 2026-11-09).
 - **Sizes.** One logical unit is min(width / 400, height / 700) CSS px; the stage is 400 units wide,
   and up to 640 on wider screens, centred between curtains. Far tins are drawn at 0.4 of the pack's
-  size (51 units), ducks 0.75 (74), near targets 0.9 (115). A bullseye is never drawn under 8 px
-  across. The pixel ratio is capped at 2. The sprites are rasterised at 2× from the pack's vector
+  size (51 units), ducks 0.75 (74), near targets 0.9 (115). The pixel ratio is capped at 2. The sprites are rasterised at 2× from the pack's vector
   file into an atlas by `scripts/shooting-gallery/build-atlas.mjs` (Claude, 2026-11-09).
 - **Hidden assist** (0 to 1): grows the body hit area of every target (never the bullseye or the
   stick) by up to 15%. It rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or
@@ -181,8 +181,7 @@ keeps the site's tokens.
   coming-soon badge, and it opens the game —
   `tests/site.test.mjs`.
 - **AC-21** At 390×844 and 360×640 the whole booth, the tray and the pips fit on screen without
-  scrolling, the far tins are drawn at least 44 px wide, and a round-8 bullseye at least 8 px
-  across — `tests/shooting-gallery.test.mjs`.
+  scrolling, and the far tins are drawn at least 44 px wide — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 
