@@ -1,0 +1,451 @@
+/* Runes: the canvas fills the screen (sky, pool, stones); the title, the bar and the cards float
+   over it. The game has its own palette, the same in light and dark: the pool is its background. */
+
+:root {
+  --ink: #f4efe6;
+  --ink-soft: rgb(244 239 230 / 72%);
+  --glass: rgb(16 24 32 / 52%);
+  --glass-strong: rgb(16 24 32 / 74%);
+  --light: #ffd88a;
+  --light-ink: #2a1d05;
+}
+
+body {
+  background: #1f3f4a;
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#pool {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.title {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 64px;
+  right: 64px;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 35%);
+}
+
+/* Dawn's sky is pale: its title is in dark ink. */
+body[data-chapter='dawn'] .title {
+  color: #24363c;
+  text-shadow: 0 1px 8px rgb(255 240 225 / 60%);
+}
+
+body[data-chapter='dawn'] .chapter {
+  color: rgb(36 54 60 / 72%);
+}
+
+body[data-chapter='dawn'] .num {
+  color: var(--ink);
+}
+
+.chapter {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.name {
+  margin: 2px 0 0;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  margin-right: 4px;
+  border-radius: 8px;
+  font-size: 15px;
+  vertical-align: 2px;
+  background: var(--glass);
+}
+
+.round {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, opacity 160ms ease;
+}
+
+.round svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.round:active {
+  transform: scale(0.92);
+}
+
+.round:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .round:not(:disabled):hover {
+    background: var(--glass-strong);
+  }
+}
+
+.round[aria-pressed='true'] {
+  color: var(--light-ink);
+  background: var(--light);
+  box-shadow: 0 0 18px rgb(255 216 138 / 55%);
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.bar[hidden],
+.result[hidden] {
+  display: none;
+}
+
+.bar {
+  position: fixed;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+}
+
+/* The result of an attempt: below the board, never over the line you drew. */
+.result {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  text-align: center;
+  border-radius: 22px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+  animation: up 260ms ease-out;
+}
+
+.result[data-kind='solved'] {
+  box-shadow: 0 0 0 2px var(--light), 0 0 36px rgb(255 216 138 / 45%);
+}
+
+.result[data-kind='failed'] {
+  box-shadow: 0 0 0 2px #ff8a7e, 0 10px 40px rgb(0 0 0 / 35%);
+}
+
+@keyframes up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 24px);
+  }
+}
+
+.result-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.result-title {
+  margin: 2px 0 2px;
+  font-size: 26px;
+  font-weight: 750;
+}
+
+.result[data-kind='failed'] .result-title {
+  color: #ffb3aa;
+}
+
+.result-text {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.result-tip {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  background: rgb(255 216 138 / 14%);
+}
+
+.result-tip::before {
+  content: 'Tip: ';
+  font-weight: 700;
+  color: var(--light);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.result-actions .play {
+  flex: 1 1 100%;
+  min-height: 48px;
+}
+
+.result-actions .play[hidden],
+.result-actions .soft[hidden] {
+  display: none;
+}
+
+.soft {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background: rgb(244 239 230 / 12%);
+  cursor: pointer;
+}
+
+.soft:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.round:focus-visible,
+.play:focus-visible,
+.soft:focus-visible,
+.link:focus-visible,
+.lv:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.card {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px 22px 18px;
+  text-align: center;
+  border-radius: 24px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+  animation: rise 260ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -44%);
+  }
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 4px 0 18px;
+  font-size: 24px;
+  font-weight: 650;
+}
+
+.card-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.play {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--light-ink);
+  background: var(--light);
+  box-shadow: 0 0 24px rgb(255 216 138 / 45%);
+  cursor: pointer;
+}
+
+.play:active {
+  transform: scale(0.97);
+}
+
+.link {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink-soft);
+  background: transparent;
+  cursor: pointer;
+}
+
+.card.levels {
+  width: min(380px, calc(100vw - 24px));
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.levels h2 {
+  margin-bottom: 10px;
+}
+
+.ch {
+  margin: 12px 0 4px;
+  text-align: left;
+}
+
+.ch-name {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.ch-level {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.lv {
+  width: 44px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: #dfe9ea;
+  background: linear-gradient(#7d979a, #657c7e 86%, #4f6264 86%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 15%);
+  cursor: pointer;
+}
+
+.lv.is-solved {
+  color: var(--light-ink);
+  background: linear-gradient(#ffe7ae, #f0c66a 86%, #b98c35 86%);
+  box-shadow: 0 0 14px rgb(255 216 138 / 55%);
+}
+
+.lv.is-current {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.lv.is-solved::after {
+  content: '✓';
+  margin-left: 2px;
+  font-size: 12px;
+}
+
+.lv svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lv[aria-disabled='true'] {
+  opacity: 0.38;
+  cursor: default;
+}

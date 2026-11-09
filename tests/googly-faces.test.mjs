@@ -242,6 +242,7 @@ test("the game's back button returns to the landing page", async () => {
   const { context, page } = await openGame({ fakeAudio: false });
   const back = page.locator('.shell-back');
   await back.tap();
+  await page.locator('[data-shell-leave]').tap(); // the shell asks before leaving
   await page.waitForURL(BASE);
   await context.close();
 });
