@@ -108,8 +108,11 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   scores more than ferrying them one by one. Measured before the PR with a scripted player that reacts
   every 0.25–0.4 s and doesn't plan its tail: runs of 70–110 s reaching street 2, and 10 points
   ferrying one at a time against 78 gathering eight. The knobs are `START_CLOCK`, `STREET_BONUS`, the
-  arrival formula, and each lane's speed, gaps, platoon and lull lengths (Claude, 2026-11-09, tuned
-  after the review's "real clock numbers" by playing).
+  arrival formula, and each lane's speed, gaps, platoon and lull lengths. Changed after the go under
+  the owner's own instruction in the batch brief, 2026-11-09: "Tune it until it meets the targets
+  your concept set." The spec at the go had a 40 s start, 0.5 × n s per arrival and no street bonus;
+  playing showed runs ending inside a minute, so AC-1 (45 s), AC-5 (0.5 + 0.5 × n s) and AC-10
+  (+10 s per street) changed with these numbers.
 - **Hits:** a vehicle overlapping a person's cell (vehicle boxes 20% narrower than their art, people
   5 art pixels wide) hits them. A hit follower tumbles (the pack's fall and down frames), then walks
   back to the kerb they came from and waits again; the line closes up. A hit leader tumbles and the
