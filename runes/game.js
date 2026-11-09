@@ -50,9 +50,6 @@ const HUES = { rise: '255, 201, 90', sink: '186, 150, 255', light: '255, 216, 13
 // ---------------------------------------------------------------------------------------------
 // Shell, sound, page parts.
 const { sound } = mountShell({
-  // The back button asks before leaving once the player has made a move in this visit, wherever
-  // they are (a level, the level select, a result); before the first move it just leaves.
-  hasProgress: () => game.played,
   sounds: {
     chime: 'sounds/chime.mp3',
     rise: 'sounds/rise.mp3',
@@ -173,7 +170,6 @@ const game = {
   openedAt: 0,
   theme: THEMES.dawn,
   overlay: null, // 'levels' | null
-  played: false, // a move has been made in this visit
 };
 const ended = () => game.done || game.failed;
 
@@ -286,7 +282,6 @@ function stepTo(cell) {
   // The player may step onto the gate before every stone is lit: that ends the attempt.
   const st = R.step(game.s, cell, { early: true });
   if (!st) return false;
-  game.played = true;
   sound.play('chime', { rate: chimeRate(game.s.path.length), gain: 0.7 });
   applied(st);
   afterChange();

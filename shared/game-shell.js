@@ -11,9 +11,8 @@
 // The back button sits in the top-left corner, clear of the notch, and plays a short sound before
 // going back. The game draws everywhere else. Escape also goes back on desktop, except while a text
 // field or an open dialog has focus, or when the game calls event.preventDefault() on that keydown.
-// Before leaving, the shell asks "Leave the game?" (Stay / Leave), because leaving loses the game's
-// progress. A game with nothing to lose at the moment says so with hasProgress: () => false, given
-// to mountShell or set on what it returns; without one, the shell always asks.
+// Before leaving, the shell always asks "Are you sure you want to go back?" (Stay / Go back),
+// because leaving loses whatever progress the game holds.
 import { createSound } from './sound.js';
 
 const BACK_SOUND = new URL('../assets/sounds/back.mp3', import.meta.url).href;
@@ -40,9 +39,9 @@ function keepForOffline() {
     .catch(() => {});
 }
 
-export function mountShell({ sounds = {}, home = HOME, hasProgress = null } = {}) {
+export function mountShell({ sounds = {}, home = HOME } = {}) {
   const sound = createSound({ back: BACK_SOUND, ...sounds });
-  const shell = { sound, back: null, hasProgress };
+  const shell = { sound, back: null };
 
   const back = document.createElement('a');
   back.className = 'shell-back';
@@ -51,16 +50,16 @@ export function mountShell({ sounds = {}, home = HOME, hasProgress = null } = {}
   back.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>';
 
-  // "Leave the game?": Stay (the default, and what Escape does) or Leave.
+  // "Are you sure you want to go back?": Stay (the default, and what Escape does) or Go back.
   const ask = document.createElement('dialog');
   ask.className = 'shell-leave';
   ask.setAttribute('aria-labelledby', 'shell-leave-title');
   ask.innerHTML =
-    '<p class="shell-leave-title" id="shell-leave-title">Leave the game?</p>' +
-    '<p class="shell-leave-text">You’ll lose your progress in this game.</p>' +
+    '<p class="shell-leave-title" id="shell-leave-title">Are you sure you want to go back?</p>' +
+    '<p class="shell-leave-text">You’ll lose any progress you may have made.</p>' +
     '<div class="shell-leave-actions">' +
     '<button type="button" class="shell-leave-stay" data-shell-stay autofocus>Stay</button>' +
-    '<button type="button" class="shell-leave-go" data-shell-leave>Leave</button>' +
+    '<button type="button" class="shell-leave-go" data-shell-leave>Go back</button>' +
     '</div>';
   ask.querySelector('[data-shell-stay]').addEventListener('click', () => ask.close());
   ask.querySelector('[data-shell-leave]').addEventListener('click', () => leave());
@@ -80,13 +79,8 @@ export function mountShell({ sounds = {}, home = HOME, hasProgress = null } = {}
   function goBack(e) {
     if (e) e.preventDefault();
     if (leaving || ask.open) return;
-    const progress = typeof shell.hasProgress === 'function' ? shell.hasProgress() : true;
-    if (!progress) {
-      leave();
-      return;
-    }
     if (typeof ask.showModal === 'function') ask.showModal();
-    else if (window.confirm('Leave the game? You’ll lose your progress in this game.')) leave();
+    else if (window.confirm('Are you sure you want to go back? You’ll lose any progress you may have made.')) leave();
   }
   back.addEventListener('click', (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;

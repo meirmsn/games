@@ -129,7 +129,7 @@ changes under the line you draw.
 
 - Changed after the go, from the owner's second playtest (chat, 2026-11-09), in their words:
   - **Levels open one at a time.** "I don't think we should allow you to go to further levels unless you finish each one … I think you should lock them, and you do one, then that unlocks the next one." Each level is locked until the one before it is solved; the bonus grouping goes, as nothing is optional now; a link to a locked level opens the furthest level open (so the URL no longer opens any level, and progress lives only in this browser's storage).
-  - **Ask before leaving, in every game.** "The back button on the page should tell you, are you sure you want to leave? You're going to lose your progress. That's not for this game, that's for all games … we can do it on this PR, and then it will be available in all games when this one is merged." The shared shell (`shared/game-shell.js`) asks "Leave the game?" with Stay and Leave before the back button or Escape leaves; a game can say it has nothing to lose (`hasProgress`). Runes asked only while a line was drawn and unsolved; then, from the owner's third playtest (chat, 2026-11-09): "When you are in the level selector, we don't show you a warning if you tap the exit … I think that warning should show up regardless of where you are in the game, maybe except on the beginning when you haven't done anything." Runes now asks once a move has been made in this visit, wherever you are.
+  - **Ask before leaving, in every game.** "The back button on the page should tell you, are you sure you want to leave? You're going to lose your progress. That's not for this game, that's for all games … we can do it on this PR, and then it will be available in all games when this one is merged." The shared shell (`shared/game-shell.js`) asks "Leave the game?" with Stay and Leave before the back button or Escape leaves; a game can say it has nothing to lose (`hasProgress`). Runes asked only while a line was drawn and unsolved; then, from the owner's third playtest (chat, 2026-11-09): "When you are in the level selector, we don't show you a warning if you tap the exit … I think that warning should show up regardless of where you are in the game, maybe except on the beginning when you haven't done anything." Then, from the owner's fourth note (chat, 2026-11-09): "instead of going into the logic of the game, just make it generic … Just show it always. Like, are you sure you will go back? … You will lose any [progress] that you may have made." The shell now always asks, in every game, "Are you sure you want to go back? You'll lose any progress you may have made." (Stay / Go back); the per-game `hasProgress` is gone.
   - **Restart only.** "I don't think we should have an undo on the buttons at the bottom, nor at the end when you lose. Like, it should be restart only." The Undo button, the panel's "Undo last move" and Backspace/Z go; dragging back along the line and tapping a lit stone still take it back, as part of drawing.
   - **The compass's label.** "the compass, I think it should say guidance, show tiles that become unreachable." Its hover label reads "Guidance: show tiles that become unreachable".
 
@@ -191,12 +191,11 @@ changes under the line you draw.
 - **AC-23** The level select reads "Dawn (easy)" and "Tide (challenging)", shows a lock on each level
   that can't be opened yet and a tick on each solved one, and is centred on the board, inside the
   screen — `tests/runes.test.mjs`.
-- **AC-24** In every game, the back button and Escape ask "Leave the game?" (you'll lose your
-  progress) before leaving: Stay (or a second Escape) keeps you in the game, Leave goes back; a game
-  that says it has nothing to lose leaves without asking — `tests/site.test.mjs`.
-- **AC-25** In Runes, the back button leaves at once before the first move of a visit; after it, it
-  asks wherever you are (a line drawn, after a restart, the level select, a solved level), and Stay
-  keeps the line — `tests/runes.test.mjs`.
+- **AC-24** In every game, the back button and Escape always ask "Are you sure you want to go back?"
+  (you'll lose any progress you may have made) before leaving: Stay (or a second Escape) keeps you in
+  the game, Go back goes back — `tests/site.test.mjs`.
+- **AC-25** In Runes, the back button always asks, wherever you are (before any move, a line drawn,
+  the level select, a solved level), and Stay keeps the line — `tests/runes.test.mjs`.
 
 ## Core flow
 

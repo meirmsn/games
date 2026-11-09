@@ -56,7 +56,7 @@ body {
   outline-offset: 2px;
 }
 
-/* "Leave the game?": asked before the back button or Escape leaves. */
+/* "Are you sure you want to go back?": asked before the back button or Escape leaves. */
 .shell-leave {
   width: min(320px, calc(100vw - 48px));
   box-sizing: border-box;

@@ -749,12 +749,7 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   await context.close();
 });
 
-test('runes AC-25: in Runes, the back button leaves at once before the first move, and asks after it wherever you are', async () => {
-  const fresh = await open();
-  await fresh.page.locator('.shell-back').click();
-  await fresh.page.waitForURL(BASE);
-  await fresh.context.close();
-
+test('runes AC-25: in Runes, the back button always asks, from the first moment, the level select and a solved level included', async () => {
   const { context, page } = await open();
   const ask = page.locator('dialog.shell-leave');
   const backAsks = async (where) => {
@@ -764,15 +759,14 @@ test('runes AC-25: in Runes, the back button leaves at once before the first mov
     await ask.waitFor({ state: 'hidden' });
     assert.equal(new URL(page.url()).pathname, '/runes/', `Stay keeps you in the game (${where})`);
   };
+  await backAsks('before any move');
   await page.keyboard.press('ArrowRight');
   await backAsks('a line drawn');
   assert.deepEqual(await path(page), [0, 1], 'Stay keeps the line');
-  await page.click('[data-restart]');
-  await backAsks('after a restart');
   await page.click('[data-levels]');
   await backAsks('on the level select');
   await page.click('[data-close-levels]');
-  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) await page.keyboard.press(k);
+  for (const k of ['ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) await page.keyboard.press(k);
   await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
   await backAsks('a solved level');
   await page.locator('.shell-back').click();
