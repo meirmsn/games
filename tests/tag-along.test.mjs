@@ -100,53 +100,56 @@ test('tag-along AC-1: traffic drives behind the start card; Start begins street 
   await context.close();
 });
 
-test('tag-along AC-2: each follower steps into the cell ahead; nobody moves while the leader waits', async () => {
+test('tag-along AC-2: the line walks the leader’s path on its own and closes up when the leader stops', async () => {
   const { context, page } = await open();
   await startEmpty(page);
-  await page.evaluate(() => window.__tagAlong.form([[5, 2], [5, 3], [5, 4]], { tail: [4, 4] }));
-  await move(page, 'right');
-  assert.deepEqual(await cells(page), { leader: [6, 2], line: [[5, 2], [5, 3]] });
-  await move(page, 'up');
-  assert.deepEqual(await cells(page), { leader: [6, 1], line: [[6, 2], [5, 2]] });
-  await run(page, 3);
-  assert.deepEqual(await cells(page), { leader: [6, 1], line: [[6, 2], [5, 2]] }, 'no step, no move');
+  await page.evaluate(() => window.__tagAlong.form([[5, 2], [5, 3], [5, 4]]));
+  await page.evaluate(() => window.__tagAlong.move('right'));
+  await run(page, 0.05);
+  assert.deepEqual(await cells(page), { leader: [6, 2], line: [[5, 2], [5, 3]] }, 'one cell each, on their own');
+  await run(page, 0.4);
+  assert.deepEqual(await cells(page), { leader: [6, 2], line: [[5, 2], [5, 3]] }, 'closed up one cell behind');
+  // The leader walks on three cells; they follow along the same path.
+  for (const d of ['up', 'right', 'right']) await move(page, d);
+  await run(page, 1);
+  assert.deepEqual(await cells(page), { leader: [8, 1], line: [[7, 1], [6, 1]] });
   await context.close();
 });
 
-test('tag-along AC-3: the line and the edges block the leader; a boxed-in leader swaps with follower 1', async () => {
+test('tag-along AC-3: only the street’s edges stop the leader; it walks back through its own line', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => window.__tagAlong.form([[0, 2], [0, 3], [1, 3]]));
   await move(page, 'left');
   assert.deepEqual((await cells(page)).leader, [0, 2], 'the edge');
   await move(page, 'down');
-  assert.deepEqual((await cells(page)).leader, [0, 2], 'its own line');
-  // Boxed in: the corner, follower 1 to the right, follower 2 above.
-  await page.evaluate(() => window.__tagAlong.form([[0, 4], [1, 4], [0, 3], [0, 2]]));
+  assert.deepEqual((await cells(page)).leader, [0, 3], 'through its own line');
   await move(page, 'right');
-  assert.deepEqual(await cells(page), { leader: [1, 4], line: [[0, 4], [0, 3], [0, 2]] });
+  assert.deepEqual((await cells(page)).leader, [1, 3]);
+  await page.evaluate(() => window.__tagAlong.form([[11, 2]]));
+  await move(page, 'right');
+  assert.deepEqual((await cells(page)).leader, [11, 2], 'the other edge');
   await context.close();
 });
 
-test('tag-along AC-4: someone waiting joins only when the cell the tail adds is safe', async () => {
+test('tag-along AC-4: someone waiting joins the end of the line only while nobody in it is in a lane', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const joined = await page.evaluate(() => {
     const t = window.__tagAlong;
     const bottom = t.layout().bottom;
-    // The leader in lane 2, the tail's next cell in lane 3: no join.
-    t.form([[5, 2], [5, 3]], { tail: [5, 3 + 0] });
-    t.history()[2] = { col: 6, row: 3 };
+    // A follower still in a lane: the one next to the leader waits.
+    t.form([[5, bottom], [5, bottom - 1]]);
     const p = t.spawnWaiting(bottom, 6);
     p.tw = 1;
-    p.kind = 'pending';
-    for (let i = 0; i < 30; i++) t.step(1 / 60);
-    const inLane = t.line().length;
-    // The tail's next cell on the kerb: they join, onto it.
-    t.history()[2] = { col: 6, row: bottom };
-    for (let i = 0; i < 30; i++) t.step(1 / 60);
-    const onKerb = t.line().length;
+    t.step(1 / 60);
+    const whileInLane = { line: t.line().length, kind: p.kind };
+    // Nobody in a lane: they join at the end, on the kerb in front of where they waited.
+    t.form([[5, bottom], [4, bottom]]);
+    t.people().push(p);
+    t.step(1 / 60);
     const last = t.line()[t.line().length - 1];
+    const out = { whileInLane, line: t.line().length, last: [last.col, last.row], isP: last === p, bottom };
     // Someone walking back after a knock can't be asked.
     t.form([[3, bottom]]);
     const q = t.spawnWaiting(bottom, 4);
@@ -154,38 +157,39 @@ test('tag-along AC-4: someone waiting joins only when the cell the tail adds is 
     q.kind = 'back';
     q.down = 0.5;
     for (let i = 0; i < 10; i++) t.step(1 / 60);
-    return { inLane, onKerb, last: [last.col, last.row], bottom, qKind: q.kind, line: t.line().length };
+    out.qKind = q.kind;
+    out.after = t.line().length;
+    return out;
   });
-  assert.equal(joined.inLane, 1, 'no join while the tail would add a lane cell');
-  assert.equal(joined.onKerb, 2);
-  assert.deepEqual(joined.last, [6, joined.bottom]);
+  assert.deepEqual(joined.whileInLane, { line: 1, kind: 'pending' });
+  assert.equal(joined.line, 2);
+  assert.ok(joined.isP);
+  assert.deepEqual(joined.last, [6, joined.bottom], 'never starts out in a lane');
   assert.equal(joined.qKind, 'back');
-  assert.equal(joined.line, 0);
+  assert.equal(joined.after, 0);
   await context.close();
 });
 
-test('tag-along AC-5: arrivals score 1, 2, 3 … in a crossing and add 0.5 + 0.5 × n seconds', async () => {
+test('tag-along AC-5: followers arrive on their own; arrivals score 1, 2, 3 … and add 0.5 + 0.5 × n seconds', async () => {
   const { context, page } = await open();
   await startEmpty(page);
-  await page.evaluate(() => {
+  const r = await page.evaluate(() => {
     const t = window.__tagAlong;
-    t.form([[5, 1], [5, 2], [5, 3]], { dest: 0 });
-    t.leader.heading = 0;
-    t.leader.from = t.layout().bottom;
+    // The leader stands still on the far kerb; three followers are still crossing.
+    t.form([[5, 0], [5, 1], [5, 2], [5, 3]], { dest: 0 });
+    t.leader.heading = t.layout().bottom;
     t.game.crossing = 0;
+    const c0 = t.game.clock;
+    const scores = [];
+    for (let i = 0; i < 90; i++) {
+      t.step(1 / 60);
+      if (scores[scores.length - 1] !== t.game.score) scores.push(t.game.score);
+    }
+    return { scores, line: t.line().length, added: t.game.clock - c0 };
   });
-  await move(page, 'up'); // leader on the kerb
-  let s = await page.evaluate(() => ({ score: window.__tagAlong.game.score }));
-  assert.deepEqual(s, { score: 0 });
-  await move(page, 'right'); // follower 1 arrives
-  s = await page.evaluate(() => ({ score: window.__tagAlong.game.score, line: window.__tagAlong.line().length }));
-  assert.deepEqual(s, { score: 1, line: 1 });
-  const c1 = await page.evaluate(() => window.__tagAlong.game.clock);
-  await move(page, 'right'); // follower 2 arrives: +2, +1 s
-  const s2 = await page.evaluate(() => ({ score: window.__tagAlong.game.score, clock: window.__tagAlong.game.clock, line: window.__tagAlong.line().length }));
-  assert.equal(s2.score, 3);
-  assert.equal(s2.line, 0);
-  assert.ok(Math.abs(s2.clock - (c1 + 1.5 - 0.15)) < 0.02, `clock ${s2.clock} vs ${c1}`);
+  assert.deepEqual(r.scores, [1, 3, 6], 'each arrival scores its place in the crossing');
+  assert.equal(r.line, 0);
+  assert.ok(Math.abs(r.added - (1 + 1.5 + 2)) < 1e-9, `clock +${r.added}`);
   // Stepping from the kerb into a lane starts a new crossing.
   await move(page, 'down');
   assert.equal(await page.evaluate(() => window.__tagAlong.game.crossing), 0);
@@ -203,7 +207,7 @@ test('tag-along AC-5: arrivals score 1, 2, 3 … in a crossing and add 0.5 + 0.5
   await context.close();
 });
 
-test('tag-along AC-6: a hit follower goes back and the rest keep their cells; a hit leader scatters the line', async () => {
+test('tag-along AC-6: a hit follower goes back and the rest keep walking; a hit leader scatters the line', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const r = await page.evaluate(() => {
@@ -222,7 +226,7 @@ test('tag-along AC-6: a hit follower goes back and the rest keep their cells; a 
     return out;
   });
   assert.equal(r.f2, 'back');
-  assert.deepEqual(r.line, [[5, 2], [5, 4]], 'the others keep their cells');
+  assert.deepEqual(r.line, [[5, 2], [5, 4]], 'the others are still in line');
   assert.notEqual(r.back, 'follower');
   const l = await page.evaluate(() => {
     const t = window.__tagAlong;
@@ -347,7 +351,7 @@ const arriveOne = (page) =>
     t.form([[4, 0], [4, 1]], { dest: 0 });
     t.leader.heading = t.layout().bottom;
     t.leader.from = 0;
-    t.move('right');
+    t.step(1 / 60); // the follower steps onto the kerb and arrives
   });
 
 test('tag-along AC-10: meeting the quota changes the street once the line is off the road', async () => {
@@ -380,7 +384,6 @@ test('tag-along AC-10: meeting the quota changes the street once the line is off
     t.form([[4, 0], [4, 1], [4, 2]], { dest: 0 });
     t.line()[1].dest = t.layout().bottom; // not arriving here
     t.leader.heading = t.layout().bottom;
-    t.move('right');
     for (let i = 0; i < 10; i++) t.step(1 / 60);
     return t.game.mode;
   });
@@ -518,24 +521,19 @@ test('tag-along AC-12: taps, holds, swipes and keys step; a second finger does n
   });
   assert.deepEqual(two.mid, [5, bottom], 'the second finger did nothing');
   assert.deepEqual(two.end, [5, bottom - 1], 'the first finger tapped');
-  // Forward along the kerb while some of the line is still in the road.
-  const along = await page.evaluate(() => {
+  // Forward: from a kerb into the road toward the other kerb; in the road, on toward the kerb ahead.
+  const fwd = await page.evaluate(() => {
     const t = window.__tagAlong;
     t.manual = true;
     t.form([[5, 0], [5, 1], [5, 2]], { dest: 0 });
-    t.line()[0].dest = t.layout().bottom; // stays in line on this kerb
     t.leader.heading = t.layout().bottom;
     const onKerb = t.forwardDir();
     t.form([[5, 2], [5, 3]]);
     t.leader.heading = 0;
-    const inRoad = t.forwardDir();
-    t.form([[5, 0]]);
-    t.leader.heading = t.layout().bottom;
-    return { onKerb, inRoad, empty: t.forwardDir() };
+    return { onKerb, inRoad: t.forwardDir() };
   });
-  assert.ok(['left', 'right'].includes(along.onKerb));
-  assert.equal(along.inRoad, 'up');
-  assert.equal(along.empty, 'down');
+  assert.equal(fwd.onKerb, 'down');
+  assert.equal(fwd.inRoad, 'up');
   await context.close();
 });
 
@@ -559,7 +557,7 @@ test('tag-along AC-13: the hidden assist rises with a hit, falls with an arrival
     t.vehicles().length = 0;
     for (let i = 0; i < 100; i++) t.step(1 / 60);
     t.form([[4, 0], [4, 1]], { dest: 0 });
-    t.move('right');
+    t.step(1 / 60);
     const afterArrival = t.game.assist;
     const dist = (a) => {
       t.vehicles().length = 0;
@@ -713,7 +711,7 @@ test('tag-along AC-17: the game works offline once it has been played', async ()
   await context.close();
 });
 
-test('tag-along AC-18: the whole street fits on phones and in landscape; a resize changes nothing', async () => {
+test('tag-along AC-18: the whole street fits on phones and in landscape, only the street shows on desktop, and a resize changes nothing', async () => {
   for (const [w, h, minPerson] of [
     [390, 844, 36],
     [360, 640, 36],
@@ -734,6 +732,26 @@ test('tag-along AC-18: the whole street fits on phones and in landscape; a resiz
       assert.ok(v.person >= minPerson, `${w}×${h}: a person is ${v.person} px`);
       assert.ok(v.scrollW <= w && v.scrollH <= h, 'no scrolling');
     }
+    await context.close();
+  }
+  {
+    // A wide screen shows only the 12 columns, centred, with plain background either side.
+    const { context, page } = await open({ viewport: { width: 1280, height: 720 } });
+    await page.evaluate(() => window.__tagAlong.startGame(4));
+    await page.waitForTimeout(300);
+    const d = await page.evaluate(() => {
+      const t = window.__tagAlong;
+      const c = document.getElementById('street');
+      const g = c.getContext('2d');
+      const k = c.width / window.innerWidth;
+      const at = (x, y) => Array.from(g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3));
+      const mid = (t.view.top + t.view.bottom) / 2;
+      return { ...t.view, side: [at(8, mid), at(window.innerWidth - 8, mid)], inside: at(t.view.left + 4, mid) };
+    });
+    assert.ok(Math.abs(d.width - 144 * d.scale) < 0.5);
+    assert.ok(Math.abs(d.left - (1280 - d.width) / 2) < 1, `centred: ${d.left}`);
+    assert.deepEqual(d.side, [[43, 47, 58], [43, 47, 58]], 'plain background either side');
+    assert.notDeepEqual(d.inside, [43, 47, 58], 'the street itself');
     await context.close();
   }
   const { context, page } = await open();
@@ -775,9 +793,7 @@ test('tag-along AC-20: steps, joins, arrivals, hits and the end each have their 
     t.form([[4, 0], [4, 1], [4, 2]], { dest: 0 });
     t.leader.heading = bottom;
     t.game.crossing = 0;
-    t.move('right');
-    for (let i = 0; i < 10; i++) t.step(1 / 60);
-    t.move('right');
+    for (let i = 0; i < 40; i++) t.step(1 / 60);
     const arrivals = t.heard.filter((h) => h.name === 'arrive').map((h) => h.rate);
     t.heard.length = 0;
     t.form([[5, 2]]);
@@ -798,5 +814,60 @@ test('tag-along AC-20: steps, joins, arrivals, hits and the end each have their 
   assert.ok(r.arrivals[1] > r.arrivals[0], 'each arrival higher');
   assert.ok(r.hit.includes('hit') && r.hit.includes('horn'));
   assert.ok(r.end.includes('over'));
+  await context.close();
+});
+
+test('tag-along AC-21: a follower looks before stepping into a lane, from the kerb and in the road', async () => {
+  const { context, page } = await open();
+  await startEmpty(page);
+  const r = await page.evaluate(() => {
+    const t = window.__tagAlong;
+    const b = t.layout().bottom;
+    t.form([[5, b - 1], [5, b]]);
+    t.move('up'); // leader to lane b - 2; the follower on the kerb wants lane b - 1 next
+    t.game.grace = 99; // only watching who walks; nobody is hit
+    // A car in lane b - 1, 0.5 s from the follower's next cell.
+    const v = t.spawnVehicle(b - 1, 'sedan');
+    v.speed = 20;
+    v.v = 20;
+    const x = t.colX(5);
+    const gap = 10; // art px between the car's box and the cell, ~0.5 s at 20 px/s
+    if (v.dir === 1) v.s = x - 2.5 - 1 - gap - v.w * 0.1 + v.w + t.ENTRY - v.w * 0.8;
+    else v.s = t.PLAY_W + t.ENTRY - (x + 2.5 + 1 + gap - v.w * 0.1);
+    const f = t.line()[0];
+    for (let i = 0; i < 24; i++) t.step(1 / 60);
+    const waited = [f.col, f.row];
+    const looking = f.looking;
+    t.vehicles().length = 0;
+    for (let i = 0; i < 20; i++) t.step(1 / 60);
+    const went = [f.col, f.row];
+    // In a lane, with a car about to reach the next cell: they wait while their own cell is clear,
+    // and go on when a car is about to reach them too.
+    const inLane = (alsoHere) => {
+      t.vehicles().length = 0;
+      t.form([[5, 1], [5, 3]]);
+      t.trail().splice(1, 0, { col: 5, row: 2 });
+      t.line()[0].pos = 0;
+      const near = (row) => {
+        const u = t.spawnVehicle(row, 'sedan');
+        u.speed = 20;
+        u.v = 20;
+        const gap = 4;
+        if (u.dir === 1) u.s = x - 3.5 - gap + 0.1 * u.w + t.ENTRY;
+        else u.s = t.PLAY_W + t.ENTRY - (x + 3.5 + gap - 0.1 * u.w);
+      };
+      near(2);
+      if (alsoHere) near(3);
+      for (let i = 0; i < 3; i++) t.step(1 / 60);
+      const g = t.line()[0];
+      return [g.col, g.row];
+    };
+    return { waited, looking, went, b, holds: inLane(false), goes: inLane(true) };
+  });
+  assert.deepEqual(r.waited, [5, r.b], 'waits on the kerb');
+  assert.equal(r.looking, true);
+  assert.deepEqual(r.went, [5, r.b - 1], 'goes once the car has passed');
+  assert.deepEqual(r.holds, [5, 3], 'in the road, waits while its own cell is clear');
+  assert.deepEqual(r.goes, [5, 2], 'goes on when a car is about to reach it too');
   await context.close();
 });

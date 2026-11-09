@@ -3,12 +3,13 @@
 // The rules (specs/tag-along.md):
 //  - The street is a grid: 12 columns, and rows from the top kerb (row 0) down to the bottom kerb,
 //    with lanes and sometimes a median between. The leader moves one cell per step.
-//  - The line is a snake: follower k stands where the leader stood k steps ago (history[k]). Nobody
-//    in the line moves unless the leader steps, so a waiting leader leaves its tail in the lanes.
+//  - The line follows the leader's path (the trail) on its own, one cell every FOLLOW_STEP, closing
+//    up behind the person ahead. Before stepping off a kerb or the median into a lane, a follower
+//    looks and waits while a car is about to reach that cell; in a lane they keep walking.
 //  - People wait on both kerbs (and on a median), each wanting another kerb. Stepping next to one
-//    asks them to join; they join at the end of the line once the cell the tail adds is safe.
-//  - A follower stepping onto their destination kerb arrives: the nth arrival of a crossing scores
-//    n and adds 0.5 * n seconds. The run is a clock; it ends at zero.
+//    asks them to join; they join the end of the line once nobody in it is in a lane.
+//  - A follower reaching their destination kerb arrives: the nth arrival of a crossing scores n and
+//    adds 0.5 + 0.5 * n seconds. The run is a clock; it ends at zero.
 //  - Traffic comes in platoons and lulls per lane, shown by a light at each lane's entry.
 //  - A hidden assist eases traffic after hits.
 //
@@ -190,8 +191,8 @@ const game = {
 let layout = null; // the current street's rows, lanes and geometry
 let vehicles = [];
 let people = []; // everyone but the leader: waiting, pending, follower, back (walking back), leaving
-let history = []; // history[0] = the leader's cell; follower k at history[k]
-const leader = { col: 5, row: 0, from: 0, heading: 0, lastDx: 1, face: 1, vx: 0, vy: 0, fx: 0, fy: 0, tw: 1, down: 0, walkFrame: 0 };
+let trail = []; // the leader's path: the last cell is the leader's; each follower has a pos in it
+const leader = { col: 5, row: 0, from: 0, heading: 0, face: 1, vx: 0, vy: 0, fx: 0, fy: 0, tw: 1, down: 0, walkFrame: 0 };
 let line = []; // the followers, in order: line[k - 1] is follower k
 let popups = []; // floating text: { x, y, text, t, color, big }
 let nextId = 1;
@@ -330,7 +331,7 @@ function setupStreet(idx, { attract = false } = {}) {
   leader.vx = leader.fx = f.x;
   leader.vy = leader.fy = f.y;
   leader.tw = 1;
-  history = [{ col: leader.col, row: leader.row }];
+  trail = [{ col: leader.col, row: leader.row }];
   // People already waiting: one right next to the leader.
   const near = spawnWaiting(layout.bottom, leader.col + 1);
   const others = attract ? 4 : 2;
@@ -513,36 +514,19 @@ function updateTraffic(dt, quiet = false) {
 }
 
 // ---------- The line ----------
+//
+// The leader's path is the trail: trail[trail.length - 1] is the leader's cell. Each follower walks
+// the trail on their own, one cell every FOLLOW_STEP, stopping one cell behind the person ahead.
+// Before stepping from a kerb or the median into a lane, a follower looks: they wait while a vehicle
+// would reach that cell within GATE_TIME. In a lane they keep walking.
 
-function occupied(col, row) {
-  for (let k = 1; k <= line.length; k++) {
-    const c = history[k];
-    if (c && c.col === col && c.row === row) return k;
-  }
-  return 0;
-}
-
-function legal(col, row) {
-  return col >= 0 && col < COLS && row >= 0 && row <= layout.bottom && !occupied(col, row);
-}
-
+const FOLLOW_STEP = 0.18;
+const GATE_TIME = 1.0;
+const ROAD_LOOK = 0.5;
 const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 
-// Which way a tap goes (the controls decision).
+// Which way a tap goes: toward the kerb the leader is heading for (on a kerb, the other one).
 function forwardDir() {
-  const tailInRoad = line.some((p) => !isKerb(p.row));
-  if (isKerb(leader.row) && tailInRoad) {
-    // Along the kerb, so taps alone pull the tail in.
-    const dx = leader.lastDx || 1;
-    if (legal(leader.col + dx, leader.row)) return dx === 1 ? 'right' : 'left';
-    if (legal(leader.col - dx, leader.row)) return dx === 1 ? 'left' : 'right';
-    const room = (d) => {
-      let n = 0;
-      for (let c = leader.col + d; c >= 0 && c < COLS && !occupied(c, leader.row); c += d) n++;
-      return n;
-    };
-    return room(1) >= room(-1) ? 'right' : 'left';
-  }
   return leader.heading === 0 ? 'up' : 'down';
 }
 
@@ -559,51 +543,31 @@ function step(dirName) {
     bump();
     return false;
   }
-  const k = occupied(col, row);
-  if (k) {
-    // Onto the line: only a swap with follower 1, and only when nothing else is possible.
-    const anyOther = Object.values(DIRS).some(([ax, ay]) => legal(leader.col + ax, leader.row + ay));
-    if (k === 1 && !anyOther) {
-      swapWithFirst();
-      return true;
-    }
-    bump();
-    return false;
-  }
   const wasKerb = isKerb(leader.row);
-  history.unshift({ col, row });
-  if (history.length > line.length + 2) history.length = line.length + 2;
+  trail.push({ col, row });
+  trimTrail();
   moveLeader(col, row, dx);
   if (wasKerb && isLane(row)) {
     game.crossing = 0;
     game.closeGain = 0;
   }
-  if (isKerb(row) && row !== leader.from) {
+  if (isKerb(row)) {
     leader.from = row;
     leader.heading = row === 0 ? layout.bottom : 0;
-  } else if (isKerb(row)) {
-    leader.heading = row === 0 ? layout.bottom : 0;
   }
-  // Each follower moves into the cell the one ahead held.
-  line.forEach((p, i) => {
-    const c = history[i + 1];
-    if (c.col !== p.col || c.row !== p.row) movePerson(p, c.col, c.row);
-  });
   if (!game.clockRunning) game.clockRunning = true;
   sfx(rnd() < 0.5 ? 'step' : 'step2', { rate: rand(0.9, 1.15), gain: 0.55 });
-  afterStep();
+  askNearby();
   return true;
 }
 
-function swapWithFirst() {
-  const a = history[0];
-  const b = history[1];
-  history[0] = b;
-  history[1] = a;
-  moveLeader(b.col, b.row, b.col - a.col);
-  movePerson(line[0], a.col, a.row);
-  sfx('step', { gain: 0.5 });
-  afterStep();
+// Drop the part of the trail behind the last follower.
+function trimTrail() {
+  const lowest = line.length ? Math.min(...line.map((p) => p.pos)) : trail.length - 1;
+  if (lowest > 0) {
+    trail.splice(0, lowest);
+    for (const p of line) p.pos -= lowest;
+  }
 }
 
 function moveLeader(col, row, dx) {
@@ -613,13 +577,10 @@ function moveLeader(col, row, dx) {
   leader.row = row;
   leader.tw = 0;
   leader.walkFrame ^= 1;
-  if (dx) {
-    leader.face = dx > 0 ? 1 : -1;
-    if (isKerb(row)) leader.lastDx = dx;
-  }
+  if (dx) leader.face = dx > 0 ? 1 : -1;
 }
 
-function movePerson(p, col, row) {
+function movePerson(p, col, row, dur = STEP_TWEEN) {
   p.fx = p.vx;
   p.fy = p.vy;
   if (col !== p.col) p.face = col > p.col ? 1 : -1;
@@ -629,7 +590,7 @@ function movePerson(p, col, row) {
   p.tx = f.x;
   p.ty = f.y;
   p.tw = 0;
-  p.twDur = STEP_TWEEN;
+  p.twDur = dur;
   p.walkFrame ^= 1;
 }
 
@@ -638,20 +599,60 @@ function bump() {
   leader.nudge = 0.15;
 }
 
-// After every step: arrivals, then joins.
-function afterStep() {
-  // Arrivals, front of the line first.
+// Would a vehicle be on this lane cell within `t` seconds?
+function laneBusy(col, row, t) {
+  const x = colX(col);
+  const a = x - PERSON_HALF - 1;
+  const b = x + PERSON_HALF + 1;
+  const mul = speedMul();
+  for (const v of vehicles) {
+    if (v.lane !== row) continue;
+    let [x0, x1] = boxOf(v);
+    const reach = v.speed * mul * t;
+    if (v.dir === 1) x1 += reach;
+    else x0 -= reach;
+    if (x0 < b && x1 > a) return true;
+  }
+  return false;
+}
+
+function updateFollowers(dt) {
   for (let i = 0; i < line.length; i++) {
     const p = line[i];
+    p.walkT = (p.walkT || 0) - dt;
+    if (p.walkT > 0) continue;
+    let maxPos = i === 0 ? trail.length - 2 : line[i - 1].pos - 1;
+    // The leader standing on this follower's kerb doesn't keep them from arriving there.
+    if (i === 0 && trail[trail.length - 1].row === p.dest) maxPos = trail.length - 1;
+    if (p.pos >= maxPos) {
+      p.looking = false;
+      continue;
+    }
+    const next = trail[p.pos + 1];
+    // Looking before a lane: from a kerb or the median, wait while a car would reach the cell within
+    // GATE_TIME; in the road, wait only if that cell is about to be hit and where they stand isn't.
+    const waitHere = isLane(next.row) && (isSafe(p.row) ? laneBusy(next.col, next.row, GATE_TIME) : laneBusy(next.col, next.row, ROAD_LOOK) && !laneBusy(p.col, p.row, ROAD_LOOK));
+    if (waitHere) {
+      p.looking = true; // waiting for the car to pass
+      continue;
+    }
+    p.looking = false;
+    const prev = { row: p.row, col: p.col };
+    p.pos += 1;
+    const far = Math.abs(next.col - p.col) + Math.abs(next.row - p.row);
+    movePerson(p, next.col, next.row, Math.min(0.5, FOLLOW_STEP * 0.75 * Math.max(1, far)));
+    p.walkT = FOLLOW_STEP;
+    checkLeaveNear(prev.row, prev.col, p.id, p);
     if (p.row === p.dest) {
       arrive(p, i);
       i--;
     }
   }
-  askNearby();
+  trimTrail();
 }
 
-// The people waiting next to the leader are asked to join, and join once there's a safe cell.
+// The people waiting next to the leader are asked to join; they join the end of the line once
+// nobody in it is in a lane, so they never start out in the road.
 function askNearby() {
   if (!leader.down && isSafe(leader.row) && game.mode === 'play') {
     for (const p of people) {
@@ -667,8 +668,6 @@ function askNearby() {
 
 function removeFromLine(i) {
   line.splice(i, 1);
-  // The person behind keeps their cell: drop the vacated cell from the path.
-  history.splice(i + 1, 1);
 }
 
 function arrive(p, i) {
@@ -698,28 +697,23 @@ function questQuota() {
 }
 
 function tryJoins() {
-  let joined = true;
-  while (joined) {
-    joined = false;
-    const pend = people.filter((p) => p.kind === 'pending');
-    for (const p of pend) {
-      // Too far from the leader now: back to waiting.
-      if (Math.abs(leader.row - p.home) > 2) {
-        p.kind = 'waiting';
-        continue;
-      }
-      const slot = line.length + 1;
-      const c = history[slot];
-      if (!c || !isSafe(c.row) || personOnCell(c.col, c.row)) continue;
-      // Join: walk from where they wait to the tail's new cell.
-      p.kind = 'follower';
-      line.push(p);
-      movePerson(p, c.col, c.row);
-      p.twDur = 0.22;
-      sfx('join', { rate: rand(0.95, 1.1), gain: 0.7 });
-      joined = true;
-      break;
+  const pend = people.filter((p) => p.kind === 'pending');
+  for (const p of pend) {
+    // Too far from the leader now: back to waiting.
+    if (Math.abs(leader.row - p.home) > 2 || leader.down) {
+      p.kind = 'waiting';
+      continue;
     }
+    if (line.some((q) => isLane(q.row))) continue;
+    // Join at the end: their own cell becomes the start of the trail.
+    trail.unshift({ col: p.col, row: p.home });
+    for (const q of line) q.pos += 1;
+    p.pos = 0;
+    p.walkT = 0.15;
+    p.kind = 'follower';
+    line.push(p);
+    movePerson(p, p.col, p.home, 0.22);
+    sfx('join', { rate: rand(0.95, 1.1), gain: 0.7 });
   }
 }
 
@@ -750,7 +744,6 @@ function hitLeader() {
   // Everyone scatters back to where they waited.
   for (const p of line) sendBack(p);
   line = [];
-  history = [{ col: leader.col, row: leader.row }];
   for (const p of people) if (p.kind === 'pending') p.kind = 'waiting';
 }
 
@@ -881,7 +874,7 @@ function updatePeople(dt) {
       leader.fx = leader.vx = f.x;
       leader.fy = leader.vy = f.y;
       leader.tw = 1;
-      history = [{ col: leader.col, row: leader.row }];
+      trail = [{ col: leader.col, row: leader.row }];
     }
   }
   // New people arrive on the kerbs.
@@ -1035,6 +1028,7 @@ function update(dt) {
   updateTraffic(dt);
   updatePeople(dt);
   if (game.mode !== 'play') return;
+  updateFollowers(dt);
   askNearby();
   checkHits();
   if (game.clockRunning) {
@@ -1072,13 +1066,9 @@ function doStep(dir) {
     input.queued = dir;
     return;
   }
-  const prev = line.map((p) => ({ p, row: p.row, col: p.col }));
   const prevLeader = { row: leader.row, col: leader.col };
   const d = dir === 'forward' ? forwardDir() : dir;
-  if (step(d)) {
-    checkLeaveNear(prevLeader.row, prevLeader.col, 'L', leader);
-    for (const { p, row, col } of prev) if (p.row !== row) checkLeaveNear(row, col, p.id, p);
-  }
+  if (step(d)) checkLeaveNear(prevLeader.row, prevLeader.col, 'L', leader);
 }
 
 // ---------- Input ----------
@@ -1176,6 +1166,7 @@ let LW = PLAY_W; // the visible width, in art px
 let LH = 300;
 let originX = 0; // where world x = 0 lands on the low canvas
 let originY = 0;
+let offX = 0; // device px from the screen's left edge to the street's
 let insetTop = 0;
 let insetBottom = 0;
 const view = { scale: 1, person: 0, top: 0, bottom: 0 }; // for tests
@@ -1289,15 +1280,21 @@ function resize() {
   const hudRoom = 64 + insetTop; // CSS px above the street for the HUD
   scale = Math.min(vw / PLAY_W, (vh - hudRoom - 16 - insetBottom) / need);
   scale = Math.max(1, scale);
-  LW = Math.ceil(vw / scale);
+  // Only the street's 12 columns are shown (it's a portrait game): on a wide screen it sits in the
+  // middle, with plain background either side.
+  LW = PLAY_W;
   LH = Math.ceil(vh / scale);
   low.width = LW;
   low.height = LH;
-  originX = Math.floor((LW - PLAY_W) / 2);
+  originX = 0;
+  offX = Math.round(((vw - PLAY_W * scale) / 2) * dpr);
+  ui.hud.style.maxWidth = `${Math.max(240, Math.round(PLAY_W * scale) - 96)}px`;
   // The street sits in the space under the HUD, centred.
   const room = vh / scale - hudRoom / scale;
   originY = Math.round(hudRoom / scale + Math.max(0, (room - need) / 2));
   view.scale = scale;
+  view.width = PLAY_W * scale;
+  view.left = offX / dpr;
   view.person = 15 * scale;
   view.top = originY * scale;
   view.bottom = (originY + need) * scale;
@@ -1622,12 +1619,6 @@ function draw() {
   drawLights();
   drawRope();
   drawBand(layout.bottom + 1);
-  // Outside the 12 columns you can walk, the street is dimmed a little.
-  const y0 = py(0);
-  const y1 = py(rowY(layout.bottom) + ROW + WAIT_H);
-  lctx.fillStyle = 'rgba(15,18,30,0.16)';
-  lctx.fillRect(0, y0, Math.max(0, px(0)), y1 - y0);
-  lctx.fillRect(px(PLAY_W), y0, LW - px(PLAY_W), y1 - y0);
   if (pal.dark > 0) {
     lctx.fillStyle = `rgba(10,12,40,${pal.dark * 0.5})`;
     // Dim only the scenery above the street; people and the road stay lit.
@@ -1646,7 +1637,11 @@ function draw() {
     sx = Math.round((rnd() - 0.5) * 4 * dpr);
     sy = Math.round((rnd() - 0.5) * 4 * dpr);
   }
-  ctx.drawImage(low, 0, 0, LW, LH, sx, sy, LW * scale * dpr, LH * scale * dpr);
+  if (offX > 0) {
+    ctx.fillStyle = '#2b2f3a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(low, 0, 0, LW, LH, offX + sx, sy, LW * scale * dpr, LH * scale * dpr);
   drawText();
 }
 
@@ -1657,7 +1652,7 @@ function drawText() {
   ctx.lineJoin = 'round';
   for (const pp of popups) {
     const a = Math.min(1, 2 - pp.t * 2);
-    const x = (pp.x + originX) * k;
+    const x = (pp.x + originX) * k + offX;
     const y = (pp.y + originY - pp.t * 10) * k;
     ctx.globalAlpha = Math.max(0, a);
     ctx.font = `800 ${Math.round((pp.big ? 20 : 13) * dpr)}px system-ui, sans-serif`;
@@ -1676,13 +1671,13 @@ function drawText() {
     const sum = (n * (2 * a + n + 1)) / 2;
     const target = going[0].dest;
     const yk = target === 0 ? rowY(0) - WAIT_H - 8 : rowY(layout.bottom) + ROW + WAIT_H + 8;
-    const x = (colX(leader.col) + originX) * k;
+    const x = (colX(leader.col) + originX) * k + offX;
     const y = (yk + originY) * k;
     const text = `×${n} · +${sum}`;
     ctx.font = `800 ${Math.round(15 * dpr)}px system-ui, sans-serif`;
     const w = ctx.measureText(text).width + 16 * dpr;
     const h = 24 * dpr;
-    const bx = Math.max(8 * dpr, Math.min(canvas.width - w - 8 * dpr, x - w / 2));
+    const bx = Math.max(offX + 4 * dpr, Math.min(offX + PLAY_W * k - w - 4 * dpr, x - w / 2));
     ctx.fillStyle = 'rgba(20,22,31,0.62)';
     roundRect(bx, y - h / 2, w, h, h / 2);
     ctx.fill();
@@ -1827,7 +1822,7 @@ sheet.decode().then(
       line: () => line,
       people: () => people,
       vehicles: () => vehicles,
-      history: () => history,
+      trail: () => trail,
       clearTraffic: () => {
         vehicles = [];
         for (const ln of layout.lanes) {
@@ -1839,7 +1834,7 @@ sheet.decode().then(
       },
       // Set up a line directly: cells[0] is the leader, the rest followers (wanting dest), and
       // `tail` an extra cell of the leader's path behind the last follower.
-      form: (cells, { dest = 0, tail = null } = {}) => {
+      form: (cells, { dest = 0 } = {}) => {
         line = [];
         people = people.filter((p) => p.kind === 'waiting');
         const [c0, ...rest] = cells;
@@ -1848,18 +1843,19 @@ sheet.decode().then(
         const f = cellFeet(c0[0], c0[1]);
         leader.vx = f.x;
         leader.vy = f.y;
-        history = [{ col: c0[0], row: c0[1] }];
-        for (const [col, row] of rest) {
+        trail = [...rest].reverse().map(([col, row]) => ({ col, row }));
+        trail.push({ col: c0[0], row: c0[1] });
+        rest.forEach(([col, row], i) => {
           const p = makePerson('follower', col, row, dest);
           p.home = dest === 0 ? layout.bottom : 0;
+          p.pos = rest.length - 1 - i;
+          p.walkT = 0;
           const g = cellFeet(col, row);
           p.vx = p.tx = g.x;
           p.vy = p.ty = g.y;
           people.push(p);
           line.push(p);
-          history.push({ col, row });
-        }
-        if (tail) history.push({ col: tail[0], row: tail[1] });
+        });
         return line;
       },
       seed: (n) => {

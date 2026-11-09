@@ -17,16 +17,16 @@ The surface is a new game page, `tag-along/`, and a new playable tile on the lan
 has its own look (pixel streets, one palette per street, the same in light and dark), like Reef; the
 landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline is the design.
 
-**Hook:** lead a line of pedestrians across rush hour; they step only where and when you step.
+**Hook:** lead a line of pedestrians across rush hour; they follow your exact path, a step behind.
 
 ### Concept check
 
-- **Verb:** step one cell (tap, swipe or hold); the leader hops and the whole line shuffles one cell
-  along behind with a patter of feet.
-- **A typical 5-second choice:** three followers still stand in lanes 2–4 and a van comes in lane 3:
-  step on now (pulling everyone one cell on, maybe into the van) or hold and leave the tail where it
-  stands; or pick up one more person on the kerb before stepping in, for a bigger payout and a longer
-  tail.
+- **Verb:** step one cell (tap, swipe or hold); the leader hops and the line patters along the same
+  path behind.
+- **A typical 5-second choice:** three followers are still crossing behind you and a van comes in
+  their lane: wait on the median so they close up behind you, or go on and hope they clear the lane
+  first; or pick up one more person on the kerb before stepping in, for a bigger payout and a longer
+  line in the road.
 - **How it teaches:** street 1 has three slow lanes, one person waiting next to the leader and
   others along the kerb; the first arrival pops "+1" and time; the line's payout shows over the
   kerb before it is earned. Each street brings one new thing.
@@ -41,7 +41,7 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 - **Form:** short-form, runs of 1–5 minutes on a clock, because it is an arcade crossing game you
   play in a spare minute.
 - **Orientation:** portrait: the lanes stack up the screen and the thumb taps and swipes. Desktop
-  shows the same street, wider.
+  shows the same portrait street in the middle of the screen.
 - **What a failure costs:** a hit sends that crossing's people back to their kerb (still waiting,
   not lost) and costs a few seconds; a whole run is at most about five minutes.
 - **Save-game stand-in:** the best score, the hidden assist and the furthest street reached, in
@@ -61,27 +61,40 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   the screen (a fractional scale, smoothing off, so pixels stay sharp). Rows are 22 art pixels tall,
   so a person (15) or a bus (21) stands inside its own row; rows are drawn from the top, vehicles
   then people in each row. The street is simulated in fixed world coordinates: vehicles enter 80 art
-  pixels beyond the play area's edge whatever the screen, so a wider screen only shows more of the
-  same road and a resize changes nothing in the game. There's nothing past the edge columns (Claude,
-  2026-11-09, from the spec review).
-- **The line (the snake rule):** follower k stands where the leader stood k steps ago. Followers
-  move only when the leader steps, so a stopped leader leaves the tail in the lanes. The leader
-  can't step onto its own line (a soft bump), except to swap places with follower 1 when no other
-  step is possible, so it can never be boxed in; a swap exchanges the two (the line behind is
-  unchanged). When someone leaves the line (arriving or knocked down), the people behind keep their
-  cells; the one just behind takes a double stride on the next step to close the gap. Hits count at
-  the cell a person steps into from the moment of the step, not after the 90 ms tween (Claude,
-  2026-11-09, from the reviews).
+  pixels beyond the play area's edge whatever the screen, and a resize changes nothing in the game.
+  Only the 12 columns are drawn, on every screen: on a wide one the street sits in the middle with
+  plain background either side, so cars enter at the street's own edges (Claude, 2026-11-09, from
+  the spec review; changed after the go by the owner, 2026-11-09: "when I play on desktop, there
+  are like two gray zones on the left and the right, and you can see the cars showing up randomly
+  in them … those should be hidden. If this game is supposed to be portrait").
+- **The line follows on its own:** the leader's path is a trail, and each follower walks it on their
+  own, one cell every 0.18 s, stopping one cell behind the person ahead (so a stopped leader's line
+  closes up behind it instead of freezing across the lanes). Before stepping from a kerb or the
+  median into a lane, a follower looks: they wait while a vehicle would reach that cell within 1 s.
+  In the road they wait only when a vehicle would reach the next cell within 0.5 s and none would
+  reach the one they stand on; otherwise they keep walking. Measured with a scripted player after
+  this change: runs of 1.5–3.5 minutes, 5–24 followers knocked down a run (from 10–38 before the
+  road look), and bold leading reaching street 4. The leader is never blocked by its own line: it can walk back
+  through its followers; only the street's edges stop it. When someone leaves the line (arriving or
+  knocked down) the people behind keep walking. Hits count at the cell a person steps into from the
+  moment of the step, not after the tween. Changed after the go by the owner, 2026-11-09, replacing
+  the snake rule (followers moved only when the leader stepped, and the leader couldn't step onto
+  its line): "if I move to the left or the right and I get to the edge of the screen, I cannot
+  return. Like, why am I blocked? … you collect a bunch of people in the line with you and then you
+  have to move really, really, really fast, and it's impossible. They always hit them. And on top of
+  it, when you get to the other side, you also need to move to the side so that it keeps bringing
+  the people"; the owner chose this fix ("All of it").
 - **Pickups never put anyone in the road:** people wait on both kerbs, each wanting the other side,
   shown by a small arrow over their head. Walking into the cell next to one (left or right on the
-  kerb, or the leader's cell) asks them to join: they join at the end of the line only when the cell
-  the tail would add is a safe cell (kerb or median), walking there from where they wait; until then
-  they wave and wait. People wait on the sidewalk's back edge, not in the walking cells, so they never
+  kerb, or the leader's cell) asks them to join: they join at the end of the line only when nobody in
+  the line is in a lane, stepping from where they wait into the kerb (or median) cell in front of
+  them, which becomes the start of their path; until then they wave and wait. People wait on the sidewalk's back edge, not in the walking cells, so they never
   block a step. At most six wait on each kerb and a new one comes every 3 s while there's room. On the
   streets with a median, up to two people wait on it, each with a random destination kerb shown by
   their arrow (Claude, 2026-11-09, from the reviews).
-- **Arrival and scoring:** a follower who steps onto their destination kerb arrives, leaves the line
-  and walks off. Arrivals are counted per crossing (the count resets when the leader steps off a kerb
+- **Arrival and scoring:** a follower who reaches their destination kerb arrives there on their own,
+  leaves the line and walks off; the leader doesn't have to walk along the kerb to bring them in
+  (changed after the go by the owner, 2026-11-09, as above). Arrivals are counted per crossing (the count resets when the leader steps off a kerb
   into a lane; the median never resets it, and neither does a hit): the 1st arrival of a crossing scores 1, the 2nd 2, the nth n, so a line of n pays
   n(n+1)/2. While the line is in the road its payout ("×4 · +10") shows at the leader's destination
   kerb (Claude, 2026-11-09, from the review).
@@ -128,13 +141,12 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
      the player's.
   5. **Downtown** (night, lit windows, people stay fully lit): the median, the crosswalk and the
      sirens together, six lanes; each round of it needs 16 arrivals and is 4% faster than the last.
-- **Controls:** a tap anywhere steps forward: in the road (or on the median), toward the kerb the
-  leader is heading for; on a kerb with nobody of the line in the road, into the road toward the
-  other kerb; on a kerb while some of the line is still in the road, along the kerb (on in the
-  direction it last went, or toward the side with more room), so taps alone pull the tail in; holding repeats a step every 160 ms; a swipe steps in
+- **Controls:** a tap anywhere steps forward, toward the kerb the leader is heading for (from a
+  kerb, into the road toward the other kerb); holding repeats a step every 160 ms; a swipe steps in
   its direction (up, down, left, right). One step can be queued during a step's 90 ms tween. Keys:
   arrows and WASD step, Space steps forward. A second finger is ignored. No on-screen arrows (Claude,
-  2026-11-09).
+  2026-11-09; the tap along the kerb that pulled the tail in went with the snake rule, by the owner's
+  change of 2026-11-09).
 - **Readability:** the leader is the pack's man recoloured to hi-vis orange, with a round red
   lollipop sign drawn above its head (the pack has no crossing guard);
   followers wear varied colours and are joined by a thin rope; waiting people have their arrow;
@@ -164,19 +176,20 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 
 - **AC-1** The page opens with traffic driving and people waiting behind the start card, with no
   errors; Start begins street 1 with the clock at 45 s — `tests/tag-along.test.mjs`.
-- **AC-2** A step moves the leader one cell, and each follower moves into the cell the one ahead of
-  it held; when the leader doesn't step, no follower moves — `tests/tag-along.test.mjs`.
-- **AC-3** The leader can't step onto its own line or past the edge columns; with no other step
-  possible, stepping onto follower 1 swaps the two and leaves the rest of the line where it was —
+- **AC-2** A step moves the leader one cell; the followers then walk the leader's path on their own,
+  one cell at a time, and close up one cell behind the person ahead when the leader stops —
   `tests/tag-along.test.mjs`.
-- **AC-4** A waiting person next to the leader joins at the end of the line only when the cell the
-  tail adds is a kerb or median cell, never a lane; a person knocked down or walking back can't be
-  picked up — `tests/tag-along.test.mjs`.
-- **AC-5** A follower stepping onto their destination kerb arrives and leaves the line; the nth
+- **AC-3** Only the street's edges stop the leader: it can walk back through its own line —
+  `tests/tag-along.test.mjs`.
+- **AC-4** A waiting person next to the leader joins the end of the line only while nobody in it is in
+  a lane, and never starts out in a lane; a person knocked down or walking back can't be picked up —
+  `tests/tag-along.test.mjs`.
+- **AC-5** A follower reaching their destination kerb arrives there on their own, even with the leader
+  standing still on it, and leaves the line; the nth
   arrival of a crossing scores n and adds 0.5 + 0.5 × n s to the clock; the count resets when the leader
   steps from a kerb into a lane, not on the median or after a hit — `tests/tag-along.test.mjs`.
 - **AC-6** A vehicle hitting a follower sends that follower back to where they waited while the
-  others keep their cells; a vehicle hitting the leader scatters the whole line and returns the leader
+  others keep walking; a vehicle hitting the leader scatters the whole line and returns the leader
   to the kerb it last left; people walking back can't be hit — `tests/tag-along.test.mjs`.
 - **AC-7** A vehicle passing within half a cell of a person without hitting adds 0.3 s, once per
   vehicle and person and at most 1 s per crossing — `tests/tag-along.test.mjs`.
@@ -193,10 +206,9 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
   Downtown a crosswalk whose walk light stops the cars before it (and a car waits for a person on it
   when walk ends, for at most 2 s); Siren Boulevard and Downtown sirens that warn at least 2.5 s
   before they enter — `tests/tag-along.test.mjs`.
-- **AC-12** A tap steps forward as the controls decision says (into the road from a kerb, on toward
-  the kerb in the road, along the kerb while some of the line is still in the road), holding repeats
-  steps, a swipe steps in its direction, and the arrow keys, WASD and Space step; a second finger does
-  nothing — `tests/tag-along.test.mjs`.
+- **AC-12** A tap steps forward (into the road from a kerb, on toward the kerb the leader is heading
+  for), holding repeats steps, a swipe steps in its direction, and the arrow keys, WASD and Space
+  step; a second finger does nothing — `tests/tag-along.test.mjs`.
 - **AC-13** A hit raises the hidden assist and an arrival lowers it; a higher assist slows traffic;
   a new player's first run starts at 0.4 and a later run at 60% of the last run's —
   `tests/tag-along.test.mjs`.
@@ -209,18 +221,23 @@ landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline i
 - **AC-17** The game plays offline once it has been played — `tests/tag-along.test.mjs`.
 - **AC-18** At 390×844 and at 360×640 the whole street (both kerbs and every lane) fits on screen
   with no scrolling and a person is drawn at least 36 CSS px tall; in landscape (844×390) the whole
-  street still fits; resizing mid-run changes no game state — `tests/tag-along.test.mjs`.
+  street still fits; on a wide screen only the 12 columns are drawn, centred, with plain background
+  either side; resizing mid-run changes no game state — `tests/tag-along.test.mjs`.
 - **AC-19** The landing page shows 8 tiles, Tag Along's playable after Googly Faces —
   `tests/site.test.mjs`.
 - **AC-20** A step plays a footstep, a join the pluck, an arrival the chime (higher for each arrival
   in the crossing), a hit the bump and the horn, and the end of the run the closing jingle —
+  `tests/tag-along.test.mjs`.
+- **AC-21** A follower about to step from a kerb or the median into a lane waits while a vehicle
+  would reach that cell within 1 s, then goes; in a lane, a follower waits for a vehicle about to
+  reach the next cell only while their own cell is clear, and goes on when it isn't —
   `tests/tag-along.test.mjs`.
 
 ## Core flow
 
 1. Tap the Tag Along tile: traffic is driving behind a small start card.
 2. Tap Start (or a street chip).
-3. Walk along the kerb to gather people, then step across; they follow where you stepped.
+3. Walk along the kerb to gather people, then step across; they follow your path on their own.
 4. Bring them across to score and add time; meet the quota for a new street.
 5. When the clock runs out, see the score and the street reached, and play again.
 
