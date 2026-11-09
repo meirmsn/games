@@ -19,6 +19,24 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's tenth playtest (owner, 2026-11-09)
+
+Where they differ from the playtests below, these win.
+
+- **The slingshot only in play.** "once the time is up and it's showing the UI, I cannot control
+  anymore the slingshot. I was able to continue. So the slingshot should only be enabled when it's
+  actually, during the game time." The slingshot answers only while the round's clock runs (not in
+  the intro, once time is up, between rounds, on the over card, or while paused, turned or counting
+  back in); a pull in hand when time runs out is dropped and fires nothing.
+- **A louder frenzy.** "when it's frenzy time … raise the music volume … the music is not matching
+  that level … higher volume of the one you currently have." The galop plays at 0.6, two and a half
+  times the waltz's 0.24 (it was 0.3).
+- **The waltz speeds up at the end.** "when the last 10 seconds start … raise the tempo, not the
+  volume … when it gets to 5 seconds, it goes even faster … the last 3 goes even faster … same song
+  as usual, just faster." The same waltz plays 1.15× as fast from 10 s, 1.3× from 5 s and 1.45×
+  from 3 s (like a speeding record, its pitch rises with it), back to normal in a frenzy and each
+  new round. The shared sound's loops gain `setRate()` for this.
+
 ### The owner's ninth playtest (owner, 2026-11-09)
 
 Where they differ from the playtests below, these win.
@@ -486,6 +504,12 @@ moment 8–18 s into rounds 2 to 6.
   the frenzy marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
   2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar and every
   paintball is drawn as a textured shell — `tests/shooting-gallery.test.mjs`.
+- **AC-35** The slingshot can be pulled and fired only while the round's clock runs: once time is
+  up, between rounds, on the over card and in the intro a pull does nothing, and a pull held as time
+  runs out is dropped and fires nothing — `tests/shooting-gallery.test.mjs`.
+- **AC-36** The waltz plays faster from 10 s left, faster again from 5 s and fastest from 3 s, at its
+  usual tempo otherwise; the frenzy's galop plays at least twice as loud as the waltz —
+  `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

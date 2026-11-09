@@ -1483,3 +1483,83 @@ test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which
   assert.ok(pink.during <= pink.before + 2, `the frenzy’s glow at the edges is warm, not pink: blue over green ${pink.before.toFixed(1)} → ${pink.during.toFixed(1)}`);
   await context.close();
 });
+
+test('shooting-gallery AC-35: the slingshot answers only while the clock runs: once time is up it can’t be pulled or fired, and a pull held as time runs out is dropped', async () => {
+  const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
+  await ready(page);
+  // A pull held as the time runs out is dropped, and letting go fires nothing.
+  await page.mouse.move(500, 300);
+  await page.mouse.down();
+  await page.mouse.move(530, 360, { steps: 5 });
+  await page.waitForTimeout(50);
+  assert.equal(await page.evaluate(() => window.__gallery.aim.active), true, 'pulled while playing');
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 0.01;
+    g.step(0.05);
+  });
+  const lost = await page.evaluate(() => ({ mode: window.__gallery.game.mode, active: window.__gallery.aim.active, live: window.__gallery.slingLive() }));
+  assert.deepEqual(lost, { mode: 'lost', active: false, live: false }, 'time up: the pull is dropped');
+  await page.mouse.move(540, 380, { steps: 3 });
+  await page.mouse.up();
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, 'letting go after time is up fires nothing');
+  // A fresh pull after time is up, and on the over card, does nothing.
+  for (const mode of ['lost', 'won', 'over', 'intro']) {
+    await page.evaluate((m) => (window.__gallery.game.mode = m), mode);
+    await page.mouse.move(500, 300);
+    await page.mouse.down();
+    await page.mouse.move(530, 360, { steps: 5 });
+    await page.waitForTimeout(50);
+    const r = await page.evaluate(() => ({ active: window.__gallery.aim.active, px: window.__gallery.aim.px, py: window.__gallery.aim.py }));
+    await page.mouse.up();
+    assert.deepEqual(r, { active: false, px: 0, py: 0 }, `no pull in ${mode}`);
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Space');
+    assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, `nothing fires in ${mode}`);
+  }
+  await context.close();
+});
+
+test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy’s galop plays at least twice as loud as the waltz', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const out = {};
+    for (const [t, key] of [[20, 'at20'], [9.5, 'at10'], [4.5, 'at5'], [2.5, 'at3']]) {
+      g.game.time = t;
+      g.step(1 / 60);
+      out[key] = g.musicSpeed();
+    }
+    g.game.time = 2.5;
+    g.startFrenzy();
+    g.step(1 / 60);
+    out.frenzy = g.musicSpeed();
+    return { ...out, gains: g.MUSIC_GAIN };
+  });
+  assert.equal(r.at20, 1, 'the usual tempo');
+  assert.ok(r.at10 > 1 && r.at5 > r.at10 && r.at3 > r.at5, `faster at 10, 5 and 3 s: ${r.at10}, ${r.at5}, ${r.at3}`);
+  assert.equal(r.frenzy, 1, 'the galop at its own tempo');
+  assert.ok(r.gains.frenzy >= 2 * r.gains.music, `the galop is louder: ${JSON.stringify(r.gains)}`);
+  // A new round starts the waltz at its usual tempo again.
+  const next = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.frenzy = 0;
+    g.startRound(2);
+    for (let i = 0; i < 90; i++) g.step(1 / 60);
+    return { speed: g.musicSpeed(), mode: g.game.mode };
+  });
+  assert.deepEqual(next, { speed: 1, mode: 'play' });
+  // The shared sound's loops take the speed: a loop set faster starts (and plays) at that rate.
+  const rate = await page.evaluate(async () => {
+    const { createSound } = await import('../shared/sound.js');
+    const s = createSound({ tune: 'sounds/chime.mp3' });
+    const stop = s.loop('tune');
+    stop.setRate(1.3);
+    await new Promise((res) => setTimeout(res, 600));
+    stop();
+    return window.__played.filter((p) => p.rate !== 1).map((p) => p.rate);
+  });
+  assert.ok(rate.includes(1.3), `the loop plays at 1.3: ${rate}`);
+  await context.close();
+});

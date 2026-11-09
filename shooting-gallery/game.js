@@ -471,11 +471,31 @@ function launchDrop(i, upFor = 1.8) {
 
 let stopMusic = null;
 let musicName = '';
+// The waltz plays at 0.24; the frenzy's galop at 0.6, two and a half times as loud, so the music
+// celebrates as loudly as the lights do.
+const MUSIC_GAIN = { music: 0.24, frenzy: 0.6 };
+let musicSpeed = 1;
 function music(name) {
   if (musicName === name) return;
   if (stopMusic) stopMusic();
   musicName = name;
-  stopMusic = name ? sound.loop(name, { gain: name === 'frenzy' ? 0.3 : 0.24 }) : null;
+  musicSpeed = 1;
+  stopMusic = name ? sound.loop(name, { gain: MUSIC_GAIN[name] }) : null;
+}
+// The waltz speeds up as the round runs out: a little at 10 s, more at 5 s, most in the last 3.
+function musicTempo() {
+  if (game.mode !== 'play' || game.frenzy > 0) return 1;
+  if (game.time <= 3) return 1.45;
+  if (game.time <= 5) return 1.3;
+  if (game.time <= 10) return 1.15;
+  return 1;
+}
+function updateMusicTempo() {
+  const want = musicName === 'music' ? musicTempo() : 1;
+  if (want !== musicSpeed && stopMusic) {
+    musicSpeed = want;
+    stopMusic.setRate(want);
+  }
 }
 
 function startRun({ seed = Date.now(), restart = false } = {}) {
@@ -1265,6 +1285,7 @@ function attractStep(dt) {
 }
 
 function update(dt) {
+  updateMusicTempo();
   game.T += dt;
   game.modeT += dt;
   if (game.banner) {
@@ -1362,6 +1383,8 @@ function update(dt) {
   }
   if (game.mode === 'lost' && game.modeT >= 1.5) gameOver();
   updateKeys(dt);
+  // Time up (or a pause, a turn): a pull in hand is dropped.
+  if (!slingLive() && (grip || aim.active || aim.kb)) dropSling();
 }
 
 // ---------- Drawing ----------
@@ -1767,7 +1790,7 @@ function drawSlingshot() {
   const g = slingGeometry();
   const x = L.slingX;
   const inPlay = hudVisible() && game.cfg;
-  const showPull = inPlay && (aim.active || aim.kb);
+  const showPull = inPlay && slingLive() && (aim.active || aim.kb);
   const p = showPull ? pouch() : { x, y: L.slingY };
   const ball = PALETTE[game.colour % PALETTE.length];
   const ready = game.frenzy > 0 || game.hopper >= 1;
@@ -2206,8 +2229,17 @@ const onPad = (cx, cy) => toUnits(cx, cy).y >= L.C - 8;
 // The slingshot is pulled from wherever the finger first touches the counter (or the mouse
 // presses anywhere): the pull is how far it has moved since, and letting go fires.
 let grip = null; // { id, x, y }: the pointer holding the pouch, and where it first touched
+// The slingshot answers only while the round's clock runs: not before it, not once time is up, and
+// not while paused, turned or counting back in.
+const slingLive = () => game.mode === 'play' && !game.paused && !game.turned && game.resumeT <= 0;
+function dropSling() {
+  grip = null;
+  aim.active = false;
+  aim.kb = false;
+  setPull(0, 0);
+}
 canvas.addEventListener('pointerdown', (e) => {
-  if (game.paused || game.turned || grip) return;
+  if (!slingLive() || grip) return;
   const isMouse = e.pointerType === 'mouse';
   if (isMouse && e.button !== 0) return;
   if (!isMouse && !onPad(e.clientX, e.clientY)) return;
@@ -2222,13 +2254,17 @@ canvas.addEventListener('pointerdown', (e) => {
   setPull(0, 0);
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (!grip || e.pointerId !== grip.id || game.paused || game.turned) return;
+  if (!grip || e.pointerId !== grip.id) return;
+  if (!slingLive()) {
+    dropSling();
+    return;
+  }
   setPull((e.clientX - grip.x) / k, (e.clientY - grip.y) / k);
 });
 function release(e) {
   if (!grip || e.pointerId !== grip.id) return;
   grip = null;
-  if (e.type === 'pointerup' && !game.paused && !game.turned) fire();
+  if (e.type === 'pointerup' && slingLive()) fire();
   aim.active = false;
   setPull(0, 0);
 }
@@ -2243,6 +2279,7 @@ window.addEventListener('keydown', (e) => {
   const t = e.target;
   if (t instanceof HTMLElement && t.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
   if (e.key.startsWith('Arrow')) {
+    if (!slingLive()) return;
     keys.add(e.key);
     e.preventDefault();
     if (!aim.kb) {
@@ -2251,7 +2288,7 @@ window.addEventListener('keydown', (e) => {
     }
   } else if (e.key === 'Shift') keys.add('Shift');
   else if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-    if (game.mode === 'play' || game.mode === 'intro') {
+    if (slingLive()) {
       e.preventDefault();
       if (aim.active) return;
       aim.kb = true;
@@ -2263,6 +2300,10 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
 function updateKeys(dt) {
+  if (!slingLive()) {
+    keys.clear();
+    return;
+  }
   const ax = (keys.has('ArrowLeft') ? 1 : 0) - (keys.has('ArrowRight') ? 1 : 0);
   const ay = (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0);
   if (!ax && !ay) return;
@@ -2420,7 +2461,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, MUSIC_GAIN, frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
