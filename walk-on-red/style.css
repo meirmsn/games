@@ -153,6 +153,31 @@ body {
   opacity: 0.8;
 }
 
+/* The level's score: what it was made of, line by line, then the total below. */
+.tally {
+  margin: 10px auto 2px;
+  border-collapse: collapse;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tally[hidden] {
+  display: none;
+}
+
+.tally td {
+  padding: 2px 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tally td + td {
+  padding-left: 18px;
+  text-align: right;
+  color: #ffd23f;
+}
+
 .banner-name {
   margin-top: 4px !important;
   font-size: 30px;
@@ -238,16 +263,9 @@ body {
 }
 
 .lead {
-  margin: 0 0 6px !important;
+  margin: 0 0 12px !important;
   font-size: 15px;
   opacity: 0.9;
-}
-
-.rule {
-  margin: 0 0 14px !important;
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffd23f;
 }
 
 .best {

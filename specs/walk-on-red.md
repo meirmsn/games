@@ -86,8 +86,18 @@ start the level, just tap up, and you win every single level." After playing tha
 cars in front of you. It shouldn't be open the road … I don't think you need to show the time at the
 top left because it's already being shown on the pedestrian light … only keep the point … make it
 clear that you're getting a multiplier … you get the points of the time that is left, and then you
-get a multiplier for all the other people who crossed … It should be simple." This spec is the game
-after those changes.
+get a multiplier for all the other people who crossed … It should be simple." After playing that,
+the owner said (2026-11-09): "Remove that message … on the beginning … It should be intuitive from
+you finishing … the first level, and seeing how the points are being computed. When there's an
+emergency vehicle, it goes over the other vehicles … the other vehicles at least move out of the way
+a little bit … bring the WC back to the center … the NPC should not wiggle because you're the one
+who needs to go to the restroom … maybe 5 and upwards, where they, after you're done with the
+restroom, you get out and they go [in] and you get … extra bonus points … show like a little table
+that says like, uh, 24 seconds left. So that becomes, 24 points. And then … inspired passerbys … and
+it shows is that a multiplier or adding … extra person relieved … there's still something odd about
+when the NPCs cross when it comes to zero. They seem to be flying … Maybe you can actually slow down
+the time for them to cross. And as they are crossing, you put the overlay of the bonus points
+because they give you zero regardless." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -124,9 +134,9 @@ goes now, and the people waiting start copying him.
 
 - **Name and hook:** "Walk on Red", slug `walk-on-red`. The second concept review called it "Red
   Man"; Claude renamed it because "Red Man" can read as a slur. He really needs the loo: a blue
-  porta-potty (roof, vent, a WC sign on its door, and a red or green busy dot) stands on the left of
-  the far sidewalk (leaving its right side to the score label); across, he walks along the sidewalk
-  to its door; now and then, standing still, he hops from foot to foot for a
+  porta-potty (roof, vent, a WC sign on its door, and a red or green busy dot) stands in the middle
+  of the far sidewalk, above his starting column; across, he walks along the sidewalk to its door;
+  now and then, standing still, he hops from foot to foot for a
   moment (0.7 s every 3.6 s), with a drop of sweat; when he gets across he goes in. No phone and no
   speech bubbles (owner, 2026-11-09: "Maybe he needs to poop"; then "he shouldn't be wiggling all
   the time … Maybe it can be even a porta potty"). Rejected: anything with a frog, logs, turtles or
@@ -162,26 +172,37 @@ goes now, and the people waiting start copying him.
 - **Score:** reaching the far kerb before the walk light turns green fixes the seconds left (at least
   1); the level scores those seconds × (1 + copiers across by the time the light turns green). If
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
-  on. The multiplier is said in plain words: the start card reads "Points: seconds left × people who
-  make it across"; while a level with copiers is played, what it is worth right now ("14 s × 3 people
-  = 42") shows at the right of the sky; each copier who arrives shows the new multiplier ("×2",
-  "×3") over their head; the count-up says "× 3 people"; and the tally reads "14 s × 3 people"
-  (owner, 2026-11-09: "make it clear that you're getting a multiplier … It should be simple").
+  on. The start card says nothing about points: the first level's score table teaches it (owner,
+  2026-11-09: "It should be intuitive from you finishing … the first level, and seeing how the points
+  are being computed"). While a level with copiers is played, what it is worth right now ("14 s × 3
+  people = 42", or "14 s × 3 = 42" where the words don't fit beside the porta-potty) shows at the
+  right of the sky; each copier who arrives shows the new multiplier ("×2", "×3") over their head; the
+  count-up says "× 3 people". When the walk light turns green, the level's **score table** shows over
+  the crossing, plain lines that add up: "24 s left 24", "2 people followed you on red +48" (each
+  worth the seconds again), "1 person relieved too +24" (below), then the total "+96" and the
+  level's stars (owner, 2026-11-09: "show like a little table").
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
   speed under its own rules, in one go, through to the tally: the walk light's seconds drain, the car
   lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
-  way carry on as they would, so they can make it, or be hit. The points count up big over the far
+  way carry on as they would, so they can make it, or be hit. The walk to green is then not fast: The points count up big over the far
   sidewalk as the seconds drain ("+42", "× 3 people", the multiplier growing as copiers arrive),
   with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
-  once the crossing is clear the walk light turns green and everyone left sets off at once, still in
-  the fast-forward (the count and the "▶▶" mark stay up), and earns nothing: each copier who crosses on green shows "+0". Then the tally
+  once the crossing is clear (and after anyone relieved too, below) the walk light turns green; then,
+  at normal speed so they can be seen walking, everyone left crosses on the zebra under the score
+  table, and earns nothing; the table stays 1.4 s more, then the next level
   (owner, 2026-11-09: "it should run the actual rules of the game, and you earn points or not
   according to that"; then "that should also be part of the fast forward, and that should give you 0
-  points"; then "much faster … they should be part of that fast forward everything"). When he was
-  too slow, the wait for the crossing to clear and the green light's crossing
-  run fast in the same way.
+  points"; then "much faster"; then "slow down the time for them to cross. And as they are crossing,
+  you put the overlay"). When he was too slow, the wait for the crossing to clear runs fast in the
+  same way, and the green light's crossing shows "Try again".
+- **Relieved too:** from level 5, one of the copiers needs the loo as well: of the crowd, only they
+  (and he) hop from foot to foot, with a drop of sweat. If they make it across, then once the
+  fast-forward ends he steps out of the porta-potty, they go in, the door shuts, a flush, and the
+  level gets the seconds once more as a bonus ("+24", and "1 person relieved too" in the table),
+  about 2.4 s at normal speed. A relieved copier still counts as a follower (owner, 2026-11-09: "the
+  NPC should not wiggle … maybe 5 and upwards … you get … extra bonus points").
 - **Copiers walk on their own:** from level 3, people at the kerb beside his column copy him. Each sets
   off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
   crossing, a row every 0.42 s. They never go past him (they may share the island or the far kerb
@@ -189,7 +210,8 @@ goes now, and the people waiting start copying him.
   1.1 s; in the road they wait at most 2.2 s for the next lane, and only while their own spot is
   clear, so in heavy traffic, or if he dawdles and they bunch up behind him in the lanes, they can be
   hit. A copier hit tumbles, then walks back to the crowd: out for this level, and their share of the
-  points with them. Copiers across queue at the porta-potty (owner, 2026-11-09: "Walk on their own",
+  points with them. Copiers across queue beside the porta-potty, to its right. Nobody in the crowd
+  hops from foot to foot but a copier who needs the loo too (below) (owner, 2026-11-09: "Walk on their own",
   "Their points").
 - **Hits:** a vehicle overlapping the player's cell (vehicle boxes 20% narrower than their art, people
   5 art pixels wide) knocks him down for 1.2 s (the pack's fall and lying frames with stars, a bump
@@ -213,7 +235,8 @@ goes now, and the people waiting start copying him.
   3. **Market Avenue:** four lanes, an island in the middle and the first copier, 28 s.
   4. **Bus Lane:** buses and trucks (long vehicles), faster, one copier, 28 s.
   5. **Rush Hour:** five lanes, denser, two copiers, 30 s.
-  6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, its lane's edge flashing
+  6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, driving over the cars in
+     its way, which pull a little aside as it comes up behind them and passes; its lane's edge flashing
      and a siren 2.5 s before it comes, at 2.5 times the lane's speed), two copiers, 30 s.
   7. **Old Town:** five fast lanes, three copiers, 32 s.
   8. **Downtown:** night, two islands, the fastest and densest traffic, three copiers and sirens,
@@ -264,13 +287,15 @@ goes now, and the people waiting start copying him.
   2 s; on red, cars short of their stop line stop at it, and none crosses it —
   `tests/walk-on-red.test.mjs`.
 - **AC-4** When the walk light reaches 0 it turns green only once no vehicle is on the crossing; then
-  everyone still waiting crosses at once, at 20 times speed, no vehicle enters the crossing, a copier crossing
-  on green shows "+0" and adds nothing, and the next level (or the same one) starts after the tally — `tests/walk-on-red.test.mjs`.
+  everyone still waiting crosses at once, at normal speed, no vehicle enters the crossing, crossing on
+  green adds nothing, and the next level (or the same one) starts after the tally — `tests/walk-on-red.test.mjs`.
 - **AC-5** Reaching the far kerb fixes the seconds left; he goes in, the door closes and the flush
-  plays, then the chime; then the game runs at 20 times speed with its own rules, through to the tally (the car lights
+  plays, then the chime; then the game runs at 20 times speed with its own rules (the car lights
   change, cars stop at their lines, copiers on the way carry on and can be hit) while the points
   count up as the seconds drain; the level scores the seconds × (1 + copiers across by the green
-  light); from across to the tally takes under 8 s — `tests/walk-on-red.test.mjs`.
+  light), plus the seconds once more for a copier relieved too; on green a score table shows the
+  seconds, the followers and anyone relieved, line by line, and the total; from across to the end of
+  the fast-forward takes under 6 s — `tests/walk-on-red.test.mjs`.
 - **AC-6** If the walk light turns green before the player is across, the level scores 0 and starts
   again — `tests/walk-on-red.test.mjs`.
 - **AC-7** Copiers set off once the player is two rows out, one after another, hop up their own
@@ -283,7 +308,8 @@ goes now, and the people waiting start copying him.
 - **AC-10** The eight levels are as in the decisions: copiers 0, 0, 1, 1, 2, 2, 3, 3; an island from
   level 3, two in level 8; heavy vehicles in level 4; sirens in levels 6 and 8 —
   `tests/walk-on-red.test.mjs`.
-- **AC-11** A siren warns 2.5 s before it comes — `tests/walk-on-red.test.mjs`.
+- **AC-11** A siren warns 2.5 s before it comes; a car it comes up behind pulls a little aside,
+  and back once it has passed — `tests/walk-on-red.test.mjs`.
 - **AC-12** After level 8 the run ends with the game-over card showing the total, the stars and the
   best; Play again leads back to the start card — `tests/walk-on-red.test.mjs`.
 - **AC-13** A hit raises the hidden assist and a copier across lowers it; a higher assist slows
@@ -305,9 +331,9 @@ goes now, and the people waiting start copying him.
 - **AC-19** A hop plays a footstep, a copier setting off the pluck, a copier across the chime (higher
   for each), a hit the bump and the horn, getting into the porta-potty the flush and then the chime,
   the green light its jingle, and the end of the run the closing jingle — `tests/walk-on-red.test.mjs`.
-- **AC-20** The start card says "Points: seconds left × people who make it across"; while a level
-  with copiers is played, what it is worth right now shows as "s s × m people = score"; a copier
-  arriving shows the new multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
+- **AC-20** The start card says nothing about points; while a level with copiers is played, what it
+  is worth right now shows as "s s × m people = score" on a phone; a copier arriving shows the new
+  multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
 - **AC-21** The landing page shows 8 tiles, Walk on Red's playable after Googly Faces —
   `tests/site.test.mjs`.
@@ -315,6 +341,9 @@ goes now, and the people waiting start copying him.
   small ones — `tests/walk-on-red.test.mjs`.
 - **AC-23** Every level starts with traffic in its lanes and a car passing right in front of him;
   from level 2, every lane has traffic and tapping straight up from the start gets him hit — `tests/walk-on-red.test.mjs`.
+- **AC-24** From level 5 one copier needs the loo too: of the crowd only they hop from foot to foot;
+  across, once the fast-forward ends, he steps out, they go in, a flush, and the seconds count once
+  more — `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 
@@ -332,8 +361,9 @@ goes now, and the people waiting start copying him.
 | ----- | ---------- | ----------- | -------------- | ------------------------- | ------ |
 | Start (traffic drives behind) | shown | hidden | hidden | hidden | hidden |
 | Playing (walk light red) | hidden | hidden | hidden | shown | the level's name, for a moment |
-| Across: in the loo, fast-forward, green | hidden | hidden | hidden | shown | hidden |
-| Tally | hidden | hidden | hidden | shown | the tally, or "Try again" |
+| Across: in the loo, fast-forward, relieved too | hidden | hidden | hidden | shown | hidden |
+| Green: everyone crosses | hidden | hidden | hidden | shown | the score table, or "Try again" |
+| Tally | hidden | hidden | hidden | shown | the score table, or "Try again" |
 | Paused (returned from hidden) | hidden | shown | hidden | shown | as before |
 | Game over | hidden | hidden | shown, with the total, the stars and the best | hidden | hidden |
 
