@@ -73,7 +73,12 @@ lights. It's clear that those are the cars['] lights … we need a better sound 
 should [sound] like actual flushing … the fast forward looks great. But once you're done with the
 fast forward, you don't have to make all of them cross when it gets green … Or you can, but that
 should also be part of the fast forward, and that should give you 0 points, like the ones that pass
-while it's green should give you [0]." This spec is the game after those changes.
+while it's green should give you [0]." After playing that, the owner said (2026-11-09): "The first
+levels are way too easy … the second one should be already harder. The flush sound is not good. It
+sounds like a space laser, so maybe go back to what you had before … The fast forward should be much
+faster. I'm waiting too long there. And also the NPCs [crossing] on green … it feels like it did the
+fast forward and then they cross … they should be part of that fast forward everything." This spec
+is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -148,19 +153,19 @@ goes now, and the people waiting start copying him.
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
   on. While playing, what the level is worth right now ("14 s × 3 = 42") shows above the far kerb.
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
-  the celebrating chime, about 2.2 s in all (the flush a lever's clunk, rushing, swirling water and
-  a few gurgles), while the walk light holds its seconds and the street
-  goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 8 times
-  speed under its own rules until the walk light turns green: the walk light's seconds drain, the car
+  the celebrating chime, about 1.6 s in all, while the walk light holds its seconds and the street
+  goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
+  speed under its own rules, in one go, through to the tally: the walk light's seconds drain, the car
   lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
   way carry on as they would, so they can make it, or be hit. The points count up big over the far
   sidewalk as the seconds drain ("+42", "× 3 a second", the multiplier growing as copiers arrive),
   with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
-  once the crossing is clear the walk light turns green. The green light's crossing is part of the
-  fast-forward too, and earns nothing: each copier who crosses on green shows "+0". Then the tally
+  once the crossing is clear the walk light turns green and everyone left sets off at once, still in
+  the fast-forward (the count and the "▶▶" mark stay up), and earns nothing: each copier who crosses on green shows "+0". Then the tally
   (owner, 2026-11-09: "it should run the actual rules of the game, and you earn points or not
   according to that"; then "that should also be part of the fast forward, and that should give you 0
-  points"). When he was too slow, the wait for the crossing to clear and the green light's crossing
+  points"; then "much faster … they should be part of that fast forward everything"). When he was
+  too slow, the wait for the crossing to clear and the green light's crossing
   run fast in the same way.
 - **Copiers walk on their own:** from level 3, people at the kerb beside his column copy him. Each sets
   off once he is two rows out, one after another 0.9 s apart, and hops up their own column on the
@@ -181,9 +186,10 @@ goes now, and the people waiting start copying him.
   "the first level is very, very easy to win. The second one is just a little bit harder … The
   third one is already getting more like a regular level, and they get progressively harder"):
   1. **Quiet Street:** just you, two slow lanes one way, sparse traffic, 30 s.
-  2. **Both Ways:** two lanes, one each way, a little faster, 30 s.
-  3. **Market Avenue:** four lanes, an island in the middle and the first copier, 28 s.
-  4. **Bus Lane:** buses and trucks (long vehicles), faster, one copier, 28 s.
+  2. **Both Ways:** two lanes, one each way, twice level 1's speed and much busier (short lulls),
+     26 s: already a real crossing (owner, 2026-11-09: "the second one should be already harder").
+  3. **Market Avenue:** four lanes, an island in the middle and the first copier, busier, 28 s.
+  4. **Bus Lane:** buses and trucks (long vehicles), faster and denser, one copier, 28 s.
   5. **Rush Hour:** five lanes, denser, two copiers, 30 s.
   6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, its lane's edge flashing
      and a siren 2.5 s before it comes, at 2.5 times the lane's speed), two copiers, 30 s.
@@ -193,8 +199,8 @@ goes now, and the people waiting start copying him.
   After level 8 the run ends with its total, the stars and the best.
 - **Tuning, measured with a scripted player** (reacting every 0.25 s, reading traffic perfectly,
   sidestepping, over 6 seeds a level, fast or careful): it never fails a level and is almost never
-  hit, so every level is within reach; the seconds it has to spend waiting grow from level 1 (none)
-  to levels 5–7; the fast way scores more on most levels; about a third to half of copiers are hit on
+  hit, so every level is within reach; the seconds it has to spend waiting go from none on level 1
+  to up to 3 (fast) or 14 (careful) on level 2, and grow to levels 5–7; the fast way scores more on most levels; about a third to half of copiers are hit on
   levels 3–7, and almost none in Downtown, where the islands give them rest. Knobs: each
   lane's speed, gaps, platoon and lull lengths, each level's seconds, and the copiers' start, pace,
   look and wait.
@@ -211,7 +217,7 @@ goes now, and the people waiting start copying him.
   pluck when a copier sets off, a rising chime for each copier across, a rising tick as the seconds
   count into points, a soft bump and a horn for a hit, a tick each second for the last 5 s, the
   crossing chirp and a jingle on green, a flush and a chime when he gets into the porta-potty, a jingle at each level's start and at the end of the run,
-  and a siren, all under the site-wide mute. The ambience, horn, siren, chirp and flush are synthesised for
+  and a siren, all under the site-wide mute. The ambience, horn, siren, chirp and flush (a stand-in until the owner brings a recorded one) are synthesised for
   the game; the rest are Kenney's CC0 sounds as MP3 (owner, 2026-11-09: "more of like sounds of being
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
 - **Tile:** a new playable tile on the landing page, after Reef and Googly Faces, drawn from the game
@@ -235,10 +241,10 @@ goes now, and the people waiting start copying him.
   2 s; on red, cars short of their stop line stop at it, and none crosses it —
   `tests/walk-on-red.test.mjs`.
 - **AC-4** When the walk light reaches 0 it turns green only once no vehicle is on the crossing; then
-  everyone still waiting crosses, at 8 times speed, no vehicle enters the crossing, a copier crossing
+  everyone still waiting crosses at once, at 20 times speed, no vehicle enters the crossing, a copier crossing
   on green shows "+0" and adds nothing, and the next level (or the same one) starts after the tally — `tests/walk-on-red.test.mjs`.
 - **AC-5** Reaching the far kerb fixes the seconds left; he goes in, the door closes and the flush
-  plays, then the chime; then the game runs at 8 times speed with its own rules (the car lights
+  plays, then the chime; then the game runs at 20 times speed with its own rules, through to the tally (the car lights
   change, cars stop at their lines, copiers on the way carry on and can be hit) while the points
   count up as the seconds drain; the level scores the seconds × (1 + copiers across by the green
   light); from across to the tally takes under 8 s — `tests/walk-on-red.test.mjs`.

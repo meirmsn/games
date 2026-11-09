@@ -72,8 +72,8 @@ const RED_AT = 2; // … and red
 const COP_START = 2; // a copier sets off once the player is this many rows out
 const COP_STAGGER = 0.9; // … each one this much after the one before
 const COP_HOP = 0.42; // a copier's pace, one row
-const FF = 8; // once he's in the loo, the game runs this many times faster until the walk light is green
-const DOOR_T = 2.2; // in the loo: the door shuts, a flush, a chime, then the fast-forward
+const FF = 20; // once he's in the loo, the game runs this many times faster, through the green light's crossing
+const DOOR_T = 1.6; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
 const COP_LOOK = 0.9; // on safe ground, a copier waits while a car would reach the next cell this soon
 const COP_DARE = 1.2; // in the road, a copier waits at most this long for the next lane
@@ -107,10 +107,10 @@ const PAL = {
 // 'M' median. Each brings one new thing.
 const LEVELS = [
   { name: 'Quiet Street', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(1, 11, CARS, [50, 100], [2, 3], [5, 7]), L(1, 13, CARS, [50, 100], [2, 3], [5, 7])], pal: PAL.maple },
-  { name: 'Both Ways', red: 30, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(-1, 15, CARS, [36, 80], [3, 5], [4, 6]), L(1, 16, CARS, [36, 80], [3, 5], [4, 6])], pal: PAL.maple },
-  { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 16, CITY, [30, 70]), L(-1, 18, CITY, [30, 70]), L(1, 17, CITY, [30, 70]), L(1, 15, CITY, [30, 70])], pal: PAL.market },
-  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 19, HEAVY, [24, 60]), L(-1, 21, CITY, [24, 60]), L(1, 20, CITY, [24, 60]), L(1, 18, HEAVY, [24, 60])], pal: PAL.market },
-  { name: 'Rush Hour', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 20, CITY, [20, 54]), L(-1, 22, CARS, [20, 54]), L(-1, 19, HEAVY, [20, 54]), L(1, 21, CARS, [20, 54]), L(1, 23, CITY, [20, 54])], pal: PAL.school },
+  { name: 'Both Ways', red: 26, copiers: 0, rows: ['K', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [12, 34], [4, 7], [2, 3]), L(1, 24, CARS, [12, 34], [4, 7], [2, 3])], pal: PAL.maple },
+  { name: 'Market Avenue', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, CITY, [16, 44], [4, 7], [2, 4]), L(-1, 23, CITY, [16, 44], [4, 7], [2, 4]), L(1, 22, CITY, [16, 44], [4, 7], [2, 4]), L(1, 20, CITY, [16, 44], [4, 7], [2, 4])], pal: PAL.market },
+  { name: 'Bus Lane', red: 28, copiers: 1, rows: ['K', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 23, HEAVY, [14, 40]), L(-1, 25, CITY, [14, 40]), L(1, 24, CITY, [14, 40]), L(1, 22, HEAVY, [14, 40])], pal: PAL.market },
+  { name: 'Rush Hour', red: 30, copiers: 2, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 21, CITY, [18, 50]), L(-1, 23, CARS, [18, 50]), L(-1, 20, HEAVY, [18, 50]), L(1, 22, CARS, [18, 50]), L(1, 24, CITY, [18, 50])], pal: PAL.school },
   { name: 'Siren Boulevard', red: 30, copiers: 2, sirens: true, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, EVENING, [20, 52]), L(-1, 20, EVENING, [20, 52]), L(-1, 24, EVENING, [20, 52]), L(1, 21, EVENING, [20, 52]), L(1, 23, EVENING, [20, 52])], pal: PAL.evening },
   { name: 'Old Town', red: 32, copiers: 3, rows: ['K', 'L', 'L', 'L', 'M', 'L', 'L', 'K'], lanes: [L(-1, 22, CARS, [20, 54]), L(-1, 24, CARS, [20, 54]), L(-1, 21, CITY, [20, 54]), L(1, 23, CITY, [20, 54]), L(1, 25, CARS, [20, 54])], pal: PAL.school },
   { name: 'Downtown', red: 32, copiers: 3, sirens: true, rows: ['K', 'L', 'M', 'L', 'L', 'M', 'L', 'K'], lanes: [L(-1, 27, NIGHT, [14, 44]), L(-1, 25, NIGHT, [14, 44]), L(1, 26, NIGHT, [14, 44]), L(1, 28, NIGHT, [14, 44])], pal: PAL.night },
@@ -628,9 +628,9 @@ function updateFinish(dt) {
     }
     if (!game.flushed && game.phaseT >= 0.45) {
       game.flushed = true;
-      sfx('flush', { gain: 0.6 });
+      sfx('flush', { gain: 0.8 });
     }
-    if (!game.cheered && game.phaseT >= DOOR_T - 0.3) {
+    if (!game.cheered && game.phaseT >= DOOR_T - 0.25) {
       game.cheered = true;
       sfx('cheer', { rate: 1.3, gain: 0.8 });
     }
@@ -686,8 +686,9 @@ function beginGreen() {
 
 function updateGreen(dt) {
   game.phaseT += dt;
-  // After a beat, everyone still on this side crosses on the zebra; so does he if he didn't make it.
-  if (game.phaseT >= 0.5 && !game.greenWalk) {
+  // Everyone still on this side crosses on the zebra at once, inside the fast-forward; so does he if
+  // he didn't make it.
+  if (!game.greenWalk) {
     game.greenWalk = true;
     for (const p of people) {
       if (p.state === 'across') continue;
@@ -1696,7 +1697,7 @@ function drawText() {
   }
   ctx.globalAlpha = 1;
   // Across: the points counting up as the seconds drain, big, above the porta-potty.
-  if (game.mode === 'finish' && game.stage !== 'door') {
+  if ((game.mode === 'finish' && game.stage !== 'door') || (game.mode === 'green' && !game.failed)) {
     const per = 1 + acrossCount();
     const text = `+${game.levelScore}`;
     const x = offX + (colX(PCOL) + originX) * k;

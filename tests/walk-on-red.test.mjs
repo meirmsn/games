@@ -268,14 +268,14 @@ test('walk-on-red AC-4: the walk light turns green only once the crossing is cle
     const everyone = t.people().every((p) => p.state === 'walk' || p.state === 'across');
     const crossedRow0 = t.people().filter((p) => p.state === 'walk').every((p) => p.walkRow === 0);
     for (let i = 0; i < 60 * 3; i++) t.step(1 / 60);
-    return { waited, mode, clearAtGreen, entered, everyone, crossedRow0, rate, after: t.game.mode };
+    return { waited, mode, clearAtGreen, entered, everyone, crossedRow0, rate, ff: t.FF, after: t.game.mode };
   });
   assert.ok(r.waited, 'waited for the crossing to clear');
   assert.equal(r.mode, 'green');
   assert.ok(r.clearAtGreen, 'green only once the crossing is clear');
   assert.equal(r.entered, 0, 'no car enters the crossing on green');
   assert.ok(r.everyone && r.crossedRow0, 'everyone crossed');
-  assert.ok(Math.abs(r.rate - 8) < 0.01, `green runs fast too: ${r.rate}`);
+  assert.ok(Math.abs(r.rate - r.ff) < 0.01, `green runs fast too: ${r.rate}`);
   assert.ok(['tally', 'play'].includes(r.after));
   await context.close();
 });
@@ -318,7 +318,7 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, then the game fas
     }
     const across = t.copiers().filter((p) => p.state === 'across').length;
     const rising = counts.length > 5 && counts.every((c, i) => i === 0 || c >= counts[i - 1]) && counts[counts.length - 1] > counts[0];
-    return { doorT: t.DOOR_T, mode, secs, door, ff, rate, lights: [...lights], across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent, rising, took };
+    return { doorT: t.DOOR_T, ffRate: t.FF, mode, secs, door, ff, rate, lights: [...lights], across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent, rising, took };
   });
   assert.equal(r.mode, 'finish');
   assert.ok(r.secs > 20, `seconds fixed on arrival: ${r.secs}`);
@@ -328,7 +328,8 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, then the game fas
   const flush = r.door.sounds.indexOf('flush');
   assert.ok(flush >= 0 && r.door.sounds.indexOf('cheer') > flush, `the flush, then the chime: ${r.door.sounds}`);
   assert.equal(r.ff, 'ff');
-  assert.ok(Math.abs(r.rate - 8) < 0.01, `the game runs 8 times over: ${r.rate}`);
+  assert.equal(r.ffRate, 20);
+  assert.ok(Math.abs(r.rate - 20) < 0.01, `the game runs 20 times over: ${r.rate}`);
   assert.deepEqual(r.lights, ['green', 'yellow', 'red'], 'the car lights change as usual, fast');
   assert.equal(r.across, 2, 'both copiers made it on an empty road');
   assert.equal(r.score, r.secs * 3);
