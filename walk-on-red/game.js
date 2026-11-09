@@ -58,10 +58,11 @@ const MAX_ROWS = 8; // the tallest street: every street is scaled as if it were 
 // sidewalks, and each lane's car light on the crossing's edge), the same on every screen.
 const COLS = 12;
 const PLAY_W = COLS * CW;
-const PCOL = 5; // the player's starting column, and the porta-potty's
+const PCOL = 5; // the player's starting column
 const CROSS_C0 = 1; // the zebra crossing's columns: nine, the view's whole width
 const CROSS_C1 = 9;
 const CROSS_W = (CROSS_C1 - CROSS_C0 + 1) * CW;
+const LOO_COL = CROSS_C0 + 1; // the porta-potty's column, on the left, so the score label fits on the right
 const ENTRY = 80; // vehicles enter this far beyond the play area's edge
 const WAIT_H = 12; // the strip behind each kerb where people wait
 const HOP_TWEEN = 0.12;
@@ -345,11 +346,14 @@ function setupLevel(idx) {
   for (let i = 0; i < 16 * 30; i++) updateTraffic(1 / 30, true);
   layout.lanes.forEach((ln, i) => ([ln.phase, ln.t] = phases[i]));
   game.mode = mode;
-  // Level 1 starts with just one car, coming up to the crossing.
-  if (s.lanes.length && idx === 0) {
-    const before = vehicles.filter((v) => v.s < crossingStop(v) - 4);
-    const first = before.reduce((m, v) => (!m || v.s > m.s ? v : m), null);
-    vehicles = first ? [first] : [];
+  // And a car passing right in front of him, in the first lane, as he starts.
+  const first = laneAt(layout.bottom - 1);
+  if (first) {
+    const v = spawnVehicle(first, pick(first.set.filter((n) => !SIRENS.includes(n))));
+    const x = colX(PCOL) - first.dir * 6; // its middle just short of his column
+    v.s = first.dir === 1 ? x + v.w / 2 + ENTRY : PLAY_W + ENTRY - (x - v.w / 2);
+    const clear = (u) => (u.s > v.s ? u.s - u.w - v.s : v.s - v.w - u.s) > 8; // a gap between them
+    vehicles = vehicles.filter((u) => u === v || u.lane !== v.lane || clear(u));
   }
 }
 
@@ -440,12 +444,12 @@ function arrive(p) {
   p.state = 'across';
   const n = acrossCount();
   game.assist = Math.max(0, game.assist - 0.03);
-  popups.push({ x: colX(p.col), y: rowY(0) - 12, text: '+1', t: 0, color: '#ffd23f', big: true });
+  popups.push({ x: colX(p.col), y: rowY(0) - 12, text: `×${n + 1}`, t: 0, color: '#ffd23f', big: true }); // the multiplier goes up
   sfx('arrive', { rate: Math.min(2, 1 + 0.1 * (n - 1)), gain: 0.7 });
   // They queue at the porta-potty too.
   setTimeout(() => {
     if (p.state !== 'across' || !layout) return;
-    const g = stripFeet(PCOL + (p.col < PCOL ? -1 : 1) * (1 + (p.order || 0)), 0);
+    const g = stripFeet(LOO_COL + 1 + (p.order || 0), 0); // in a queue beside the door
     walkTo(p, g.x, g.y, 0.4);
   }, 250);
 }
@@ -505,7 +509,7 @@ function bump() {
 
 function updatePlayer(dt) {
   if (player.tw < 1) {
-    player.tw = Math.min(1, player.tw + dt / HOP_TWEEN);
+    player.tw = Math.min(1, player.tw + dt / (player.inside ? player.inDur : HOP_TWEEN));
     const f = player.inside ? doorFeet() : cellFeet(player.col, player.row);
     player.vx = player.fx + (f.x - player.fx) * player.tw;
     player.vy = player.fy + (f.y - player.fy) * player.tw;
@@ -535,7 +539,7 @@ function updatePlayer(dt) {
 }
 
 function doorFeet() {
-  return { x: colX(PCOL), y: rowY(0) - WAIT_H + 1 };
+  return { x: colX(LOO_COL), y: rowY(0) - WAIT_H + 1 };
 }
 
 function checkHits() {
@@ -609,15 +613,18 @@ function closeLevel() {
   game.mode = 'finish';
   game.stage = 'door';
   game.counted = 0;
-  game.phaseT = 0;
   game.shut = false;
   game.flushed = false;
   game.cheered = false;
-  // In through the porta-potty door.
+  // Along the sidewalk and in through the porta-potty door; the door stage's clock starts as he gets there.
   player.inside = true;
   player.fx = player.vx;
   player.fy = player.vy;
   player.tw = 0;
+  const d = doorFeet();
+  player.inDur = Math.max(HOP_TWEEN, Math.hypot(d.x - player.vx, d.y - player.vy) / 110);
+  if (Math.abs(d.x - player.vx) > 1) player.face = d.x > player.vx ? 1 : -1;
+  game.phaseT = -player.inDur;
   sfx('join', { rate: 0.75, gain: 0.7 }); // in through the door
 }
 
@@ -755,7 +762,8 @@ function beginTally() {
   const prev = saved.stars[game.level] || 0;
   if (stars > prev) saved.stars[game.level] = stars;
   save();
-  ui.bannerNum.textContent = `${game.closedSecs} s × ${1 + across} · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
+  const times = across ? ` × ${headcount(1 + across)}` : '';
+  ui.bannerNum.textContent = `${game.closedSecs} s${times} · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
   ui.bannerName.textContent = `+${game.levelScore}`;
   ui.banner.hidden = false;
   sfx('arrive', { rate: 1.2, gain: 0.6 });
@@ -1590,13 +1598,13 @@ function drawLights() {
   }
 }
 
-// The porta-potty across the street, on the far sidewalk above his starting column: blue, with a
+// The porta-potty across the street, on the left of the far sidewalk: blue, with a
 // roof, a vent, a door that opens for him, and a WC sign on it.
 const shut = () => player.inside && (game.mode !== 'finish' || game.stage !== 'door' || game.shut);
 function drawToilet() {
   // It rocks a little while it flushes.
   const flushing = game.mode === 'finish' && game.stage === 'door' && game.phaseT > 0.35 && game.phaseT < 1.4;
-  const cx = px(colX(PCOL)) + (flushing ? (Math.floor(game.phaseT * 14) % 2 ? 1 : 0) : 0);
+  const cx = px(colX(LOO_COL)) + (flushing ? (Math.floor(game.phaseT * 14) % 2 ? 1 : 0) : 0);
   const w = 13;
   const h = 24;
   const x = cx - 6;
@@ -1724,7 +1732,7 @@ function drawText() {
     if (per > 1) {
       ctx.font = `800 ${Math.round(13 * dpr)}px system-ui, sans-serif`;
       ctx.lineWidth = 4 * dpr;
-      const sub = `× ${per} a second`;
+      const sub = `× ${headcount(per)}`;
       ctx.strokeText(sub, x, y + 20 * dpr);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(sub, x, y + 20 * dpr);
@@ -1747,12 +1755,12 @@ function drawText() {
   if (game.mode === 'play' && street().copiers > 0) {
     const m = 1 + acrossCount() + onTheWayCount();
     const secs = Math.max(0, Math.ceil(game.red));
-    const text = `${secs} s × ${m} = ${m * secs}`;
+    const text = `${secs} s × ${headcount(m)} = ${m * secs}`;
     const yk = rowY(0) - WAIT_H - 12;
     ctx.font = `800 ${Math.round(14 * dpr)}px system-ui, sans-serif`;
     const w = ctx.measureText(text).width + 16 * dpr;
     const h = 22 * dpr;
-    const x = offX + LW * k * 0.74; // beside the porta-potty, not on it
+    const x = right + 2 * dpr - w / 2; // at the right edge, clear of the porta-potty
     const y = (yk + originY) * k;
     ctx.fillStyle = 'rgba(20,22,31,0.62)';
     roundRect(x - w / 2, y - h / 2, w, h, h / 2);
@@ -1762,6 +1770,8 @@ function drawText() {
     drawn.payout = text;
   } else drawn.payout = null;
 }
+
+const headcount = (n) => `${n} ${n === 1 ? 'person' : 'people'}`;
 
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
@@ -1778,7 +1788,6 @@ function roundRect(x, y, w, h, r) {
 const $ = (sel) => document.querySelector(sel);
 const ui = {
   hud: $('[data-hud]'),
-  clock: $('[data-clock]'),
   score: $('[data-score]'),
   streetName: $('[data-street-name]'),
   quotaFill: $('[data-quota-fill]'),
@@ -1800,15 +1809,11 @@ const drawn = { payout: null };
 
 let hudCache = '';
 function syncHud() {
-  const c = Math.max(0, Math.ceil(game.red));
   const shown = game.score + (['finish', 'wait', 'green'].includes(game.mode) ? game.levelScore : 0);
-  const key = `${c}|${shown}|${game.level}|${game.mode}`;
+  const key = `${shown}|${game.level}|${game.mode}`;
   if (key === hudCache) return;
   hudCache = key;
   const green = game.mode === 'green' || game.mode === 'tally';
-  ui.clock.textContent = green ? 'GO' : String(c);
-  ui.clock.classList.toggle('low', game.red <= 5 && game.mode === 'play');
-  ui.clock.classList.toggle('green', green);
   ui.score.textContent = String(shown);
   ui.streetName.textContent = `${game.level + 1} · ${street().name}`;
   ui.quotaFill.style.width = `${((game.level + (green ? 1 : 0)) / LEVELS_N) * 100}%`;

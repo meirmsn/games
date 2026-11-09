@@ -85,22 +85,6 @@ body {
   display: none;
 }
 
-.clock {
-  min-width: 2.2ch;
-  font-size: 24px;
-  font-weight: 800;
-  color: #ffd23f;
-}
-
-.clock.green {
-  color: #5ae17c;
-}
-
-.clock.low {
-  color: #ff6b6b;
-  animation: pulse 1s ease-in-out infinite;
-}
-
 .hud-mid {
   flex: 1;
   min-width: 0;
@@ -254,9 +238,16 @@ body {
 }
 
 .lead {
-  margin: 0 0 12px !important;
+  margin: 0 0 6px !important;
   font-size: 15px;
   opacity: 0.9;
+}
+
+.rule {
+  margin: 0 0 14px !important;
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffd23f;
 }
 
 .best {
@@ -315,20 +306,9 @@ body {
   }
 }
 
-@keyframes pulse {
-  50% {
-    transform: scale(1.12);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .banner,
-  .clock.green {
-  color: #5ae17c;
-}
-
-.clock.low {
+  .banner {
     animation: none;
   }
 }

@@ -81,8 +81,13 @@ fast forward and then they cross … they should be part of that fast forward ev
 very easy to win if you just … go up very fast because there's no cars on the road. So I think the
 cars need to start on the road already when the level starts. All of them … Perhaps only on the
 first level … there is like only one car on the road … it shouldn't be the case that as soon as you
-start the level, just tap up, and you win every single level." This spec is the game after those
-changes.
+start the level, just tap up, and you win every single level." After playing that, the owner said
+(2026-11-09): "on the first level you show cars as well, crossing the road … they should start with
+cars in front of you. It shouldn't be open the road … I don't think you need to show the time at the
+top left because it's already being shown on the pedestrian light … only keep the point … make it
+clear that you're getting a multiplier … you get the points of the time that is left, and then you
+get a multiplier for all the other people who crossed … It should be simple." This spec is the game
+after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -119,8 +124,9 @@ goes now, and the people waiting start copying him.
 
 - **Name and hook:** "Walk on Red", slug `walk-on-red`. The second concept review called it "Red
   Man"; Claude renamed it because "Red Man" can read as a slur. He really needs the loo: a blue
-  porta-potty (roof, vent, a WC sign on its door, and a red or green busy dot) stands on the far
-  sidewalk above his starting column; now and then, standing still, he hops from foot to foot for a
+  porta-potty (roof, vent, a WC sign on its door, and a red or green busy dot) stands on the left of
+  the far sidewalk (leaving its right side to the score label); across, he walks along the sidewalk
+  to its door; now and then, standing still, he hops from foot to foot for a
   moment (0.7 s every 3.6 s), with a drop of sweat; when he gets across he goes in. No phone and no
   speech bubbles (owner, 2026-11-09: "Maybe he needs to poop"; then "he shouldn't be wiggling all
   the time … Maybe it can be even a porta potty"). Rejected: anything with a frog, logs, turtles or
@@ -145,7 +151,8 @@ goes now, and the people waiting start copying him.
   and kerbs stop him. One hop can be queued during a hop. A second finger is ignored (owner,
   2026-11-09: "we should allow to move left and right"). He stays on the zebra: its edges stop him.
 - **The lights, which the cars obey:** the walk light on each kerb shows a red man with the seconds
-  left in a pixel countdown (the same number as the clock at the top). Each lane has a car light on
+  left in a pixel countdown; it is the only clock (the HUD shows the level and the points, not the
+  time: owner, 2026-11-09, "it's already being shown on the pedestrian light"). Each lane has a car light on
   the crossing's edge, by its stop line. It's green while the walk light counts down, turns yellow at 4.5 s and red at 2 s.
   On red a car stops at its stop line; on yellow it stops if it is still well short of the line; a
   car already past its line when the light changes hurries across. When the walk light reaches 0 and
@@ -155,14 +162,18 @@ goes now, and the people waiting start copying him.
 - **Score:** reaching the far kerb before the walk light turns green fixes the seconds left (at least
   1); the level scores those seconds × (1 + copiers across by the time the light turns green). If
   the light turns green first, the level scores 0 and starts again; you need at least 1 point to go
-  on. While playing, what the level is worth right now ("14 s × 3 = 42") shows above the far kerb.
+  on. The multiplier is said in plain words: the start card reads "Points: seconds left × people who
+  make it across"; while a level with copiers is played, what it is worth right now ("14 s × 3 people
+  = 42") shows at the right of the sky; each copier who arrives shows the new multiplier ("×2",
+  "×3") over their head; the count-up says "× 3 people"; and the tally reads "14 s × 3 people"
+  (owner, 2026-11-09: "make it clear that you're getting a multiplier … It should be simple").
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
   speed under its own rules, in one go, through to the tally: the walk light's seconds drain, the car
   lights go yellow and red as usual and the cars stop at their lines, and the copiers still on the
   way carry on as they would, so they can make it, or be hit. The points count up big over the far
-  sidewalk as the seconds drain ("+42", "× 3 a second", the multiplier growing as copiers arrive),
+  sidewalk as the seconds drain ("+42", "× 3 people", the multiplier growing as copiers arrive),
   with a rising tick and a "▶▶" mark. At 0 the level is scored, copiers still in the road stop, and
   once the crossing is clear the walk light turns green and everyone left sets off at once, still in
   the fast-forward (the count and the "▶▶" mark stay up), and earns nothing: each copier who crosses on green shows "+0". Then the tally
@@ -189,8 +200,9 @@ goes now, and the people waiting start copying him.
 - **Traffic from the first second:** every level starts with every lane already full of traffic,
   driving (filled by running 16 s of traffic on green before the level starts, every lane in a
   platoon; then the lanes take up their staggered platoons and lulls), so tapping straight up gets
-  you hit. Level 1 starts with just one car, coming up to the crossing (owner, 2026-11-09, as quoted
-  in the intent).
+  you hit; level 1 too, with its own sparse traffic. And on every level a car is passing right in
+  front of him, in the first lane, as the level starts (owner, 2026-11-09: "they should start with
+  cars in front of you. It shouldn't be open the road").
 - **The eight levels**, getting harder one after another; tuned by playing (owner, 2026-11-09:
   "the first level is very, very easy to win. The second one is just a little bit harder … The
   third one is already getting more like a regular level, and they get progressively harder"):
@@ -293,15 +305,16 @@ goes now, and the people waiting start copying him.
 - **AC-19** A hop plays a footstep, a copier setting off the pluck, a copier across the chime (higher
   for each), a hit the bump and the horn, getting into the porta-potty the flush and then the chime,
   the green light its jingle, and the end of the run the closing jingle — `tests/walk-on-red.test.mjs`.
-- **AC-20** While a level with copiers is played, what it is worth right now shows above the far
-  kerb as "s s × m = score"; the walk light shows the seconds left in its pixel countdown —
+- **AC-20** The start card says "Points: seconds left × people who make it across"; while a level
+  with copiers is played, what it is worth right now shows as "s s × m people = score"; a copier
+  arriving shows the new multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
 - **AC-21** The landing page shows 8 tiles, Walk on Red's playable after Googly Faces —
   `tests/site.test.mjs`.
 - **AC-22** A car coming within 10 art px of him honks once, deep for big vehicles and high for
   small ones — `tests/walk-on-red.test.mjs`.
-- **AC-23** Every level from level 2 starts with traffic driving in every lane, and tapping straight
-  up from the start gets him hit; level 1 starts with exactly one car — `tests/walk-on-red.test.mjs`.
+- **AC-23** Every level starts with traffic in its lanes and a car passing right in front of him;
+  from level 2, every lane has traffic and tapping straight up from the start gets him hit — `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 
@@ -315,11 +328,11 @@ goes now, and the people waiting start copying him.
 
 ## States
 
-| State | Start card | Paused card | Game-over card | HUD (clock, level, total) | Banner |
+| State | Start card | Paused card | Game-over card | HUD (level, total) | Banner |
 | ----- | ---------- | ----------- | -------------- | ------------------------- | ------ |
 | Start (traffic drives behind) | shown | hidden | hidden | hidden | hidden |
 | Playing (walk light red) | hidden | hidden | hidden | shown | the level's name, for a moment |
-| Across: in the loo, fast-forward, green | hidden | hidden | hidden | shown, the clock reading GO on green | hidden |
+| Across: in the loo, fast-forward, green | hidden | hidden | hidden | shown | hidden |
 | Tally | hidden | hidden | hidden | shown | the tally, or "Try again" |
 | Paused (returned from hidden) | hidden | shown | hidden | shown | as before |
 | Game over | hidden | hidden | shown, with the total, the stars and the best | hidden | hidden |
