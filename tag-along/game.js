@@ -1166,7 +1166,8 @@ let LW = PLAY_W; // the visible width, in art px
 let LH = 300;
 let originX = 0; // where world x = 0 lands on the low canvas
 let originY = 0;
-let offX = 0; // device px from the screen's left edge to the street's
+let offX = 0;
+const TILE = new URLSearchParams(location.search).has('tile'); // device px from the screen's left edge to the street's
 let insetTop = 0;
 let insetBottom = 0;
 const view = { scale: 1, person: 0, top: 0, bottom: 0 }; // for tests
@@ -1282,12 +1283,13 @@ function resize() {
   scale = Math.max(1, scale);
   // Only the street's 12 columns are shown (it's a portrait game): on a wide screen it sits in the
   // middle, with plain background either side.
-  LW = PLAY_W;
+  // The landing tile's picture (?tile) shows the street wide, filling the picture.
+  LW = TILE ? Math.ceil(vw / scale) : PLAY_W;
   LH = Math.ceil(vh / scale);
   low.width = LW;
   low.height = LH;
-  originX = 0;
-  offX = Math.round(((vw - PLAY_W * scale) / 2) * dpr);
+  originX = TILE ? Math.floor((LW - PLAY_W) / 2) : 0;
+  offX = TILE ? 0 : Math.round(((vw - PLAY_W * scale) / 2) * dpr);
   ui.hud.style.maxWidth = `${Math.max(240, Math.round(PLAY_W * scale) - 96)}px`;
   // The street sits in the space under the HUD, centred.
   const room = vh / scale - hudRoom / scale;
