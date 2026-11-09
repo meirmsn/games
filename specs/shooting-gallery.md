@@ -19,6 +19,20 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's fifth playtest (owner, 2026-11-09)
+
+- **A hit tips the whole thing back, stick and all.** "When you hit one of them, it doesn't look
+  realistic because the stick disappears … do not disappear the stick and actually move everything
+  down … the whole dog or target together with the stick bent backward as if mechanically you hit
+  them." A hit target and its stick tip back together about the stick's foot (seen foreshortened,
+  falling away), in about 0.2 s, then the mechanism lowers them out of sight behind the strip over
+  0.5 s; a drop-down swings back and is pulled up behind the valance. Nothing fades, and the stick
+  never disappears.
+- **Sticks you can see.** "for the stick, you need to use also some texture … currently it's only
+  one color, which mixes with the backgrounds … a border or … a shadow or two tones." Every stick is
+  outlined, lit on one side and shaded on the other, with a faint grain.
+- **A longer frenzy.** "the frenzy should last … like 1 more second." 7 s instead of 6.
+
 ### The owner's fourth playtest (owner, 2026-11-09)
 
 The owner played the bulb-timer version and asked, in the session's chat on 2026-11-09, for more of
@@ -196,7 +210,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
 - **Frenzy.** "some frenzy mode where many targets show up suddenly … being raised and shot up on
   your face … a different song, things move faster, and then you can go crazy, and then it returns
   to the normal. Maybe that's just for bonus points." From round 2, once a round, at a random
-  moment 8–18 s in: 6 s of "Frenzy!", the galop instead of the waltz, pop-ups and drop-downs
+  moment 8–18 s in: 6 s of "Frenzy!" (7 s since the fifth playtest), the galop instead of the waltz, pop-ups and drop-downs
   springing up across every lane, targets 1.6× as fast (the paintball's flight unchanged), shots
   free, points ×2 and no pips. The round's timer stops during it; frenzy shots don't move the
   assist (Claude's rules, from the review: a frenzy late in a round must not lose the run).
@@ -320,7 +334,7 @@ moment 8–18 s into rounds 2 to 6.
   `tests/shooting-gallery.test.mjs`.
 - **AC-11** Meeting the quota starts the bonus: ×1 near, ×2 middle, ×3 far and on the gold duck;
   closing time doubles everything; no hit scores more than ×8 — `tests/shooting-gallery.test.mjs`.
-- **AC-12** Hitting the frenzy target starts a frenzy for 6 s: the galop plays, targets spring up
+- **AC-12** Hitting the frenzy target starts a frenzy for 7 s: the galop plays, targets spring up
   across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it and the
   bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz returns; no
   frenzy comes without the target — `tests/shooting-gallery.test.mjs`.
@@ -372,6 +386,8 @@ moment 8–18 s into rounds 2 to 6.
   `tests/shooting-gallery.test.mjs`.
 - **AC-29** The start, over, pause and turn cards are wooden signs from the pack's wood, and the
   10 s chime is louder than the others — `tests/shooting-gallery.test.mjs`.
+- **AC-30** A hit target tips back with its stick, which stays drawn, and is lowered out of sight
+  behind its strip (a drop-down is pulled up) within 0.8 s — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 
@@ -389,7 +405,7 @@ moment 8–18 s into rounds 2 to 6.
 | Round intro (about 1.2 s) | hidden | the round's number and name | hidden | hidden | hidden | shown |
 | Playing | hidden | hidden | hidden | hidden | hidden | shown |
 | Bonus (quota met) | hidden | "Bonus!" briefly, a pill on the counter | hidden | hidden | hidden | shown, the pips lit gold |
-| Frenzy (6 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer pink and stopped |
+| Frenzy (7 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer pink and stopped |
 | Round won (about 1.5 s) | hidden | "Round cleared" and the round's score | hidden | hidden | hidden | shown |
 | Paused (page was hidden) | hidden | hidden | shown | hidden | hidden | shown |
 | Turned (the screen's orientation changed) | hidden | hidden | hidden | shown, offering a restart | hidden | shown, greyed |

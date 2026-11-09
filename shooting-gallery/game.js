@@ -58,7 +58,7 @@ const pullY = () => (orient === 'landscape' ? 80 : 140);
 const PULL_MIN = 10;
 const FLIGHT_NEAR = 0.18;
 const FLIGHT_FAR = 0.45;
-const FRENZY_LEN = 6;
+const FRENZY_LEN = 7;
 const FRENZY_SPEED = 1.6;
 const MULT_CAP = 8;
 const PAINT_KEEP = 70;
@@ -1271,6 +1271,11 @@ function drawTarget(t) {
   ctx.save();
   ctx.translate(pv.x, pv.y);
   ctx.rotate(rockAngle(t));
+  if (t.state === 'knocked') {
+    const k = knockPose(t);
+    ctx.translate(0, k.dy);
+    ctx.scale(1, k.sy);
+  }
   ctx.translate(-pv.x, -pv.y);
   if (t.kind === 'drop') {
     // The rope, from the valance down to the target.
@@ -1280,22 +1285,13 @@ function drawTarget(t) {
     ctx.moveTo(t.x, L.top + 30);
     ctx.lineTo(t.x, t.y - h / 2 + 2);
     ctx.stroke();
-  } else if (t.state === 'live') {
-    // The stick it stands on, from its middle down past its lane's strip.
-    const sw = 30 * lane.s * 0.8;
-    sprite('stick_wood', t.x - sw / 2, t.y, sw, Math.max(4, pv.y + 16 - t.y));
+  } else {
+    // The stick it stands on, from its middle down past its lane's strip; it goes down with it.
+    pole(t.x, t.y, pv.y + 16, Math.max(5, 30 * lane.s * 0.8));
   }
   ctx.save();
   ctx.translate(t.x, t.y);
-  let fade = 1;
-  if (t.state === 'knocked') {
-    // Knocked flat: it tips back over its base.
-    const p = Math.min(1, t.anim / 0.25);
-    ctx.translate(0, h * 0.5);
-    ctx.scale(1, Math.max(0.02, 1 - p));
-    ctx.translate(0, -h * 0.5);
-    if (t.anim > 0.5) fade = Math.max(0, 1 - (t.anim - 0.5) / 0.4);
-  }
+  const fade = 1;
   ctx.globalAlpha = fade;
   ctx.scale(ts.sx, 1);
   let name = t.face;
@@ -1328,6 +1324,42 @@ function drawTarget(t) {
   ctx.restore();
   ctx.restore();
   ctx.globalAlpha = 1;
+}
+
+// A hit target's pose: the whole thing, target and stick together, tips back about the stick's foot
+// (seen foreshortened as it falls away, `sy`), then the mechanism lowers it out of sight behind the
+// strip (`dy`); a drop-down swings back on its rope and is pulled up behind the valance.
+function knockPose(t) {
+  const [, h] = dims(t);
+  const pv = pivotOf(t);
+  const tip = 1 - Math.pow(1 - Math.min(1, t.anim / 0.22), 2);
+  const lower = Math.max(0, Math.min(1, (t.anim - 0.22) / 0.5));
+  const sy = 1 - 0.55 * tip;
+  if (t.kind === 'drop') return { sy, dy: -lower * ((t.y + h / 2 - pv.y) * sy + 12) };
+  const top = pv.y - (pv.y - (t.y - h / 2)) * sy;
+  return { sy, dy: lower * Math.max(0, L.lanes[t.lane].strip + 10 - top) };
+}
+// How many poles the last frame drew (for the tests).
+let polesDrawn = 0;
+// A wooden pole: outlined, light on one side and dark on the other, with a faint grain, so it shows
+// against water, grass and wood alike.
+function pole(x, top, bottom, w) {
+  polesDrawn++;
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+  g.addColorStop(0, '#e0a566');
+  g.addColorStop(0.45, '#b07034');
+  g.addColorStop(1, '#5e3311');
+  ctx.fillStyle = g;
+  ctx.fillRect(x - w / 2, top, w, bottom - top);
+  ctx.strokeStyle = 'rgba(60, 30, 8, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x - w * 0.12, top);
+  ctx.lineTo(x - w * 0.08, bottom);
+  ctx.stroke();
+  ctx.strokeStyle = '#2e1808';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x - w / 2, top, w, bottom - top);
 }
 
 function drawCurtains() {
@@ -1877,6 +1909,7 @@ function drawLamps() {
 }
 
 function draw() {
+  polesDrawn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2149,7 +2182,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

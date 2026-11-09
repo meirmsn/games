@@ -493,7 +493,7 @@ test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the g
   await shoot(page, 60, 0);
   await shoot(page, 60, 0);
   assert.equal((await state(page)).assist, 0.5, 'frenzy misses leave the assist');
-  await steps(page, 6);
+  await steps(page, 7);
   s = await state(page);
   assert.equal(s.frenzy, 0);
   assert.equal(await page.evaluate(() => window.__gallery.music()), 'music', 'the waltz is back');
@@ -1067,7 +1067,7 @@ test('shooting-gallery AC-28: a frenzy lights a chasing marquee of big bulbs alo
       chased: a.some((x, i) => x.lit !== b[i].lit),
       ratio: g.MARQUEE_R / g.timerBulbRadius(),
     };
-    g.step(6);
+    g.step(7);
     out.after = g.ui().marquee;
     return out;
   });
@@ -1096,5 +1096,35 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
     return { chime: g.heardOpts.chime.gain, warn: g.heardOpts.warn.gain };
   });
   assert.ok(gains.warn > gains.chime, `the 10 s ring is louder: ${JSON.stringify(gains)}`);
+  await context.close();
+});
+
+test('shooting-gallery AC-30: a hit target tips back with its stick, and is lowered out of sight within 0.8 s', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
+  assert.equal((await shoot(page, t.x + t.w * 0.38, 2)).what, 'body');
+  const r = await page.evaluate(async (id) => {
+    const g = window.__gallery;
+    const tg = g.targets().find((x) => x.id === id);
+    const lane = g.L.lanes[tg.lane];
+    const pv = g.pivotOf(tg);
+    const [, h] = g.dims(tg);
+    const topAt = (anim) => {
+      tg.anim = anim;
+      const k = g.knockPose(tg);
+      return { top: pv.y - (pv.y - (tg.y - h / 2)) * k.sy + k.dy, sy: k.sy };
+    };
+    const early = topAt(0.1);
+    const late = topAt(0.75);
+    tg.anim = 0.3;
+    // Its stick is still drawn while it goes down.
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    return { early, late, strip: lane.strip, poles: g.polesDrawn(), state: tg.state };
+  }, t.id);
+  assert.equal(r.state, 'knocked');
+  assert.ok(r.early.sy < 1 && r.early.top < r.strip, 'it tips back, still in view');
+  assert.ok(r.late.top >= r.strip, `then it is lowered out of sight: ${r.late.top} vs ${r.strip}`);
+  assert.equal(r.poles, 1, 'its stick is drawn as it goes down');
   await context.close();
 });
