@@ -1,0 +1,312 @@
+/* Tag Along: the street canvas fills the screen; the HUD and cards float over it. */
+
+body {
+  background: #2b2f3a;
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#street {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: pointer;
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active {
+  transform: scale(0.92);
+}
+
+/* HUD: between the back and mute buttons, clear of the notch. */
+.hud {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: calc(env(safe-area-inset-left) + 64px);
+  right: calc(env(safe-area-inset-right) + 64px);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud[hidden] {
+  display: none;
+}
+
+.clock {
+  min-width: 2.2ch;
+  font-size: 24px;
+  font-weight: 800;
+  color: #ffd23f;
+}
+
+.clock.low {
+  color: #ff6b6b;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.hud-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.street-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  opacity: 0.92;
+}
+
+.quota {
+  height: 6px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 22%);
+}
+
+.quota-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: #5ae17c;
+  transition: width 200ms ease;
+}
+
+.score {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.banner {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  padding: 16px 28px;
+  text-align: center;
+  border-radius: 20px;
+  background: rgb(20 22 31 / 66%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  animation: pop 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.banner p {
+  margin: 0;
+}
+
+.banner-num {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.banner-name {
+  margin-top: 4px !important;
+  font-size: 30px;
+  font-weight: 800;
+  color: #ffd23f;
+  white-space: nowrap;
+}
+
+.card {
+  position: fixed;
+  z-index: 8;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 22px 20px 18px;
+  text-align: center;
+  border-radius: 24px;
+  background: rgb(20 22 31 / 66%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 30%);
+  animation: rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h1,
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #ffd23f;
+}
+
+.card p {
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.detail {
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+.score-line {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+/* The start card sits low, so the street stays in view above it. */
+.card.start {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  animation-name: rise-low;
+}
+
+.play {
+  min-width: 160px;
+  min-height: 52px;
+  margin: 4px 0;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  color: #3b2a00;
+  background: #ffd23f;
+  box-shadow: 0 4px 0 #d9a800;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.play:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #d9a800;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chips[hidden] {
+  display: none;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+  cursor: pointer;
+}
+
+.chip:active {
+  transform: scale(0.95);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -42%);
+  }
+}
+
+@keyframes rise-low {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.85);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    transform: scale(1.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .banner,
+  .clock.low {
+    animation: none;
+  }
+}
