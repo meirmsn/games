@@ -3,13 +3,14 @@
 // parks on it and where it's caught), img (planet sprite 0–9), cloud (cloud layer), spin (turns per
 // minute), glow (atmosphere colour) } and, for a moon, orbit { around, r, period, phase } instead
 // of x, y. A leg goes from one body to another. motes: { leg, x, y }, laid along routes that
-// scripts/orbit/solve.mjs found; tests/orbit-levels.test.mjs pins every system's tuning.
+// scripts/orbit/solve.mjs found; bold: one leg's caught release that slingshots round another
+// planet (solve.mjs <i> bold); tests/orbit-levels.test.mjs pins every system's tuning.
 
 export const SYSTEMS = [
   {
     name: 'First Light',
     nebula: 'galaxy',
-    brake: false,
+    bold: { leg: 1, at: 5.6898, power: 0, dir: -1 }, // a caught release that slingshots round another planet
     catchSpeed: 2.4,
     bodies: [
       { x: 500, y: 1630, r: 80, mu: 7.0e6, ring: 130, img: 3, cloud: '10', spin: 1.2, glow: '150, 200, 255' },
@@ -52,19 +53,19 @@ export const SYSTEMS = [
   {
     name: 'Slingshot',
     nebula: 'nebula',
-    brake: true,
+    bold: { leg: 1, at: 2.8623, power: 0.1, dir: -1 }, // a caught release that slingshots round another planet
     bodies: [
       { x: 210, y: 1580, r: 78, mu: 7.5e6, ring: 165, img: 7, cloud: '05', spin: 1, glow: '160, 220, 255' },
       { x: 520, y: 1110, r: 140, mu: 3.4e7, ring: 360, catchSpeed: 3.2, img: 2, cloud: '14', spin: 0.6, glow: '255, 180, 120' },
-      { x: 840, y: 1590, r: 74, mu: 6.5e6, ring: 150, catchSpeed: 1.15, img: 4, cloud: '22', spin: -1.1, glow: '200, 210, 230' },
+      { x: 840, y: 1590, r: 74, mu: 6.5e6, ring: 150, catchSpeed: 1.4, img: 4, cloud: '22', spin: -1.1, glow: '200, 210, 230' },
       { x: 820, y: 760, r: 80, mu: 1.1e7, ring: 180, catchSpeed: 1.9, img: 6, cloud: '10', spin: 1.3, glow: '255, 170, 200' },
       { x: 230, y: 230, r: 74, mu: 7.0e6, ring: 118, catchSpeed: 1.2, img: 9, cloud: '05', spin: -0.9, glow: '210, 170, 255' },
     ],
     legs: [
       { from: 0, to: 2, gold: { at: 5.62, power: 0, dir: -1 } },
-      { from: 2, to: 3, gold: { at: 4.1015, power: 0.28, dir: -1 } },
-      { from: 3, to: 4, gold: { at: 5.3407, power: 0.6, dir: -1, brakeAt: 1.3 } },
-      { from: 4, to: 1, gold: { at: 4.3633, power: 0.04, dir: 1 } },
+      { from: 2, to: 3, gold: { at: 4.7124, power: 0.18, dir: -1 } },
+      { from: 3, to: 4, gold: { at: 2.6878, power: 0.5, dir: 1 } },
+      { from: 4, to: 1, gold: { at: 2.1118, power: 0, dir: -1 } },
     ],
     motes: [
       { line: 'close', leg: 0, x: 233, y: 1335 },
@@ -72,29 +73,29 @@ export const SYSTEMS = [
       { line: 'close', leg: 0, x: 301, y: 987 },
       { line: 'close', leg: 0, x: 585, y: 956 },
       { line: 'close', leg: 0, x: 765, y: 1202 },
-      { line: 'wide', leg: 1, x: 531, y: 1617 },
-      { line: 'wide', leg: 1, x: 277, y: 1689 },
-      { line: 'wide', leg: 1, x: 71, y: 1505 },
-      { line: 'wide', leg: 1, x: 87, y: 1255 },
-      { line: 'wide', leg: 1, x: 233, y: 1017 },
-      { line: 'close', leg: 2, x: 812, y: 544 },
-      { line: 'close', leg: 2, x: 681, y: 482 },
-      { line: 'close', leg: 2, x: 549, y: 432 },
-      { line: 'close', leg: 2, x: 417, y: 388 },
-      { line: 'close', leg: 2, x: 290, y: 348 },
-      { line: 'wide', leg: 3, x: 403, y: 123 },
-      { line: 'wide', leg: 3, x: 530, y: 177 },
-      { line: 'wide', leg: 3, x: 638, y: 247 },
-      { line: 'wide', leg: 3, x: 742, y: 338 },
-      { line: 'wide', leg: 3, x: 840, y: 454 },
-      { line: 'wide', leg: 3, x: 923, y: 610 },
-      { line: 'wide', leg: 3, x: 940, y: 820 },
+      { line: 'wide', leg: 1, x: 380, y: 1381 },
+      { line: 'wide', leg: 1, x: 78, y: 1058 },
+      { line: 'wide', leg: 1, x: 93, y: 763 },
+      { line: 'wide', leg: 1, x: 294, y: 556 },
+      { line: 'wide', leg: 1, x: 581, y: 443 },
+      { line: 'close', leg: 2, x: 591, y: 695 },
+      { line: 'close', leg: 2, x: 531, y: 560 },
+      { line: 'close', leg: 2, x: 477, y: 443 },
+      { line: 'close', leg: 2, x: 419, y: 329 },
+      { line: 'close', leg: 2, x: 350, y: 223 },
+      { line: 'wide', leg: 3, x: 354, y: 384 },
+      { line: 'wide', leg: 3, x: 479, y: 401 },
+      { line: 'wide', leg: 3, x: 598, y: 428 },
+      { line: 'wide', leg: 3, x: 716, y: 477 },
+      { line: 'wide', leg: 3, x: 833, y: 558 },
+      { line: 'wide', leg: 3, x: 929, y: 701 },
+      { line: 'wide', leg: 3, x: 926, y: 892 },
     ],
   },
   {
     name: 'Moons',
     nebula: 'band',
-    brake: true,
+    bold: { leg: 1, at: 0.3491, power: 0.5, dir: -1 }, // a caught release that slingshots round another planet
     bodies: [
       { x: 500, y: 1650, r: 85, mu: 8.0e6, ring: 175, img: 6, cloud: '22', spin: 1, glow: '255, 180, 200' },
       { x: 500, y: 920, r: 115, mu: 1.6e7, ring: 190, catchSpeed: 0.92, img: 3, cloud: '10', spin: 0.7, glow: '150, 210, 255' },

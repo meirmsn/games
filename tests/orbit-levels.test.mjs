@@ -3,11 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SYSTEMS } from '../orbit/levels.js';
-import { fly, launch, step, arrivalDir, settlePlan, settleStep, PROBE_R, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH, CATCH_ANGLE } from '../orbit/physics.js';
+import { fly, launch, step, arrivalDir, settlePlan, settleStep, PROBE_R, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH, CATCH_ANGLE, SLING_ZONE } from '../orbit/physics.js';
 import { rate, rateByStart, parkingClear, window as timingWindow } from '../scripts/orbit/solve.mjs';
 
 // Each leg's timing window: at its best booster power and circling direction, how many degrees of
-// the orbit release into a catch without the brake. Measured once and shared by the tests below.
+// the orbit release into a catch. Measured once and shared by the tests below.
 const WINDOWS = SYSTEMS.map((sys) => sys.legs.map((_, l) => timingWindow(sys, l).deg));
 
 test('orbit AC-12: System 1 leg 1 has a timing window of at least 40 degrees, and every leg at least 10', () => {
@@ -23,10 +23,37 @@ test('orbit AC-12: waves, not a ramp: leg 3 is narrower than leg 2, and leg 4 th
   });
 });
 
-test('orbit AC-12: on System 2 leg 1, the brake at least doubles the timing window', () => {
-  const sys = SYSTEMS[1];
-  const braked = timingWindow(sys, 0, { brake: true, pstep: 0.1, astep: 3 }).deg;
-  assert.ok(braked >= 2 * WINDOWS[1][0], `${braked} with the brake, ${WINDOWS[1][0]} without`);
+test('orbit AC-19: each system has a caught release that slingshots round another planet; a plain pass or the leg\'s own planets never count', () => {
+  for (const sys of SYSTEMS) {
+    const g = sys.bold;
+    const f = fly(sys, g.leg, g.at, g.power, 0, { dir: g.dir });
+    assert.equal(f.result, 'captured', sys.name);
+    assert.ok(f.slings.length >= 1, `${sys.name}: a slingshot`);
+    const leg = sys.legs[g.leg];
+    for (const i of f.slings) {
+      assert.ok(i !== leg.from && i !== leg.to, `${sys.name}: round another planet`);
+      assert.ok(Math.abs(f.sling[i]) >= (120 * Math.PI) / 180, `${sys.name}: swung at least 120 degrees`);
+    }
+  }
+  // a swing of 110 degrees round a planet, or 130 degrees just outside its zone, is no slingshot;
+  // 130 degrees inside it is one
+  const sys = SYSTEMS[0];
+  const b = sys.bodies[2]; // neither end of leg 1
+  const swing = (deg, r) => {
+    const f = launch(sys, 0, 0, 0.5, 0);
+    const n = 200;
+    for (let k = 0; k <= n && !f.result; k++) {
+      const a = (k / n) * ((deg * Math.PI) / 180);
+      Object.assign(f, { x: b.x + Math.cos(a) * r, y: b.y + Math.sin(a) * r, vx: 0, vy: 0 });
+      f.t -= DT; // hold the clock, so only the probe moves
+      f.age = 0.1;
+      step(f, sys); // gravity nudges it a hair off the placed point; the angle round the planet holds
+    }
+    return f.slings.includes(2);
+  };
+  assert.equal(swing(110, b.r * 2), false, '110 degrees');
+  assert.equal(swing(130, b.r * SLING_ZONE + 4), false, 'outside the zone');
+  assert.equal(swing(130, b.r * 2), true, '130 degrees inside the zone');
 });
 
 test('orbit AC-12: on System 3, waiting for the moon matters (on a plain throw, best start time at least twice the worst)', () => {
@@ -42,7 +69,7 @@ test('orbit AC-12: every leg has a gold route that catches every mote, and the r
       const g = leg.gold;
       const total = sys.motes.filter((m) => m.leg === l).length;
       assert.ok(total >= 5, `${sys.name} leg ${l + 1} has motes`);
-      const f = fly(sys, l, g.at, g.power, g.t0 ?? 0, { dir: g.dir, brakeAt: g.brakeAt ?? -1 });
+      const f = fly(sys, l, g.at, g.power, g.t0 ?? 0, { dir: g.dir });
       assert.equal(f.result, 'captured', `${sys.name} leg ${l + 1}`);
       assert.equal(f.caught.length, total, `${sys.name} leg ${l + 1} motes`);
       // the probe arrives circling the way the next leg's gold route starts
@@ -55,7 +82,7 @@ test('orbit AC-12: every leg has a gold route that catches every mote, and the r
 test('orbit AC-12: a typical captured flight is an arc, not a hop (median at least 0.7 s)', () => {
   for (const sys of SYSTEMS) {
     sys.legs.forEach((_, l) => {
-      rate(sys, l, { samples: 200, brake: Boolean(sys.brake) });
+      rate(sys, l); // 1,200 blind releases, as the solver prints
       assert.ok(rate.lastMedianAge >= 0.7, `${sys.name} leg ${l + 1}: ${rate.lastMedianAge}`);
     });
   }
@@ -96,11 +123,10 @@ test('orbit AC-5: no body, nor the target band, ever meets the parking ring', ()
   for (const sys of SYSTEMS) assert.deepEqual(parkingClear(sys), [], sys.name);
 });
 
-test('orbit AC-11: System 1 has planets only and no brake, System 2 the brake and a big planet, System 3 moons; each its own look', () => {
+test('orbit AC-11: System 1 has planets only, System 2 a big planet to swing around, System 3 moons; there is no brake; each its own look', () => {
   const [a, b, c] = SYSTEMS;
-  assert.equal(a.brake, false);
+  assert.ok(SYSTEMS.every((s) => !('brake' in s)), 'no brake anywhere');
   assert.ok(a.bodies.every((x) => !x.orbit));
-  assert.equal(b.brake, true);
   assert.ok(b.bodies.every((x) => !x.orbit));
   const biggest = Math.max(...b.bodies.map((x) => x.r));
   assert.ok(biggest >= 1.5 * Math.max(...a.bodies.map((x) => x.r)), 'a big planet to swing around');

@@ -97,13 +97,19 @@ def launch():
     return echo(air + glide, tail=0.8)
 
 
-def brake():
-    # a soft, low pulse, like a thruster heard through a hull
-    d = 0.5
+def sling():
+    # a slingshot: a whoosh sweeping past and up, and two bright notes rising over it
+    d = 1.0
     n = int(SR * d)
-    body = sine(lambda t: 120 - 50 * (t / d), d) * env(n, 0.01, 0.48, 2.5)
-    puff = bandnoise(d, 80, 700) * env(n, 0.005, 0.3, 3) * 0.5
-    return echo(body + puff, gains=(0.2, 0.12, 0.06), tail=0.5)
+    t = t_(d)
+    whoosh = bandnoise(d, 250, 2600) * np.sin(np.pi * np.clip(t / 0.7, 0, 1)) ** 2 * 0.7
+    sweep = sine(lambda t: 220 + 520 * (t / d) ** 1.4, d) * env(n, 0.15, 0.8, 1.8) * 0.35
+    notes = np.zeros(n)
+    for start, f in ((0.32, 1046.5), (0.46, 1568.0)):
+        k = int(SR * start)
+        m = n - k
+        notes[k:] += (sine(f, m / SR) + 0.3 * sine(2 * f, m / SR)) * env(m, 0.004, m / SR, 3.2) * 0.5
+    return echo(whoosh + sweep + notes, tail=0.9)
 
 
 def mote():
@@ -191,7 +197,7 @@ def drone():
 
 SOUNDS = {
     "launch": launch,
-    "brake": brake,
+    "sling": sling,
     "mote": mote,
     "capture": capture,
     "crash": crash,

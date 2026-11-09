@@ -13,17 +13,17 @@ import {
   park,
   launch,
   step,
-  brake,
   catchLimit,
   relSpeed,
   settlePlan,
   settleStep,
+  SLING_ANGLE,
 } from './physics.js';
 import { SYSTEMS } from './levels.js';
 
-const SOUNDS = ['launch', 'brake', 'skim', 'mote', 'capture', 'crash', 'lost', 'tick', 'done', 'drone'];
+const SOUNDS = ['launch', 'sling', 'skim', 'mote', 'capture', 'crash', 'lost', 'tick', 'done', 'drone'];
 const { sound } = mountShell({ sounds: Object.fromEntries(SOUNDS.map((n) => [n, `sounds/${n}.mp3`])) });
-const GAIN = { launch: 0.8, lost: 0.6, tick: 0.25, mote: 0.5, skim: 0.7, crash: 0.9, capture: 0.8, brake: 0.8, done: 0.8 };
+const GAIN = { launch: 0.8, lost: 0.6, tick: 0.25, mote: 0.5, skim: 0.7, crash: 0.9, capture: 0.8, sling: 0.8, done: 0.8 };
 const heard = []; // what played, for tests
 function sfx(name, opts = {}) {
   heard.push(name);
@@ -37,7 +37,10 @@ const ctx = canvas.getContext('2d');
 const ui = {
   hud: $('[data-hud]'),
   sysName: $('[data-sys-name]'),
+  jump: $('[data-jump]'),
   legs: $('[data-legs]'),
+  slings: $('[data-slings]'),
+  slingsBox: $('.slings'),
   dust: $('[data-dust]'),
   dustOf: $('[data-dust-of]'),
   dustBox: $('.dust'),
@@ -52,6 +55,7 @@ const ui = {
   doneTitle: $('[data-done-title]'),
   doneDust: $('[data-done-dust]'),
   doneLaunches: $('[data-done-launches]'),
+  doneSlings: $('[data-done-slings]'),
   badge: $('[data-badge]'),
   retry: $('[data-retry]'),
   next: $('[data-next]'),
@@ -63,10 +67,10 @@ const ui = {
   hint: $('[data-hint]'),
   probes: $('[data-probes]'),
   probesBox: $('.probes'),
+  probePips: $('[data-probe-pips]'),
   out: $('[data-screen="out"]'),
   outText: $('[data-out-text]'),
   outRetry: $('[data-out-retry]'),
-  boostLabel: $('[data-boost-label]'),
 };
 
 // ---------- Images ----------
@@ -105,6 +109,7 @@ const store = {
 };
 const MEDALS = ['', 'bronze', 'silver', 'gold'];
 const PROBES = 10; // launches per system; when they're spent, the system starts over
+const SLING_WORTH = 3; // a slingshot counts as this many motes toward the medal
 
 // ---------- Layout ----------
 
@@ -114,7 +119,7 @@ let dpr = 1;
 const view = { x: 0, y: 0, s: 1 }; // field → CSS px: px = view.x + wx * view.s
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const EDGE = 24; // touches starting this close to the bottom (plus the safe area) are the phone's
-const BAR_SPACE = 64; // room under the field for the booster bar
+const BAR_SPACE = 82; // room under the field for the booster bar and the probes left above it
 
 function readInsets() {
   const probe = document.createElement('div');
@@ -198,16 +203,16 @@ const game = {
   fails: 0,
   legFails: 0,
   skims: 0,
+  slings: 0, // slingshots banked this system (on caught flights)
   flight: null,
   ghost: null, // the last failed flight: { pts, angle, power }
   trail: [], // [x, y, ok, …] of the current flight
   rewindFrom: 0,
   rewindT: 0,
   capture: null, // { t, x0, y0 } while spiralling in
-  slowmo: 0, // seconds of slow motion left
-  slowmoUsed: false,
-  braked: store.get('orbit.braked', false),
   burst: [], // little effects: { x, y, t, kind }
+  slingFx: [], // "Slingshot!" labels: { body, x, y, t }
+  slingBank: null, // "+1 slingshot" on a catch: { n, x, y, t }
   skimFlash: new Map(), // body index → seconds of flare left
   paused: false,
   intro: false,
@@ -249,10 +254,13 @@ function startSystem(i) {
   game.launches = 0;
   game.fails = 0;
   game.skims = 0;
+  game.slings = 0;
   game.ghost = null;
   game.trail = [];
   game.flight = null;
   game.burst = [];
+  game.slingFx = [];
+  game.slingBank = null;
   const p = park(game.level, legOf().from);
   game.park = { r: p.r, period: p.period, phase: Math.PI / 2, dir: -1 };
   game.parkBody = legOf().from;
@@ -270,7 +278,6 @@ function beginLeg() {
   game.legFails = 0;
   game.idleAge = 0;
   game.ghost = null;
-  game.slowmoUsed = false;
 }
 
 function systemFromHash() {
@@ -317,7 +324,6 @@ function fire(power = input.power, at) {
   game.flight.at = a;
   game.flight.power = power;
   game.lastLaunch = { at: a, power, dir: game.park.dir, x: game.flight.x, y: game.flight.y, vx: game.flight.vx, vy: game.flight.vy, t: game.clock };
-  game.flight.slowmoDone = false;
   game.trail = [];
   game.acc = 0;
   game.launches++;
@@ -328,6 +334,7 @@ function fire(power = input.power, at) {
   syncBoost();
   updateHud();
   game.missShown = false;
+  game.slingFx = [];
   sfx('launch', { rate: 0.9 + power * 0.25 });
 }
 
@@ -337,6 +344,7 @@ function simStep() {
   const f = game.flight;
   const before = f.caught.length;
   const skimsBefore = f.skims.length;
+  const slingsBefore = f.slings.length;
   step(f, game.level, game.taken);
   // trail, coloured by whether the probe is slow enough for the target ring
   const ok = relSpeed(game.level, f.to, f.t, f.vx, f.vy) < catchLimit(game.level, f.to, f.assist);
@@ -357,6 +365,14 @@ function simStep() {
     game.skimFlash.set(f.skims[k], 0.8);
     sfx('skim');
   }
+  // a slingshot round another planet: said by the planet as it happens; banked if the probe is caught
+  for (let k = slingsBefore; k < f.slings.length; k++) {
+    const i = f.slings[k];
+    const bp = bodyPos(i, f.t);
+    const b = game.level.bodies[i];
+    game.slingFx.push({ body: i, t: 0, x: bp.x, y: bp.y - b.r * 1.5 - 14 });
+    sfx('sling', { rate: 1 + 0.12 * k });
+  }
   // Crossing the ring without being caught: say why, once per pass.
   if (f.inBand && f.missWhy && !f.result && !game.missShown) {
     game.missShown = true;
@@ -364,30 +380,8 @@ function simStep() {
     const a = Math.atan2(f.y - tp.y, f.x - tp.x);
     const rr = game.level.bodies[f.to].ring + 34;
     game.miss = { text: { fast: 'Too fast', steep: 'Too steep', close: 'Too close' }[f.missWhy], x: tp.x + Math.cos(a) * rr, y: tp.y + Math.sin(a) * rr, t: 0 };
-    if (f.missWhy === 'fast' && game.level.brake && f.brakeLeft > 0 && !game.braked) {
-      ui.hint.textContent = 'Too fast to be caught: tap to brake';
-      ui.hint.hidden = false;
-    }
   }
   if (!f.inBand) game.missShown = false;
-  // The brake's first lesson: near the ring, too fast, brake unused.
-  if (
-    game.sys === 1 &&
-    game.leg === 0 &&
-    !game.braked &&
-    !f.slowmoDone &&
-    f.brakeLeft > 0 &&
-    !f.result
-  ) {
-    const tp = bodyPos(f.to, f.t);
-    const tb = game.level.bodies[f.to];
-    if (Math.hypot(f.x - tp.x, f.y - tp.y) < tb.ring * 2.2 && !ok) {
-      f.slowmoDone = true;
-      game.slowmo = 0.6;
-      ui.hint.textContent = 'Too fast to be caught: tap to brake';
-      ui.hint.hidden = false;
-    }
-  }
   game.clock = f.t;
   if (f.result) endFlight();
 }
@@ -397,6 +391,16 @@ function endFlight() {
   game.lastResult = { result: f.result, why: f.why, x: f.x, y: f.y, age: f.age, caught: f.caught.length };
   if (f.result === 'captured') {
     sfx('capture');
+    if (f.slings.length) {
+      game.slings += f.slings.length;
+      const tp = bodyPos(f.to, f.t);
+      const tb = game.level.bodies[f.to];
+      game.slingBank = { n: f.slings.length, t: 0, x: tp.x, y: tp.y - tb.ring - 30 };
+      updateHud();
+      ui.slingsBox.classList.remove('pop');
+      void ui.slingsBox.offsetWidth;
+      ui.slingsBox.classList.add('pop');
+    }
     // The probe eases into the ring (physics.js settlePlan), carrying on the way it was flying.
     game.capture = settlePlan(game.level, f.to, f.t, f.x, f.y, f.vx, f.vy);
     game.capture.acc = 0;
@@ -489,11 +493,14 @@ function finishCapture() {
   game.park = { r: p.r, period: p.period, phase: a, dir: c.dir, rOff };
   beginLeg();
   buildLegDots();
+  updateHud();
 }
 
 // ---------- End of a system ----------
 
-function medalFor(got, total, launches, par) {
+// A slingshot counts as SLING_WORTH motes, so a bold route can make up for motes missed.
+function medalFor(got, total, launches, par, slings = 0) {
+  got = Math.min(total, got + SLING_WORTH * slings);
   if (got >= 0.9 * total && launches <= par) return 3;
   if (got >= 0.7 * total && launches <= 2 * par) return 2;
   return 1;
@@ -504,7 +511,7 @@ function finishSystem() {
   const total = game.level.motes.length;
   const par = game.level.legs.length + 2;
   const got = game.taken.size;
-  const medal = medalFor(got, total, game.launches, par);
+  const medal = medalFor(got, total, game.launches, par, game.slings);
   const bests = store.get('orbit.best', {});
   if ((bests[game.sys] || 0) < medal) {
     bests[game.sys] = medal;
@@ -515,6 +522,7 @@ function finishSystem() {
   ui.doneTitle.textContent = last ? 'Tour complete' : `${game.level.name} done`;
   ui.doneDust.textContent = `${got} / ${total}`;
   ui.doneLaunches.textContent = `${game.launches} / ${par}`;
+  ui.doneSlings.textContent = game.slings;
   ui.done.querySelector('[data-skims]')?.remove();
   const sk = document.createElement('div');
   sk.dataset.skims = '';
@@ -552,12 +560,22 @@ function buildLegDots() {
 }
 
 function updateHud(pop = false) {
-  ui.sysName.textContent = game.level.name;
+  ui.sysName.textContent = `System ${game.sys + 1} · ${game.level.name}`;
+  const legs = game.level.legs.length;
+  ui.jump.textContent = `Jump ${Math.min(legs, game.leg + 1)} of ${legs}`;
+  ui.slings.textContent = game.slings;
+  ui.slingsBox.hidden = game.slings === 0;
   ui.dust.textContent = game.taken.size;
   ui.dustOf.textContent = game.level.motes.length;
   const left = Math.max(0, PROBES - game.launches);
   ui.probes.textContent = left;
   ui.probesBox.classList.toggle('low', left <= 3);
+  ui.probesBox.setAttribute('aria-label', `${left} probes left`);
+  if (ui.probePips.children.length !== PROBES) {
+    ui.probePips.innerHTML = '';
+    for (let i = 0; i < PROBES; i++) ui.probePips.appendChild(document.createElement('i'));
+  }
+  [...ui.probePips.children].forEach((pip, i) => pip.classList.toggle('spent', i >= left));
   if (pop) {
     ui.dustBox.classList.remove('pop');
     void ui.dustBox.offsetWidth;
@@ -594,10 +612,16 @@ function update(dt) {
   if (game.mode !== lastMode) {
     lastMode = game.mode;
     syncBoost(); // the bar dims while the probe isn't on its orbit
-    if (game.mode !== 'idle' && game.mode !== 'fly') ui.hint.hidden = true;
+    if (game.mode !== 'idle') ui.hint.hidden = true;
   }
   for (const b of game.burst) b.t += dt;
   if (game.miss) game.miss.t += dt;
+  for (const fx of game.slingFx) fx.t += dt;
+  game.slingFx = game.slingFx.filter((fx) => fx.t < 1.8);
+  if (game.slingBank) {
+    game.slingBank.t += dt;
+    if (game.slingBank.t > 2) game.slingBank = null;
+  }
   game.burst = game.burst.filter((b) => b.t < 1.2);
   for (const [k, v] of game.skimFlash) {
     if (v - dt <= 0) game.skimFlash.delete(k);
@@ -611,13 +635,8 @@ function update(dt) {
       maybeHint();
       break;
     case 'fly': {
-      let scale = 1;
-      if (game.slowmo > 0) {
-        game.slowmo -= dt;
-        scale = 0.4;
-      }
       // whole fixed steps, counted in steps so 60 and 120 Hz frames never drift apart
-      game.acc += (dt * scale) / DT;
+      game.acc += dt / DT;
       while (game.acc >= 1 - 1e-6 && game.mode === 'fly') {
         game.acc -= 1;
         simStep();
@@ -652,10 +671,12 @@ function draw() {
   for (let i = 0; i < game.level.bodies.length; i++) drawBody(i, pos[i * 2], pos[i * 2 + 1]);
   drawMotes();
   drawGhost();
+  drawSwing(pos);
   drawTrail();
   drawProbe();
   drawBursts();
   drawMiss();
+  drawSling();
 }
 
 function drawSky() {
@@ -846,7 +867,7 @@ function probeHeading() {
   return a + (game.park.dir * Math.PI) / 2;
 }
 
-// A flame out of the ship: behind it when the boosters push, ahead of it when the brake fires.
+// A flame out of the ship, behind it, when the boosters push.
 function drawFlame(x, y, ux, uy, len, width, alpha) {
   const flick = 0.85 + 0.15 * Math.sin(time * 47) + 0.08 * Math.sin(time * 83);
   const ex = x + ux * len * flick;
@@ -889,14 +910,10 @@ function drawProbe() {
   const h = probeHeading();
   const ux = Math.cos(h);
   const uy = Math.sin(h);
-  // engine flames: the boosters for a moment after firing, the brake ahead of the nose
+  // the boosters' flame for a moment after firing
   const f = game.flight;
-  if (f && game.mode === 'fly') {
-    if (f.age < 0.45) drawFlame(x - ux * L * 0.4, y - uy * L * 0.4, -ux, -uy, L * (1.1 + f.power) * (1 - f.age / 0.45), L * 0.2, dim);
-    if (f.brakeAge >= 0 && f.age - f.brakeAge < 0.4) {
-      const k = 1 - (f.age - f.brakeAge) / 0.4;
-      drawFlame(x + ux * L * 0.5, y + uy * L * 0.5, ux, uy, L * 1.4 * k, L * 0.16, k * dim);
-    }
+  if (f && game.mode === 'fly' && f.age < 0.45) {
+    drawFlame(x - ux * L * 0.4, y - uy * L * 0.4, -ux, -uy, L * (1.1 + f.power) * (1 - f.age / 0.45), L * 0.2, dim);
   }
   // a soft glow, so it reads against the dark
   const g = ctx.createRadialGradient(x, y, 0, x, y, L * 1.3);
@@ -948,6 +965,56 @@ function drawMiss() {
   ctx.globalAlpha = 1;
 }
 
+// A swing round another planet, as it happens: a gold arc round the planet traces the angle swept,
+// from a third of the way to a slingshot; it brightens once the swing counts.
+const SWING_SHOW = (40 * Math.PI) / 180;
+const SWING_FULL = (SLING_ANGLE * Math.PI) / 180;
+function drawSwing(pos) {
+  const f = game.flight;
+  if (!f || game.mode !== 'fly') return;
+  game.level.bodies.forEach((b, i) => {
+    const sw = f.sling[i];
+    if (!f.slingIn[i] || Math.abs(sw) < SWING_SHOW) return;
+    const done = f.slings.includes(i);
+    const k = Math.min(1, Math.abs(sw) / SWING_FULL);
+    const x = sx(pos[i * 2]);
+    const y = sy(pos[i * 2 + 1]);
+    const r = (b.r + 16) * view.s + 6;
+    const a0 = f.slingFrom[i];
+    ctx.strokeStyle = done ? 'rgba(255, 217, 138, 0.9)' : `rgba(255, 217, 138, ${0.2 + 0.4 * k})`;
+    ctx.lineWidth = done ? 3 : 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(x, y, r, a0, a0 + sw, sw < 0);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  });
+}
+
+// "Slingshot!" by the planet the moment a swing counts, and "+1 slingshot" by the ring on the catch
+function drawSling() {
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const fx of game.slingFx) {
+    const k = fx.t / 1.8;
+    const grow = Math.min(1, fx.t / 0.18);
+    ctx.globalAlpha = k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3;
+    ctx.fillStyle = '#ffd98a';
+    ctx.font = `700 ${Math.round(13 + 5 * grow)}px system-ui, -apple-system, Segoe UI, Roboto, sans-serif`;
+    ctx.fillText('Slingshot!', Math.max(50, Math.min(W - 50, sx(fx.x))), Math.max(70, sy(fx.y)) - k * 10);
+  }
+  const bank = game.slingBank;
+  if (bank) {
+    const k = bank.t / 2;
+    ctx.globalAlpha = k < 0.75 ? 1 : 1 - (k - 0.75) / 0.25;
+    ctx.fillStyle = '#ffd98a';
+    ctx.font = '600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif';
+    const text = bank.n > 1 ? `+${bank.n} slingshots` : '+1 slingshot';
+    ctx.fillText(text, Math.max(60, Math.min(W - 60, sx(bank.x))), Math.max(70, sy(bank.y)) - k * 12);
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawBursts() {
   for (const b of game.burst) {
     const x = sx(b.x);
@@ -975,7 +1042,7 @@ function drawBursts() {
 
 // ---------- Input ----------
 
-// A tap anywhere on the space (not the bar) fires the boosters, or brakes in flight (System 2 on).
+// A tap anywhere on the space (not the bar) fires the boosters; in flight it does nothing.
 function onDown(e) {
   if (game.paused) {
     resumeGame();
@@ -983,19 +1050,6 @@ function onDown(e) {
   }
   if (!e.isPrimary && e.pointerType === 'touch') return; // a second finger
   if (e.clientY > H - insets.bottom - EDGE) return; // the phone's swipe strip
-  if (game.mode === 'fly') {
-    if (game.level.brake && game.flight && brake(game.flight, game.level)) {
-      sfx('brake');
-      game.slowmo = 0;
-      ui.hint.hidden = true;
-      syncBoost();
-      if (!game.braked) {
-        game.braked = true;
-        store.set('orbit.braked', true);
-      }
-    }
-    return;
-  }
   if (game.mode === 'idle') fire();
 }
 
@@ -1049,9 +1103,6 @@ function syncBoost() {
   ui.boost.setAttribute('aria-valuenow', String(pct));
   ui.boostValue.textContent = `${pct}%`;
   ui.boost.classList.toggle('is-off', game.mode !== 'idle');
-  const brakeReady = game.mode === 'fly' && game.flight && game.level.brake && game.flight.brakeLeft > 0;
-  ui.boost.classList.toggle('brake-ready', Boolean(brakeReady));
-  ui.boostLabel.textContent = brakeReady ? 'Brake' : 'Boost';
   if (game.ghost && game.mode === 'idle') {
     ui.boostGhost.hidden = false;
     ui.boostGhost.style.left = `${game.ghost.power * 100}%`;
@@ -1060,7 +1111,7 @@ function syncBoost() {
   }
 }
 
-// Keys: Space fires (or brakes in flight); left and right (or down and up) set the power. A tap
+// Keys: Space fires; left and right (or down and up) set the power. A tap
 // nudges it by 2%; a held key slides it smoothly, easing in over a third of a second (keyPower).
 const keysDown = new Map(); // held arrow -> seconds held
 const KEY_LESS = ['ArrowLeft', 'ArrowDown'];

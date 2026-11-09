@@ -19,10 +19,10 @@
 
     <div class="hud" data-hud>
       <p class="sys-name" data-sys-name></p>
-      <div class="legs" data-legs aria-hidden="true"></div>
+      <p class="jump"><span data-jump></span><span class="legs" data-legs aria-hidden="true"></span></p>
       <div class="hud-row">
-        <p class="dust"><span class="mote-icon" aria-hidden="true"></span><span data-dust>0</span><span class="dust-of">/<span data-dust-of>0</span></span></p>
-        <p class="probes" aria-label="Probes left"><span class="ship-icon" aria-hidden="true"></span><span data-probes>10</span></p>
+        <p class="dust"><span class="mote-icon" aria-hidden="true"></span><span class="hud-label">Stardust</span><span data-dust>0</span><span class="dust-of">/<span data-dust-of>0</span></span></p>
+        <p class="slings" hidden><span class="sling-icon" aria-hidden="true"></span><span class="hud-label">Slingshots</span><span data-slings>0</span></p>
       </div>
     </div>
 
@@ -43,6 +43,7 @@
       <dl class="stats">
         <div><dt>Stardust</dt><dd data-done-dust></dd></div>
         <div><dt>Launches</dt><dd data-done-launches></dd></div>
+        <div><dt>Slingshots</dt><dd data-done-slings></dd></div>
       </dl>
       <p class="badge" data-badge hidden>One shot</p>
       <div class="actions">
@@ -59,8 +60,10 @@
       </div>
     </section>
 
+    <p class="probes" aria-label="10 probes left"><span class="hud-label">Probes</span><span class="probe-pips" data-probe-pips aria-hidden="true"></span><span data-probes>10</span><span class="probes-left">left</span></p>
+
     <div class="boost" data-boost role="slider" aria-label="Booster power" aria-valuemin="0" aria-valuemax="100" aria-valuenow="25">
-      <span class="boost-label" data-boost-label>Boost</span>
+      <span class="boost-label">Boost</span>
       <div class="boost-track" data-boost-track>
         <div class="boost-rail"></div>
         <div class="boost-fill"></div>

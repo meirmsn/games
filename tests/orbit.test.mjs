@@ -75,10 +75,7 @@ const flyGold = (page) =>
     g.clock = gold.t0 ?? g.legStart; // where the moons are (static systems don't mind)
     g.park.dir = gold.dir;
     o.fire(gold.power, gold.at);
-    for (let i = 0; i < 240 * 12 && g.mode === 'fly'; i++) {
-      if (gold.brakeAt !== undefined && g.flight && g.flight.brakeLeft && g.flight.age >= gold.brakeAt) o.tap();
-      o.update(1 / 240);
-    }
+    for (let i = 0; i < 240 * 12 && g.mode === 'fly'; i++) o.update(1 / 240);
     for (let i = 0; i < 180 && g.mode === 'capture'; i++) o.update(1 / 60);
     return g.lastResult;
   });
@@ -184,18 +181,16 @@ test('orbit AC-2: the bar sets the power, and a tap anywhere fires from where th
   await context.close();
 });
 
-test('orbit AC-3: the same aim gives the same flight at 60 Hz and 120 Hz, brake included', async () => {
+test('orbit AC-3: the same aim gives the same flight at 60 Hz and 120 Hz', async () => {
   const { context, page } = await open({ hash: '#s2' });
   await manual(page);
   const run = (hz) =>
     page.evaluate((hz) => {
       const o = window.__orbit;
       o.startSystem(1);
-      o.game.braked = true; // no slow-motion lesson in the way
       o.fire(0.25, 0.5);
       let frame = 0;
       while (o.game.mode === 'fly' && frame < hz * 20) {
-        if (frame === hz / 2) o.tap(); // brake at 0.5 s
         o.update(1 / hz);
         frame++;
       }
@@ -327,33 +322,26 @@ test('orbit AC-6: motes caught on a failed flight stay caught; skims are counted
   await context.close();
 });
 
-test('orbit AC-7: from System 2 a touch in flight brakes once, by 35%; System 1 has no brake', async () => {
-  const { context, page } = await open();
+test('orbit AC-7: there is no brake: a touch or Space in flight changes nothing, in every system', async () => {
+  const { context, page } = await open({ hasTouch: false });
   await manual(page);
-  const speeds = (sys) =>
-    page.evaluate((sys) => {
+  for (const sys of [0, 1, 2]) {
+    const r = await page.evaluate((sys) => {
       const o = window.__orbit;
       o.startSystem(sys);
-      o.game.braked = true;
       o.fire(0.6);
       o.update(1 / 60);
       const f = o.game.flight;
-      const sp = () => Math.hypot(f.vx, f.vy); // the targets here sit still
-      const a = sp();
+      const a = [f.vx, f.vy];
       o.tap();
-      const b = sp();
-      o.tap();
-      const c = sp();
-      return [a, b, c];
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+      return { a, b: [f.vx, f.vy], mode: o.game.mode, launches: o.game.launches, label: document.querySelector('.boost-label').textContent };
     }, sys);
-  const [a1, b1] = await speeds(0);
-  assert.equal(a1, b1, 'no brake in System 1');
-  const [a2, b2, c2] = await speeds(1);
-  assert.ok(Math.abs(b2 / a2 - 0.65) < 1e-9);
-  assert.equal(b2, c2, 'once per flight');
+    assert.deepEqual(r.b, r.a, `system ${sys + 1}: the speed is untouched`);
+    assert.deepEqual([r.mode, r.launches, r.label], ['fly', 1, 'Boost'], `system ${sys + 1}`);
+  }
   await context.close();
 });
-
 test('orbit AC-8: the probe is a small ship pointing the way it moves, with no line ahead of it and no path previewed', async () => {
   const { context, page } = await open();
   await manual(page);
@@ -463,7 +451,7 @@ test('orbit AC-9: the hidden assist grows with misses, never changes the drawn r
   await context.close();
 });
 
-test('orbit AC-10: the end card shows motes, launches, skims, medal and badge; the best shows on the intro next time', async () => {
+test('orbit AC-10: the end card shows motes, launches, slingshots, skims, medal and badge; the best shows on the intro next time', async () => {
   const { context, page } = await open();
   await manual(page);
   for (let i = 0; i < 4; i++) assert.equal((await flyGold(page)).result, 'captured');
@@ -475,13 +463,15 @@ test('orbit AC-10: the end card shows motes, launches, skims, medal and badge; t
   assert.equal(await page.locator('[data-medal]').getAttribute('data-kind'), 'gold');
   assert.equal(await page.locator('[data-badge]').isVisible(), true);
   assert.match(await card.textContent(), /Skims/);
+  assert.equal(await page.locator('[data-done-slings]').textContent(), String(await page.evaluate(() => window.__orbit.game.slings)));
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('orbit.best'))[0]), 3);
   // the medal rules
   const m = await page.evaluate(() => {
     const f = window.__orbit.medalFor;
-    return [f(20, 22, 6, 6), f(20, 22, 7, 6), f(16, 22, 12, 6), f(16, 22, 13, 6), f(3, 22, 30, 6)];
+    // a slingshot counts as 3 motes: 14 motes and 2 slingshots make 20 of 22
+    return [f(20, 22, 6, 6), f(20, 22, 7, 6), f(16, 22, 12, 6), f(16, 22, 13, 6), f(3, 22, 30, 6), f(14, 22, 6, 6, 2), f(14, 22, 6, 6, 1), f(22, 22, 6, 6, 9)];
   });
-  assert.deepEqual(m, [3, 2, 2, 1, 1]);
+  assert.deepEqual(m, [3, 2, 2, 1, 1, 3, 2, 3]);
   await page.click('[data-retry]');
   assert.match(await page.locator('[data-intro-best]').textContent(), /gold/);
   await context.close();
@@ -651,13 +641,10 @@ test('orbit AC-13: hiding the page in flight undoes the flight; a capture in pro
   await context.close();
 });
 
-test('orbit AC-14: arrow keys set the power, Space fires and brakes, R rewinds; a cancelled drag on the bar stops it', async () => {
+test('orbit AC-14: arrow keys set the power, Space fires, R rewinds; a cancelled drag on the bar stops it', async () => {
   const { context, page } = await open({ hash: '#s2', hasTouch: false });
   await manual(page);
-  await page.evaluate(() => {
-    window.__orbit.game.braked = true;
-    window.__orbit.setPower(0.5);
-  });
+  await page.evaluate(() => window.__orbit.setPower(0.5));
   const power = () => page.evaluate(() => window.__orbit.input.power);
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
@@ -679,8 +666,6 @@ test('orbit AC-14: arrow keys set the power, Space fires and brakes, R rewinds; 
   assert.ok(held > 0.35, `a one-second hold slides the power a long way (${held})`);
   await page.keyboard.press(' ');
   assert.equal((await state(page)).mode, 'fly', 'Space fires');
-  await page.keyboard.press(' ');
-  assert.equal(await page.evaluate(() => window.__orbit.game.flight.brakeLeft), 0, 'Space brakes in flight');
   await page.keyboard.press('r');
   await frames(page, 60);
   const r = await state(page);
@@ -737,14 +722,22 @@ test('orbit AC-18: each event plays its sound, and nothing plays while muted', a
     await manual(page);
     await page.waitForFunction(() => window.__decoded >= 11);
     await page.mouse.click(5, 300); // unlock audio
-    await page.evaluate(() => (window.__orbit.game.braked = true));
-    await page.evaluate(() => {
-      const o = window.__orbit;
-      o.fire(0.5);
-      o.tap(); // brake
-    });
+    await page.evaluate(() => window.__orbit.fire(0.5));
     await settle(page); // a crash or a loss
     await flyGold(page); // a capture, with motes
+    // a slingshot: System 2's bold release, on its own leg
+    await page.evaluate(() => {
+      const o = window.__orbit;
+      const g = o.game;
+      const b = g.level.bold;
+      g.leg = b.leg;
+      g.legStart = 0;
+      g.clock = 0;
+      g.parkBody = g.level.legs[b.leg].from;
+      g.park = { r: g.level.bodies[g.parkBody].ring, period: 7, phase: 0, dir: b.dir };
+      o.fire(b.power, b.at);
+      for (let i = 0; i < 240 * 10 && g.mode === 'fly'; i++) o.update(1 / 240);
+    });
     // the drone loops on silently while muted (the shared sound's loops do); count everything else
     const drone = (await (await fetch(BASE + 'orbit/sounds/drone.mp3')).arrayBuffer()).byteLength;
     const r = await page.evaluate((drone) => ({ heard: [...window.__orbit.heard], played: window.__played.filter((p) => p.bytes !== drone).length }), drone);
@@ -752,7 +745,7 @@ test('orbit AC-18: each event plays its sound, and nothing plays while muted', a
     return r;
   };
   const on = await run(false);
-  for (const name of ['launch', 'brake', 'capture', 'mote']) assert.ok(on.heard.includes(name), name);
+  for (const name of ['launch', 'sling', 'capture', 'mote']) assert.ok(on.heard.includes(name), name);
   assert.ok(on.heard.includes('crash') || on.heard.includes('lost'), 'crash or lost');
   assert.ok(on.played >= on.heard.length, 'they played');
   const off = await run(true);
@@ -777,42 +770,65 @@ test('orbit AC-18: a crash plays the thud and a loss the falling blip', async ()
   await context.close();
 });
 
-test('orbit AC-19: on System 2 leg 1, until the first brake, a fast approach slows time to 0.4x for 0.6 s', async () => {
-  const { context, page } = await open({ hash: '#s2' });
+// Put the probe on a system's bold leg and fly its stored slingshot release, frame by frame,
+// noting what shows during the swing; with failAfter, rewind by hand once the swing has counted.
+const flyBold = (page, sys, { failAfter = -1 } = {}) =>
+  page.evaluate(
+    ([sys, failAfter]) => {
+      const o = window.__orbit;
+      o.startSystem(sys);
+      const g = o.game;
+      const b = g.level.bold;
+      g.leg = b.leg;
+      g.legStart = 0;
+      g.clock = 0;
+      g.parkBody = g.level.legs[b.leg].from;
+      g.park = { r: g.level.bodies[g.parkBody].ring, period: 7, phase: 0, dir: b.dir };
+      o.fire(b.power, b.at);
+      const seen = { arc: false, label: false, hudDuring: null, slings: 0 };
+      for (let i = 0; i < 240 * 10 && g.mode === 'fly'; i++) {
+        o.update(1 / 240);
+        const f = g.flight;
+        if (f && f.slingIn.some((inZone, k) => inZone && Math.abs(f.sling[k]) > (40 * Math.PI) / 180)) seen.arc = true;
+        if (g.slingFx.length && !seen.label) {
+          seen.label = true;
+          seen.hudDuring = g.slings; // not banked yet
+        }
+        if (failAfter >= 0 && seen.label && f && f.age > failAfter) {
+          o.rewindByHand();
+          break;
+        }
+      }
+      for (let i = 0; i < 600 && g.mode !== 'idle' && g.mode !== 'done'; i++) o.update(1 / 60);
+      seen.slings = g.slings;
+      seen.hud = document.querySelector('[data-slings]').textContent;
+      seen.hudShown = !document.querySelector('.slings').hidden;
+      seen.heard = [...o.heard];
+      seen.result = g.lastResult.result;
+      return seen;
+    },
+    [sys, failAfter]
+  );
+
+test('orbit AC-19: a slingshot shows as it happens, a gold arc and "Slingshot!", and is banked only when the probe is caught', async () => {
+  const { context, page } = await open();
   await manual(page);
-  const r = await page.evaluate(() => {
-    const o = window.__orbit;
-    const g = o.game;
-    g.braked = false;
-    o.fire(0.5);
-    const b = g.level.bodies[g.level.legs[0].to];
-    Object.assign(g.flight, { x: b.x - b.ring * 1.8, y: b.y - 40, vx: 900, vy: 0 });
-    o.update(1 / 240);
-    const slow = g.slowmo;
-    const age0 = g.flight.age;
-    o.update(0.1);
-    const ran = g.flight ? g.flight.age - age0 : null;
-    return { slow, ran };
-  });
-  assert.ok(Math.abs(r.slow - 0.6) < 0.01, `slow motion for 0.6 s (${r.slow})`);
-  assert.ok(Math.abs(r.ran - 0.04) < 0.006, `0.4x: ${r.ran}`);
-  // once braked, never again
-  const again = await page.evaluate(() => {
-    const o = window.__orbit;
-    const g = o.game;
-    for (let i = 0; i < 200 && g.mode !== 'idle'; i++) o.update(1 / 60);
-    g.braked = true;
-    o.fire(0.5);
-    const b = g.level.bodies[g.level.legs[0].to];
-    Object.assign(g.flight, { x: b.x - b.ring * 1.8, y: b.y - 40, vx: 900, vy: 0 });
-    g.slowmo = 0;
-    o.update(1 / 240);
-    return g.slowmo;
-  });
-  assert.equal(again, 0);
+  for (const sys of [0, 1, 2]) {
+    const r = await flyBold(page, sys);
+    assert.equal(r.result, 'captured', `system ${sys + 1}`);
+    assert.ok(r.arc, `system ${sys + 1}: the swing is drawn as it happens`);
+    assert.ok(r.label, `system ${sys + 1}: "Slingshot!" shows`);
+    assert.equal(r.hudDuring, 0, 'not banked mid-flight');
+    assert.ok(r.heard.includes('sling'));
+    assert.ok(r.slings >= 1 && r.hud === String(r.slings) && r.hudShown, `system ${sys + 1}: banked on the catch`);
+  }
+  // the same swing, then a failed flight: nothing banked, and the counter stays hidden
+  const failed = await flyBold(page, 1, { failAfter: 0 });
+  assert.equal(failed.label, true);
+  assert.equal(failed.slings, 0, 'a failed flight banks no slingshot');
+  assert.equal(failed.hudShown, false);
   await context.close();
 });
-
 test('orbit AC-20: the probe dims over the last 2 s before its time runs out', async () => {
   const { context, page } = await open();
   await manual(page);
@@ -856,12 +872,27 @@ test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched
   await context.close();
 });
 
-test('orbit AC-25: a system has 10 probes; when they are spent a card says so, and Try again restarts the system', async () => {
+test('orbit AC-25: a system has 10 probes, shown by the booster bar; when they are spent a card says so, and Try again restarts the system', async () => {
   const { context, page } = await open();
   await manual(page);
   const probes = () => page.locator('[data-probes]').textContent();
   assert.equal(await probes(), '10');
-  for (let i = 0; i < 10; i++) {
+  const pips = () => page.evaluate(() => [...document.querySelectorAll('[data-probe-pips] i')].map((i) => (i.classList.contains('spent') ? 0 : 1)).join(''));
+  assert.equal(await pips(), '1111111111', 'a ship per probe');
+  // right above the bar, not up in the top bar
+  const where = await page.evaluate(() => {
+    const p = document.querySelector('.probes').getBoundingClientRect();
+    const bar = document.querySelector('[data-boost]').getBoundingClientRect();
+    return { gap: bar.top - p.bottom, inHud: Boolean(document.querySelector('[data-hud] [data-probes]')) };
+  });
+  assert.ok(where.gap >= 0 && where.gap <= 12, `just above the bar (${where.gap})`);
+  assert.equal(where.inHud, false);
+  await page.evaluate(() => window.__orbit.fire(1, Math.PI));
+  await settle(page);
+  assert.equal(await probes(), '9');
+  assert.equal(await pips(), '1111111110');
+  assert.equal(await page.locator('.probes').getAttribute('aria-label'), '9 probes left');
+  for (let i = 1; i < 10; i++) {
     // from the left of the first planet at full power: down and out of the field, a failed flight
     await page.evaluate(() => window.__orbit.fire(1, Math.PI));
     await settle(page);
@@ -894,32 +925,21 @@ test('orbit AC-25: a system has 10 probes; when they are spent a card says so, a
   await context.close();
 });
 
-test('orbit AC-26: crossing a ring uncaught says why by the ring; too fast with the brake unused says to tap to brake', async () => {
+test('orbit AC-26: crossing a ring uncaught says why by the ring', async () => {
   const { context, page } = await open({ hash: '#s2' });
   await manual(page);
   const r = await page.evaluate(() => {
     const o = window.__orbit;
     const g = o.game;
-    g.braked = false;
-    g.park.dir = -1;
-    o.fire(0.9, (66 * Math.PI) / 180); // a release that reaches the ring too fast
-    let n = 0;
-    while (g.mode === 'fly' && !g.miss && n++ < 4000) o.update(1 / 240);
-    const out = {
-      miss: g.miss && g.miss.text,
-      hint: document.querySelector('[data-hint]').hidden ? '' : document.querySelector('[data-hint]').textContent,
-      label: document.querySelector('[data-boost-label]').textContent,
-    };
-    o.tap(); // brake
-    out.afterHint = document.querySelector('[data-hint]').hidden;
-    out.afterLabel = document.querySelector('[data-boost-label]').textContent;
-    return out;
+    o.fire(0.5);
+    const b = g.level.bodies[g.level.legs[0].to];
+    // in the band, along the ring, far over its limit
+    Object.assign(g.flight, { x: b.x + b.ring, y: b.y, vx: 0, vy: -900 });
+    o.update(1 / 240);
+    return { miss: g.miss && g.miss.text, hint: !document.querySelector('[data-hint]').hidden };
   });
   assert.equal(r.miss, 'Too fast');
-  assert.match(r.hint, /tap to brake/);
-  assert.equal(r.label, 'Brake', 'the bar says the brake is ready');
-  assert.equal(r.afterHint, true, 'braking hides the hint');
-  assert.equal(r.afterLabel, 'Boost');
+  assert.equal(r.hint, false, 'no hint line: the ring says it');
   // too steep: in the band, slow enough, but heading into the planet
   const steep = await page.evaluate(() => {
     const o = window.__orbit;
@@ -947,6 +967,21 @@ test('orbit AC-26: crossing a ring uncaught says why by the ring; too fast with 
   await context.close();
 });
 
+test('orbit AC-27: the top bar says what it counts: the system by number and name, the jump of the system, and stardust', async () => {
+  const { context, page } = await open({ hash: '#s2' });
+  await manual(page);
+  const hud = () => page.evaluate(() => document.querySelector('[data-hud]').innerText.replace(/\s+/g, ' ').trim());
+  let t = await hud();
+  assert.match(t, /System 2 · Slingshot/i);
+  assert.match(t, /Jump 1 of 4/i);
+  assert.match(t, /Stardust ?0 ?\/ ?22/i);
+  assert.doesNotMatch(t, /Slingshots/i, 'no slingshot count until one is earned');
+  await flyGold(page);
+  t = await hud();
+  assert.match(t, /Jump 2 of 4/i);
+  await context.close();
+});
+
 test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolling, clear of the buttons', async () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const { context, page } = await open({ viewport });
@@ -955,7 +990,11 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
       const back = document.querySelector('.shell-back').getBoundingClientRect();
       const mute = document.querySelector('.mute').getBoundingClientRect();
       const bar = document.querySelector('[data-boost]').getBoundingClientRect();
+      const probes = document.querySelector('.probes').getBoundingClientRect();
+      const hud = document.querySelector('[data-hud]').getBoundingClientRect();
       return {
+        probes: { top: probes.top, left: probes.left, right: probes.right },
+        hud: { left: hud.left, right: hud.right, bottom: hud.bottom, width: hud.width, scroll: document.querySelector('[data-hud]').scrollWidth },
         top: v.y,
         left: v.x,
         right: v.x + 1000 * v.s,
@@ -975,6 +1014,8 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
     assert.ok(r.bar.top >= r.bottom, `${viewport.width}: the booster bar sits below the field`);
     assert.ok(r.bar.bottom <= r.h - 24 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, above the edge strip`);
     assert.ok(r.bar.height >= 44, 'the bar is easy to hit');
+    assert.ok(r.probes.top >= r.bottom - 1 && r.probes.left >= 0 && r.probes.right <= r.w, `${viewport.width}: the probes left sit between the field and the bar`);
+    assert.ok(r.hud.left >= 0 && r.hud.right <= r.w && r.hud.scroll <= r.hud.width + 1, `${viewport.width}: the top bar fits`);
     assert.equal(r.scroll, 0);
     await context.close();
   }

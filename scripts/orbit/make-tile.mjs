@@ -20,7 +20,6 @@ const box = await page.evaluate(() => {
   document.querySelector('[data-boost]').hidden = true;
   document.querySelector('.shell-back').hidden = true;
   const g = o.game;
-  g.braked = true;
   // a release that whips half way round the big planet (found with the solver's physics)
   g.park.dir = -1;
   o.fire(0, 5.672);

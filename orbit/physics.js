@@ -12,7 +12,11 @@ export const MAX_FLIGHT = 8; // seconds without a capture, then the probe is cal
 export const LOST_MARGIN = 200; // how far past the field's edge the probe may swing
 export const MOTE_RADIUS = 30; // how close the probe must pass to pick up a mote
 export const SKIM = 1.35; // passing within SKIM × a body's radius without touching is a skim
-export const BRAKE = 0.35; // a brake takes this fraction off the current speed (relative to the target)
+// A slingshot: swinging at least SLING_ANGLE degrees round a planet that is neither the leg's start
+// nor its target, within SLING_ZONE × that planet's radius of its centre.
+export const SLING_ZONE = 3;
+export const SLING_ANGLE = 120;
+const SLING_RAD = (SLING_ANGLE * Math.PI) / 180;
 export const BOOST_MAX = 420; // full power adds this much speed on top of the escape speed
 export const MAX_SPEED = 1400; // speed is clamped here, so a close pass never tunnels
 export const CATCH_WIDTH = 26; // the capture band reaches this far outside the drawn ring
@@ -119,8 +123,11 @@ export function launch(level, legIndex, at, power, t0 = 0, assist = 0, dir = 1) 
     from: leg.from,
     to: leg.to,
     assist,
-    brakeLeft: level.brake ? 1 : 0,
-    brakeAge: -1,
+    sling: level.bodies.map(() => 0), // angle swept round each body while in its zone (signed)
+    slingFrom: level.bodies.map(() => 0), // where in its zone the swing began (angle round it)
+    slingIn: level.bodies.map(() => false),
+    slings: [], // bodies slingshot round on this flight
+    slingLast: level.bodies.map(() => 0),
     caught: [], // motes picked up on this flight
     skims: [], // bodies skimmed on this flight
     fastPass: false, // crossed the ring band too fast to be caught
@@ -140,7 +147,7 @@ export function catchLimit(level, to, assist = 0) {
   return (b.catchSpeed ?? level.catchSpeed ?? CATCH_SPEED) * (1 + ASSIST_SPEED * Math.min(1, assist)) * escapeSpeed(b, b.ring);
 }
 
-// The probe's speed relative to the target (for the brake's first lesson: too fast near the ring).
+// The probe's speed relative to the target.
 export function relSpeed(level, to, t, vx, vy) {
   const v = bodyVel(level.bodies, to, t, { x: 0, y: 0 });
   return Math.hypot(vx - v.x, vy - v.y);
@@ -239,18 +246,6 @@ export function settleClear(level, plan) {
   return true;
 }
 
-// One brake: BRAKE less speed relative to the target. Returns false if none is left.
-export function brake(f, level) {
-  if (f.result || f.brakeLeft <= 0) return false;
-  f.brakeLeft--;
-  const v = bodyVel(level.bodies, f.to, f.t, { x: 0, y: 0 });
-  f.vx = v.x + (f.vx - v.x) * (1 - BRAKE);
-  f.vy = v.y + (f.vy - v.y) * (1 - BRAKE);
-  f.brakeAge = f.age;
-  f.sweep = 0;
-  return true;
-}
-
 const acc = { x: 0, y: 0 };
 const tv = { x: 0, y: 0 };
 
@@ -286,6 +281,24 @@ export function step(f, level, taken = null) {
       return f;
     }
     if (d < b.r * SKIM && i !== f.from && !f.skims.includes(i)) f.skims.push(i);
+    // a slingshot: the angle swept round another planet while in its zone
+    if (i !== f.from && i !== f.to && d < b.r * SLING_ZONE) {
+      const ang = Math.atan2(dy, dx);
+      if (f.slingIn[i]) {
+        let da = ang - f.slingLast[i];
+        if (da > Math.PI) da -= 2 * Math.PI;
+        if (da < -Math.PI) da += 2 * Math.PI;
+        f.sling[i] += da;
+        if (Math.abs(f.sling[i]) >= SLING_RAD && !f.slings.includes(i)) f.slings.push(i);
+      } else {
+        f.slingIn[i] = true;
+        f.sling[i] = 0;
+        f.slingFrom[i] = ang;
+      }
+      f.slingLast[i] = ang;
+    } else if (f.slingIn[i]) {
+      f.slingIn[i] = false;
+    }
     const g = b.mu / (d * d);
     if (g > pull) {
       pull = g;
@@ -371,12 +384,11 @@ export function step(f, level, taken = null) {
   return f;
 }
 
-// Run a whole flight headless. brakeAt: the flight age to brake at (or -1 for none).
-export function fly(level, legIndex, at, power, t0 = 0, { brakeAt = -1, assist = 0, trail = null, dir = 1 } = {}) {
+// Run a whole flight headless.
+export function fly(level, legIndex, at, power, t0 = 0, { assist = 0, trail = null, dir = 1 } = {}) {
   const f = launch(level, legIndex, at, power, t0, assist, dir);
   let n = 0;
   while (!f.result) {
-    if (brakeAt >= 0 && f.brakeLeft > 0 && f.age >= brakeAt) brake(f, level);
     step(f, level);
     if (trail && n++ % 4 === 0) trail.push(f.x, f.y);
   }

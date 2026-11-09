@@ -95,6 +95,26 @@ body {
   white-space: nowrap;
 }
 
+.jump {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgb(233 243 255 / 55%);
+  white-space: nowrap;
+}
+
+.hud-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  margin-right: 2px;
+}
+
 .legs {
   display: flex;
   gap: 7px;
@@ -126,24 +146,91 @@ body {
   align-items: center;
 }
 
-.probes {
+.slings {
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 14px;
-  font-weight: 600;
-  color: #e9f3ff;
+  font-weight: 700;
+  color: #ffd98a;
 }
 
-.probes.low {
+.slings.pop {
+  animation: pop 420ms ease-out;
+}
+
+/* a slingshot: a little arc swinging round a dot */
+.sling-icon {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ffd98a;
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  transform: rotate(-20deg);
+}
+
+.sling-icon::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: rgb(255 217 138 / 55%);
+}
+
+/* The probes left, just above the booster bar: one ship per probe, spent ones faint. */
+.probes {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 74px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #e9f3ff;
+  pointer-events: none;
+}
+
+.probes .hud-label {
+  color: rgb(233 243 255 / 55%);
+  opacity: 1;
+  letter-spacing: 0.16em;
+  font-size: 11px;
+}
+
+.probes-left {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgb(233 243 255 / 55%);
+}
+
+.probes.low,
+.probes.low .probe-pips i {
   color: #ffa64d;
 }
 
-.ship-icon {
-  width: 11px;
-  height: 11px;
+.probe-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.probe-pips i {
+  width: 10px;
+  height: 10px;
   background: currentColor;
   clip-path: polygon(100% 50%, 0 100%, 22% 50%, 0 0);
+  transition: opacity 300ms ease;
+}
+
+.probe-pips i.spent {
+  opacity: 0.18;
 }
 
 .out-text {
@@ -390,21 +477,6 @@ body {
   opacity: 0.4;
 }
 
-/* in flight, while the brake is unused, the bar's label says so */
-.boost.brake-ready {
-  opacity: 1;
-}
-
-.boost.brake-ready .boost-track,
-.boost.brake-ready .boost-value {
-  opacity: 0.35;
-}
-
-.boost.brake-ready .boost-label {
-  color: #ffa64d;
-  animation: breathe 1.2s ease-in-out infinite;
-}
-
 .boost-label,
 .boost-value {
   font-size: 11px;
@@ -488,7 +560,7 @@ body {
   position: fixed;
   z-index: 5;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 80px);
+  bottom: calc(env(safe-area-inset-bottom) + 100px);
   transform: translateX(-50%);
   margin: 0;
   padding: 8px 14px;
@@ -514,7 +586,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .dust.pop {
+  .dust.pop,
+  .slings.pop {
     animation: none;
   }
 }
