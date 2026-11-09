@@ -3,14 +3,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SYSTEMS } from '../orbit/levels.js';
-import { fly, launch, step, preview, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH } from '../orbit/physics.js';
+import { fly, launch, step, bodyAt, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH, CATCH_ANGLE } from '../orbit/physics.js';
 import { rate, rateByStart, parkingClear } from '../scripts/orbit/solve.mjs';
 
 const SAMPLES = 900;
 const withBrake = (sys) => Boolean(sys.brake);
 
-test('orbit AC-12: System 1 leg 1 catches at least 60% of roughly aimed flicks, and every leg can be caught', () => {
-  assert.ok(rate(SYSTEMS[0], 0, { samples: SAMPLES, t0s: [0] }) >= 0.6);
+test('orbit AC-12: System 1 leg 1 catches at least 30% of roughly aimed flicks, and every leg can be caught', () => {
+  assert.ok(rate(SYSTEMS[0], 0, { samples: SAMPLES, t0s: [0] }) >= 0.3);
   for (const sys of SYSTEMS) {
     sys.legs.forEach((_, l) => {
       const r = rate(sys, l, { samples: 300, brake: withBrake(sys) });
@@ -27,16 +27,16 @@ test('orbit AC-12: waves, not a ramp: leg 3 is harder than leg 2, and leg 4 the 
   }
 });
 
-test('orbit AC-12: System 2 leg 1 needs the brake (under 20% without, at least 40% with)', () => {
+test('orbit AC-12: System 2 leg 1 needs the brake (under 10% without, at least 25% with)', () => {
   const sys = SYSTEMS[1];
-  assert.ok(rate(sys, 0, { samples: SAMPLES }) < 0.2);
-  assert.ok(rate(sys, 0, { samples: SAMPLES, brake: true }) >= 0.4);
+  assert.ok(rate(sys, 0, { samples: SAMPLES }) < 0.1);
+  assert.ok(rate(sys, 0, { samples: SAMPLES, brake: true }) >= 0.25);
 });
 
-test('orbit AC-12: on System 3, waiting for the moon matters (best start time at least twice the worst)', () => {
+test('orbit AC-12: on System 3, waiting for the moon matters (on a plain throw, best start time at least twice the worst)', () => {
   const sys = SYSTEMS[2];
   const leg = sys.legs.findIndex((l) => sys.bodies[l.to].orbit);
-  const r = rateByStart(sys, leg, { brake: true });
+  const r = rateByStart(sys, leg);
   assert.ok(Math.max(...r) >= 2 * Math.min(...r), r.join(' '));
 });
 
@@ -52,12 +52,12 @@ test('orbit AC-12: every leg has a gold route that catches every mote of its leg
   }
 });
 
-test('orbit AC-12: a typical captured flight is an arc, not a hop (median 0.7-2.5 s)', () => {
+test('orbit AC-12: a typical captured flight is an arc, not a hop (median 0.7-3.5 s)', () => {
   for (const sys of SYSTEMS) {
     sys.legs.forEach((_, l) => {
       rate(sys, l, { samples: 600, brake: withBrake(sys) });
       const m = rate.lastMedianAge;
-      assert.ok(m >= 0.7 && m <= 2.5, `${sys.name} leg ${l + 1}: ${m}`);
+      assert.ok(m >= 0.7 && m <= 3.5, `${sys.name} leg ${l + 1}: ${m}`);
     });
   }
 });
@@ -96,6 +96,17 @@ test('orbit AC-4: inside the band under the limit is caught (inside the ring too
     assert.equal(f.result, want, `${dist} at ${speed}`);
   }
   assert.equal(f.fastPass, true);
+  // moving along the ring is caught; heading into the planet, or steeper than CATCH_ANGLE, is not
+  const steep = ((CATCH_ANGLE + 8) * Math.PI) / 180;
+  const shallow = ((CATCH_ANGLE - 8) * Math.PI) / 180;
+  for (const [ang, want] of [[0, 'captured'], [shallow, 'captured'], [steep, null], [Math.PI / 2, null]]) {
+    const g = launch(sys, 0, 0, 0.5, 0);
+    const v = limit * 0.8;
+    // at the ring, to the right of the planet: tangent is straight up, the planet is to the left
+    Object.assign(g, { x: tb.x + tb.ring, y: tb.y, vx: -v * Math.sin(ang), vy: -v * Math.cos(ang) });
+    step(g, sys);
+    assert.equal(g.result, want, `${(ang * 180) / Math.PI} degrees off the ring`);
+  }
 });
 
 test('orbit AC-5: hitting a body, swinging away, looping round another body or 8 s all fail the flight', () => {
@@ -151,24 +162,23 @@ test('orbit AC-5: circling the planet a moon target goes round is not a failure'
   assert.equal(f.result, null, `${f.result} ${f.why} at ${f.age} of a ${period} s loop`);
 });
 
-test('orbit AC-8: the preview lies on the real flight and stops by 1.3 s', () => {
-  const sys = SYSTEMS[1];
-  const pts = preview(sys, 1, -1.7, 0.5, 0);
-  const trail = [];
-  fly(sys, 1, -1.7, 0.5, 0, { trail });
-  // every preview point is on (within a step of) the flight's path
-  for (let k = 0; k < pts.length; k += 2) {
-    let near = Infinity;
-    for (let j = 0; j < trail.length; j += 2) near = Math.min(near, Math.hypot(pts[k] - trail[j], pts[k + 1] - trail[j + 1]));
-    assert.ok(near < 12, `point ${k / 2} is ${near} from the flight`);
-  }
-  const f = launch(sys, 1, -1.7, 0.5, 0);
-  let n = 0;
-  while (!f.result && f.age < 1.3) {
-    step(f, sys);
-    n++;
-  }
-  assert.ok(pts.length / 2 <= Math.ceil(n / 3) + 2);
+test('orbit AC-12: in System 1, throwing straight at the next planet never catches it', () => {
+  // the owner, 2026-11-09: "You just point at the planet and throw it ... it always catches it"
+  const sys = SYSTEMS[0];
+  sys.legs.forEach((leg, l) => {
+    const a = bodyAt(sys.bodies, leg.from, 0);
+    const b = bodyAt(sys.bodies, leg.to, 0);
+    const direct = Math.atan2(b.y - a.y, b.x - a.x);
+    let caught = 0;
+    let n = 0;
+    for (let off = -5; off <= 5; off += 1) {
+      for (let p = 0.25; p <= 1; p += 0.05) {
+        n++;
+        if (fly(sys, l, direct + (off * Math.PI) / 180, p, 0).result === 'captured') caught++;
+      }
+    }
+    assert.ok(caught / n < 0.05, `leg ${l + 1}: ${caught} of ${n} straight throws caught`);
+  });
 });
 
 test('orbit AC-9: the assist widens the band by 15% and the limit by 25% at most', () => {

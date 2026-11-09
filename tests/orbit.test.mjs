@@ -118,7 +118,7 @@ test('orbit AC-1: System 1 is alive before any touch: planets turn, the probe ci
     return { planet: planet[0] + planet[1] + planet[2], ring };
   });
   assert.ok(lit.planet > 120, 'the planet is drawn');
-  assert.ok(lit.ring > 120, 'the ring is drawn');
+  assert.ok(lit.ring > 40, 'the ring is drawn (a thin, faint line)');
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -211,6 +211,31 @@ test('orbit AC-4: a capture parks the probe on the ring and the next leg begins'
     return { d: Math.hypot(p.x - b.x, p.y - b.y), ring: b.ring, from: o.game.level.legs[1].from, was: o.game.level.legs[0].to };
   });
   assert.ok(Math.abs(parked.d - parked.ring) < 1, 'on the ring');
+  // the catch eases in: the next leg's flight, followed frame by frame, never turns sharply
+  const turn = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const gd = g.level.legs[g.leg].gold;
+    g.clock = g.legStart;
+    o.fire(gd.angle, 0.06 + gd.power * 0.94);
+    const pts = [];
+    for (let i = 0; i < 60 * 20 && (g.mode === 'fly' || g.mode === 'capture'); i++) {
+      o.update(1 / 60);
+      const q = o.probeWorld();
+      if (q) pts.push(q);
+    }
+    let worst = 0;
+    for (let i = 2; i < pts.length; i++) {
+      const h1 = Math.atan2(pts[i - 1].y - pts[i - 2].y, pts[i - 1].x - pts[i - 2].x);
+      const h2 = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
+      let d = Math.abs(h2 - h1);
+      if (d > Math.PI) d = 2 * Math.PI - d;
+      worst = Math.max(worst, d);
+    }
+    return { worst: (worst * 180) / Math.PI, leg: g.leg };
+  });
+  assert.equal(turn.leg, 2, 'the second leg was caught too');
+  assert.ok(turn.worst < 6, `no sudden turn: at most ${turn.worst.toFixed(1)} degrees between frames`);
   assert.equal(parked.from, parked.was, 'that planet starts the next leg');
   await context.close();
 });
@@ -316,18 +341,42 @@ test('orbit AC-7: from System 2 a touch in flight brakes once, by 35%; System 1 
   await context.close();
 });
 
-test('orbit AC-8: the preview is amber where the probe is over the limit and cool under it', async () => {
-  const { context, page } = await open({ hash: '#s2' });
+test('orbit AC-8: the aim shows direction and power only, with no preview of the path', async () => {
+  const { context, page } = await open();
   await manual(page);
   const r = await page.evaluate(() => {
     const o = window.__orbit;
-    const p = 0.06 + 0.25 * 0.94;
-    const cols = o.previewColours(-0.2, p); // past the big planet: it speeds up
-    return { first: cols[0], last: cols[cols.length - 1], n: cols.length, pts: o.previewFor(-0.2, p).length / 2 };
+    document.querySelector('[data-screen="intro"]').hidden = true;
+    o.game.mode = 'aim';
+    o.input.active = true;
+    o.input.angle = -Math.PI / 2; // straight up, where the field is empty above the aim line
+    const c = document.querySelector('#space');
+    const ctx = c.getContext('2d');
+    const dpr = c.width / innerWidth;
+    const lit = (len, power) => {
+      o.input.power = power;
+      o.draw();
+      const p = o.launchPoint(o.input.angle);
+      const x = o.view.x + p.x * o.view.s;
+      const y = o.view.y + p.y * o.view.s - len;
+      const d = ctx.getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data;
+      return d[0] + d[1] + d[2];
+    };
+    return {
+      // the line reaches further with more power
+      shortNear: lit(10, 0.3),
+      shortFar: lit(50, 0.3),
+      longFar: lit(50, 0.9),
+      // nothing is drawn beyond the line's end, however far gravity would carry the probe
+      beyond: lit(100, 0.9),
+      hasPreview: typeof o.previewFor === 'function' || typeof o.previewColours === 'function',
+    };
   });
-  assert.equal(r.first, true, 'slow at the start: cool');
-  assert.equal(r.last, false, 'fast past the big planet: amber');
-  assert.equal(r.n, r.pts, 'a colour per point');
+  assert.ok(r.shortNear > 300, `the aim line is drawn (${r.shortNear})`);
+  assert.ok(r.shortFar < 100, `a weak throw draws a short line (${r.shortFar})`);
+  assert.ok(r.longFar > 300, `a strong throw draws a long line (${r.longFar})`);
+  assert.ok(r.beyond < 100, `nothing past the line (${r.beyond})`);
+  assert.equal(r.hasPreview, false);
   await context.close();
 });
 
@@ -352,7 +401,7 @@ test('orbit AC-9: the hidden assist grows with misses, never changes the drawn r
       o.fire(-1.5, 0.5);
       const b = g.level.bodies[g.level.legs[0].to];
       const ringBefore = b.ring;
-      Object.assign(g.flight, { x: b.x + b.ring * 1.04 + 26, y: b.y, vx: 300, vy: 0 }); // heading out
+      Object.assign(g.flight, { x: b.x + b.ring * 1.04 + 26, y: b.y, vx: 0, vy: -60 }); // along the ring
       o.update(1 / 240);
       const res = g.mode;
       for (let i = 0; i < 400 && g.mode !== 'idle'; i++) o.update(1 / 60);
@@ -471,7 +520,7 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
     const g = o.game;
     o.fire(-1.5, 0.5);
     const b = g.level.bodies[g.level.legs[g.leg].to];
-    Object.assign(g.flight, { x: b.x + b.ring, y: b.y, vx: 0, vy: -10 });
+    Object.assign(g.flight, { x: b.x + b.ring + 15, y: b.y, vx: 0, vy: -150 }); // along the ring
     o.update(1 / 240);
   });
   assert.deepEqual(await cards(), { mode: 'capture', intro: false, done: false, resume: false });
@@ -576,6 +625,24 @@ test('orbit AC-14: arrows aim, Space launches and brakes, R rewinds; a cancelled
   const r2 = await page.evaluate(() => ({ a: window.__orbit.input.angle, p: window.__orbit.input.power }));
   assert.ok(Math.abs(r2.a - r.a - (1 * Math.PI) / 180) < 1e-9, 'right turns the aim, half a degree a press');
   assert.ok(Math.abs(r2.p - r.p - 0.01) < 1e-9, 'up adds power');
+  // holding a key turns and powers up smoothly, fast enough to cross the range in about a second
+  const held = await page.evaluate(() => {
+    const o = window.__orbit;
+    const p0 = o.input.power;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    for (let i = 0; i < 60; i++) o.update(1 / 60);
+    const down = p0 - o.input.power;
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown' }));
+    const a0 = o.input.angle;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+    for (let i = 0; i < 60; i++) o.update(1 / 60);
+    const turned = ((a0 - o.input.angle) * 180) / Math.PI;
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowLeft' }));
+    o.input.power = 0.5;
+    return { down, turned };
+  });
+  assert.ok(held.down > 0.35, `a one-second hold takes off a good share of the power (${held.down})`);
+  assert.ok(held.turned > 45, `a one-second hold turns the aim a long way (${held.turned} degrees)`);
   await page.keyboard.press(' ');
   assert.equal((await state(page)).mode, 'fly');
   await page.keyboard.press(' ');

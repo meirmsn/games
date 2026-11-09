@@ -18,6 +18,7 @@ export const LAUNCH_MAX = 660; // fastest launch (full drag)
 export const MAX_SPEED = 1400; // speed is clamped here, so a close pass never tunnels
 export const CATCH_WIDTH = 26; // the capture band reaches this far outside the drawn ring
 export const CATCH_SPEED = 1.75; // capture needs speed (relative to the target) under this × escape speed at the ring
+export const CATCH_ANGLE = 30; // capture needs the path within this many degrees of running along the ring
 export const ASSIST_BAND = 0.15; // the hidden assist widens the band by up to 15% (inside the ring's glow)
 export const ASSIST_SPEED = 0.25; // and raises the speed limit by up to 25%
 
@@ -138,8 +139,7 @@ export function catchLimit(level, to, assist = 0) {
   return (b.catchSpeed ?? level.catchSpeed ?? CATCH_SPEED) * (1 + ASSIST_SPEED * Math.min(1, assist)) * escapeSpeed(b, b.ring);
 }
 
-// The probe's speed relative to the target, and whether it's under the ring's limit: the trail and
-// the preview are drawn cool when it is and amber when it isn't.
+// The probe's speed relative to the target (for the brake's first lesson: too fast near the ring).
 export function relSpeed(level, to, t, vx, vy) {
   const v = bodyVel(level.bodies, to, t, { x: 0, y: 0 });
   return Math.hypot(vx - v.x, vy - v.y);
@@ -216,8 +216,13 @@ export function step(f, level, taken = null) {
   const d = Math.hypot(f.x - tx, f.y - ty);
   if (d < tb.ring * (1 + ASSIST_BAND * Math.min(1, f.assist)) + CATCH_WIDTH) {
     bodyVel(bodies, f.to, f.t, tv);
-    const rel = Math.hypot(f.vx - tv.x, f.vy - tv.y);
-    if (rel < catchLimit(level, f.to, f.assist)) {
+    const rvx = f.vx - tv.x;
+    const rvy = f.vy - tv.y;
+    const rel = Math.hypot(rvx, rvy);
+    // along the ring, not into it: the part of the speed heading in or out must be small
+    const radial = Math.abs((rvx * (f.x - tx) + rvy * (f.y - ty)) / (d || 1));
+    const along = radial <= rel * Math.sin((CATCH_ANGLE * Math.PI) / 180);
+    if (rel < catchLimit(level, f.to, f.assist) && along) {
       f.result = 'captured';
       return f;
     }
@@ -275,35 +280,4 @@ export function fly(level, legIndex, angle, power, t0 = 0, { brakeAt = -1, assis
     if (trail && n++ % 4 === 0) trail.push(f.x, f.y);
   }
   return f;
-}
-
-// The preview: the path from the launch until the first close pass of a body other than the
-// launch planet (its closest approach), at most PREVIEW_MAX seconds. Returns [x, y, …].
-export const PREVIEW_MAX = 1.3;
-export function preview(level, legIndex, angle, power, t0) {
-  const f = launch(level, legIndex, angle, power, t0);
-  const pts = [f.x, f.y];
-  let prevD = Infinity;
-  let near = -1;
-  let n = 0;
-  while (!f.result && f.age < PREVIEW_MAX) {
-    step(f, level);
-    if (n++ % 3 === 0) pts.push(f.x, f.y);
-    // nearest body other than the launch planet, in units of its radius
-    let best = Infinity;
-    let bi = -1;
-    for (let i = 0; i < level.bodies.length; i++) {
-      if (i === f.from) continue;
-      const d = Math.hypot(f.x - f.pos[i * 2], f.y - f.pos[i * 2 + 1]) / level.bodies[i].r;
-      if (d < best) {
-        best = d;
-        bi = i;
-      }
-    }
-    if (bi === near && best > prevD && best < 4.5) break; // just passed its closest approach
-    near = bi;
-    prevD = best;
-  }
-  pts.push(f.x, f.y);
-  return pts;
 }

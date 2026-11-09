@@ -23,14 +23,14 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
 **Concept check** (the guidelines' questions, answered after two rounds of adversarial review):
 
 - Verb: pull back and release, watch a readable arc bend around a planet, and the settle: the probe
-  spirals into the ring with a chord.
+  eases into the ring's orbit with a chord.
 - A typical 5-second choice: chase the leg's line of motes, a close pass by a planet (risking a crash)
   or a wide arc (risking drifting away), or take the plain capture; brake early (fall inward) or
   late (slow enough to be caught).
-- How it teaches: no text. System 1's first ring is caught by any roughly aimed flick. The preview
-  thread shows the first bend and is amber while the probe is too fast to be caught. The brake
-  arrives with a slow-motion moment and a pulsing flame on the probe. Moons first appear where
-  waiting for one is plainly right.
+- How it teaches: no text and no path preview. A throw straight at a planet hits it, and the ghost
+  of that flight shows why; a throw past it swings round into the ring. The brake arrives with a
+  slow-motion moment and a pulsing flame on the probe. Moons first appear where waiting for one is
+  plainly right.
 - Three clocks: a flight resolves every 3–8 s; a new system with a new element and new look every
   2–3 minutes; you come back for gold medals, the "one shot" badge and the par.
 - What an expert does differently: brakes at the right moment, threads each leg's line of motes in
@@ -64,17 +64,23 @@ three differ.
   gives the same flight. Physics runs at a fixed 1/240 s step, accumulated from frame time, so 60
   and 120 Hz screens agree. Rejected: launching from wherever the circling probe happens to be,
   which made retries unrepeatable (first concept review, 2026-11-09).
-- Gravity is shown by its effect, not by rings. A comet-coloured thread previews the real path up
-  to the first close pass of another body (at most 1.3 s), fading out. There are no gravity-reach
-  rings and no dotted arc; rejected: reach rings, which mislead (inverse-square gravity reaches
-  everywhere) and look like an existing well-known game (first concept review, 2026-11-09).
-- Capture has a speed limit. Entering the ring's band (its radius plus 26 units) slower than the
-  limit, relative to the target, catches the probe, which spirals into the ring over 0.4 s.
-  Otherwise it flies through. The limit is 1.75 × the escape speed at the ring (2.4 × in System 1).
-  The preview thread and the flight trail are drawn, point by point, cool while the probe's speed
-  relative to the target is under the target's current limit (the assist included) and amber while
-  it's over. Capture is a disk test: anywhere inside the band counts, inside the ring too (second
-  concept review and spec review, 2026-11-09).
+- Gravity is shown by its effect alone, never ahead of the throw. The aim is one thin line out of
+  the probe along the throw, its length the power, with a small dot at its end; nothing previews
+  where the probe will go. Rejected: a preview thread of the path, which made it too easy (owner,
+  2026-11-09: "It even tells you, the controls are showing you if it's gonna bend or not bend.
+  It's very easy to play the game"); and gravity-reach rings, which mislead and look like an
+  existing well-known game (first concept review, 2026-11-09).
+- Capture is an orbit, not a net. Inside the ring's band (its radius plus 26 units, inside the ring
+  too), the probe is caught only if it moves along the ring, its path within 30° of the ring's
+  direction, and slower than the ring's limit relative to the target: 1.75 × the escape speed at
+  the ring by default, with a per-system and per-planet value tuned in `orbit/levels.js`. A throw
+  straight at a planet comes in head-on and hits it; you throw past the planet so the probe swings
+  round into its orbit. A caught probe eases into the ring over 1 s: its distance follows a smooth
+  curve from its own speed in or out, and its speed round the planet blends to the ring's,
+  carrying on the way it was flying. Rejected: catching any probe in the band and snapping it onto
+  the ring in 0.4 s (owner, 2026-11-09: "if you pointed towards the planets and it's not going
+  straight into it, it seems like it always catches it. It doesn't feel natural. It just goes
+  almost at a right angle and then ploop, it clacks. It latches into the orbit").
 - The tool is a brake, not a thrust. From System 2, one tap per flight cuts the probe's speed
   relative to the target by 35%. A late brake gets under the ring's limit; an early one drops the
   probe inward. Rejected: a +30% burn, which fought the speed limit (second concept review,
@@ -116,21 +122,29 @@ three differ.
   cancels, and a second finger is ignored. A cancelled pointer, or a resize or rotation, cancels a
   drag without launching; a flight carries on through a resize in world units. The leg's clock
   (moons) pauses while a drag is held. A touch during flight brakes the moment it lands (from
-  System 2; in System 1 it does nothing), and dragging it aims nothing. Keyboard: left and right turn the aim, up and
-  down set the power (the preview shows and the clock pauses, as in a drag), Space launches and
-  brakes in flight, R rewinds. The mouse drags like a finger. In landscape the field letterboxes
-  and stays playable (first concept review and spec review, 2026-11-09; a touch brakes as it lands:
-  tuning, 2026-11-09).
+  System 2; in System 1 it does nothing), and dragging it aims nothing. Keyboard: left and right turn
+  the aim, up and down set the power (the aim line shows and the clock pauses, as in a drag); a tap
+  nudges by half a degree or 1% power, and a held key moves smoothly, easing in over a third of a
+  second to 90° a second or 90% power a second (Shift: a quarter of that). Space launches and brakes
+  in flight, R rewinds. The mouse drags like a finger. In landscape the field letterboxes and stays
+  playable (first concept review and spec review, 2026-11-09; a touch brakes as it lands: tuning,
+  2026-11-09; held keys: owner, 2026-11-09: "you touch the arrows and then it grows, but it grows
+  slowly ... it feels odd").
 - Look: pitch black, two layers of slowly twinkling stars, and a very faint, darkened nebula from
   Skyboxes Space that differs per system. Planets are the pack's whole planets with a slowly
-  turning cloud layer from its parts, a soft shadow on the side away from one sun direction, and a
-  thin atmosphere glow. The probe is a small white-cyan light with a fading trail (session,
-  2026-11-09).
-- Sound: a quiet low drone; a stepped tick as drag power rises; a whoosh on launch; a chime per mote,
-  climbing in pitch within a flight; a roar on a skim; a thump on a brake; a chord on capture; a
-  muffled thud on a crash; a falling blip when lost; a jingle at a system's end. All play under the
-  site-wide mute and are unlocked by the first touch. They are MP3 files from Kenney's audio packs
-  (session, 2026-11-09).
+  turning cloud layer from its parts and a soft shadow on the side away from one sun direction;
+  a skim makes the planet's air glow for a moment. The target's ring is one thin plain circle,
+  brighter while it catches; stardust is small plain dots; the probe is a small white-cyan light
+  with a thin trail in one soft colour. Rejected: glow bands, dashed turning rings, a parking
+  circle, sparkle-shaped motes and a trail coloured by speed (owner, 2026-11-09: "we need to make it
+  much more visually simpler. It looks ugly, the controls, and also clunky").
+- Sound: a slow pad of low sines for the drone; a tiny soft blip as drag power rises; an airy swell
+  on launch; a glassy ping per mote, climbing in pitch within a flight; a breath of air on a skim; a
+  soft low pulse on a brake; a warm open chord on capture; a far-off muffled thud on a crash; a tone
+  falling away when lost; slow rising bells at a system's end. Each has a little echo so it hangs in
+  the dark. They are synthesised by `scripts/orbit/make-sounds.py` into MP3s, and all play under the
+  site-wide mute, unlocked by the first touch. Rejected: Kenney's clips (owner, 2026-11-09: "we need
+  better sounds. They don't sound like the space. They sound weird").
 - Interruptible: when the page is hidden, play pauses. A flight in progress is undone: its launch
   isn't counted, its motes stay caught, and on return the probe is back at the leg's start and
   waits for a touch. A capture in progress completes instead, and an end card stays as it was
@@ -145,14 +159,17 @@ three differ.
 - Tuning targets, pinned by `tests/orbit-levels.test.mjs`, measured over roughly aimed flicks
   (within 35° of the straight line to the target, any power above a quarter) and, where moons
   move, over leg start times across a full moon period; where there's a brake, a flick counts if
-  braking at some moment catches it. System 1's first leg captures at least 60% at leg time 0. Every
-  leg can be captured. In each system leg 3 captures less often than leg 2, and leg 4 most often of
-  legs 2–4: leg 1 brings the system's new thing, so it is tuned by its own target. Each leg's
-  stored gold route captures and takes every mote of its leg, so a par-length gold run exists.
-  On every leg the median captured flight takes 0.7–2.5 s, so a leg is an arc, not a hop. System 2's first leg captures under 20%
-  without the brake and at least 40% with it. On System 3's first moon leg the best start time
-  captures at least twice as often as the worst (session and spec review, 2026-11-09; the waves
-  rule on legs 2–4 and the 0.7–2.5 s flight range: tuning, 2026-11-09).
+  braking at some moment catches it. In System 1 a throw straight at the next planet (within 5°)
+  is caught less than 5% of the time on every leg. System 1's first leg captures at least 30% at
+  leg time 0. Every leg can be captured. In each system leg 3 captures less often than leg 2, and
+  leg 4 most often of legs 2–4: leg 1 brings the system's new thing, so it is tuned by its own
+  target. Each leg's stored gold route captures and takes every mote of its leg, so a par-length
+  gold run exists. On every leg the median captured flight takes 0.7–3.5 s, so a leg is an arc,
+  not a hop. System 2's first leg captures under 10% without the brake and at least 25% with it.
+  On System 3's first moon leg, on a plain throw, the best start time captures at least twice as
+  often as the worst (session and spec review, 2026-11-09; the waves rule on legs 2–4: tuning,
+  2026-11-09; harder throughout, the straight-throw rule and these numbers: owner, 2026-11-09:
+  "it's too easy ... You just point at the planet and throw it").
 
 ## Acceptance items
 
@@ -165,10 +182,10 @@ three differ.
 - **AC-3** Driven through the game's own frame loop with frames of 1/60 s and of 1/120 s, the same
   aim at the same leg time, with a brake tap at the same moment, ends the same way at the same
   place.
-- **AC-4** A probe entering the target's band (inside the ring too) under the speed limit is caught
-  and parks on the ring;
-  that planet becomes the next leg's start and the next ring appears. One entering over the limit
-  flies through.
+- **AC-4** A probe in the target's band (inside the ring too), moving within 30° of along the ring
+  and under the speed limit, is caught and eases onto the ring with no sudden turn; that planet
+  becomes the next leg's start and the next ring appears. One over the limit, or heading in
+  steeper than 30°, is not caught.
 - **AC-5** Hitting a body, swinging out of the field, looping around a non-target body or flying 8 s
   is a failed flight: within 1 s the probe is back at the leg's start with the moons rewound, a ghost
   trail of the failed flight shows, and play goes on with no lives lost and no game over. R in
@@ -177,9 +194,8 @@ three differ.
 - **AC-6** Motes caught on a failed flight stay caught; a skim is counted apart from motes.
 - **AC-7** From System 2, one tap during flight cuts the probe's speed relative to the target by
   35%, once per flight; System 1 has no brake.
-- **AC-8** The preview thread follows the real path (its points lie on the flight that launch
-  makes), stops by 1.3 s, and each point is amber when the probe's speed relative to the target is
-  over the current limit and cool when under.
+- **AC-8** While aiming, only a line along the throw is drawn, longer with more power; nothing
+  previews the probe's path beyond it.
 - **AC-9** With 0, 2, 3, 4 and 5 failed flights on a leg, the capture band grows by 0, 0, 5, 10
   and 15% of the ring's radius and the speed limit by 0, 0, 8.3, 16.7 and 25%; the drawn ring
   stays the same size; a capture resets them.
@@ -193,8 +209,9 @@ three differ.
 - **AC-13** Hiding the page in flight pauses play; on return the probe is at the leg's start,
   neither the launch nor a failed flight is counted, the flight's motes stay, and it waits for a touch.
   Hiding it during a capture completes the capture.
-- **AC-14** Arrow keys aim and set power, Space launches and brakes, and R rewinds. A cancelled
-  pointer or a resize during a drag launches nothing.
+- **AC-14** Arrow keys aim and set power: a tap nudges, and a one-second hold turns the aim more than
+  45° or takes off more than 35% power. Space launches and brakes, and R rewinds. A cancelled pointer
+  or a resize during a drag launches nothing.
 - **AC-15** `#s2` and `#s3` start at System 2 and System 3 on a fresh browser; `#s9` and `#x`
   start System 1; changing the hash loads its system.
 - **AC-16** The landing page's Orbit tile is a link to `orbit/`, no longer "Coming soon", and the
