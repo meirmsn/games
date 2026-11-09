@@ -11,7 +11,7 @@
 // The back button sits in the top-left corner, clear of the notch, and plays a short sound before
 // going back. The game draws everywhere else. Escape also goes back on desktop, except while a text
 // field or an open dialog has focus, or when the game calls event.preventDefault() on that keydown.
-// Before leaving, the shell always asks "Are you sure you want to go back?" (Stay / Go back),
+// Before leaving, the shell always asks "Are you sure you want to leave?" (Stay / Leave),
 // because leaving loses whatever progress the game holds.
 import { createSound } from './sound.js';
 
@@ -50,16 +50,16 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
   back.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>';
 
-  // "Are you sure you want to go back?": Stay (the default, and what Escape does) or Go back.
+  // "Are you sure you want to leave?": Stay (the default, and what Escape does) or Leave.
   const ask = document.createElement('dialog');
   ask.className = 'shell-leave';
   ask.setAttribute('aria-labelledby', 'shell-leave-title');
   ask.innerHTML =
-    '<p class="shell-leave-title" id="shell-leave-title">Are you sure you want to go back?</p>' +
+    '<p class="shell-leave-title" id="shell-leave-title">Are you sure you want to leave?</p>' +
     '<p class="shell-leave-text">You’ll lose any progress you may have made.</p>' +
     '<div class="shell-leave-actions">' +
     '<button type="button" class="shell-leave-stay" data-shell-stay autofocus>Stay</button>' +
-    '<button type="button" class="shell-leave-go" data-shell-leave>Go back</button>' +
+    '<button type="button" class="shell-leave-go" data-shell-leave>Leave</button>' +
     '</div>';
   ask.querySelector('[data-shell-stay]').addEventListener('click', () => ask.close());
   ask.querySelector('[data-shell-leave]').addEventListener('click', () => leave());
@@ -80,7 +80,7 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
     if (e) e.preventDefault();
     if (leaving || ask.open) return;
     if (typeof ask.showModal === 'function') ask.showModal();
-    else if (window.confirm('Are you sure you want to go back? You’ll lose any progress you may have made.')) leave();
+    else if (window.confirm('Are you sure you want to leave? You’ll lose any progress you may have made.')) leave();
   }
   back.addEventListener('click', (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;

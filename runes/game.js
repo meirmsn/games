@@ -12,7 +12,6 @@ const KNOBS = {
   stepMinPx: 28, // ... but at least this many pixels
   axisLead: 1.5, // an axis leads once it is this many times the other
   clampCells: 0.3, // movement against a wall is held to this
-  backCells: 0.8, // movement toward the previous stone that takes a step back
   tapPx: 10, // a tap moves less than this ...
   tapMs: 300, // ... and lasts less than this
   ghostDelay: 4000, // level 1: the ghost light first shows after this long without input
@@ -288,22 +287,7 @@ function stepTo(cell) {
   return true;
 }
 
-function stepBack() {
-  if (game.done) return false;
-  reopen();
-  const len = game.s.path.length;
-  const st = R.back(game.s);
-  if (!st) return false;
-  sound.play('chime', { rate: chimeRate(len) * 0.94, gain: 0.45 });
-  for (const [c, was] of st.changes) {
-    game.anims.set(c, { t: performance.now(), up: was });
-  }
-  if (st.changes.length) sound.play('drip', { gain: 0.6 });
-  afterChange();
-  return true;
-}
-
-// Cut the line back to `cell` (a tap on a lit stone, Hint, Restart).
+// Cut the line back to `cell` (Hint, Restart).
 function cutTo(cell) {
   if (game.done) return false;
   const idx = game.s.path.indexOf(cell);
@@ -590,13 +574,9 @@ function feed(dx, dy) {
     if (lead < KNOBS.axisLead * other) break;
     const d = horizontal ? (drag.ax > 0 ? 1 : 3) : drag.ay > 0 ? 2 : 0;
     const target = dirCell(d);
-    const p = game.s.path;
-    const prev = p.length > 1 ? p[p.length - 2] : -2;
     const stepPx = Math.max(KNOBS.stepMinPx, KNOBS.stepCells * box.cell);
-    if (target === prev) {
-      if (lead < KNOBS.backCells * box.cell) break;
-      stepBack();
-    } else if (target >= 0 && !R.blocked(game.s, target)) {
+    // There is no going back: a lit stone, the previous one included, is a wall like water.
+    if (target >= 0 && !R.blocked(game.s, target)) {
       if (lead < stepPx) break;
       stepTo(target);
     } else {
@@ -617,10 +597,7 @@ function feed(dx, dy) {
 function tap(x, y) {
   const c = cellAt(x, y);
   if (c < 0) return;
-  if (game.s.lit[c]) {
-    cutTo(c);
-    return;
-  }
+  if (game.s.lit[c]) return; // no going back: Restart starts the line again
   const h = R.head(game.s);
   if (R.dirOf(game.level, h, c) >= 0) {
     if (!stepTo(c)) bump(c);
@@ -673,7 +650,7 @@ function endDrag(e, cancelled) {
 function actionable(c) {
   if (c < 0 || ended() || game.overlay) return false;
   const s = game.s;
-  if (s.lit[c]) return true; // the head (drag from it) or a lit stone (cut back to it)
+  if (c === R.head(s)) return true; // the head: drag from it
   return R.dirOf(game.level, R.head(s), c) >= 0 && !R.blocked(s, c);
 }
 function hover(x, y) {
@@ -695,9 +672,7 @@ window.addEventListener('keydown', (e) => {
     if (ended()) return;
     startMusic();
     const t = dirCell(keys[e.key]);
-    const p = game.s.path;
-    if (p.length > 1 && t === p[p.length - 2]) stepBack();
-    else if (t >= 0 && !stepTo(t)) bump(t);
+    if (t >= 0 && !stepTo(t)) bump(t); // a lit stone, the previous one included, is a wall
     return;
   }
   if (e.key === 'r' || e.key === 'R') {
@@ -1080,7 +1055,6 @@ window.__runes = {
   loadBoard: (rows) => loadLevel(game.index, { push: false, rows }),
   dragging: () => drag.id !== null,
   stepTo,
-  stepBack,
   restart,
   hint,
   cutTo,

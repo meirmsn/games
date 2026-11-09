@@ -109,10 +109,12 @@ test('runes AC-2: a relative drag steps the line, a drag back takes it back, wal
   const x = box.ox + c;
   await drag(page, x, y, 0.62 * c, 0);
   assert.deepEqual(await path(page), [0, 1], '0.6 cell right steps one stone right');
-  await drag(page, x, y, -0.5 * c, 0);
-  assert.deepEqual(await path(page), [0, 1], 'half a cell back is not enough');
-  await drag(page, x, y, -0.82 * c, 0);
-  assert.deepEqual(await path(page), [0], '0.8 cell back takes the step back');
+  // No going back: dragging toward the previous stone, however far, moves nothing and stores nothing.
+  await drag(page, x, y, -3 * c, 0, { end: false });
+  assert.deepEqual(await path(page), [0, 1], 'a drag back takes nothing back');
+  await drag(page, x - 3 * c, y, 0.95 * c, 0, { start: false });
+  assert.deepEqual(await path(page), [0, 1, 2], 'the drag back stored nothing');
+  await page.evaluate(() => window.__runes.restart());
   // Push left (off the board) for three cells, then right: nothing was stored by the push.
   await drag(page, x, y, -3 * c, 0, { end: false });
   assert.deepEqual(await path(page), [0]);
@@ -144,37 +146,37 @@ test('runes AC-2: a relative drag steps the line, a drag back takes it back, wal
   await context.close();
 });
 
-test('runes AC-3: taps step and cut; Restart clears the line; there is no Undo button', async () => {
+test('runes AC-3: taps step; a tap on a lit stone does nothing; Restart clears the line; there is no Undo button', async () => {
   const { context, page } = await open();
   await tapCell(page, 1);
   await tapCell(page, 2);
   await tapCell(page, 5);
   assert.deepEqual(await path(page), [0, 1, 2, 5], 'taps on neighbours step');
   await tapCell(page, 1);
-  assert.deepEqual(await path(page), [0, 1], 'a tap on a lit stone cuts back to it');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'a tap on a lit stone takes nothing back');
   await page.click('[data-restart]');
   assert.deepEqual(await path(page), [0], 'Restart clears the line');
   assert.equal(await page.locator('[data-undo], [data-result-undo]').count(), 0, 'no Undo button anywhere');
   await context.close();
 });
 
-test('runes AC-4: arrow keys step and step back, R restarts, and Backspace and Z undo nothing', async () => {
+test('runes AC-4: arrow keys step, never back; R restarts; Backspace and Z do nothing', async () => {
   const { context, page } = await open();
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowDown');
   assert.deepEqual(await path(page), [0, 1, 2, 5]);
   await page.keyboard.press('ArrowUp');
-  assert.deepEqual(await path(page), [0, 1, 2], 'an arrow toward the previous stone steps back');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'an arrow toward the previous stone does nothing');
   await page.keyboard.press('Backspace');
   await page.keyboard.press('z');
-  assert.deepEqual(await path(page), [0, 1, 2], 'Backspace and Z change nothing');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Backspace and Z change nothing');
   await page.keyboard.press('r');
   assert.deepEqual(await path(page), [0], 'R restarts');
   await context.close();
 });
 
-test('runes AC-5: entering a Rise raises its water neighbours; taking the step back lowers them', async () => {
+test('runes AC-5: entering a Rise raises its water neighbours; Restart lowers them again', async () => {
   const { context, page } = await open();
   // S R .     the Rise (1) has water to its right (2) and below (4); the source (0) is lit.
   // o . .
@@ -184,7 +186,7 @@ test('runes AC-5: entering a Rise raises its water neighbours; taking the step b
   assert.deepEqual(await up(), [1, 1, 0, 1, 0, 0, 1, 0, 0]);
   await page.evaluate(() => window.__runes.stepTo(1));
   assert.deepEqual(await up(), [1, 1, 1, 1, 1, 0, 1, 0, 0], 'cells 2 and 4 rose; nothing else changed');
-  await page.evaluate(() => window.__runes.stepBack());
+  await page.evaluate(() => window.__runes.restart());
   assert.deepEqual(await up(), [1, 1, 0, 1, 0, 0, 1, 0, 0], 'they sank again');
   await context.close();
 });
@@ -200,13 +202,12 @@ test('runes AC-6: leaving a Sink sinks its plain neighbours except the next, nev
   assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'nothing sinks while the light stands on it');
   await page.evaluate(() => window.__runes.stepTo(2));
   assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'the next stone is spared, the Rise and the source stay');
-  await page.evaluate(() => window.__runes.stepBack());
   await board(page, ['SKo', 'ooo', 'Goo']);
   await page.evaluate(() => window.__runes.stepTo(1));
   await page.evaluate(() => window.__runes.stepTo(4));
   assert.deepEqual(await up(), [1, 1, 0, 1, 1, 1, 1, 1, 1], 'stone 2 sank as the light left for 4');
-  await page.evaluate(() => window.__runes.stepBack());
-  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'taking the step back raises it again');
+  await page.evaluate(() => window.__runes.restart());
+  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'Restart raises it again');
   await context.close();
 });
 
@@ -278,7 +279,7 @@ test('runes AC-7: each state shows only its own panel, and the board takes input
   await context.close();
 });
 
-test('runes AC-8: with Guidance on (off by default), a line that can no longer finish dims the gate and marks stranded stones; a step back restores it', async () => {
+test('runes AC-8: with Guidance on (off by default), a line that can no longer finish dims the gate and marks stranded stones; Restart restores it', async () => {
   const { context, page } = await open({ hash: '2' });
   assert.equal(await page.evaluate(() => window.__runes.guidance()), false, 'Guidance starts off');
   assert.equal(await page.locator('[data-guidance]').getAttribute('aria-pressed'), 'false');
@@ -316,7 +317,7 @@ test('runes AC-8: with Guidance on (off by default), a line that can no longer f
   assert.equal(await page.locator('[data-guidance]').getAttribute('aria-pressed'), 'true');
   await page.waitForFunction(() => window.__runes.game.dead === true);
   assert.ok((await page.evaluate(() => window.__runes.game.stranded.length)) > 0, 'a stranded stone is marked');
-  await page.evaluate(() => window.__runes.stepBack());
+  await page.click('[data-restart]');
   await page.waitForFunction(() => window.__runes.game.dead === false && window.__runes.game.deadKnown);
   assert.equal(await page.evaluate(() => window.__runes.game.stranded.length), 0);
   await page.reload();
@@ -429,7 +430,7 @@ test('runes AC-11: Hint cuts back to the start shared with a solution and marks 
   await context.close();
 });
 
-test('runes AC-12: the chime climbs with the line and falls on a step back; Rise, Sink and solving have their sounds; mute silences all', async () => {
+test('runes AC-12: the chime climbs with the line and falls on a Restart; Rise, Sink and solving have their sounds; mute silences all', async () => {
   const { context, page } = await open();
   await page.evaluate(() => {
     const r = window.__runes;
@@ -445,13 +446,10 @@ test('runes AC-12: the chime climbs with the line and falls on a step back; Rise
   const chimes = (await log()).filter(([n]) => n === 'chime').map(([, r]) => r);
   assert.equal(chimes.length, 3);
   assert.ok(chimes[0] < chimes[1] && chimes[1] < chimes[2], `rates climb: ${chimes}`);
-  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('r');
   const back = (await log()).find(([n]) => n === 'chime');
-  assert.ok(back[1] < chimes[2], 'a step back plays a falling note');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press('ArrowLeft');
+  assert.ok(back[1] < chimes[2], 'a Restart plays a falling note');
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) await page.keyboard.press(k);
   assert.ok((await log()).some(([n]) => n === 'solved'), 'solving plays the jingle');
   await page.evaluate(() => window.__runes.loadBoard(['SR.', 'o..', 'G..']));
   await page.evaluate(() => window.__runes.stepTo(1));
@@ -711,9 +709,9 @@ test('runes AC-21: with a mouse, the cursor is a hand over stones the line can a
     window.__runes.stepTo(1);
     window.__runes.stepTo(2);
   });
-  p = await at(1); // a lit stone (not the head): a tap cuts back to it
+  p = await at(1); // a lit stone (not the head): nothing to do there
   await mouse(p.x, p.y);
-  assert.equal(await cursor(), 'pointer');
+  assert.equal(await cursor(), 'auto');
   await page.evaluate(() => window.__runes.restart());
   p = await at(3); // water
   await mouse(p.x, p.y);

@@ -41,8 +41,10 @@ changes under the line you draw.
   gate" as the goal, under which a Rise is always good and a Sink always bad, so there is no choice
   (concept attack, round 1); a Sink that fires as the light enters it, which drowns the stone you'd
   step to next (found by the level search) (session proposal, 2026-11-09).
-- Every step can be taken back exactly, in the reverse order, undoing what it raised or sank, by
-  dragging back or tapping a lit stone (there is no Undo button: changed after the go). There are no
+- The line only goes forward: once a stone is lit it stays lit until Restart (or Hint, which cuts
+  the line back to where it went wrong), and each cut undoes exactly what its steps raised or sank,
+  in reverse order (changed after the go: dragging back and tapping a lit stone used to take the
+  line back, and an Undo button did). There are no
   lives. A line that ends unsolved shows the result panel with a tip (changed after the go). With
   Guidance on (opt-in, changed after the go), when the line can no longer finish the gate's glow
   dims at once and stones the rules can show are cut off crack and dim. A search from the current
@@ -72,11 +74,11 @@ changes under the line you draw.
 - Input. **Drag anywhere (relative):** each 0.6 cell (at least 28 px) of movement along the leading
   axis steps the line one stone that way; an axis leads once it is 1.5 times the other; both axes
   reset after each step; movement into water, a lit stone or off the board is clamped to 0.3 cell
-  so pushing against a wall stores nothing, except toward the previous stone, where 0.8 cell takes
-  one step back. The finger never has to sit on the line's head, so it never covers what it acts on. A
-  **tap** (under 10 px and 300 ms) on a neighbour stone of the head steps there; on a lit stone, cuts
-  the line back to it. **Restart** clears the line; there is no Undo button (changed after the go).
-  Keyboard: arrow keys and WASD step or step back, R restart.
+  so pushing against a wall stores nothing; the previous stone is a wall like any lit stone (changed
+  after the go: 0.8 cell toward it used to take a step back). The finger never has to sit on the line's head, so it never covers what it acts on. A
+  **tap** (under 10 px and 300 ms) on a neighbour stone of the head steps there; on a lit stone, does
+  nothing. **Restart** clears the line; there is no Undo button (changed after the go).
+  Keyboard: arrow keys and WASD step, R restart.
   A second finger is ignored. Input never freezes: a rune's animation takes 150 ms and its state
   changes at once. Rejected: dragging the head under the finger, which hides the head and the
   stones around it (concept attack, rounds 1 and 2) (session proposal, 2026-11-09).
@@ -97,7 +99,7 @@ changes under the line you draw.
   concept attack, round 2). Water is dark and moving, with drifting motes. Each chapter has its own
   sky and water: Dawn rose and teal, Tide deep blue and silver (session proposal, 2026-11-09).
 - Sound, Kenney's, as MP3 under the site-wide mute: each step chimes one glass note whose pitch
-  climbs a pentatonic scale with the line's length (retracting plays it falling); a Rise grinds
+  climbs a pentatonic scale with the line's length (Restart plays it falling); a Rise grinds
   stone up with a splash, a Sink gulps; the gate opens with a short jingle; one calm music loop. The
   sound adds to the picture and never replaces it (session proposal, 2026-11-09).
 - Memory: localStorage keeps which levels are solved (losing it re-locks every level after the
@@ -129,32 +131,36 @@ changes under the line you draw.
 
 - Changed after the go, from the owner's second playtest (chat, 2026-11-09), in their words:
   - **Levels open one at a time.** "I don't think we should allow you to go to further levels unless you finish each one … I think you should lock them, and you do one, then that unlocks the next one." Each level is locked until the one before it is solved; the bonus grouping goes, as nothing is optional now; a link to a locked level opens the furthest level open (so the URL no longer opens any level, and progress lives only in this browser's storage).
-  - **Ask before leaving, in every game.** "The back button on the page should tell you, are you sure you want to leave? You're going to lose your progress. That's not for this game, that's for all games … we can do it on this PR, and then it will be available in all games when this one is merged." The shared shell (`shared/game-shell.js`) asks "Leave the game?" with Stay and Leave before the back button or Escape leaves; a game can say it has nothing to lose (`hasProgress`). Runes asked only while a line was drawn and unsolved; then, from the owner's third playtest (chat, 2026-11-09): "When you are in the level selector, we don't show you a warning if you tap the exit … I think that warning should show up regardless of where you are in the game, maybe except on the beginning when you haven't done anything." Then, from the owner's fourth note (chat, 2026-11-09): "instead of going into the logic of the game, just make it generic … Just show it always. Like, are you sure you will go back? … You will lose any [progress] that you may have made." The shell now always asks, in every game, "Are you sure you want to go back? You'll lose any progress you may have made." (Stay / Go back); the per-game `hasProgress` is gone.
-  - **Restart only.** "I don't think we should have an undo on the buttons at the bottom, nor at the end when you lose. Like, it should be restart only." The Undo button, the panel's "Undo last move" and Backspace/Z go; dragging back along the line and tapping a lit stone still take it back, as part of drawing.
+  - **Ask before leaving, in every game.** "The back button on the page should tell you, are you sure you want to leave? You're going to lose your progress. That's not for this game, that's for all games … we can do it on this PR, and then it will be available in all games when this one is merged." The shared shell (`shared/game-shell.js`) asks "Leave the game?" with Stay and Leave before the back button or Escape leaves; a game can say it has nothing to lose (`hasProgress`). Runes asked only while a line was drawn and unsolved; then, from the owner's third playtest (chat, 2026-11-09): "When you are in the level selector, we don't show you a warning if you tap the exit … I think that warning should show up regardless of where you are in the game, maybe except on the beginning when you haven't done anything." Then, from the owner's fourth note (chat, 2026-11-09): "instead of going into the logic of the game, just make it generic … Just show it always. Like, are you sure you will go back? … You will lose any [progress] that you may have made." The shell now always asks, in every game; the per-game `hasProgress` is gone. Then, from the owner's sixth note (chat, 2026-11-09): "If you don't read it, the go back, it's unclear if you go back to the game or go back to the main menu … it should be stay or leave. Are you sure you want to leave? You lose any progress you may have made, stay or leave … the leave should be in some … red color." It reads "Are you sure you want to leave? You'll lose any progress you may have made." with Stay (white, the default) and Leave (red).
+  - **Restart only.** "I don't think we should have an undo on the buttons at the bottom, nor at the end when you lose. Like, it should be restart only." The Undo button, the panel's "Undo last move" and Backspace/Z go; dragging back and tapping a lit stone still took the line back then (see the fifth note below).
   - **The compass's label.** "the compass, I think it should say guidance, show tiles that become unreachable." Its hover label reads "Guidance: show tiles that become unreachable".
+
+- Changed after the go, from the owner's fifth note (chat, 2026-11-09), in their words: "I don't think you should allow to go back. I drag back and it let me go back, like backtrack. I don't think we should do that. It makes it too easy to play." Dragging toward the previous stone, an arrow key toward it and a tap on a lit stone now do nothing; the line only goes forward, and Restart starts it again. Hint still cuts the line back to where it left every solution, as the help the player chooses (session proposal, put to the owner).
 
 ## Acceptance items
 
 - **AC-1** Opening `runes/` shows level 1's board already moving (two frames 300 ms apart differ
   before any input), with Restart, Hint, Guidance and the level button, and no errors — `tests/runes.test.mjs`.
 - **AC-2** A relative drag of 0.6 cell steps the line one stone in the drag's leading direction, from
-  anywhere on the screen, also from below the board; 0.8 cell back toward the previous stone takes
-  the step back; pushing into water or a lit stone steps nothing and stores nothing; a second finger
+  anywhere on the screen, also from below the board; dragging back toward the previous stone, however
+  far, takes nothing back and stores nothing; pushing into water or a lit stone steps nothing and
+  stores nothing; a second finger
   moves nothing — `tests/runes.test.mjs`.
 - **AC-3** A tap (under 10 px of movement) on a neighbour stone of the head steps there; on a lit
-  stone, cuts the line back to it; Restart clears the line to the source; there is no Undo button — `tests/runes.test.mjs`.
-- **AC-4** Arrow keys step and step back, R restarts, and Backspace and Z change nothing — `tests/runes.test.mjs`.
+  stone, does nothing; Restart clears the line to the source; there is no Undo button — `tests/runes.test.mjs`.
+- **AC-4** Arrow keys step, and an arrow toward the previous stone does nothing; R restarts; Backspace
+  and Z change nothing — `tests/runes.test.mjs`.
 - **AC-5** Entering a Rise raises its water neighbours into stones (never a cell the light holds);
-  taking that step back lowers them again — `tests/runes.test.mjs`.
+  Restart lowers them again — `tests/runes.test.mjs`.
 - **AC-6** Leaving a Sink sinks its unlit plain-stone neighbours except the one the light goes to,
-  and never a rune, the source or the gate; taking that step back raises them again — `tests/runes.test.mjs`.
+  and never a rune, the source or the gate; Restart raises them again — `tests/runes.test.mjs`.
 - **AC-7** A step onto the gate while another stone is dark ends the attempt unsolved; a step onto it
   that leaves no stone dark (counting what that step sinks) solves the level: the result panel shows
   "Solved!" in the bar's place, the level's stone on the level select is lit, the mark survives a
   reload, and Next opens the next level — `tests/runes.test.mjs`.
 - **AC-8** Guidance starts off: a line that can no longer finish shows nothing until it ends. With
   Guidance on (remembered after a reload), such a line dims the gate and marks the stones it cut off
-  for good as stranded; taking back the step that lost it restores the gate's glow — `tests/runes.test.mjs`.
+  for good as stranded; Restart restores the gate's glow — `tests/runes.test.mjs`.
 - **AC-9** Every level in `runes/levels.js` uses only stones, water, the source, the gate, Rise and
   Sink; has 1 to 3 solutions; fails the greedy line when it has a rune; and each of its runes passes
   the generator's checks (a Rise constrains, a Sink is needed, every rune is two-sided), with no
@@ -166,8 +172,8 @@ changes under the line you draw.
   `#99` and `#abc` open level 1 and rewrite the hash — `tests/runes.test.mjs`.
 - **AC-11** Hint cuts the line back to the longest start it shares with one of the stored solutions
   (the one sharing most, the first listed on a tie) and marks that solution's next stone — `tests/runes.test.mjs`.
-- **AC-12** Each step plays the chime at a rate that rises with the line's length and a step back at
-  a falling one; a Rise and a Sink play their own sounds; solving plays the jingle; with the site
+- **AC-12** Each step plays the chime at a rate that rises with the line's length and Restart at a
+  falling one; a Rise and a Sink play their own sounds; solving plays the jingle; with the site
   muted, nothing plays — `tests/runes.test.mjs`.
 - **AC-13** Hiding the page ends a drag in progress, keeps the line and suspends the sound — `tests/runes.test.mjs`.
 - **AC-14** At 360 × 640 and at 390 × 844, a 6 × 8 board fits on screen with cells of at least 44 px,
@@ -184,16 +190,16 @@ changes under the line you draw.
   below the board, clear of it: "You didn't make it", how many stones are still dark, and a tip for
   why (on level 2's early gate: "Light every stone before you step on the gate"; at a dead end: a way
   in and a way out); the panel has no Undo; Try again restarts and takes the panel away — `tests/runes.test.mjs`.
-- **AC-21** With a mouse, the cursor is a hand over the head, a lit stone or a stone the line can step
-  to, a closed hand while dragging, and the usual arrow over water and far stones — `tests/runes.test.mjs`.
+- **AC-21** With a mouse, the cursor is a hand over the head or a stone the line can step to (not over
+  a lit stone), a closed hand while dragging, and the usual arrow over water and far stones — `tests/runes.test.mjs`.
 - **AC-22** Each button at the bottom (Levels, Restart, Hint, Guidance) has a hover label that says
   what it does; Guidance's reads "Guidance: show tiles that become unreachable" — `tests/runes.test.mjs`.
 - **AC-23** The level select reads "Dawn (easy)" and "Tide (challenging)", shows a lock on each level
   that can't be opened yet and a tick on each solved one, and is centred on the board, inside the
   screen — `tests/runes.test.mjs`.
-- **AC-24** In every game, the back button and Escape always ask "Are you sure you want to go back?"
+- **AC-24** In every game, the back button and Escape always ask "Are you sure you want to leave?"
   (you'll lose any progress you may have made) before leaving: Stay (or a second Escape) keeps you in
-  the game, Go back goes back — `tests/site.test.mjs`.
+  the game, Leave (in red) goes back — `tests/site.test.mjs`.
 - **AC-25** In Runes, the back button always asks, wherever you are (before any move, a line drawn,
   the level select, a solved level), and Stay keeps the line — `tests/runes.test.mjs`.
 
