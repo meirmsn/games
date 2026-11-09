@@ -833,7 +833,6 @@ test('windsock AC-23: the UI is 8-bit: a pixel font, no rounding, blur or soft s
       }),
       fontLoaded: document.fonts.check('16px "Kenney Mini Square"'),
       rendering: getComputedStyle(document.getElementById('field')).imageRendering,
-      alphas: window.__windsock.marksAlphaProbe(),
     };
   });
   assert.ok(r.fontLoaded, 'the pixel font loads');
@@ -848,6 +847,36 @@ test('windsock AC-23: the UI is 8-bit: a pixel font, no rounding, blur or soft s
     }
   }
   assert.equal(r.rendering, 'pixelated');
-  assert.deepEqual(r.alphas, [0, 255], 'every mark pixel is fully drawn or not at all');
+  // A live scene with every kind of mark: lines, a live and a soon-live end in the warning, an
+  // arrival's arrow, fuel arcs, a conflict, the drawing head, the closed strip's crosses and points.
+  const scene = await page.evaluate(() => {
+    const W = window.__windsock;
+    W.manual = true;
+    W.beginShift(0);
+    W.beginHour(2, false);
+    W.st.planes.length = 0;
+    const live = W.liveEnds(W.st.wind);
+    const a = W.plane(W.addPlane('prop', 40, 230, 0.3));
+    W.extendLine(a, { x: 70, y: 200 });
+    W.extendLine(a, W.ENDS[live.main].ring);
+    W.schedule.length = 0;
+    W.run(W.SWING_AT - W.WARN + 1);
+    W.land(W.addPlane('prop', 0, 0, 0), live.main);
+    W.schedule.push({ at: W.st.t + 2, type: 'prop', side: 0, along: 0.3, aim: { x: 90, y: 150 }, livery: 0, fuel: 1, shown: false, delay: 0 });
+    for (const p of W.st.planes) p.fuel = 999;
+    W.addPlane('prop', 120, 80, 0);
+    W.addPlane('prop', 150, 80, Math.PI);
+    W.run(0.02);
+    const out = { warn: !!W.st.warn, arrows: W.schedule.filter((x) => x.shown && !x.done).length, conflict: W.st.planes.some((p) => p.conflict) };
+    out.probe = W.marksAlphaProbe();
+    W.beginHour(0, false); // the strip's closed crosses
+    out.closed = W.marksAlphaProbe();
+    return out;
+  });
+  assert.ok(scene.warn && scene.conflict, 'the scene has a warning and a conflict');
+  for (const probe of [scene.probe, scene.closed]) {
+    assert.ok(probe.drawn > 300, `${probe.drawn} mark pixels drawn`);
+    for (const a of probe.alphas) assert.ok(probe.allowed.includes(a), `alpha ${a} is one of the flat values ${probe.allowed}`);
+  }
   await context.close();
 });

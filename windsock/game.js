@@ -1512,28 +1512,35 @@ function draw() {
   ctx.drawImage(lo, 0, 0, LW, LH, bx, by, LW * S * dpr, LH * S * dpr);
 }
 
-// For the test: draw every kind of mark on a clear canvas and return the alpha values it used.
+// The flat alphas the marks may use: fully clear, fully drawn, and the few deliberate see-through
+// fills (a live ring's inside, a soon-live ring's inside, the fuel arc). Smoothing would add others.
+const MARK_ALPHAS = [0, 255, Math.round(0.18 * 255), Math.round(0.14 * 255), Math.round(0.6 * 255)];
+
+// For the test: draw the live game's marks (runway ends, the sock, arrows, lines, fuel, conflict,
+// the drawing head, points) with the very functions the frame uses, onto a clear canvas, and return
+// the alpha values found. Clouds, shadows and smoke are left out: they are see-through on purpose.
 function marksAlphaProbe() {
   const keep = lc;
   const c = document.createElement('canvas');
-  c.width = FW;
-  c.height = FH;
+  c.width = FW + 40;
+  c.height = FH + 40;
   lc = c.getContext('2d');
-  pxRing(40, 40, RING_R, '#5ee05a', { th: 2 });
-  pxRing(80, 40, 12, '#ffffff', { a0: -Math.PI / 2, a1: 2 });
-  pxLine(10, 100, 170, 140, '#ff3b30');
-  pxPoly([rot(7, 0, 0.7, 60, 200), rot(-4, -5, 0.7, 60, 200), rot(-1, 0, 0.7, 60, 200), rot(-4, 5, 0.7, 60, 200)], '#ffffff');
-  pxText('+30 x3', 90, 260, '#ffd23f', '#1e2130');
-  const stKeep = st;
-  st = st || newShiftState(0);
-  lc.translate(-SOCK.x + 140, -SOCK.y + 200);
+  lc.translate(20, 20);
+  drawEnds();
   drawSock();
-  st = stKeep;
-  const data = lc.getImageData(0, 0, FW, FH).data;
+  for (const a of schedule) if (a.shown && !a.done) drawArrow(a);
+  for (const p of st.planes) drawLine(p);
+  drawMarks();
+  pxText('+30 x3 DIVERTED', 90, 300, '#ffd23f', '#1e2130');
+  const data = lc.getImageData(0, 0, c.width, c.height).data;
   lc = keep;
   const alphas = new Set();
-  for (let i = 3; i < data.length; i += 4) alphas.add(data[i]);
-  return [...alphas].sort((a, b) => a - b);
+  let drawn = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    alphas.add(data[i]);
+    if (data[i]) drawn++;
+  }
+  return { alphas: [...alphas].sort((x, y) => x - y), allowed: MARK_ALPHAS, drawn };
 }
 
 // ---------- Loop ----------
