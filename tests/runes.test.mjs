@@ -127,6 +127,12 @@ test('runes AC-2: a relative drag steps the line, a drag back takes it back, wal
   assert.deepEqual(await path(page), [0, 1, 4, 3, 6], 'the push into the lit stone stored nothing');
   await page.evaluate(() => window.__runes.loadLevel(0));
   await page.evaluate(() => window.__runes.stepTo(1));
+  // Push down into water (below the source) for three cells, then right: nothing was stored.
+  await page.evaluate(() => window.__runes.restart());
+  await drag(page, x, y, 0, 3 * c, { end: false });
+  assert.deepEqual(await path(page), [0], 'water takes nothing');
+  await drag(page, x, y + 3 * c, 0.95 * c, 0, { start: false });
+  assert.deepEqual(await path(page), [0, 1], 'the push into the water stored nothing');
   // Down from stone 1 is water: nothing happens.
   await drag(page, x, y, 0, 2 * c);
   assert.deepEqual(await path(page), [0, 1]);
@@ -410,6 +416,16 @@ test('runes AC-11: Hint cuts back to the start shared with a solution and marks 
   await page.click('[data-hint]');
   assert.deepEqual(await path(page), sol.slice(0, 3));
   assert.equal(await page.evaluate(() => window.__runes.game.hintCell), sol[3]);
+  // A tie: two solutions share the same start with the line (just the source); the first listed wins.
+  const tie = await page.evaluate(() => {
+    const r = window.__runes;
+    r.loadBoard(['Soo', 'ooo', 'ooG']);
+    const sols = r.game.solutions;
+    r.hint();
+    return { first: sols[0][1], second: sols[1] && sols[1][1], hint: r.game.hintCell };
+  });
+  assert.ok(tie.second != null && tie.second !== tie.first, 'the board has two solutions that part at the first step');
+  assert.equal(tie.hint, tie.first, 'the first listed solution wins the tie');
   await context.close();
 });
 
