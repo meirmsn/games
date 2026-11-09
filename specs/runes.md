@@ -41,12 +41,14 @@ changes under the line you draw.
   gate" as the goal, under which a Rise is always good and a Sink always bad, so there is no choice
   (concept attack, round 1); a Sink that fires as the light enters it, which drowns the stone you'd
   step to next (found by the level search) (session proposal, 2026-11-09).
-- Every step can be taken back exactly, in the reverse order, undoing what it raised or sank. There
-  are no lives and no fail screen. When the line can no longer finish, the gate's glow dims at once,
-  and stones the rules can show are cut off crack and dim, so you see that, and often why, you went
-  wrong. A search from the current state decides it, with a budget of 200,000 nodes, run after the
-  frame that drew the step; if the budget runs out, the gate stays lit (session proposal, from
-  concept attack round 2 and the spec review, 2026-11-09).
+- Every step can be taken back exactly, in the reverse order, undoing what it raised or sank, by
+  dragging back or tapping a lit stone (there is no Undo button: changed after the go). There are no
+  lives. A line that ends unsolved shows the result panel with a tip (changed after the go). With
+  Guidance on (opt-in, changed after the go), when the line can no longer finish the gate's glow
+  dims at once and stones the rules can show are cut off crack and dim. A search from the current
+  state decides it, with a budget of 200,000 nodes, run after the frame that drew the step; if the
+  budget runs out, the gate stays lit (session proposal, from concept attack round 2 and the spec
+  review, 2026-11-09).
 - Levels are hand-picked from a generator and frozen in `runes/levels.js`; level 1, a three-by-three
   bend, is too small for the generator and is hand-made, under the same checks. The generator
   (`scripts/runes/generate.mjs`) builds a board around a random line and keeps it only if it has 1–3
@@ -121,8 +123,8 @@ changes under the line you draw.
   - **A loud result when you're done, below the board.** "when you're done, we should be loud … right below so that we don't block you from seeing what you built … okay, you're done, you didn't make it … make sure to reach all tiles before getting to the last one. That should be the message … on level 2 … as you go along, make sure the messages are pro tips about why you're not finishing or what you need to do to finish." The light may now step onto the gate early, which ends the attempt; so does a line with nowhere to go. The panel takes the bar's place below the board, says how many stones are still dark, outlines them, and gives a tip for why: the gate taken early, a Rise's stones left behind, a Sink's drowning, or a dead end. It offers Try again, Undo last move and All levels. Solving shows the same panel with Next. This replaces "an early step onto the gate is refused" and the solved card.
   - **The cursor.** "it should be the hand for the tiles … where you can drag … as you're being active … when you're not on top of something that is draggable … it should change as usual." With a mouse: a hand over the head, a lit stone or a stone the line can step to; a closed hand while dragging; the usual arrow elsewhere.
   - **Hover labels.** "The buttons at the bottom should have hover, tell you what they do."
-  - **The level select.** "put a lock in the ones that you cannot reach yet … next to the done, put in parentheses easy, and then next to the tide, put challenging." Locked levels show a lock, solved ones a tick, the chapters read "Dawn (easy)" and "Tide (challenging)", and each chapter's last two levels sit in a box labelled "bonus" (they were "deep", with a gold rim that read as half-solved: "some of them are just with a yellow border but still gray"). The dialog is centred on the board ("the level indicator square like dialog is not centered").
-  - **Next goes in order.** "when I was done with level 5, it jumped to level 8, and I don't know how that happened or why." Next opens the next level, bonus ones included; after level 7 it opens level 8 once Tide is open, else the level select.
+  - **The level select.** "put a lock in the ones that you cannot reach yet … next to the done, put in parentheses easy, and then next to the tide, put challenging." Locked levels show a lock, solved ones a tick, the chapters read "Dawn (easy)" and "Tide (challenging)", and each chapter's last two levels sat in a box labelled "bonus" until the second playtest removed it (they were "deep", with a gold rim that read as half-solved: "some of them are just with a yellow border but still gray"). The dialog is centred on the board ("the level indicator square like dialog is not centered").
+  - **Next goes in order.** "when I was done with level 5, it jumped to level 8, and I don't know how that happened or why." Next opens the next level, bonus ones included (later, in the second playtest, every level opens only once the one before it is solved, and the bonus grouping went).
   - **No arrow on the Rise.** "there's like an arrow, and it's unclear what the direction of the arrow means." The Rise's glyph is now the arch (ᚢ, a bridge rising) and the Sink's the swirl (ᛃ, a whirlpool), so neither reads as a direction.
 
 - Changed after the go, from the owner's second playtest (chat, 2026-11-09), in their words:
