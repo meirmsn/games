@@ -224,8 +224,10 @@ export function step(f, level, taken = null) {
     f.fastPass = true;
   }
 
-  // Stuck: bound to one body (not the target) and swept a full loop around it.
-  if (strongest !== f.to && strongest >= 0) {
+  // Stuck: bound to one body (not the target, nor the body the target circles) and swept a full
+  // loop around it. Swinging round a moon's planet while chasing the moon is fair play.
+  const parent = tb.orbit ? tb.orbit.around : -1;
+  if (strongest !== f.to && strongest !== parent && strongest >= 0) {
     const b = bodies[strongest];
     const dx = f.x - f.pos[strongest * 2];
     const dy = f.y - f.pos[strongest * 2 + 1];

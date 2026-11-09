@@ -52,11 +52,12 @@ test('orbit AC-12: every leg has a gold route that catches every mote of its leg
   }
 });
 
-test('orbit AC-12: a typical captured flight is an arc, not a hop (median 0.7 s or more)', () => {
+test('orbit AC-12: a typical captured flight is an arc, not a hop (median 0.7-2.5 s)', () => {
   for (const sys of SYSTEMS) {
     sys.legs.forEach((_, l) => {
-      rate(sys, l, { samples: 300 });
-      assert.ok(rate.lastMedianAge >= 0.7 || rate.lastMedianAge === 0, `${sys.name} leg ${l + 1}: ${rate.lastMedianAge}`);
+      rate(sys, l, { samples: 600, brake: withBrake(sys) });
+      const m = rate.lastMedianAge;
+      assert.ok(m >= 0.7 && m <= 2.5, `${sys.name} leg ${l + 1}: ${m}`);
     });
   }
 });
@@ -107,9 +108,19 @@ test('orbit AC-5: hitting a body, swinging away, looping round another body or 8
   // straight out of the field
   const away = fly(sys, 0, Math.PI / 2, 1, 0);
   assert.deepEqual([away.result, away.why], ['lost', 'away']);
-  // a weak launch falls back round its own planet: one loop and it's over
-  const stuck = fly(sys, 0, Math.PI / 2 + 0.5, 0, 0);
-  assert.equal(stuck.result === 'crashed' || stuck.why === 'stuck', true, `${stuck.result} ${stuck.why}`);
+  // circling a body that isn't the target: one loop and it's over (the others' pull switched off,
+  // so the orbit stays a clean circle; the speed is circular for the softened gravity)
+  const alone = structuredClone(sys);
+  alone.bodies.forEach((x, i) => i !== 2 && (x.mu = 0));
+  const c = alone.bodies[2];
+  const r = 150;
+  const v = Math.sqrt((c.mu * r * r) / (r * r + 400) ** 1.5);
+  const loop = launch(alone, 0, 0, 0.5, 0);
+  Object.assign(loop, { x: c.x + r, y: c.y, vx: 0, vy: -v });
+  while (!loop.result) step(loop, alone);
+  assert.deepEqual([loop.result, loop.why], ['lost', 'stuck']);
+  const period = (2 * Math.PI * r) / v;
+  assert.ok(Math.abs(loop.age - period) < 0.1, `after one loop: ${loop.age} of ${period}`);
   // the clock
   const slow = launch(sys, 0, 0, 0.5, 0);
   Object.assign(slow, { x: 60, y: 60, vx: 0, vy: 0, age: MAX_FLIGHT - DT / 2 });
@@ -119,6 +130,25 @@ test('orbit AC-5: hitting a body, swinging away, looping round another body or 8
   step(slow, sys);
   sys.bodies.forEach((x, i) => (x.mu = saved[i]));
   assert.deepEqual([slow.result, slow.why], ['lost', 'time']);
+});
+
+test('orbit AC-5: circling the planet a moon target goes round is not a failure', () => {
+  // System 3's moon leg with only the moon's planet pulling and the moon's band out of reach, so
+  // nothing but the loop rule could end the flight before 8 s
+  const sys = structuredClone(SYSTEMS[2]);
+  const li = sys.legs.findIndex((l) => sys.bodies[l.to].orbit);
+  const moon = sys.bodies[sys.legs[li].to];
+  sys.bodies.forEach((x, i) => i !== moon.orbit.around && (x.mu = 0));
+  moon.ring = 1;
+  const p = sys.bodies[moon.orbit.around];
+  const r = 200;
+  const v = Math.sqrt((p.mu * r * r) / (r * r + 400) ** 1.5);
+  const period = (2 * Math.PI * r) / v;
+  assert.ok(period * 1.5 < 7.5, 'a loop and a half fits in the flight time');
+  const f = launch(sys, li, 0, 0.5, 0);
+  Object.assign(f, { x: p.x + r, y: p.y, vx: 0, vy: -v });
+  while (!f.result && f.age < period * 1.5) step(f, sys);
+  assert.equal(f.result, null, `${f.result} ${f.why} at ${f.age} of a ${period} s loop`);
 });
 
 test('orbit AC-8: the preview lies on the real flight and stops by 1.3 s', () => {

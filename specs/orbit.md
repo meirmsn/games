@@ -148,7 +148,7 @@ three differ.
   leg can be captured. In each system leg 3 captures less often than leg 2, and leg 4 most often of
   legs 2–4: leg 1 brings the system's new thing, so it is tuned by its own target. Each leg's
   stored gold route captures and takes every mote of its leg, so a par-length gold run exists.
-  Typical captured flights take about 1–2 s, so a leg is an arc, not a hop. System 2's first leg captures under 20%
+  On every leg the median captured flight takes 0.7–2.5 s, so a leg is an arc, not a hop. System 2's first leg captures under 20%
   without the brake and at least 40% with it. On System 3's first moon leg the best start time
   captures at least twice as often as the worst (session and spec review, 2026-11-09).
 

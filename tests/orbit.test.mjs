@@ -422,16 +422,36 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
       };
       return { mode: window.__orbit.game.mode, intro: shown('[data-screen="intro"]'), done: shown('[data-screen="done"]'), resume: shown('[data-resume]') };
     });
+  const probe = () => page.evaluate(() => window.__orbit.probeWorld());
+  const moved = async (dt) => {
+    const a = await probe();
+    await page.evaluate((dt) => window.__orbit.update(dt), dt);
+    const b = await probe();
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  };
   // System intro: the intro card, the probe circling
   assert.deepEqual(await cards(), { mode: 'idle', intro: true, done: false, resume: false });
+  assert.ok((await moved(0.3)) > 5, 'the probe circles');
   // Aiming: the first touch fades the intro
   await pointer(page, 'pointerdown', 200, 400);
   await pointer(page, 'pointermove', 200, 480);
   assert.deepEqual(await cards(), { mode: 'aim', intro: false, done: false, resume: false });
+  const aim = await page.evaluate(() => {
+    const o = window.__orbit;
+    const c0 = o.game.clock;
+    for (let i = 0; i < 30; i++) o.update(1 / 60);
+    const p = o.probeWorld();
+    const l = o.launchPoint(o.input.angle);
+    return { paused: o.game.clock === c0, off: Math.hypot(p.x - l.x, p.y - l.y) };
+  });
+  assert.ok(aim.paused, 'the clock waits while you aim');
+  assert.ok(aim.off < 1e-9, "the probe sits at the aim's launch point");
   await page.waitForFunction(() => document.querySelector('[data-screen="intro"]').hidden);
   // Flying
   await pointer(page, 'pointerup', 200, 480);
   assert.deepEqual(await cards(), { mode: 'fly', intro: false, done: false, resume: false });
+  assert.ok((await moved(0.1)) > 5, 'the probe flies');
+  assert.ok(await page.evaluate(() => window.__orbit.game.trail.length > 0), 'with its trail');
   // Rewinding (after a failed flight)
   await page.evaluate(() => {
     const o = window.__orbit;
@@ -440,7 +460,11 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
     for (let i = 0; i < 20 && o.game.mode === 'fly'; i++) o.update(1 / 240);
   });
   assert.deepEqual(await cards(), { mode: 'rewind', intro: false, done: false, resume: false });
+  assert.ok(await page.evaluate(() => window.__orbit.game.ghost.pts.length > 2), 'the ghost trail shows');
   await settle(page);
+  let s = await state(page);
+  assert.equal(s.clock, s.legStart, "back at the leg's start");
+  assert.ok(await page.evaluate(() => window.__orbit.game.ghost !== null), 'the ghost stays until the next launch');
   // Captured (spiral in)
   await page.evaluate(() => {
     const o = window.__orbit;
@@ -451,6 +475,21 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
     o.update(1 / 240);
   });
   assert.deepEqual(await cards(), { mode: 'capture', intro: false, done: false, resume: false });
+  const spiral = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const b = g.level.bodies[g.level.legs[g.leg].to];
+    const d = () => {
+      const p = o.probeWorld();
+      return Math.hypot(p.x - b.x, p.y - b.y);
+    };
+    const a = o.probeWorld();
+    const d0 = Math.abs(d() - b.ring);
+    o.update(0.2);
+    const p = o.probeWorld();
+    return { d0, d1: Math.abs(d() - b.ring), moved: Math.hypot(p.x - a.x, p.y - a.y) };
+  });
+  assert.ok(spiral.moved > 5 && spiral.d1 <= spiral.d0 + 1e-6, 'spiralling into the ring');
   await settle(page);
   // Paused (page hidden, then back): only the resume button
   await page.evaluate(() => {
@@ -460,10 +499,20 @@ test('orbit AC-1 AC-10 AC-13: each state shows only its own card, as in the spec
     document.dispatchEvent(new Event('visibilitychange'));
   });
   assert.deepEqual(await cards(), { mode: 'idle', intro: false, done: false, resume: true });
+  s = await state(page);
+  assert.equal(s.clock, s.legStart, "at the leg's start, waiting");
   await page.click('[data-resume]');
   // System done: only the end card
   for (let i = 0; i < 4 && (await state(page)).mode !== 'done'; i++) await flyGold(page);
   assert.deepEqual(await cards(), { mode: 'done', intro: false, done: true, resume: false });
+  const parked = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const b = g.level.bodies[g.level.legs[g.level.legs.length - 1].to];
+    const p = o.probeWorld();
+    return Math.abs(Math.hypot(p.x - b.x, p.y - b.y) - b.ring);
+  });
+  assert.ok(parked < 1, 'parked on the last planet');
   await context.close();
 });
 
