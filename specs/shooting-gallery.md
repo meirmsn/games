@@ -116,7 +116,7 @@ for these changes. Where they differ from the decisions further down, these win.
   changes color to … yellow and then orange and then red on the last … 2 or 3 seconds … the color
   is not on the digits but on the background of the timer." The seconds left, in large digits on a
   badge at the top left beside the back button, larger than the score. At half time a chime and the
-  badge swells; at 10 s a double chime and the badge turns yellow, at 5 s orange, at 3 s red, with a
+  badge swells; at 10 s a double chime (a triple ring since the fourth playtest) and the badge turns yellow, at 5 s orange, at 3 s red, with a
   tick each of the last 3 seconds. During a frenzy the badge is pink and stopped. The counter's
   timer bar is gone.
 - **A frenzy you earn.** "it's not clear when you're gonna get the frenzy, so maybe you earn it by
@@ -256,7 +256,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   as MP3: the band's twang on each shot, a wet splat on landing (two variants, varied pitch), a wood
   knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
   empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
-  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time and a double chime at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
+  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time and a louder triple ring at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
 - **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
   targets, sticks, from which the slingshot is built) and its Splat Pack's; the slingshot's band and pouch, the timer badge, the ropes
   and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
@@ -352,7 +352,7 @@ moment 8–18 s into rounds 2 to 6.
   score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
   target — `tests/shooting-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
-  half time it chimes and swells; at 10 s it chimes twice and its bulbs turn yellow, at 5 s orange
+  half time it chimes and swells; at 10 s it plays its louder triple ring and its bulbs turn yellow, at 5 s orange
   and at 3 s red, ticking each of the last 3 seconds; in a frenzy they are pink and it stops —
   `tests/shooting-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
