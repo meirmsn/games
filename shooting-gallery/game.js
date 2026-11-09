@@ -512,7 +512,7 @@ function startRound(n) {
   banner(`Round ${n}`, cfg.name, 1.3);
   sfx('round');
   if (n === 1) {
-    // A big, slow target crosses the middle of the nearest lane, where the gun already points.
+    // A big, slow target crosses the middle of the nearest lane, where a short straight pull lands.
     const i = L.n - 1;
     const t = makeTarget(L.lanes[i].kind === 'water' ? 'duck' : 'target', { lane: i, speed: 26, big: 1.15, face: L.lanes[i].kind === 'water' ? 'duck_target_yellow' : 'target_colored', turn: false });
     // It crosses the middle, where a straight pull lands.
@@ -1387,7 +1387,7 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Where a mid-play banner's pill sits, in units: on the counter, right of the gun.
+// Where a mid-play banner's pill sits, in units: on the counter, right of the slingshot.
 function pillBox() {
   const w = Math.min(SW * 0.4, 200);
   const cy = L.C + (orient === 'landscape' ? 44 : 50);
