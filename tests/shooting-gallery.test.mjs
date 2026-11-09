@@ -457,6 +457,13 @@ test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the g
   // Without the target, no frenzy comes.
   await steps(page, 20);
   assert.equal((await state(page)).frenzy, 0);
+  // A frenzy lasts 7 s: still on at 6.5 s, over by 7.1 s.
+  await page.evaluate(() => window.__gallery.startFrenzy());
+  await steps(page, 6.5);
+  assert.ok((await state(page)).frenzy > 0, 'still on at 6.5 s');
+  await steps(page, 0.6);
+  assert.equal((await state(page)).frenzy, 0, 'over by 7.1 s');
+  await page.evaluate(() => window.__gallery.clear());
   await page.evaluate(() => (window.__gallery.game.time = 25));
   const ft = await page.evaluate(() => {
     const t = window.__gallery.launchFrenzyTarget();
@@ -1126,5 +1133,17 @@ test('shooting-gallery AC-30: a hit target tips back with its stick, and is lowe
   assert.ok(r.early.sy < 1 && r.early.top < r.strip, 'it tips back, still in view');
   assert.ok(r.late.top >= r.strip, `then it is lowered out of sight: ${r.late.top} vs ${r.strip}`);
   assert.equal(r.poles, 1, 'its stick is drawn as it goes down');
+  // A hit drop-down swings back and is pulled up behind the valance.
+  const drop = await page.evaluate(() => {
+    const g = window.__gallery;
+    const d = g.makeTarget('drop', { lane: 3, x: 300, up: true, turn: false });
+    d.state = 'knocked';
+    d.anim = 0.75;
+    const k = g.knockPose(d);
+    const pv = g.pivotOf(d);
+    const [, h] = g.dims(d);
+    return { bottom: pv.y + (d.y + h / 2 - pv.y) * k.sy + k.dy, valance: g.L.top + 30 };
+  });
+  assert.ok(drop.bottom <= drop.valance, `a drop-down is pulled up out of sight: ${JSON.stringify(drop)}`);
   await context.close();
 });
