@@ -1,4 +1,4 @@
-// Tag Along: lead a line of pedestrians across rush hour. They step only where and when you step.
+// Tag Along: lead a line of pedestrians across rush hour. They follow your path, a step behind.
 //
 // The rules (specs/tag-along.md):
 //  - The street is a grid: 12 columns, and rows from the top kerb (row 0) down to the bottom kerb,
