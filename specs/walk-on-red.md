@@ -112,7 +112,10 @@ hit you in the middle … You should start from the beginning … if they hit an
 disappear. It shouldn't go back. If the game restarts because they hit you, then okay, they all
 start from the bottom." Then (2026-11-09): "The UI showing you on the beginning of the game and also
 showing you the level names, those should also be 8-bit … if we have anything else that is not
-8-bit, we should also make it." This spec is the game after those changes.
+8-bit, we should also make it." Then: "the one with the siren should show up earlier … fix the bug …
+at the top where the bar, depending on the number of points, the bar is changing width … there
+should be fixed space for the number of points in there so that the bar never changes the width."
+This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -209,7 +212,8 @@ goes now, and the people waiting start copying him.
   and a hard shadow, with no blur or rounding; animations step rather than glide; the mute and
   back icons are pixel art. They stay page text and buttons, so taps, keys and screen readers work
   as before (owner, 2026-11-09: "those should also be 8-bit … if we have anything else that is not
-  8-bit, we should also make it").
+  8-bit, we should also make it"). The HUD keeps a fixed space for the points, room for five
+  digits, so its bar never changes width as they come in (owner, 2026-11-09).
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
@@ -265,11 +269,12 @@ goes now, and the people waiting start copying him.
   1. **Quiet Street:** just him, two slow lanes one way, sparse traffic.
   2. **Both Ways:** two lanes, one each way, nearly twice level 1's speed, short lulls.
   3. **Market Avenue:** four lanes with an island.
-  4. **Bus Lane:** buses and trucks (long vehicles).
-  5. **Rush Hour:** five lanes, denser.
-  6. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, driving over the cars in
+  4. **Siren Boulevard:** sirens (an ambulance, police car or fire engine, driving over the cars in
      its way, which pull a little aside as it comes up behind them and passes; its lane's edge
-     flashing and a siren 2.5 s before it comes, at 2.5 times the lane's speed).
+     flashing and a siren 2.5 s before it comes, at 2.5 times the lane's speed), on four lanes with
+     an island (owner, 2026-11-09: "the one with the siren should show up earlier").
+  5. **Bus Lane:** buses and trucks (long vehicles).
+  6. **Rush Hour:** five lanes, denser.
   7. **Old Town:** five fast lanes.
   8. **Corner Shop:** the first follower, on four calm lanes.
   9. **School Run:** one follower, school traffic.
@@ -353,8 +358,8 @@ goes now, and the people waiting start copying him.
 - **AC-9** A vehicle hitting the player knocks him down and sends him back to the start, on the
   near kerb at his starting column — `tests/walk-on-red.test.mjs`.
 - **AC-10** The 21 levels are as in the decisions: nobody follows on levels 1–7, one follower on
-  8–10, two on 11–14, three from 15; an island from level 3; heavy vehicles from level 4; sirens from
-  level 6 —
+  8–10, two on 11–14, three from 15; an island from level 3; sirens from level 4; heavy vehicles from
+  level 5 —
   `tests/walk-on-red.test.mjs`.
 - **AC-11** A siren warns 2.5 s before it comes; a car it comes up behind pulls a little aside,
   and back once it has passed — `tests/walk-on-red.test.mjs`.
@@ -394,7 +399,7 @@ goes now, and the people waiting start copying him.
   more — `tests/walk-on-red.test.mjs`.
 - **AC-25** The page's text and boxes are 8-bit like the street: the pixel font loads, and the start
   and paused cards, the banner, the HUD, the Start, mute and back buttons use it, square, with no
-  blur — `tests/walk-on-red.test.mjs`.
+  blur; the HUD's bar keeps one width whatever the points — `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 

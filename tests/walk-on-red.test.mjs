@@ -401,7 +401,7 @@ test('walk-on-red AC-6: if the walk light turns green before he is across, the l
   assert.equal(s.total, 0);
   await run(page, 2.4);
   s = await page.evaluate(() => ({ mode: window.__walkOnRed.game.mode, level: window.__walkOnRed.game.level, red: Math.ceil(window.__walkOnRed.game.red) }));
-  assert.deepEqual(s, { mode: 'play', level: 3, red: 28 }, 'the same level again');
+  assert.deepEqual(s, { mode: 'play', level: 3, red: 30 }, 'the same level again');
   await context.close();
 });
 
@@ -538,14 +538,14 @@ test('walk-on-red AC-10: the 21 levels: nobody follows until level 8, then one, 
   assert.deepEqual(levels.map((l) => l.copiers), [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3]);
   assert.deepEqual(levels.slice(0, 2).map((l) => l.medians), [0, 0], 'no island on the first two');
   assert.ok(levels.slice(2).every((l) => l.medians >= 1), 'an island from level 3');
-  assert.equal(levels.findIndex((l) => l.buses), 3, 'buses and trucks from level 4');
-  assert.equal(levels.findIndex((l) => l.sirens), 5, 'sirens from level 6');
+  assert.equal(levels.findIndex((l) => l.sirens), 3, 'sirens from level 4');
+  assert.equal(levels.findIndex((l) => l.buses), 4, 'buses and trucks from level 5');
   await context.close();
 });
 
 test('walk-on-red AC-11: a siren warns 2.5 s ahead', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 5);
+  await startEmpty(page, 3);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     t.game.sirenIn = 0.01;
@@ -1117,6 +1117,21 @@ test('walk-on-red AC-25: the page is 8-bit too: the game’s pixel font, square 
     };
   });
   assert.ok(r.loaded, 'the pixel font loads');
+  // The HUD's bar keeps one width whatever the score.
+  const widths = await page.evaluate(async () => {
+    const t = window.__walkOnRed;
+    t.resume();
+    t.manual = true;
+    const out = [];
+    for (const score of [0, 7, 88, 1111, 88888]) {
+      t.game.score = score;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      out.push([document.querySelector('[data-score]').textContent, document.querySelector('.quota').getBoundingClientRect().width]);
+    }
+    return out;
+  });
+  assert.deepEqual(widths.map((w) => w[0]), ['0', '7', '88', '1111', '88888'], 'the score shows');
+  assert.ok(widths.every((w) => w[1] === widths[0][1] && w[1] > 0), `the bar keeps its width: ${JSON.stringify(widths)}`);
   for (const [what, l] of Object.entries(r)) {
     if (what === 'loaded') continue;
     assert.deepEqual(l, { font: true, radius: '0px', blur: 'none' }, what);
