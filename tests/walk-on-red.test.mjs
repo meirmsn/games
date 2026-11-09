@@ -928,9 +928,11 @@ test('walk-on-red AC-20: what the level is worth while playing, ×2 as a copier 
   await page.waitForTimeout(200);
   const label = await page.evaluate(() => {
     const t = window.__walkOnRed;
-    return { text: t.drawn.payout, red: Math.ceil(t.game.red), countdown: t.drawn.countdown };
+    return { text: t.drawn.payout, clear: t.drawn.payoutClear, red: Math.ceil(t.game.red), countdown: t.drawn.countdown };
   });
-  assert.equal(label.text, `${label.red} s × 1 person = ${label.red}`);
+  // With the words where they fit beside the porta-potty (it depends on the font), without them where not.
+  assert.ok([`${label.red} s × 1 person = ${label.red}`, `${label.red} s × 1 = ${label.red}`].includes(label.text), label.text);
+  assert.ok(label.clear, 'clear of the porta-potty');
   assert.equal(label.countdown, label.red, 'the walk light’s countdown matches');
   // A copier arriving shows the new multiplier.
   const popup = await page.evaluate(() => {

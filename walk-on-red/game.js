@@ -1856,6 +1856,7 @@ function drawText() {
     ctx.fillStyle = '#ffd23f';
     ctx.fillText(text, x, y + dpr);
     drawn.payout = text;
+    drawn.payoutClear = x - w / 2 >= right - room; // its left end clear of the porta-potty
   } else drawn.payout = null;
 }
 

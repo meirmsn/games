@@ -332,7 +332,8 @@ goes now, and the people waiting start copying him.
   for each), a hit the bump and the horn, getting into the porta-potty the flush and then the chime,
   the green light its jingle, and the end of the run the closing jingle — `tests/walk-on-red.test.mjs`.
 - **AC-20** The start card says nothing about points; while a level with copiers is played, what it
-  is worth right now shows as "s s × m people = score" on a phone; a copier arriving shows the new
+  is worth right now shows as "s s × m people = score", or "s s × m = score" where the words
+  don't fit beside the porta-potty, clear of it; a copier arriving shows the new
   multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
 - **AC-21** The landing page shows 8 tiles, Walk on Red's playable after Googly Faces —
