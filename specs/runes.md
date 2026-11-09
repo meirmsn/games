@@ -105,8 +105,9 @@ changes under the line you draw.
 - Memory: localStorage keeps which levels are solved (losing it re-locks every level after the
   first); when storage is blocked the game plays as on a fresh browser. The URL carries the level
   (`runes/#7`), so a bookmark or a shared link opens it if it is open, and otherwise the furthest
-  level open (changed after the go: it opened any level). A hash that names no level opens level 1
-  and rewrites the hash; changing the hash mid-level opens that level (session proposal, 2026-11-09).
+  level open (changed after the go: it opened any level). Entering with no level, or a hash that names
+  no level, opens the furthest level open and rewrites the hash (changed after the go: it opened
+  level 1); changing the hash mid-level opens that level (session proposal, 2026-11-09).
 - Interruptible: when the page is hidden, the gesture ends, the line stays, and sound pauses until
   the next touch (session proposal, 2026-11-09).
 - Targets, tuned by playing (play-testing targets, not acceptance items): the first level solved in under 20 s; the first dead end around level 3
@@ -136,6 +137,8 @@ changes under the line you draw.
   - **The compass's label.** "the compass, I think it should say guidance, show tiles that become unreachable." Its hover label reads "Guidance: show tiles that become unreachable".
 
 - Changed after the go, from the owner's fifth note (chat, 2026-11-09), in their words: "I don't think you should allow to go back. I drag back and it let me go back, like backtrack. I don't think we should do that. It makes it too easy to play." Dragging toward the previous stone, an arrow key toward it and a tap on a lit stone now do nothing; the line only goes forward, and Restart starts it again. Hint still cuts the line back to where it left every solution, as the help the player chooses (session proposal, put to the owner).
+
+- Changed after the go, from the owner's eighth note (chat, 2026-11-09): "When you enter the game, you should jump to the latest available level to play, not start from the beginning." Entering the game opens the furthest level open (a bad level in the URL does too, where it used to open level 1); a URL naming an open level still opens that one.
 
 ## Acceptance items
 
@@ -168,8 +171,9 @@ changes under the line you draw.
 - **AC-10** There are 14 levels in two chapters of seven, Dawn (easy) and Tide (challenging). On a
   fresh browser only level 1 is open; each level opens once the one before it is solved, and a locked
   one doesn't open from the level select; Next opens the next level, and after level 14 the level
-  select; a URL naming a locked level opens the furthest level open and rewrites the hash; `#0`,
-  `#99` and `#abc` open level 1 and rewrite the hash — `tests/runes.test.mjs`.
+  select; entering the game with no level in the URL, or one that names no level (`#0`, `#99`,
+  `#abc`) or a locked one, opens the furthest level open and rewrites the hash; a URL naming an open
+  level opens it; a fresh browser starts at level 1 — `tests/runes.test.mjs`.
 - **AC-11** Hint cuts the line back to the longest start it shares with one of the stored solutions
   (the one sharing most, the first listed on a tie) and marks that solution's next stone — `tests/runes.test.mjs`.
 - **AC-12** Each step plays the chime at a rate that rises with the line's length and Restart at a

@@ -351,7 +351,7 @@ test('runes AC-9: every level is sound: 1–3 solutions, greedy fails, every run
   }
 });
 
-test('runes AC-10: two chapters of seven levels; each level opens once the one before it is solved; Next goes in order; a link to a locked level opens the furthest one open', async () => {
+test('runes AC-10: two chapters of seven levels; each level opens once the one before it is solved; Next goes in order; entering the game, or a link to a locked level, opens the furthest one open', async () => {
   assert.deepEqual(
     CHAPTERS.map((c) => [c.name, c.level, c.to - c.from]),
     [
@@ -389,16 +389,28 @@ test('runes AC-10: two chapters of seven levels; each level opens once the one b
   assert.equal(await s.page.evaluate(() => window.__runes.nextAfter(13)), -1);
   await s.context.close();
 
-  // A hash that names no level opens level 1 and is rewritten.
-  const bad = await open();
-  for (const h of ['0', '99', 'abc']) {
-    await bad.page.goto(`${BASE}runes/#${h}`);
-    await bad.page.reload();
-    await bad.page.waitForFunction(() => window.__runes);
-    assert.equal(await bad.page.evaluate(() => window.__runes.game.index), 0, `#${h}`);
-    assert.equal(new URL(bad.page.url()).hash, '#1', `#${h} is rewritten`);
+  // Entering the game (no level in the URL, or one that names no level) opens the furthest level
+  // open, and the URL says which.
+  const mid = await open({ init: () => localStorage.setItem('runes-solved', '[0,1,2]') });
+  for (const h of ['', '#0', '#99', '#abc']) {
+    await mid.page.goto(`${BASE}runes/${h}`);
+    await mid.page.reload();
+    await mid.page.waitForFunction(() => window.__runes);
+    assert.equal(await mid.page.evaluate(() => window.__runes.game.index), 3, `'${h}' opens level 4`);
+    assert.equal(new URL(mid.page.url()).hash, '#4', `'${h}' is rewritten`);
   }
-  await bad.context.close();
+  // A URL naming an open level still opens it.
+  await mid.page.goto(`${BASE}runes/#2`);
+  await mid.page.reload();
+  await mid.page.waitForFunction(() => window.__runes);
+  assert.equal(await mid.page.evaluate(() => window.__runes.game.index), 1);
+  await mid.context.close();
+  const fresh = await browser.newContext();
+  const fp = await fresh.newPage();
+  await fp.goto(`${BASE}runes/`);
+  await fp.waitForFunction(() => window.__runes);
+  assert.equal(await fp.evaluate(() => window.__runes.game.index), 0, 'a fresh browser starts at level 1');
+  await fresh.close();
 });
 
 test('runes AC-11: Hint cuts back to the start shared with a solution and marks its next stone', async () => {

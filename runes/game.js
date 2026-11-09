@@ -207,7 +207,7 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   updateButtons();
 }
 
-// The level a URL names: a bad hash means level 1, a locked level the furthest one open.
+// The level a URL names (-1 for none, or a bad one); a locked level means the furthest one open.
 function levelFromHash() {
   const m = /^#(\d{1,3})$/.exec(location.hash);
   const n = m ? Number(m[1]) : NaN;
@@ -540,10 +540,8 @@ ui.restart.addEventListener('click', () => restart());
 ui.hint.addEventListener('click', () => hint());
 window.addEventListener('hashchange', () => {
   const i = levelFromHash();
-  if (i < 0) {
-    history.replaceState(null, '', '#1');
-    loadLevel(0, { push: false });
-  } else if (i !== game.index) loadLevel(i);
+  if (i < 0) loadLevel(frontier());
+  else if (i !== game.index) loadLevel(i);
   else if (location.hash !== `#${i + 1}`) history.replaceState(null, '', `#${i + 1}`);
 });
 
@@ -1042,9 +1040,9 @@ window.addEventListener('resize', layout);
 
 // ---------------------------------------------------------------------------------------------
 // Start, and the test hook.
+// Entering the game opens the furthest level open; a URL naming an open level opens that one.
 const first = levelFromHash();
-if (first < 0 && location.hash) history.replaceState(null, '', '#1');
-loadLevel(first < 0 ? 0 : first); // rewrites the hash to the level it opened
+loadLevel(first < 0 ? frontier() : first); // rewrites the hash to the level it opened
 setGuidance(guidance);
 requestAnimationFrame(frame);
 
@@ -1067,6 +1065,7 @@ window.__runes = {
   feed,
   locked,
   nextAfter,
+  frontier,
   center: (cell) => ({ x: cx(cell), y: cy(cell) }),
   solvedSet: () => [...solvedSet],
   // Run the dead-line check now instead of after the next frame.
