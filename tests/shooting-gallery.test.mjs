@@ -580,7 +580,7 @@ test('shooting-gallery AC-17: each state shows only its own card and HUD', async
   await page.evaluate(() => (window.__gallery.game.pips = 6));
   await page.evaluate(() => (window.__gallery.game.queue.push({ at: 9999, kind: 'duck' }), 0));
   await steps(page, 0.05);
-  assert.equal((await ui()).banner, 'Bonus!');
+  assert.equal((await ui()).banner, 'Bonus! ×2 points');
   await page.evaluate(() => {
     const g = window.__gallery;
     g.clear();

@@ -464,8 +464,10 @@ function startRound(n) {
   }
 }
 
-function banner(text, sub = '', life = 1.2) {
-  game.banner = { text, sub, t: 0, life };
+// A banner between rounds sits over the pond; one during play (`small`) is a slim pill in the front
+// water's band above the counter, where nothing can be hit, so it never hides a target.
+function banner(text, sub = '', life = 1.2, small = false) {
+  game.banner = { text, sub, t: 0, life, small };
 }
 
 function quotaRound() {
@@ -485,7 +487,7 @@ function checkRound() {
     if (game.shells > 0 && !paradeOver()) {
       game.bonus = true;
       game.speedMul = BONUS_SPEED;
-      banner('Bonus!', 'double points', 1.1);
+      banner('Bonus! ×2 points', '', 1.3, true);
       return;
     }
     roundWon();
@@ -1174,7 +1176,24 @@ function drawBanner() {
   const p = b ? Math.min(1, b.t / 0.18) : 1;
   const out = b ? Math.max(0, (b.t - (b.life - 0.25)) / 0.25) : 0;
   ctx.globalAlpha = 1 - out;
-  // Over the pond between the ducks and the front water, so a banner never hides the ducks or tins.
+  if (b && b.small) {
+    const y = (L.frontY + L.C) / 2 + 8;
+    const w = Math.min(SW - 60, 230);
+    ctx.save();
+    ctx.translate(SW / 2, y);
+    ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
+    ctx.fillStyle = '#fff4dc';
+    ctx.strokeStyle = '#b9773a';
+    ctx.lineWidth = 4;
+    roundRect(-w / 2, -19, w, 38, 19);
+    ctx.fill();
+    ctx.stroke();
+    label(text, 0, 1, 21, 'center', '#e86a17');
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
+  }
+  // Between rounds: over the pond between the ducks and the front water.
   const y = Math.min((L.midY + L.frontY) / 2 + 24, L.frontY - 40);
   const s = 0.7 + 0.3 * p;
   ctx.save();

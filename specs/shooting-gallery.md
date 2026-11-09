@@ -207,7 +207,7 @@ keeps the site's tokens.
 | Start (the booth moves behind) | shown | hidden | hidden | hidden | hidden |
 | Round intro (about 1.2 s) | hidden | shown | hidden | hidden | shown |
 | Playing | hidden | hidden | hidden | hidden | shown |
-| Bonus (quota met) | hidden | "Bonus!" briefly | hidden | hidden | shown, the pips lit gold |
+| Bonus (quota met) | hidden | "Bonus! ×2 points" briefly, a slim pill above the counter where nothing can be hit | hidden | hidden | shown, the pips lit gold |
 | Free round | hidden | shown at its start | hidden | hidden | shown, the pips hidden and the tray dimmed |
 | Round won (about 1.5 s) | hidden | the round's tally | hidden | hidden | shown |
 | Paused (page was hidden) | hidden | hidden | shown | hidden | shown |
