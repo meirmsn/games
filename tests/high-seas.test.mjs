@@ -848,3 +848,49 @@ test('high-seas AC-21: a delivery, a gust and a knockdown each play their sound,
   assert.equal(quiet.total, 0);
   await context.close();
 });
+
+test('high-seas: each state shows only its own cards and HUD, as in the spec\'s state table', async () => {
+  const { context, page } = await open();
+  const shown = () =>
+    page.evaluate(() => {
+      const vis = (sel) => {
+        const el = document.querySelector(sel);
+        return !!el && !el.hidden && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+      };
+      return {
+        start: vis('[data-screen="start"]'),
+        port: vis('[data-screen="port"]'),
+        hud: vis('[data-hud]'),
+        over: vis('[data-screen="over"]'),
+        pause: vis('[data-screen="pause"]'),
+      };
+    });
+  const row = (start, port, hud, over, pause) => ({ start, port, hud, over, pause });
+  assert.deepEqual(await shown(), row(true, false, false, false, false), 'Start');
+  await page.click('[data-start]');
+  assert.deepEqual(await shown(), row(false, true, true, false, false), 'Docked');
+  await page.click('[data-cast]');
+  assert.deepEqual(await shown(), row(false, false, true, false, false), 'Sailing');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.deepEqual(await shown(), row(false, false, true, false, true), 'Paused');
+  await page.click('[data-resume]');
+  await page.evaluate(() => {
+    const s = window.__seas;
+    const S = s.S;
+    s.manual = true;
+    S.mode = 'docked';
+    S.portAt = 0;
+    S.coins = 400;
+    s.buy('galleon');
+    s.takeCharter();
+    s.castOff();
+    const l = S.world.lighthouse;
+    Object.assign(S.boat, { x: l.rx, y: l.ry, v: 0 });
+    for (let i = 0; i < 200 && S.mode !== 'over'; i++) s.step(1 / 60);
+  });
+  assert.deepEqual(await shown(), row(false, false, false, true, false), 'Voyage over');
+  await context.close();
+});

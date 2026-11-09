@@ -82,7 +82,9 @@ has been waiting in the shipyard since the first minute.
 - Purchases change the verb, not a number: keel (60 coins), spinnaker (130), galleon (320). Each is
   shown on the shipyard's quay, with its price, from the start (owner's guidelines: show the reward
   before it's earned). The galleon (Kenney's white-sailed ship) is moored at the shipyard from the
-  first minute.
+  first minute. The prices were first 60, 120 and 260; playtesting during the build, before the PR,
+  raised the spinnaker to 130 and the galleon to 320, because voyages ended under the 8–12 minute
+  target (Claude, 2026-11-09).
 - The start port is the shipyard. Three other ports, and a lighthouse island far off for the
   finale. Each port offers two contracts: goods (pay by distance) or mail (a departure window shown
   as a draining ring; delivered on time pays ×1.6, late pays the goods rate). The window is for
@@ -122,7 +124,8 @@ has been waiting in the shipyard since the first minute.
   scaled down. The dinghy is drawn in code (no small sailboat in the pack).
 - Tuning targets, each a knob in one table in the code: the first delivery in under 40 s; the
   first upwind contract by about 2 minutes; the keel by about 3 minutes; the galleon by about 7; the
-  voyage's end at 8–12 minutes.
+  voyage's end at 8–12 minutes. `scripts/high-seas/playtest.mjs` times an autopilot playing whole
+  voyages at 390×844, for AC-22's playtest.
 - The address keeps a version, the seed, the progress, the voyage clock and a short checksum. An
   address that doesn't check out (edited, garbled or from another version) starts a fresh voyage on
   its seed, without an error.
