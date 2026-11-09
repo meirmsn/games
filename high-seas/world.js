@@ -152,8 +152,9 @@ function attempt(seed) {
   let rt = 0;
   const want = 7 + Math.floor(rand() * 5);
   while (rocks.length < want && rt++ < 500) {
-    const i = 2 + Math.floor(rand() * (W - 4));
-    const j = 2 + Math.floor(rand() * (H - 4));
+    // Clear of the chart's edge as well as of land: the edge is a shore too.
+    const i = 4 + Math.floor(rand() * (W - 8));
+    const j = 4 + Math.floor(rand() * (H - 8));
     const t = tiles[idx(i, j)];
     if (t !== DEEP && t !== SHALLOW) continue;
     // In open water, with room to pass on either side: never wedged against a beach.
@@ -370,13 +371,15 @@ export const navAt = (nav, x, y) => {
   return inside(i, j) ? nav[idx(i, j)] === 1 : false;
 };
 
-// The nearest tile centre to (x, y) on a navigability map (for a spilled crate).
-export function nearestNav(nav, x, y) {
+// The nearest tile centre to (x, y) on a navigability map (for a spilled crate), at least
+// `clearOf` tiles from every point in `avoid` (the rocks), so fetching it never means hitting one.
+export function nearestNav(nav, x, y, avoid = [], clearOf = 0) {
   let best = null;
   for (let r = 0; r < 12 && !best; r++)
     for (let j = Math.floor(y) - r; j <= Math.floor(y) + r; j++)
       for (let i = Math.floor(x) - r; i <= Math.floor(x) + r; i++) {
         if (!inside(i, j) || !nav[idx(i, j)]) continue;
+        if (avoid.some((q) => Math.hypot(q.x - i - 0.5, q.y - j - 0.5) < clearOf)) continue;
         const d = Math.hypot(i + 0.5 - x, j + 0.5 - y);
         if (!best || d < best.d) best = { x: i + 0.5, y: j + 0.5, d };
       }

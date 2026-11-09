@@ -188,6 +188,7 @@ function resetVoyage() {
   S.wind.next = null;
   S.wind.shiftAt = Infinity;
   S.wind.turnT = 0;
+  S.wind.fair = false;
   S.done = null;
   S.paid = null;
   S.slowFor = 0;
@@ -282,6 +283,7 @@ function takeCharter() {
   if (S.hold.some((c) => c.kind === 'charter')) return false;
   S.hold.push(makeContract(0, 'lighthouse', 'charter'));
   play('load');
+  fairWind();
   renderPort();
   renderHud();
   return true;
@@ -369,7 +371,28 @@ function castOff() {
 }
 
 // --- Wind and gusts ----------------------------------------------------------------------------
+// The Grand Charter sails on a fair wind: as it's loaded the wind swings round so the lighthouse
+// lies on a broad reach (135° off the wind, the galleon's best), and it holds to the end.
+function fairWind() {
+  const y = S.world.ports[0];
+  const l = S.world.lighthouse;
+  const bearing = Math.atan2(l.ry - y.ry, l.rx - y.rx);
+  const a = wrap(bearing + Math.PI / 4);
+  const b = wrap(bearing - Math.PI / 4);
+  // The nearer of the two broad reaches to the wind that's blowing.
+  S.wind.next = Math.abs(wrap(a - S.wind.dir)) <= Math.abs(wrap(b - S.wind.dir)) ? a : b;
+  S.wind.shiftAt = S.clock;
+  S.wind.turnT = 0;
+  S.wind.fair = true;
+  play('shift');
+}
+
 function scheduleShift(inS) {
+  if (S.wind.fair) {
+    S.wind.next = null;
+    S.wind.shiftAt = Infinity;
+    return;
+  }
   S.wind.shiftAt = S.clock + inS;
   const turn = (S.rand() < 0.5 ? 1 : -1) * (Math.PI / 2) * (0.85 + S.rand() * 0.3);
   S.wind.next = wrap(S.wind.dir + turn);
@@ -449,7 +472,8 @@ function spill() {
   const nav = S.owned.galleon ? S.world.deep : S.world.light;
   S.hold.forEach((c, k) => {
     const a = b.h + Math.PI + (k - (S.hold.length - 1) / 2) * 0.9;
-    const p = nearestNav(nav, b.x + Math.cos(a) * 1.3, b.y + Math.sin(a) * 1.3);
+    let p = nearestNav(nav, b.x + Math.cos(a) * 1.3, b.y + Math.sin(a) * 1.3, S.world.rocks, 2.2);
+    if (!nav[Math.floor(p.y) * W + Math.floor(p.x)]) p = nearestNav(nav, b.x, b.y); // nowhere clear: just afloat
     S.crates.push({ x: p.x, y: p.y, c, t: 0 });
   });
   S.hold = [];

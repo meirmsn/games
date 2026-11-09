@@ -106,11 +106,14 @@ has been waiting in the shipyard since the first minute.
   wind, and the boat's speed with it.
 - Turn rates: the dinghy 150° a second, the galleon 55°. A second finger on the glass cancels the
   steer, and the boat holds its course.
-- Rocks stand in open water, at least 3 tiles from any land, so there is room to pass on either
-  side; a boat that hits one is thrown clear onto open water and turns away from it. While the
-  Grand Charter is aboard, the boat docks only where it has cargo to deliver and at the lighthouse,
-  so the last passage isn't interrupted by every port it passes (Claude, 2026-11-09, from the timed
-  playtest).
+- Rocks stand in open water, at least 3 tiles from any land and 4 from the chart's edge, so there is
+  room to pass on either side; a boat that hits one is thrown clear onto open water and turns away
+  from it, and its spilled cargo floats at least 2 tiles clear of every rock. While the Grand
+  Charter is aboard, the boat docks only where it has cargo to deliver and at the lighthouse, so the
+  last passage isn't interrupted by every port it passes. The Grand Charter sails on a fair wind:
+  as it is loaded the wind swings round so the lighthouse lies on a broad reach, and no further
+  shift comes, so the finale is a release after the build-up rather than a beat upwind (Claude,
+  2026-11-09, from the timed playtest).
 - Rocks show a white surf ring at their footprint, which is what the boat hits, not the tall sprite.
 - The wind shifts by about 90°, announced at least 30 s ahead by a ghost arrow on the wind vane and
   clouds turning: 45 s after the fourth delivery, again 45 s after buying the galleon, then every

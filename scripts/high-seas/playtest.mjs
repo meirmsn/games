@@ -3,7 +3,8 @@
 // finished. It is paced like a person: it spends a few seconds at each quay reading the cards,
 // adjusts its steering a few times a second rather than every frame, follows the shortest water
 // route, tacks when the route is upwind (changing tack when it meets a shore), bears away from
-// heavy heel, takes the best-paying contracts and buys each upgrade as soon as it can.
+// heavy heel, takes the best-paying contracts, and heads back to buy each upgrade once it can
+// afford it.
 // Run: node scripts/high-seas/playtest.mjs [SEED ...]   (needs Playwright's Chromium)
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
@@ -63,6 +64,7 @@ async function autopilot(max) {
   let delivered = 0;
   let wp = null;
   let clear = null;
+  let wide = null;
   let awayT = 0;
   let quayT = 0; // seconds left reading the cards at a quay
   let steerT = 0; // seconds until the next steering adjustment
@@ -79,7 +81,11 @@ async function autopilot(max) {
       }
       const offers = (S.offers[S.portAt] || []).slice().sort((a, b) => b.pay / b.len - a.pay / a.len);
       // With the galleon, it sets off with the Grand Charter alone, as a player heading for the end.
-      if (!S.owned.galleon) for (const c of offers) if (S.hold.length < s.rig().cargo) s.takeOffer(c);
+      // Once it can afford the next purchase it heads for the shipyard, taking only cargo bound
+      // there, as a player saving for the price tag on the quay would.
+      const next = ['keel', 'spinnaker', 'galleon'].find((w) => !S.owned[w]);
+      const saving = next && S.portAt !== 0 && S.coins >= s.TUNE.prices[next];
+      if (!S.owned.galleon) for (const c of offers) if (S.hold.length < s.rig().cargo && (!saving || c.to === 0)) s.takeOffer(c);
       if (!S.hold.length) {
         // Nothing to carry from here: head back to the shipyard (a contract that pays nothing).
         const c = s.makeContract(S.portAt, 0, 'goods');
@@ -106,7 +112,13 @@ async function autopilot(max) {
           clear = S.world.light.slice();
           for (const q of S.world.rocks) for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) clear[(q.j + dj) * N + q.i + di] = 0;
         }
-        let p = path(S.owned.galleon ? S.world.deep : clear, b.x, b.y, dest.rx, dest.ry);
+        // The galleon gives rocks a wider berth still.
+        if (!wide) {
+          wide = S.world.deep.slice();
+          for (const q of S.world.rocks) for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) wide[(q.j + dj) * N + q.i + di] = 0;
+        }
+        let p = path(S.owned.galleon ? wide : clear, b.x, b.y, dest.rx, dest.ry);
+        if (!p && S.owned.galleon) p = path(S.world.deep, b.x, b.y, dest.rx, dest.ry);
         if (!p) p = path(S.world.light, b.x, b.y, dest.rx, dest.ry);
         wp = p ? p[Math.min(p.length - 1, S.owned.galleon ? 4 : 3)] : [dest.rx, dest.ry];
       }

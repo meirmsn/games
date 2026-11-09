@@ -580,7 +580,7 @@ test('high-seas AC-13: a seed always gives the same sea; every sea links its por
   }
 });
 
-test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter; the lighthouse ends the voyage with its time and the sea\'s best; then a new sea or the same', async () => {
+test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter, on a fair wind; the lighthouse ends the voyage with its time and the sea\'s best; then a new sea or the same', async () => {
   const { context, page } = await open({ hash: 'LUMEN' });
   await page.click('[data-start]');
   assert.equal(await page.locator('[data-charter]').count(), 0, 'no charter without the galleon');
@@ -595,6 +595,13 @@ test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter; 
   const r = await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
+    // A fair wind for the charter: within a few seconds the lighthouse lies 135° off the wind.
+    for (let i = 0; i < 60 * 6; i++) s.step(1 / 60);
+    const y = S.world.ports[0];
+    const lh = S.world.lighthouse;
+    const bearing = Math.atan2(lh.ry - y.ry, lh.rx - y.rx);
+    const off = Math.abs(Math.atan2(Math.sin(bearing - S.wind.dir - Math.PI), Math.cos(bearing - S.wind.dir - Math.PI)));
+    window.__fair = { off: (off * 180) / Math.PI, next: S.wind.next };
     s.castOff();
     // Sailing through another port's ring with only the charter aboard doesn't stop the voyage.
     const p = S.world.ports[1];
@@ -609,6 +616,9 @@ test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter; 
     return { mode: S.mode, best: JSON.parse(localStorage.getItem('high-seas-best')) };
   });
   assert.equal(await page.evaluate(() => window.__passed), 'sail', 'no stop on the way');
+  const fair = await page.evaluate(() => window.__fair);
+  near(fair.off, 135, 0.5, 'the lighthouse on a broad reach');
+  assert.equal(fair.next, null, 'and no further shift is coming');
   assert.equal(r.mode, 'over');
   assert.equal(await page.isVisible('[data-screen="over"]'), true);
   assert.equal(await page.textContent('[data-final-time]'), '7:06');
