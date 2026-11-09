@@ -116,6 +116,10 @@ export function drawVector(ctx, img, m, x, y, scale, pose = {}, faceBoost = 1) {
     part(ctx, img, ear, L.bw * 0.3, L.bodyTop + 14, { px: 0.5, py: 0.9, rot: 0.35 + air * 0.2, flip: true });
   }
   part(ctx, img, L.body, 0, L.bodyBottom, { px: 0.5, py: 1 });
+  if (pose.noFace) {
+    ctx.restore();
+    return;
+  }
   // The face, looking a little ahead.
   const [eyeName, count] = EYES[m.eyes];
   const eye = frame(eyeName);
@@ -178,28 +182,101 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
     const lum = col[0] * 0.3 + col[1] * 0.59 + col[2] * 0.11;
     return lum > 150 ? two[0] : two[1];
   };
+  const face = pixelFaceColours(img, m, pal, hex(outline), two);
+  const fillIdx = pal.length > 1 ? 1 : 0; // the body's colour (a dark body is the outline's)
   const frames = {};
   for (const [name, pose] of Object.entries(POSES)) {
     const c = makeCanvas(w, h);
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = true;
     g.imageSmoothingQuality = 'high';
-    drawVector(g, img, m, footX, footY, s, { ...pose, ears }, faceBoost);
+    // The body, arms and legs only: the face is drawn afterwards, pixel by pixel.
+    drawVector(g, img, m, footX, footY, s, { ...pose, ears, noFace: true }, faceBoost);
     const data = g.getImageData(0, 0, w, h);
     const d = data.data;
     const solid = new Uint8Array(w * h);
+    const idx = new Int8Array(w * h).fill(-1); // each pixel's palette entry
     for (let i = 0; i < w * h; i++) {
       const a = d[i * 4 + 3];
       if (a >= 110) {
         solid[i] = 1;
         // Opaque, and snapped to the monster's own short palette: no in-between shades.
-        const snapped = nearest(pal, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
-        const [r, g2, b] = two ? toTwo(snapped) : snapped;
-        d[i * 4] = r;
-        d[i * 4 + 1] = g2;
-        d[i * 4 + 2] = b;
-        d[i * 4 + 3] = 255;
-      } else d[i * 4 + 3] = 0;
+        idx[i] = nearestIndex(pal, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+      }
+    }
+    // Smooth out lone pixels: a pixel whose colour almost none of its neighbours share takes the
+    // colour most of them have. Shapes stay whole and uniform instead of speckled.
+    for (let pass = 0; pass < 2; pass++) {
+      const next = idx.slice();
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const i = y * w + x;
+          if (idx[i] < 0) continue;
+          const tally = new Map();
+          let same = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              const v = idx[i + dy * w + dx];
+              if (v < 0) continue;
+              if (v === idx[i]) same++;
+              tally.set(v, (tally.get(v) || 0) + 1);
+            }
+          }
+          if (same > 1) continue;
+          let best = -1;
+          let bn = 0;
+          for (const [v, n] of tally) if (n > bn) [best, bn] = [v, n];
+          if (bn >= 4) next[i] = best;
+        }
+      }
+      idx.set(next);
+    }
+    // Fill the gaps inside the silhouette (between an arm and the body, say), which would otherwise
+    // be outlined into little hollow loops: thin slits first, then any hole not open to the outside.
+    for (let pass = 0; pass < 2; pass++) {
+      const next = idx.slice();
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const i = y * w + x;
+          if (idx[i] >= 0) continue;
+          const l = idx[i - 1];
+          const r = idx[i + 1];
+          const u = idx[i - w];
+          const dn = idx[i + w];
+          if (l >= 0 && r >= 0) next[i] = l === r ? l : fillIdx;
+          else if (u >= 0 && dn >= 0) next[i] = u === dn ? u : fillIdx;
+        }
+      }
+      idx.set(next);
+    }
+    const outside = new Uint8Array(w * h);
+    const stack = [];
+    for (let x = 0; x < w; x++) stack.push(x, (h - 1) * w + x);
+    for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+    while (stack.length) {
+      const i = stack.pop();
+      if (outside[i] || idx[i] >= 0) continue;
+      outside[i] = 1;
+      const x = i % w;
+      if (x > 0) stack.push(i - 1);
+      if (x < w - 1) stack.push(i + 1);
+      if (i >= w) stack.push(i - w);
+      if (i < w * (h - 1)) stack.push(i + w);
+    }
+    for (let i = 0; i < w * h; i++) if (idx[i] < 0 && !outside[i]) idx[i] = fillIdx;
+    for (let i = 0; i < w * h; i++) solid[i] = idx[i] >= 0 ? 1 : 0;
+    for (let i = 0; i < w * h; i++) {
+      if (idx[i] < 0) {
+        d[i * 4 + 3] = 0;
+        continue;
+      }
+      const col = pal[idx[i]];
+      const [r, g2, b] = two ? toTwo(col) : col;
+      d[i * 4] = r;
+      d[i * 4 + 1] = g2;
+      d[i * 4 + 2] = b;
+      d[i * 4 + 3] = 255;
     }
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
@@ -215,10 +292,149 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
         }
       }
     }
+    // The face, drawn as pixel art: clean eyes and a clean mouth, sized to the body.
+    pixelFace(d, w, h, m, s, pose, footX, footY, face, solid);
     g.putImageData(data, 0, 0);
     frames[name] = c;
   }
   return { frames, w, h, footX, footY };
+}
+
+// The colours of the pixel face: the eyes' own colour (white, red, yellow…), the outline's dark for
+// pupils and mouths, white teeth and a pink tongue; any that would vanish into the body change.
+function pixelFaceColours(img, m, pal, outline, two) {
+  if (two) return { sclera: two[1], pupil: two[0], dark: two[1], tooth: two[0], tongue: null, ring: false };
+  const [eyeName] = EYES[m.eyes];
+  const f = MONSTER[eyeName];
+  const c = makeCanvas(f[2], f[3]);
+  const g = c.getContext('2d');
+  g.drawImage(img, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+  const d = g.getImageData(0, 0, f[2], f[3]).data;
+  const counts = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 250) continue;
+    const lum = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+    if (lum < 70) continue; // the pupil
+    const key = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let sclera = [255, 255, 255];
+  let top = 0;
+  for (const [k, n] of counts) {
+    if (n > top) {
+      top = n;
+      sclera = [((k >> 8) & 15) * 17, ((k >> 4) & 15) * 17, (k & 15) * 17];
+    }
+  }
+  const body = pal[1] || pal[0];
+  const near = (a, b) => dist2(a, b) < MIN_APART * MIN_APART;
+  // Every face colour snaps to a palette colour it's close to, so no two near colours sit together.
+  const snap = (col, among) => among.find((p) => near(p, col)) || col;
+  sclera = snap(sclera, pal.slice(1));
+  // An eye the body's own colour is ringed in dark, so it still reads.
+  const ring = sclera === body;
+  const tooth = snap([255, 255, 255], [body, sclera, ...pal.slice(1)]);
+  const pink = [232, 80, 106];
+  const tongue = [body, sclera, tooth, ...pal.slice(1)].some((p) => near(p, pink)) ? null : pink;
+  return { sclera, pupil: outline, dark: outline, tooth, tongue, ring };
+}
+
+function pixelFace(d, w, h, m, s, pose, footX, footY, fc, solid) {
+  const L = layout(m);
+  const sq = pose.squash || 0;
+  const sx = s * (1 + sq * 0.18);
+  const sy = s * (1 - sq * 0.18);
+  const bodyW = L.bw * sx;
+  const cx = footX + L.bw * 0.08 * sx;
+  // The face stays inside the body: never on its outline or past it.
+  const set = (x, y, col) => {
+    if (!col || x < 0 || y < 0 || x >= w || y >= h || !solid[y * w + x]) return;
+    const i = (y * w + x) * 4;
+    d[i] = col[0];
+    d[i + 1] = col[1];
+    d[i + 2] = col[2];
+    d[i + 3] = 255;
+  };
+  const [eyeName, count] = EYES[m.eyes];
+  const ew = Math.max(3, Math.min(count === 1 ? 10 : count === 2 ? 7 : 5, Math.round(bodyW * (count === 1 ? 0.5 : count === 2 ? 0.36 : 0.28))));
+  const eh = Math.max(3, ew - (ew > 4 ? 1 : 0));
+  const eyeCy = Math.round(footY + (L.bodyTop + L.bh * 0.36) * sy);
+  const gap = ew + 1;
+  const closed = /closed/.test(eyeName);
+  const angry = /angry/.test(eyeName);
+  const inside = (x, y) => {
+    const nx = (x + 0.5 - ew / 2) / (ew / 2);
+    const ny = (y + 0.5 - eh / 2) / (eh / 2);
+    return nx * nx + ny * ny <= 1.2;
+  };
+  for (let k = 0; k < count; k++) {
+    const ex = Math.round(cx + (k - (count - 1) / 2) * gap - ew / 2);
+    const ey = eyeCy - Math.round(eh / 2) - (count === 3 && k === 1 ? Math.ceil(eh / 2) : 0);
+    if (closed) {
+      // A happy arch: ^
+      for (let x = 0; x < ew; x++) {
+        const t = Math.abs(x + 0.5 - ew / 2) / (ew / 2);
+        set(ex + x, ey + Math.round(eh / 2 - 1 + t * (eh / 2)), fc.dark);
+      }
+      continue;
+    }
+    if (fc.ring) {
+      for (let y = -1; y <= eh; y++) {
+        for (let x = -1; x <= ew; x++) {
+          if (inside(x, y)) continue;
+          if (inside(x - 1, y) || inside(x + 1, y) || inside(x, y - 1) || inside(x, y + 1)) set(ex + x, ey + y, fc.dark);
+        }
+      }
+    }
+    for (let y = 0; y < eh; y++) for (let x = 0; x < ew; x++) if (inside(x, y)) set(ex + x, ey + y, fc.sclera);
+    // The pupil looks ahead (frames face right; they're flipped to look left).
+    const p = ew >= 7 ? 3 : ew >= 4 ? 2 : 1;
+    const px = ex + Math.min(ew - p, Math.round(ew / 2 - p / 2 + (ew >= 5 ? 1 : 0)));
+    const py = ey + Math.round(eh / 2 - p / 2);
+    for (let y = 0; y < p; y++) for (let x = 0; x < p; x++) set(px + x, py + y, fc.pupil);
+    if (p >= 3) set(px, py, fc.sclera); // a glint
+    if (angry) {
+      // A brow, sloping down towards the middle of the face.
+      const inner = k < (count - 1) / 2 ? ew - 1 : 0;
+      for (let x = 0; x < ew; x++) {
+        const drop = Math.round((1 - Math.abs(x - inner) / Math.max(1, ew - 1)) * 1);
+        set(ex + x, ey - 2 + drop, fc.dark);
+      }
+    }
+  }
+  // The mouth.
+  const mouthName = MOUTHS[m.mouth];
+  const mw = Math.max(5, Math.min(9, Math.round(bodyW * 0.42)));
+  const mx = Math.round(cx - mw / 2);
+  const my = Math.round(footY + (L.bodyTop + L.bh * 0.68) * sy);
+  if (mouthName === 'mouth_closed_happy') {
+    for (let x = 0; x < mw; x++) set(mx + x, my + (x === 0 || x === mw - 1 ? 0 : 1), fc.dark);
+    for (let x = 2; x < mw - 2; x++) set(mx + x, my + 2, fc.dark);
+  } else if (mouthName === 'mouth_closed_fangs') {
+    for (let x = 0; x < mw; x++) set(mx + x, my, fc.dark);
+    set(mx + 1, my + 1, fc.tooth);
+    set(mx + mw - 2, my + 1, fc.tooth);
+  } else if (mouthName === 'mouth_closed_teeth') {
+    for (let x = 0; x < mw; x++) {
+      set(mx + x, my, fc.dark);
+      set(mx + x, my + 1, x === 0 || x === mw - 1 ? fc.dark : fc.tooth);
+      set(mx + x, my + 2, fc.dark);
+    }
+  } else {
+    // An open mouth: a rounded dark shape, with a tongue or a tooth.
+    const mh = mw >= 5 ? 3 : 2;
+    const n = MOUTHS.indexOf(mouthName);
+    for (let y = 0; y < mh; y++) {
+      for (let x = 0; x < mw; x++) {
+        const corner = (y === 0 || y === mh - 1) && (x === 0 || x === mw - 1);
+        if (corner && y === mh - 1) continue;
+        if (corner && y === 0 && mh > 2) continue;
+        set(mx + x, my + y, fc.dark);
+      }
+    }
+    if (n % 2 === 0 && fc.tongue) for (let x = 2; x < mw - 2; x++) set(mx + x, my + mh - 1, fc.tongue);
+    else set(mx + 1 + (n % 3), my, fc.tooth);
+  }
 }
 
 // The monster's palette: the flat colours its parts are drawn in. The parts are drawn large, where
@@ -297,6 +513,18 @@ function dist2(a, b) {
   const dg = a[1] - b[1];
   const db = a[2] - b[2];
   return dr * dr * 2 + dg * dg * 3 + db * db;
+}
+function nearestIndex(pal, r, g, b) {
+  let best = 0;
+  let bd = Infinity;
+  for (let i = 0; i < pal.length; i++) {
+    const dd = dist2(pal[i], [r, g, b]);
+    if (dd < bd) {
+      bd = dd;
+      best = i;
+    }
+  }
+  return best;
 }
 function nearest(pal, r, g, b) {
   let best = pal[0];
