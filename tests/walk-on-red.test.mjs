@@ -664,6 +664,10 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner', as
   assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true, banner: 'Quiet Street' }, 'the level’s name just after Start');
   await page.waitForTimeout(1800);
   assert.equal((await shown()).banner, null, 'then it goes');
+  // Paused while playing.
+  await page.evaluate(() => window.__walkOnRed.pause());
+  assert.deepEqual(await shown(), { start: false, paused: true, over: false, hud: true, banner: null });
+  await page.evaluate(() => window.__walkOnRed.resume());
   await page.evaluate(() => window.__walkOnRed.put(0));
   assert.equal(await until('green'), 'green');
   await page.waitForTimeout(100);
@@ -761,8 +765,15 @@ test('walk-on-red AC-18: the street takes the screen’s shape at load, keeps on
   // Turned sideways mid-game: paused, asking to turn back or start over.
   await page.setViewportSize({ width: 896, height: 414 });
   await page.waitForTimeout(100);
+  const cards = () =>
+    page.evaluate(() => {
+      const vis = (sel) => !document.querySelector(sel).hidden;
+      return { start: vis('[data-screen="start"]'), paused: vis('[data-screen="paused"]'), over: vis('[data-screen="over"]'), rotate: vis('[data-screen="rotate"]'), hud: vis('[data-hud]'), banner: vis('[data-banner]') };
+    });
+  const bannerBefore = await page.evaluate(() => !document.querySelector('[data-banner]').hidden);
   let r = await page.evaluate(() => ({ paused: window.__walkOnRed.game.paused, rotate: !document.querySelector('[data-screen="rotate"]').hidden }));
   assert.deepEqual(r, { paused: true, rotate: true });
+  assert.deepEqual(await cards(), { start: false, paused: false, over: false, rotate: true, hud: true, banner: bannerBefore }, 'the state table’s row for a turned device');
   assert.equal(await state(), before, 'nothing changed');
   // Turned back: the rotate card goes, the paused card waits for a tap.
   await page.setViewportSize({ width: 414, height: 896 });
