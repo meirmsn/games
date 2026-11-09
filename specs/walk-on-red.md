@@ -106,7 +106,11 @@ down so that one person follows you and you understand this new mechanic, and ag
 to ramp up … then you can add a second person following you. You don't need to go down on the
 complexity of the level at that point … 20 levels total … maybe 21 … the last 5 levels or so are
 gonna be very hard because a bunch of people are following you. Plus, are the most complex in terms
-of the traffic." This spec is the game after those changes.
+of the traffic." After playing that, the owner said (2026-11-09): "It's feeling great … the end …
+the amount of people that follow you and all those points, that should also look 8-bit … if they
+hit you in the middle … You should start from the beginning … if they hit an NPC, that NPC should
+disappear. It shouldn't go back. If the game restarts because they hit you, then okay, they all
+start from the bottom." This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
 goes now, and the people waiting start copying him.
@@ -134,7 +138,7 @@ goes now, and the people waiting start copying him.
   each level is half a minute, so it stops cleanly between any two.
 - **Orientation:** portrait, everywhere: the view is the zebra crossing, edge to edge, the same
   shape on a phone, a phone held sideways and a desktop.
-- **What a failure costs:** a hit costs a few seconds; a follower hit costs their share of the points;
+- **What a failure costs:** a hit sends him back to the start (several seconds); a follower hit costs their share of the points;
   too slow costs the level's points and a replay of that level (about 30 s). No lives.
 - **Save-game stand-in:** the best total, the best stars per level and the hidden assist, in
   localStorage.
@@ -189,9 +193,12 @@ goes now, and the people waiting start copying him.
   people = 42", in a smaller font where it would not fit beside the porta-potty) shows at the
   right of the sky; each follower who arrives shows the new multiplier ("×2", "×3") over their head; the
   count-up says "× 3 people". When the walk light turns green, the level's **score table** shows over
-  the crossing, plain lines that add up: "24 s left 24", "2 people followed you on red +48" (each
-  worth the seconds again), "1 person relieved too +24" (below), then the total "+96" and the
-  level's stars (owner, 2026-11-09: "show like a little table").
+  the crossing, plain lines that add up: "24 SECONDS 24", "2 FOLLOWED YOU +48" (each worth the
+  seconds again), "1 RELIEVED TOO +24" (below), then the total "+96" and the level's stars (owner,
+  2026-11-09: "show like a little table"). The table, the count-up, the "▶▶ 20×" mark and the
+  pop-ups ("!", "×2", "+24") are drawn on the street in its own pixels, in a 3×5 pixel font with a
+  square box and a one-pixel border, not in smooth type; the table's words stay in the page for
+  screen readers (owner, 2026-11-09: "that should also look 8-bit").
   Once he's across he goes into the porta-potty: the door closes (its dot turns red), a flush, then
   the celebrating chime as the flush ends, about 1.8 s in all, while the walk light holds its seconds and the street
   goes on at normal speed. Then nobody waits in real time: the whole game fast-forwards at 20 times
@@ -221,15 +228,17 @@ goes now, and the people waiting start copying him.
   and so on, catching up a cell every 0.15 s. They don't look at the traffic, they trust him, so
   whether they make it is down to his timing alone: a gap only he fits through gets the last of them
   hit. When he stands still they catch up to his cell (a little to the side). While he is down they
-  wait, and when he is put back on the last safe strip his trail goes back with him, so they walk
-  back to it instead of into the car. A follower hit tumbles, then walks back to the crowd: out for
-  this level, and their share of the points with them. Followers across queue beside the
+  wait; when he is sent back to the start, they go back to their places on the near kerb with him,
+  and stick to him again as he sets off. A follower hit tumbles and is gone: out for this level, and
+  their share of the points with them (owner, 2026-11-09: "that pedestrian should disappear"). Followers across queue beside the
   porta-potty, to its right. Nobody in the crowd hops from foot to foot but a follower who needs the
   loo too (above) (owner, 2026-11-09: "randomly they stick to you. But once they do, they follow your
   footsteps"; this replaces copiers who chose their own moment, which made the points feel random).
 - **Hits:** a vehicle overlapping the player's cell (vehicle boxes 20% narrower than their art, people
   5 art pixels wide) knocks him down for 1.2 s (the pack's fall and lying frames with stars, a bump
-  and a horn), then he's back on the last safe strip he stood on. Stepping into a vehicle counts.
+  and a horn), then he starts again from the beginning, at his place on the near kerb, wherever he
+  was hit (owner, 2026-11-09: "it doesn't matter when they hit you. You should start from the
+  beginning"). Stepping into a vehicle counts.
   There are no lives.
 - **Stars:** a level's score against its best possible (all its seconds × everyone across): 12% for
   one star, 28% for two, 45% for three. The best stars per level and the best total are kept.
@@ -325,12 +334,13 @@ goes now, and the people waiting start copying him.
   again — `tests/walk-on-red.test.mjs`.
 - **AC-7** Followers stick to him as he steps off the kerb (a "!" over each) and walk his exact
   path, each where he was 0.4 s before the one ahead; when he stands still they catch up to his
-  cell; while he is down they wait, and a knock back takes them back to the last safe strip too —
+  cell; while he is down they wait, and when he is sent back to the start they are too, and stick
+  to him again as he sets off —
   `tests/walk-on-red.test.mjs`.
-- **AC-8** A follower hit by a vehicle tumbles, goes back to the crowd and no longer counts; the level
+- **AC-8** A follower hit by a vehicle tumbles and is gone, and no longer counts; the level
   carries on — `tests/walk-on-red.test.mjs`.
-- **AC-9** A vehicle hitting the player knocks him down and puts him back on the last safe strip he
-  stood on — `tests/walk-on-red.test.mjs`.
+- **AC-9** A vehicle hitting the player knocks him down and sends him back to the start, on the
+  near kerb at his starting column — `tests/walk-on-red.test.mjs`.
 - **AC-10** The 21 levels are as in the decisions: nobody follows on levels 1–7, one follower on
   8–10, two on 11–14, three from 15; an island from level 3; heavy vehicles from level 4; sirens from
   level 6 —

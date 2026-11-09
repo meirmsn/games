@@ -141,6 +141,17 @@ body {
   display: none;
 }
 
+/* The score table is drawn on the street in pixels; its words stay here for screen readers. */
+.banner.as-text {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  animation: none;
+}
+
 .banner p {
   margin: 0;
 }

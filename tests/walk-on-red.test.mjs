@@ -320,7 +320,7 @@ test('walk-on-red AC-5: across, the door shuts and it flushes, the game fast-for
     const across = t.copiers().filter((p) => p.state === 'across').length;
     const rising = counts.length > 5 && counts.every((c, i) => i === 0 || c >= counts[i - 1]) && counts[counts.length - 1] > counts[0];
     const rows = [...document.querySelectorAll('[data-tally] tr')].map((tr) => [...tr.cells].map((td) => td.textContent));
-    const tableShown = !document.querySelector('[data-banner]').hidden && !document.querySelector('[data-tally]').hidden;
+    const tableShown = !document.querySelector('[data-banner]').hidden && !document.querySelector('[data-tally]').hidden && t.drawn.result.length === 3;
     return { doorT: t.DOOR_T + walkIn, ffRate: t.FF, mode, secs, door, ff, rate, lights: [...lights], across, score: t.game.results[t.game.level].score, banner: document.querySelector('[data-banner-name]').textContent, rising, took, rows, tableShown };
   });
   assert.equal(r.mode, 'finish');
@@ -405,7 +405,7 @@ test('walk-on-red AC-6: if the walk light turns green before he is across, the l
   await context.close();
 });
 
-test('walk-on-red AC-7: followers stick to him as he steps off and walk his exact path, a lag apart; they catch up when he stops, wait while he is down, and go back with him', async () => {
+test('walk-on-red AC-7: followers stick to him as he steps off and walk his exact path, a lag apart; they catch up when he stops, wait while he is down, and start again with him', async () => {
   const { context, page } = await open();
   await startEmpty(page, 10);
   const r = await page.evaluate(() => {
@@ -449,7 +449,11 @@ test('walk-on-red AC-7: followers stick to him as he steps off and walk his exac
     run(1);
     const still = [a.row, c.row];
     run(2);
-    return { before, joined, bang, seen, path, caught, m, at, down, frozen, still, back: [a.row, c.row, t.player.row] };
+    const back = { rows: [a.row, c.row, t.player.row], states: [a.state, c.state], home: [a.col === a.homeCol, c.col === c.homeCol], col: t.player.col };
+    t.move('up');
+    t.step(1 / 60);
+    const again = [a.state, c.state];
+    return { b, before, joined, bang, seen, path, caught, m, at, down, frozen, still, back, again, pcol: t.PCOL };
   });
   assert.deepEqual(r.before, ['wait', 'wait']);
   assert.deepEqual(r.joined, ['go', 'go'], 'they stick to him as he steps off');
@@ -463,11 +467,12 @@ test('walk-on-red AC-7: followers stick to him as he steps off and walk his exac
   assert.ok(r.down);
   assert.ok(r.at[0] < r.m, `the first follower was in the road behind him: ${r.at}`);
   assert.deepEqual(r.still, r.frozen, 'they wait while he is down');
-  assert.deepEqual(r.back, [r.m, r.m, r.m], 'back on the island with him');
+  assert.deepEqual(r.back, { rows: [r.b, r.b, r.b], states: ['wait', 'wait'], home: [true, true], col: r.pcol }, 'all back at the start');
+  assert.deepEqual(r.again, ['go', 'go'], 'and they stick to him again as he sets off');
   await context.close();
 });
 
-test('walk-on-red AC-8: a follower hit by a car goes back to the crowd and no longer counts', async () => {
+test('walk-on-red AC-8: a follower hit by a car tumbles and is gone, and no longer counts', async () => {
   const { context, page } = await open();
   await startEmpty(page, 7);
   const r = await page.evaluate(() => {
@@ -490,13 +495,12 @@ test('walk-on-red AC-8: a follower hit by a car goes back to the crowd and no lo
     return { hit, after: p.state, mode: t.game.mode, row: p.row, b: t.layout().bottom };
   });
   assert.equal(r.hit, 'down');
-  assert.equal(r.after, 'home');
-  assert.equal(r.row, r.b, 'back with the crowd');
+  assert.equal(r.after, 'gone', 'gone, not back to the crowd');
   assert.equal(r.mode, 'play', 'the level carries on');
   await context.close();
 });
 
-test('walk-on-red AC-9: a hit knocks the player down and back to his last safe strip', async () => {
+test('walk-on-red AC-9: a hit knocks the player down and sends him back to the start', async () => {
   const { context, page } = await open();
   await startEmpty(page, 2);
   const m = await page.evaluate(() => {
@@ -512,8 +516,11 @@ test('walk-on-red AC-9: a hit knocks the player down and back to his last safe s
   assert.ok(await page.evaluate(() => window.__walkOnRed.player.down > 0));
   await page.evaluate(() => (window.__walkOnRed.vehicles().length = 0));
   await run(page, 1.3);
-  const back = await page.evaluate(() => [window.__walkOnRed.player.row, window.__walkOnRed.player.down, window.__walkOnRed.game.mode]);
-  assert.deepEqual(back, [m, 0, 'play']);
+  const back = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    return [t.player.row, t.player.col, t.player.down, t.game.mode, t.layout().bottom, t.PCOL];
+  });
+  assert.deepEqual(back.slice(0, 4), [back[4], back[5], 0, 'play'], 'on the near kerb, at his starting column');
   await context.close();
 });
 

@@ -13,8 +13,8 @@
 //    so a gap only you fit through gets them hit.
 //  - Reaching the far kerb before the light turns green scores the seconds left × (1 + followers
 //    across). If the light turns green first, the level scores 0 and you try it again.
-//  - A car hitting you knocks you back to the last safe strip; a follower hit goes home, and their
-//    share of the points with them. There are no lives; a run is 21 levels.
+//  - A car hitting you sends you back to the start, your followers with you; a follower hit is
+//    gone, and their share of the points with them. There are no lives; a run is 21 levels.
 //  - A hidden assist eases the traffic after hits.
 //
 // Drawing: the street is drawn at its art resolution (1 art px = 1 canvas px) on a small offscreen
@@ -263,7 +263,7 @@ function makePerson(kind, col, row) {
     kind, // copier | crowd
     col,
     row,
-    state: 'wait', // wait | go | across | down | home | walk
+    state: 'wait', // wait | go | across | down | gone | walk
     hopT: 0,
     dare: 0,
     startAt: Infinity,
@@ -324,6 +324,7 @@ function setupLevel(idx) {
   game.greenWalk = false;
   game.relieved = 0;
   game.out = false;
+  game.result = null;
   game.trail = [{ t: -Infinity, col: PCOL, row: layout.bottom }]; // where he has stood, and since when
   game.stuck = false;
   // Lanes start staggered: neighbours never in the same phase.
@@ -354,6 +355,7 @@ function setupLevel(idx) {
   for (let i = 0; i < s.copiers; i++) {
     const p = makePerson('copier', cols[i], layout.bottom);
     p.order = i;
+    p.homeCol = cols[i];
     p.urgent = idx >= RELIEF_FROM && i === s.copiers - 1; // from level 10, the last follower needs the loo too
     const g = cellFeet(p.col, p.row);
     place(p, g.x, g.y);
@@ -416,14 +418,8 @@ function trailAt(ago) {
   return at;
 }
 
-// Every move he makes goes on his trail; a knock back to the last safe strip takes the trail back
-// there too, so his followers walk back with him instead of into the car.
-function markTrail(back = false) {
-  if (back) {
-    let i = game.trail.length - 1;
-    while (i > 0 && game.trail[i].row !== player.row) i--; // the last time he was on that strip
-    game.trail.length = Math.max(1, i + 1);
-  }
+// Every move he makes goes on his trail (a hit starts a new one, from the start).
+function markTrail() {
   game.trail.push({ t: game.time, col: player.col, row: player.row });
 }
 
@@ -446,11 +442,8 @@ function updateCopiers(dt) {
     if (p.state === 'down') {
       p.downT -= dt;
       if (p.downT <= 0) {
-        // Shaken, they walk back to the crowd: out for this level.
-        p.state = 'home';
-        p.row = layout.bottom;
-        const g = stripFeet(p.col, layout.bottom);
-        walkTo(p, g.x, g.y, 0.9);
+        // Gone: out for this level, and their share of the points with them.
+        p.state = 'gone';
       }
       continue;
     }
@@ -552,10 +545,22 @@ function updatePlayer(dt) {
   if (player.down > 0) {
     player.down -= dt;
     if (player.down <= 0) {
-      // Back on the last safe strip.
+      // Back to the start, on the near kerb; his followers go back there too, and stick to him
+      // again as he sets off.
       player.down = 0;
-      player.row = player.lastSafe;
-      markTrail(true);
+      player.row = layout.bottom;
+      player.col = PCOL;
+      player.lastSafe = layout.bottom;
+      game.trail = [{ t: -Infinity, col: PCOL, row: layout.bottom }];
+      game.stuck = false;
+      for (const p of people) {
+        if (p.kind !== 'copier' || p.state !== 'go') continue;
+        p.state = 'wait';
+        p.col = p.homeCol;
+        p.row = layout.bottom;
+        const g = cellFeet(p.col, p.row);
+        place(p, g.x, g.y);
+      }
       const f = cellFeet(player.col, player.row);
       player.fx = player.vx = f.x;
       player.fy = player.vy = f.y;
@@ -793,7 +798,7 @@ function updateGreen(dt) {
   if (!game.greenWalk) {
     game.greenWalk = true;
     for (const p of people) {
-      if (p.state === 'across') continue;
+      if (p.state === 'across' || p.state === 'gone') continue;
       p.state = 'walk';
       p.walkRow = p.row;
       p.hopT = rand(0, 0.4);
@@ -828,7 +833,9 @@ function updateGreen(dt) {
 function showResult() {
   const s = street();
   ui.tally.replaceChildren();
+  ui.banner.classList.add('as-text'); // drawn on the street in pixels; the words stay for screen readers
   if (game.failed) {
+    game.result = { failed: true };
     ui.bannerNum.textContent = 'The light turned green';
     ui.bannerName.textContent = 'Try again';
     ui.tally.hidden = true;
@@ -859,6 +866,13 @@ function showResult() {
   const prev = saved.stars[game.level] || 0;
   if (stars > prev) saved.stars[game.level] = stars;
   save();
+  game.result = {
+    level: game.level + 1,
+    stars,
+    total: game.results[game.level].score,
+    rows: [[`${secs} SECONDS`, String(secs)], ...(across ? [[`${across} FOLLOWED YOU`, `+${across * secs}`]] : []), ...(game.relieved ? [[`${game.relieved} RELIEVED TOO`, `+${game.relieved * secs}`]] : [])],
+  };
+  drawn.result = game.result.rows.map((r) => r.join(' '));
   ui.bannerNum.textContent = `Level ${game.level + 1} · ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`;
   ui.bannerName.textContent = `+${game.results[game.level].score}`;
   ui.banner.hidden = false;
@@ -943,6 +957,7 @@ function showStart() {
 
 function showBanner() {
   ui.tally.hidden = true;
+  ui.banner.classList.remove('as-text');
   ui.bannerNum.textContent = `Level ${game.level + 1} of ${LEVELS_N}`;
   ui.bannerName.textContent = street().name;
   ui.banner.hidden = false;
@@ -1588,7 +1603,7 @@ function personSprite(p, isPlayer) {
 function urgentJiggle(p, isPlayer) {
   if (game.mode === 'title' && !isPlayer) return 0;
   const still = isPlayer ? player.tw >= 1 && !player.down : p.tw >= 1;
-  const urgent = isPlayer ? !player.inside : p.urgent && !p.inLoo && p.state !== 'down' && p.state !== 'home';
+  const urgent = isPlayer ? !player.inside : p.urgent && !p.inLoo && p.state !== 'down' && p.state !== 'gone';
   if (!still || !urgent) return 0;
   const t = game.time + (p.id || 0) * 1.7;
   if (t % 3.6 > 0.7) return 0; // a burst of 0.7 s every 3.6 s
@@ -1606,11 +1621,11 @@ function drawPerson(p, isPlayer = false) {
   let x = px(p.vx - img.width / 2) + urgentJiggle(p, isPlayer);
   if (isPlayer && player.nudge > 0) x += Math.round(Math.sin(player.nudge * 60));
   const y = py(p.vy - img.height - hopY);
-  if (!isPlayer && p.state === 'home') lctx.globalAlpha = 0.7;
+  if (!isPlayer && p.state === 'gone') return;
   lctx.drawImage(img, x, y);
   lctx.globalAlpha = 1;
   // A drop of sweat, now and then.
-  const sweats = isPlayer ? !player.down && !player.inside : p.urgent && !p.inLoo && p.state !== 'down' && p.state !== 'home';
+  const sweats = isPlayer ? !player.down && !player.inside : p.urgent && !p.inLoo && p.state !== 'down' && p.state !== 'gone';
   if (sweats && game.mode !== 'title' && !(isPlayer && game.mode === 'finish')) {
     const ph = (game.time * 1.3) % 1;
     if (ph < 0.6) {
@@ -1632,8 +1647,103 @@ function drawPerson(p, isPlayer = false) {
   }
 }
 
-// A 3×5 pixel font for the countdown.
+// A 3×5 pixel font: the countdown's digits, and the letters for the score table.
 const DIGITS = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
+const GLYPHS = {
+  A: '010101111101101', B: '110101110101110', C: '011100100100011', D: '110101101101110', E: '111100110100111',
+  F: '111100110100100', G: '011100101101011', H: '101101111101101', I: '111010010010111', J: '001001001101010',
+  K: '101101110101101', L: '100100100100111', M: '101111111101101', N: '110101101101101', O: '010101101101010',
+  P: '110101110100100', '>': '100010001010100', Q: '010101101110011', R: '110101110101101', S: '011100010001110', T: '111010010010010',
+  U: '101101101101111', V: '101101101101010', W: '101101111111101', X: '101101010101101', Y: '101101010010010',
+  Z: '111001010100111', '+': '000010111010000', '-': '000000111000000', '.': '000000000000010', '!': '010010010000010',
+};
+const STAR = ['00100', '01110', '11111', '01110', '01010'];
+function glyphOf(c) {
+  if (c >= '0' && c <= '9') return DIGITS[+c];
+  return GLYPHS[c.toUpperCase()] || null;
+}
+const pixWidth = (text, k = 1) => text.length * 4 * k - k;
+function pixText(text, x, y, color, k = 1) {
+  lctx.fillStyle = color;
+  [...text].forEach((c, n) => {
+    const g = glyphOf(c);
+    if (!g) return;
+    for (let i = 0; i < 15; i++) if (g[i] === '1') lctx.fillRect(x + n * 4 * k + (i % 3) * k, y + Math.floor(i / 3) * k, k, k);
+  });
+}
+function pixStar(x, y, color) {
+  lctx.fillStyle = color;
+  STAR.forEach((row, j) => [...row].forEach((b, i) => b === '1' && lctx.fillRect(x + i, y + j, 1, 1)));
+}
+
+// Pixel text with a one-pixel dark outline, centred on x (view px) and clamped to the view.
+function pixLabel(text, cx, y, color, k = 1) {
+  const w = pixWidth(text, k);
+  const x = Math.max(1, Math.min(LW - w - 1, Math.round(cx - w / 2)));
+  for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) pixText(text, x + dx, y + dy, '#14161f', k);
+  pixText(text, x, y, color, k);
+}
+
+// Pop-ups ("!", "×2", "+28") and, once he's across, the points counting up, in the same pixels.
+function drawPopups() {
+  for (const pp of popups) {
+    const life = pp.long ? 1.8 : 1.1;
+    lctx.globalAlpha = Math.max(0, Math.min(1, (life - pp.t) * 2.5));
+    const k = pp.big ? 2 : 1;
+    pixLabel(pp.text.replace('×', 'X'), px(pp.x), py(pp.y - pp.t * 10) - Math.round(2.5 * k), pp.color, k);
+  }
+  lctx.globalAlpha = 1;
+  if (game.mode === 'finish' && game.stage !== 'door') {
+    const per = 1 + acrossCount();
+    const x = px(colX(PCOL));
+    const y = py(rowY(0)) + 1; // over the far sidewalk, below the porta-potty
+    pixLabel(`+${game.levelScore}`, x, y, '#ffd23f', 2);
+    if (per > 1) pixLabel(`X ${headcount(per).toUpperCase()}`, x, y + 13, '#ffffff');
+    // Fast-forward: a >> mark in the corner of the sky.
+    if (fastForward()) {
+      const t = `>> ${FF}X`;
+      pixLabel(t, LW - 3 - pixWidth(t) / 2, py(rowY(0)) - WAIT_H - 15, '#ffffff');
+      drawn.ff = true;
+    } else drawn.ff = false;
+    drawn.counting = game.levelScore;
+  }
+}
+
+// The score table over the green light: a box in the street's own pixels, line by line, then the total.
+function drawResult() {
+  const r = game.result;
+  if (!r || !(game.mode === 'green' || game.mode === 'tally')) return;
+  const w = LW - 12;
+  const x = Math.floor((LW - w) / 2);
+  const lines = r.failed ? 2 : r.rows.length;
+  const h = r.failed ? 32 : 14 + lines * 8 + 18;
+  const y = py(rowY(1)) + 2;
+  lctx.fillStyle = '#f4f1e8';
+  lctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+  lctx.fillStyle = '#1b1e29';
+  lctx.fillRect(x, y, w, h);
+  lctx.fillStyle = '#3a3f55';
+  lctx.fillRect(x + 1, y + 1, w - 2, 1);
+  if (r.failed) {
+    pixText('TOO SLOW', x + Math.floor((w - pixWidth('TOO SLOW')) / 2), y + 5, '#c9ccd6');
+    pixText('TRY AGAIN', x + Math.floor((w - pixWidth('TRY AGAIN', 2)) / 2), y + 15, '#ffd23f', 2);
+    return;
+  }
+  const head = `LEVEL ${r.level}`;
+  pixText(head, x + 5, y + 5, '#c9ccd6');
+  for (let i = 0; i < 3; i++) pixStar(x + w - 5 - (3 - i) * 7 + 1, y + 5, i < r.stars ? '#ffd23f' : '#4a4f66');
+  r.rows.forEach(([what, pts], i) => {
+    const yy = y + 15 + i * 8;
+    pixText(what, x + 5, yy, '#f4f1e8');
+    pixText(pts, x + w - 5 - pixWidth(pts), yy, '#ffd23f');
+  });
+  const ly = y + 15 + lines * 8;
+  lctx.fillStyle = '#3a3f55';
+  lctx.fillRect(x + 5, ly - 1, w - 10, 1);
+  const total = `+${r.total}`;
+  pixText(total, x + Math.floor((w - pixWidth(total, 2)) / 2), ly + 3, '#ffd23f', 2);
+}
+
 function drawDigits(n, x, y, color) {
   const s = String(n);
   lctx.fillStyle = color;
@@ -1790,6 +1900,8 @@ function draw() {
     lctx.fillStyle = `rgba(10,12,40,${pal.dark * 0.5})`;
     lctx.fillRect(0, 0, LW, py(rowY(0)) - WAIT_H - 30);
   }
+  drawPopups();
+  drawResult();
   if (game.paused) {
     lctx.fillStyle = 'rgba(20,22,31,0.45)';
     lctx.fillRect(0, 0, LW, LH);
@@ -1816,57 +1928,7 @@ function drawText() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round';
-  const left = offX + 6 * dpr;
   const right = offX + LW * k - 6 * dpr;
-  for (const pp of popups) {
-    const life = pp.long ? 1.8 : 1.1;
-    const a = Math.min(1, (life - pp.t) * 2.5);
-    ctx.font = `800 ${Math.round((pp.big ? 20 : 12) * dpr)}px system-ui, sans-serif`;
-    const w = ctx.measureText(pp.text).width;
-    const x = Math.max(left + w / 2, Math.min(right - w / 2, (pp.x + originX) * k + offX));
-    const y = (pp.y + originY - pp.t * 10) * k;
-    ctx.globalAlpha = Math.max(0, a);
-    ctx.lineWidth = 4 * dpr;
-    ctx.strokeStyle = 'rgba(20,22,31,0.75)';
-    ctx.strokeText(pp.text, x, y);
-    ctx.fillStyle = pp.color;
-    ctx.fillText(pp.text, x, y);
-  }
-  ctx.globalAlpha = 1;
-  // Across: the points counting up as the seconds drain, big, above the porta-potty.
-  if (game.mode === 'finish' && game.stage !== 'door') {
-    const per = 1 + acrossCount();
-    const text = `+${game.levelScore}`;
-    const x = offX + (colX(PCOL) + originX) * k;
-    const y = (rowY(0) + 6 + originY) * k; // over the far sidewalk, below the porta-potty
-    ctx.font = `900 ${Math.round(26 * dpr)}px system-ui, sans-serif`;
-    ctx.lineWidth = 5 * dpr;
-    ctx.strokeStyle = 'rgba(20,22,31,0.8)';
-    ctx.strokeText(text, x, y);
-    ctx.fillStyle = '#ffd23f';
-    ctx.fillText(text, x, y);
-    if (per > 1) {
-      ctx.font = `800 ${Math.round(13 * dpr)}px system-ui, sans-serif`;
-      ctx.lineWidth = 4 * dpr;
-      const sub = `× ${headcount(per)}`;
-      ctx.strokeText(sub, x, y + 20 * dpr);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(sub, x, y + 20 * dpr);
-    }
-    // Fast-forward: a ▶▶ mark in the corner of the sky.
-    if (fastForward()) {
-      ctx.font = `900 ${Math.round(15 * dpr)}px system-ui, sans-serif`;
-      ctx.textAlign = 'right';
-      ctx.lineWidth = 4 * dpr;
-      const fy = (rowY(0) - WAIT_H - 12 + originY) * k;
-      ctx.strokeText(`▶▶ ${FF}×`, right, fy);
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText(`▶▶ ${FF}×`, right, fy);
-      ctx.textAlign = 'center';
-      drawn.ff = true;
-    } else drawn.ff = false;
-    drawn.counting = game.levelScore;
-  }
   // What the level is worth right now: the seconds left × (1 + copiers across or on the way).
   if (game.mode === 'play' && street().copiers > 0) {
     const m = 1 + acrossCount() + onTheWayCount();
