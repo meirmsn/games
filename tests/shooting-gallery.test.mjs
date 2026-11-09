@@ -306,6 +306,11 @@ test('shooting-gallery AC-7: a won round carries its shells plus 4, capped at 10
   await winRound(page);
   s = await state(page);
   assert.deepEqual([s.round, s.shells, s.score - before], [2, 10, 150]);
+  // A round never starts with fewer than 6, however few were carried.
+  await ready(page, 1);
+  await page.evaluate(() => (window.__gallery.game.shells = 0));
+  await winRound(page);
+  assert.equal((await state(page)).shells, 6);
   // Into the free round and out of it: the tray is untouched both ways.
   await ready(page, 3);
   await page.evaluate(() => (window.__gallery.game.shells = 5));

@@ -27,9 +27,9 @@ keeps the site's tokens.
   from Googly Faces in its structure (rounds with a quota) and in having failure at all (Claude,
   2026-11-09).
 - **Portrait, short-form.** The targets fill the upper part of the booth and the thumb works on the
-  counter at the bottom; a full run is 8 rounds, about 4–5 minutes, and a first-timer's run usually
-  ends in round 2 or 3. Wider screens show the same booth, wider (up to 640 logical units), centred
-  between curtains (Claude, 2026-11-09).
+  counter at the bottom; a full run is 8 rounds, about 2.5–3 minutes (measured, below), and a
+  first-timer's run usually ends in round 2 or 3. Wider screens show the same booth, wider (up to
+  640 logical units), centred between curtains (Claude, 2026-11-09).
 - **Controls**, after the concept attack found that lift-to-fire misfires every time the thumb
   re-grips (Claude, 2026-11-09):
   - Touch: dragging anywhere moves the crosshair by the finger's movement times 1.5 (relative, like
@@ -45,8 +45,8 @@ keeps the site's tokens.
     speeding up the longer they're held, Shift for fine aim, Space or Enter fires.
 - **The economy** (Claude, after two attack rounds, 2026-11-09):
   - **Shells.** A run starts with 8 in the tray. Every shot spends one. Shells left over carry
-    on. Entering a quota round other than round 1, the tray becomes the carried shells + 4; the tray
-    holds 10, and each shell that would go past 10 is paid out at once for 50 points. Free rounds
+    on. Entering a quota round other than round 1, the tray becomes the carried shells + 4, and never
+    fewer than 6; the tray holds 10, and each shell that would go past 10 is paid out at once for 50 points. Free rounds
     leave the tray untouched on the way in, during and on the way out.
   - **Pips.** Each round has a quota of pips, shown as a row on the counter. A near target is worth
     1 pip, a duck 2, a far tin target 3, the gold duck 2.
@@ -80,8 +80,8 @@ keeps the site's tokens.
   | Round | Name | What's new | Parade | Quota | Rail speeds (units/s) |
   | ----- | ---- | ---------- | ------ | ----- | --------------------- |
   | 1 | Ducks | ducks on one rail | 9 ducks (3 target-ducks) | 6 | ducks 60 |
-  | 2 | Tin row | far tin targets on sticks; the first tins' bullseyes pulse gold with a small shell above them, and one stick is drawn cracked | 6 ducks, 5 tins | 10 | ducks 65, tins 110 |
-  | 3 | Pop-ups | near targets rise from behind the front water, stay up 1.8 s and sink; the gold duck crosses once | 5 ducks, 4 tins, 6 pop-ups | 12 | ducks 70, tins 115 |
+  | 2 | Tin row | far tin targets on sticks; the first tins' bullseyes pulse gold with a small shell above them, and one stick is drawn cracked | 6 ducks, 5 tins | 8 | ducks 65, tins 110 |
+  | 3 | Pop-ups | near targets rise from behind the front water, stay up 1.8 s and sink; the gold duck crosses once | 5 ducks, 4 tins, 6 pop-ups | 11 | ducks 70, tins 115 |
   | 4 | Free round | a 12 s flock of ducks; shots cost nothing and return nothing; points only | flock | none | ducks 100 |
   | 5, 6 | Turnabouts / Crosswind, in a random order each run | Turnabouts: targets and ducks turn on their sticks (face 2.2 s, back 1.2 s, a 0.25 s turn); a hit on a back scores nothing and spends the shell; the 0.25 s turn counts as back; a back blocks shots at what's behind it; sticks always snap. Crosswind: the duck and tin rails run against each other and the water rolls twice as high | 5 ducks, 5 tins, 6 pop-ups | 14, then 15 | ducks 75, tins 120 |
   | 7 | Free round | a faster flock | flock | none | ducks 130 |
@@ -119,6 +119,16 @@ keeps the site's tokens.
   the pack (Claude, 2026-11-09).
 - **Tuning targets:** the first hit within 5 s of Start; a first-timer's first run ends in round 2–3
   (about 1.5–2 minutes); the first new element (round 2) at about 30 s (Claude, 2026-11-09).
+- **Tuned by simulated play** (scripted shooters with a beginner's, an average and an expert's aim
+  and pace, eight runs each), Claude, 2026-11-09:
+  - The first version doomed a first-timer: spending the bonus down to nothing left 4 shells for
+    round 2's quota of 10, so every beginner run ended in round 2 within 30 s. Now a quota round
+    never starts with fewer than 6 shells, round 2's quota is 8 and round 3's 11.
+  - Measured after: the first hit at 1.5 s; round 2 at about 21 s; a beginner's run ends in rounds
+    2–5, mostly 3, after 36–100 s (a person, slower than the script, takes longer); an average
+    player reaches rounds 5–8; an expert usually reaches closing time, in about 2.7 minutes, at
+    about 5 times a beginner's score. A full run is about 2.5–3 minutes, not the 4–5 first guessed,
+    because the bonus speeds the parade up.
 - The game is one slice, one PR: the concept fits the size of Reef's first PR. If it outgrows that,
   the keyboard speed-up, the rifle's kick and the overflow payout are the first to cut (Claude,
   2026-11-09).
@@ -148,7 +158,7 @@ keeps the site's tokens.
   on; the over card shows the score, the round reached and the
   best, and Play again starts a new run with 8 shells — `tests/shooting-gallery.test.mjs`.
 - **AC-7** A won round leads to the next; entering a quota round the tray is the carried shells
-  plus 4, capped at 10, each shell past 10 paying 50 points; a free round leaves the tray as it was
+  plus 4, at least 6 and capped at 10, each shell past 10 paying 50 points; a free round leaves the tray as it was
   — `tests/shooting-gallery.test.mjs`.
 - **AC-8** Rounds bring in their elements as in the table: ducks only in round 1, tins from 2,
   pop-ups and a gold duck from 3, free rounds at 4 and 7 that don't touch the tray, Turnabouts and

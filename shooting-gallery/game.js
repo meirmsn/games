@@ -44,6 +44,7 @@ function sfx(name, opts) {
 const TRAY_MAX = 10;
 const START_SHELLS = 8;
 const ROUND_SHELLS = 4;
+const ROUND_FLOOR = 6;
 const OVERFLOW_PAY = 50;
 const END_SHELL_PAY = 60;
 const BONUS_SPEED = 1.5;
@@ -72,8 +73,8 @@ function roundPlan(order) {
   return [
     null,
     { name: 'Ducks', bg: 'wood', quota: 6, ducks: 9, tins: 0, pops: 0, duckV: 60, tinV: 110 },
-    { name: 'Tin row', bg: 'red', shade: true, quota: 10, ducks: 6, tins: 5, pops: 0, duckV: 65, tinV: 110, hint: true },
-    { name: 'Pop-ups', bg: 'blue', quota: 12, ducks: 5, tins: 4, pops: 6, duckV: 70, tinV: 115, gold: true },
+    { name: 'Tin row', bg: 'red', shade: true, quota: 8, ducks: 6, tins: 5, pops: 0, duckV: 65, tinV: 110, hint: true },
+    { name: 'Pop-ups', bg: 'blue', quota: 11, ducks: 5, tins: 4, pops: 6, duckV: 70, tinV: 115, gold: true },
     { name: 'Free round', bg: 'wood', free: true, duration: 12, flockV: 100 },
     { ...a, quota: 14, ducks: 5, tins: 5, pops: 6, duckV: 75, tinV: 120, gold: true },
     { ...b, quota: 15, ducks: 5, tins: 5, pops: 6, duckV: 75, tinV: 120, gold: true },
@@ -427,7 +428,9 @@ function startRound(n) {
   const cfg = game.plan[n];
   game.cfg = cfg;
   if (!cfg.free && n > 1) {
-    const total = game.shells + ROUND_SHELLS;
+    // Carried shells plus 4, never fewer than 6: a player who spent the bonus down to nothing
+    // isn't doomed by a rule they couldn't see, and carrying more than 2 still pays.
+    const total = Math.max(ROUND_FLOOR, game.shells + ROUND_SHELLS);
     const over = Math.max(0, total - TRAY_MAX);
     game.shells = Math.min(TRAY_MAX, total);
     if (over > 0) {
@@ -1171,7 +1174,8 @@ function drawBanner() {
   const p = b ? Math.min(1, b.t / 0.18) : 1;
   const out = b ? Math.max(0, (b.t - (b.life - 0.25)) / 0.25) : 0;
   ctx.globalAlpha = 1 - out;
-  const y = (L.T + L.C) / 2 - 30;
+  // Over the pond between the ducks and the front water, so a banner never hides the ducks or tins.
+  const y = Math.min((L.midY + L.frontY) / 2 + 24, L.frontY - 40);
   const s = 0.7 + 0.3 * p;
   ctx.save();
   ctx.translate(SW / 2, y);
