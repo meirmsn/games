@@ -62,7 +62,7 @@ const SOUNDS = {};
 for (const s of ['m', 'c']) {
   for (const n of ['jump', 'coin', 'stomp', 'poof', 'flag', 'land', 'music']) SOUNDS[`${s}-${n}`] = `sounds/${s}-${n}.mp3`;
 }
-for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music']) SOUNDS[n] = `sounds/${n}.mp3`;
+for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music', 'morph-up', 'morph-down']) SOUNDS[n] = `sounds/${n}.mp3`;
 const { sound } = mountShell({ sounds: SOUNDS });
 const heard = []; // the last sounds played, for tests
 function play(name, opts) {
@@ -210,6 +210,8 @@ function loadStage(w, s) {
     ...t, id: i, sx: t.x, sy: t.y, alive: true, dir: -1, t: 0, state: 'whole', got: false,
   }));
   stage = st;
+  game.inNext = false;
+  game.morphT = 0;
   player.checkpoint = { x: st.start.x, y: st.start.y };
   respawn(true);
   ensureBaked();
@@ -226,12 +228,23 @@ function respawn(fresh = false) {
   player.face = 1;
   snapCamera();
 }
-function ensureBaked() {
-  const w = world();
-  if (w.smooth) return;
+// The monster's baked frames for a pixel world, kept per world, so the glimpse of the next world
+// can draw it in that world's style too.
+const bakeCache = new Map();
+function bakedFor(w) {
+  if (!w || w.smooth) return null;
   const key = `${w.id}:${codeOf(monster)}:${game.ears}`;
-  if (baked && baked.key === key) return;
-  baked = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit }) };
+  let b = bakeCache.get(key);
+  if (!b) {
+    b = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit }) };
+    bakeCache.set(key, b);
+    if (bakeCache.size > 16) bakeCache.delete(bakeCache.keys().next().value);
+  }
+  return b;
+}
+function ensureBaked() {
+  // In a smooth world the HUD's life icons still come from the first world's frames.
+  baked = bakedFor(world()) || bakedFor(WORLDS[0]);
 }
 
 // ---------------------------------------------------------------- collision
@@ -370,8 +383,29 @@ function update(dt) {
   if (game.mode !== 'play') return;
   game.time += dt;
   stepPlayer(dt);
+  crossing(dt);
   animateThings(dt, true);
   updateCamera(dt);
+}
+
+// Stepping into the glimpse of the next world redraws the monster in that world's style: it steps
+// through the resolutions between the two (MORPH s), with a rising sound into a smooth world and a
+// falling one out of it. Stepping back out does the same the other way.
+const MORPH = 0.5;
+function crossing(dt) {
+  game.morphT = Math.max(0, (game.morphT || 0) - dt);
+  const w = world();
+  const wn = WORLDS[game.world + 1];
+  if (!wn) return;
+  const inNext = player.x >= stage.next;
+  if (inNext === game.inNext) return;
+  game.inNext = inNext;
+  const from = inNext ? w : wn;
+  const to = inNext ? wn : w;
+  if (from.smooth === to.smooth && from.res === to.res && !from.oneBit === !to.oneBit) return;
+  game.morphT = MORPH;
+  game.morphFrom = from;
+  play(to.smooth ? 'morph-up' : 'morph-down', { gain: 0.8 });
 }
 
 function setMode(m) {
@@ -836,16 +870,17 @@ function hash(x) {
 // Draws the level at `res` pixels per tile into g, whose origin is the view's top-left corner. From
 // the level's `next` column on, the ground and sky are the next world's: a glimpse of where the
 // door leads, drawn by the next world's own rule at this resolution.
-function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height) {
-  const w = WORLDS[wi];
-  const wn = WORLDS[wi + 1];
+// region: 'all' (no glimpse), 'main' (this world, up to the glimpse) or 'next' (the glimpse, drawn
+// by the next world's own rule; the caller clips it).
+function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height, region = 'all') {
+  const w = region === 'next' ? WORLDS[wi + 1] : WORLDS[wi];
+  const wn = region === 'main' ? WORLDS[wi + 1] : null;
   let ox = cam.x * res;
   let oy = cam.y * res;
   if (pixel) {
     ox = Math.round(ox);
     oy = Math.round(oy);
   }
-  const split = wn ? stage.next * res - ox : Infinity;
   const c0 = Math.max(0, Math.floor(cam.x) - 1);
   const c1 = Math.min(stage.cols - 1, Math.ceil(cam.x + vw / res) + 1);
   const layer = (lw, from, to, clipX) => {
@@ -875,12 +910,13 @@ function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height)
     g.imageSmoothingEnabled = sm;
     g.restore();
   };
-  layer(w, c0, Math.min(c1, wn ? stage.next - 1 : c1));
-  if (split < vw) layer(wn, Math.max(c0, stage.next), c1, Math.max(0, split));
+  if (region === 'next') layer(w, Math.max(c0, stage.next), c1);
+  else layer(w, c0, Math.min(c1, wn ? stage.next - 1 : c1));
+  const mine = (x) => region === 'all' || (region === 'main' ? x < stage.next : x >= stage.next);
   g.save();
   g.translate(-ox, -oy);
-  drawThings(g, w, wn, res, pixel);
-  drawPlayer(g, w, res, pixel);
+  drawThings(g, w, res, pixel, mine);
+  if (mine(player.x)) drawPlayer(g, w, res, pixel);
   drawParticles(g, w, res, pixel);
   g.restore();
 }
@@ -1054,10 +1090,10 @@ function heartAsCoin() {
   return game.shields >= MAX_SHIELDS;
 }
 
-function drawThings(g, w, wn, res, pixel) {
+function drawThings(g, w, res, pixel, mine) {
   for (const t of stage.things) {
-    // Things in the glimpse of the next world are drawn in its style.
-    const tw = wn && t.x >= stage.next ? wn : w;
+    if (!mine(t.x)) continue;
+    const tw = w;
     const px = t.x * res;
     const py = t.y * res;
     const pp = tw.id === 'meadow' || tw.id === 'frost';
@@ -1206,29 +1242,54 @@ function poseName() {
   return Math.floor(game.t * 1.5) % 2 ? 'stand1' : 'stand0';
 }
 
+const morphCanvas = makeCanvas(1, 1);
 function drawPlayer(g, w, res, pixel) {
   const p = player;
   if (p.poof > 0) return;
   if (p.invul > 0 && Math.floor(game.t * 16) % 2) return;
   const fx = p.x * res;
   const fy = p.y * res;
-  if (pixel && baked) {
-    const f = baked.frames[poseName()];
+  const pose = {
+    run: p.run,
+    moving: p.ground ? Math.min(1, Math.abs(p.vx) / MOVE.top) : 0,
+    air: p.ground ? 0 : p.vy < 0 ? -1 : 1,
+    squash: p.land > 0 ? 0.4 : !p.ground && p.vy < -8 ? -0.25 : 0,
+    look: p.face,
+    ears: game.ears,
+    blink: Math.sin(game.t * 0.9) > 0.985 ? 1 : 0,
+  };
+  // Mid-change between a pixel and a smooth world: the monster steps through the resolutions in
+  // between, drawn small and scaled up without smoothing.
+  if (game.morphT > 0 && game.morphFrom) {
+    const k = 1 - game.morphT / MORPH;
+    const steps = w.smooth ? [18, 35] : [35, 18];
+    if (k < 0.66) {
+      const rm = k < 0.33 ? steps[0] : steps[1];
+      const bw = Math.ceil(rm * 4);
+      const bh = Math.ceil(rm * 3.6);
+      morphCanvas.width = bw;
+      morphCanvas.height = bh;
+      const mg = morphCanvas.getContext('2d');
+      drawVector(mg, images.monster, monster, bw / 2, bh - 2, scaleFor(monster, rm), pose);
+      const s = res / rm;
+      const sm = g.imageSmoothingEnabled;
+      g.imageSmoothingEnabled = false;
+      g.drawImage(morphCanvas, fx - (bw / 2) * s, fy - (bh - 2) * s, bw * s, bh * s);
+      g.imageSmoothingEnabled = sm;
+      game.morphRes = rm;
+      return;
+    }
+  }
+  game.morphRes = 0;
+  const own = pixel ? bakedFor(w) : null;
+  if (own) {
+    const f = own.frames[poseName()];
     g.save();
     g.translate(Math.round(fx), Math.round(fy));
     if (p.face < 0) g.scale(-1, 1);
-    g.drawImage(f, -baked.footX, -baked.footY);
+    g.drawImage(f, -own.footX, -own.footY);
     g.restore();
   } else {
-    const pose = {
-      run: p.run,
-      moving: p.ground ? Math.min(1, Math.abs(p.vx) / MOVE.top) : 0,
-      air: p.ground ? 0 : p.vy < 0 ? -1 : 1,
-      squash: p.land > 0 ? 0.4 : !p.ground && p.vy < -8 ? -0.25 : 0,
-      look: p.face,
-      ears: game.ears,
-      blink: Math.sin(game.t * 0.9) > 0.985 ? 1 : 0,
-    };
     drawVector(g, images.monster, monster, fx, fy, scaleFor(monster, res), pose);
   }
 }
@@ -1279,7 +1340,10 @@ function render() {
     } else if (t < 1.2) res = steps[1];
     else res = steps[2];
   }
-  // Before the leap's midpoint the old world is still the one loaded.
+  // The glimpse of the next world is drawn separately, by that world's own rule.
+  const wn = WORLDS[game.world + 1];
+  const glimpse = wn && game.mode !== 'leap' && game.mode !== 'build' ? Math.round((stage.next - cam.x) * view.U) : Infinity;
+  const region = glimpse < view.W ? 'main' : 'all';
   const pixel = !w.smooth && res === w.res;
   if (pixel || res !== w.res) {
     // Drawn small and scaled up by U / res without smoothing.
@@ -1292,7 +1356,7 @@ function render() {
     }
     bctx.imageSmoothingEnabled = false;
     bctx.setTransform(1, 0, 0, 1, 0, 0);
-    drawScene(bctx, res, game.world, pixel);
+    drawScene(bctx, res, game.world, pixel, bw, bh, region);
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // A tile is U canvas pixels: when res doesn't divide U (Ink's 16), the buffer is scaled to fit.
@@ -1302,8 +1366,35 @@ function render() {
     ctx.imageSmoothingQuality = 'high';
     const s = view.U / res;
     ctx.setTransform(s, 0, 0, s, 0, 0);
-    drawSceneScaled(res, s);
+    drawSceneScaled(res, s, region);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (region === 'main') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(Math.max(0, glimpse), 0, view.W, view.H);
+    ctx.clip();
+    if (wn.smooth) {
+      ctx.imageSmoothingEnabled = true;
+      const s = view.U / wn.res;
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      drawSceneScaled(wn.res, s, 'next');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    } else {
+      const scale = view.U / wn.res;
+      const bw = Math.ceil(view.W / scale);
+      const bh = Math.ceil(view.H / scale);
+      if (buffer2.width !== bw || buffer2.height !== bh) {
+        buffer2.width = bw;
+        buffer2.height = bh;
+      }
+      b2ctx.imageSmoothingEnabled = false;
+      b2ctx.setTransform(1, 0, 0, 1, 0, 0);
+      drawScene(b2ctx, wn.res, game.world, true, bw, bh, 'next');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(buffer2, 0, 0, bw * scale, bh * scale);
+    }
+    ctx.restore();
   }
   renderRes = res;
   if (overlay > 0) {
@@ -1314,11 +1405,13 @@ function render() {
   }
 }
 // The smooth path draws straight to the screen, at res pixels per tile scaled by s.
-function drawSceneScaled(res, s) {
+function drawSceneScaled(res, s, region = 'all') {
   seam = 0.8 / s;
-  drawScene(ctx, res, game.world, false, view.W / s, view.H / s);
+  drawScene(ctx, res, game.world, false, view.W / s, view.H / s, region);
   seam = 0;
 }
+const buffer2 = makeCanvas(1, 1); // the glimpse of a pixel world
+const b2ctx = buffer2.getContext('2d');
 
 // ---------------------------------------------------------------- the builder
 const partsEl = document.querySelector('[data-parts]');

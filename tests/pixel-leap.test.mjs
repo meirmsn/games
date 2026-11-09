@@ -1197,3 +1197,57 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
   assert.deepEqual(errors, []);
   await context.close();
 });
+
+test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and stepping into it changes the monster with a sound', async () => {
+  const { context, page } = await open(PHONE);
+  await play(page, 0, 0);
+  const cross = (w) =>
+    page.evaluate((w) => {
+      const L = window.__leap;
+      L.startWorld(w);
+      L.game.mode = 'play';
+      const st = L.stage();
+      Object.assign(L.player, { x: st.next - 1.5, y: st.ground[st.next - 2], vx: 0, vy: 0, invul: 0 });
+      L.steps(5);
+      const heard = L.heard.length;
+      const res = [];
+      L.input.keys.add('right');
+      L.sync();
+      for (let i = 0; i < 100; i++) {
+        L.step();
+        L.render();
+        if (L.player.x >= st.next) res.push(L.game.morphRes);
+      }
+      L.input.keys.clear();
+      L.sync();
+      // The glimpse's look: a block of the screen just past the line, in canvas pixels.
+      L.cam.x = st.next - L.view.tilesW / 2;
+      L.render();
+      const c = document.getElementById('view');
+      const U = L.view.U;
+      const x0 = Math.round((st.next + 1 - L.cam.x) * U);
+      const y0 = Math.round((10.5 - L.cam.y) * U);
+      const d = c.getContext('2d').getImageData(x0, y0, U, U).data;
+      let soft = 0;
+      for (let y = 0; y < U; y++) {
+        for (let x = 1; x < U; x++) {
+          const i = (y * U + x) * 4;
+          const diff = Math.abs(d[i] - d[i - 4]) + Math.abs(d[i + 1] - d[i - 3]) + Math.abs(d[i + 2] - d[i - 2]);
+          if (diff > 0 && diff < 30) soft++; // a soft step between neighbours: smooth drawing
+        }
+      }
+      return { sounds: L.heard.slice(heard), steps: [...new Set(res.filter(Boolean))], soft };
+    }, w);
+  const meadow = await cross(0);
+  assert.deepEqual(meadow.sounds.filter((x) => x.startsWith('morph')), [], 'Meadow to Frost changes no style');
+  assert.deepEqual(meadow.steps, []);
+  const frost = await cross(1);
+  assert.ok(frost.sounds.includes('morph-up'), 'a rising sound into smooth Candy');
+  assert.deepEqual(frost.steps, [18, 35], 'the monster steps through 18 and 35 px per tile');
+  assert.ok(frost.soft > 20, `Candy's glimpse is smooth (${frost.soft} soft steps)`);
+  const candy = await cross(2);
+  assert.ok(candy.sounds.includes('morph-down'), 'a falling sound out of smooth Candy');
+  assert.deepEqual(candy.steps, [35, 18]);
+  assert.ok(candy.soft < 5, `Ink's glimpse is hard-edged pixels (${candy.soft} soft steps)`);
+  await context.close();
+});

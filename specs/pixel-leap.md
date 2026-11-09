@@ -124,9 +124,15 @@ item.
   you land and come back after 3 s, gummy worms); 4 Ink (the 1-Bit pack, two colours: ghosts, and
   drips that fall as you come near, landing just ahead of a monster at full speed). Each level is
   about a minute for a first-timer.
-- **A glimpse of the next world:** each level's last stretch, its door included, is drawn in the next
-  world's style (its ground, sky and door) by the next world's own art at the current resolution, so
-  you see where the door leads before you go through.
+- **A glimpse of the next world:** each level's last stretch, its door included, is drawn by the next
+  world's own rule (its art at its own resolution: smooth before Candy, two-colour pixels before Ink),
+  a mini preview of where the door leads. Stepping into it redraws the monster in that world's style:
+  it steps through the resolutions between the two over half a second, with a rising sound into a
+  smooth world and a falling one out of it; the music stays one track per level (owner, 2026-11-09:
+  "when you get to the door, that it's already a mini preview of the next level … when you go
+  through the door, then there's some sound effect … to get the feeling that you're transitioning
+  from smooth to 8-bit or from 8-bit to smooth. And visually … the monster transitions at the same
+  time").
 - **The leap between levels is the event:** the door ends each level. Entering it takes the monster
   out of physics and freezes the world, and the tally card shows. Its Leap button starts the leap,
   1.6 s in all: a soft white flash (0.3 s), then the next world drawn through the resolutions
@@ -275,6 +281,10 @@ item.
 - **AC-22** At 390×844, a 20 s run's update and draw take under 8 ms per frame on average in the test
   browser, and the simulation moves the same at 60 and 120 frames per second —
   `tests/pixel-leap.test.mjs`.
+- **AC-23** The glimpse before Frost's door is drawn smooth and the one before Candy's door in Ink's
+  pixels; stepping into a glimpse that changes the style plays the rising (into smooth) or falling
+  (out of smooth) sound and draws the monster at in-between resolutions, then in the new style, and
+  stepping from the Meadow into Frost's glimpse changes nothing — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
