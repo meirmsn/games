@@ -1,4 +1,4 @@
-# Shooting Gallery: a fairground booth where every shell counts
+# Shooting Gallery: a fairground paintball booth
 
 **Go:** "don't consult with me, just start building after following this process" 2026-11-09
 
@@ -19,205 +19,242 @@ keeps the site's tokens.
 
 ## Decisions
 
-- **Hook:** a fairground shooting booth where every shell counts, and a bullseye gives your shell
-  back. Rejected: a timed booth with a "Time up" sign, which is the pack's own sample picture and
-  has no choices beyond "shoot everything" (Claude, from the concept check, 2026-11-09).
-- **Differs in kind** from Reef in its verb (aim a crosshair and fire, not steer a body) and in what
-  failure means (you run out of shells by missing; nothing attacks you, there are no lives), and
-  from Googly Faces in its structure (rounds with a quota) and in having failure at all (Claude,
-  2026-11-09).
-- **Portrait, short-form.** The targets fill the upper part of the booth and the thumb works on the
-  counter at the bottom; a full run is 8 rounds, about 2.5–3 minutes (measured, below), and a
-  first-timer's run usually ends in round 2 or 3. Wider screens show the same booth, wider (up to
-  640 logical units), centred between curtains (Claude, 2026-11-09).
-- **Controls**, after the concept attack found that lift-to-fire misfires every time the thumb
-  re-grips (Claude, 2026-11-09):
-  - Touch: dragging anywhere moves the crosshair by the finger's movement times 1.5 (relative, like
-    a trackpad), from wherever it was; lifting after a drag never fires. A tap (one finger, down and
-    up within 250 ms, moving less than 6 px) fires, and the shot is tested against the crosshair and
-    the targets as they were at touch-down, so the tap's own latency doesn't cost the shot. While one
-    finger is down (dragging or not), a second finger's touch fires at once, and the first finger's
-    lift then never fires. A still hold longer than 250 ms fires nothing. Further touches are
-    ignored.
-  - The crosshair is a thin ring with an open centre and a 2 px dot: the shot lands exactly on the
-    dot.
-  - Mouse: the crosshair follows the pointer and a click fires. Keyboard: arrow keys move it,
-    speeding up the longer they're held, Shift for fine aim, Space or Enter fires.
-- **The economy** (Claude, after two attack rounds, 2026-11-09):
-  - **Shells.** A run starts with 8 in the tray. Every shot spends one. Shells left over carry
-    on. Entering a quota round other than round 1, the tray becomes the carried shells + 4, and never
-    fewer than 6; the tray holds 10, and each shell that would go past 10 is paid out at once for 50 points. Free rounds
-    leave the tray untouched on the way in, during and on the way out.
-  - **Pips.** Each round has a quota of pips, shown as a row on the counter. A near target is worth
-    1 pip, a duck 2, a far tin target 3, the gold duck 2.
-  - **Bullseye.** A target's painted centre with the first ring around it, or the whole painted
-    target on a target-duck (plain ducks have none): ×2 points, and the shell flies back into the
-    tray. It is exactly what's painted, never smaller: an earlier draft shrank it 6% a round, which
-    would have made the hit zone smaller than the paint with nothing on screen to show it.
-  - **Stick shot.** Hitting the wooden stick under a far or near target (ducks' sticks are hidden
-    by the water) snaps it and the target falls: the target's pips + 1, ×3 points, no shell back.
-  - A hit is one of: stick, bullseye or body, decided in that order. Multipliers multiply: a tin
-    stick shot in round 8's bonus scores 30 × 3 × 2 × 2 = 360.
-  - **Points:** near 10, duck 20, tin 30, gold duck 100. The gold duck is the pack's yellow
-    target-duck drawn with a gold sheen; in quota play before the bonus it also gives 2 shells
-    (up to the tray's 10). It never appears in free rounds and isn't counted in a parade's pips.
-  - **Bonus.** Once the quota is met, "Bonus!": the rest of the parade runs 1.5× faster and scores
-    ×2, but bullseyes no longer return shells. Each shot is then a choice: points now, or the shell
-    kept for the next round. The gold duck in the bonus scores ×2 and gives no shells.
-  - **A won round:** the quota is met and then the parade has passed or the tray is empty. Meeting
-    the quota with the last shell (tray at 0) wins at once, with no bonus.
-  - **A lost round** is the end of the run: when the tray is empty and the quota is unmet, or when
-    the parade has gone by with the quota unmet. Both are checked only after a shot has fully
-    resolved, so a last-shell bullseye refills the tray first. The missing pips flash and a falling
-    jingle plays.
-  - **The end of a full run:** after round 8, every shell left pays 60 points.
-- **Occlusion.** The shot hits the frontmost thing at the dot: front water, then near targets, the
-  middle water, ducks, then far targets, and the backdrop. Water or backdrop is a miss (a splash or
-  a shot hole). A pop-up target hidden behind the front water can't be hit (Claude, 2026-11-09).
-- **Rounds, in waves**: three pushes, a breather, two pushes, a breather, the finale. Starting
-  values, the knobs to tune by playing:
+### The owner's changes after playing v2 (owner, 2026-11-09)
 
-  | Round | Name | What's new | Parade | Quota | Rail speeds (units/s) |
-  | ----- | ---- | ---------- | ------ | ----- | --------------------- |
-  | 1 | Ducks | ducks on one rail | 9 ducks (3 target-ducks) | 6 | ducks 60 |
-  | 2 | Tin row | far tin targets on sticks; the first tins' bullseyes pulse gold with a small shell above them, and one stick is drawn cracked | 6 ducks, 5 tins | 8 | ducks 65, tins 110 |
-  | 3 | Pop-ups | near targets rise from behind the front water, stay up 1.8 s and sink; the gold duck crosses once | 5 ducks, 4 tins, 6 pop-ups | 11 | ducks 70, tins 115 |
-  | 4 | Free round | a 12 s flock of ducks; shots cost nothing and return nothing; points only | flock | none | ducks 100 |
-  | 5, 6 | Turnabouts / Crosswind, in a random order each run | Turnabouts: targets and ducks turn on their sticks (face 2.2 s, back 1.2 s, a 0.25 s turn); a hit on a back scores nothing and spends the shell; the 0.25 s turn counts as back; a back blocks shots at what's behind it; sticks always snap. Crosswind: the duck and tin rails run against each other and the water rolls twice as high | 5 ducks, 5 tins, 6 pop-ups | 14, then 15 | ducks 75, tins 120 |
-  | 7 | Free round | a faster flock | flock | none | ducks 130 |
-  | 8 | Closing time | both Turnabouts and Crosswind; all points ×2 | 6 ducks, 6 tins, 6 pop-ups | 16 | ducks 80, tins 125 |
+The owner played the first version's preview and asked, in the session's chat on 2026-11-09, for a
+harder, paintball version. These decisions replace the first version's controls, economy, rounds
+and music; the first version's decisions they replace are kept, struck, in "Replaced" below.
 
-  Every quota round's parade is worth at least twice its quota in pips, with the easy targets
-  first. A gold duck also crosses once in each quota round from round 3. The order of rounds 5
-  and 6 comes from the run's seed, which the test hook can set. Rejected: 6+ endless rounds
-  that only get faster, the weakness the guidelines name in Reef (Claude, 2026-11-09).
-- **Sizes.** One logical unit is min(width / 400, height / 700) CSS px; the stage is 400 units wide,
-  and up to 640 on wider screens, centred between curtains. Far tins are drawn at 0.4 of the pack's
-  size (51 units), ducks 0.75 (74), near targets 0.9 (115). The pixel ratio is capped at 2. The sprites are rasterised at 2× from the pack's vector
-  file into an atlas by `scripts/shooting-gallery/build-atlas.mjs` (Claude, 2026-11-09).
-- **Hidden assist** (0 to 1): grows the body hit area of every target (never the bullseye or the
-  stick) by up to 15%. It rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or
-  2, and falls 0.05 with each hit; shots in free rounds don't count. It is kept with the best score in localStorage, starts at 0.3 for
-  a new player, and never applies in round 8 (Claude, 2026-11-09).
-- **No written tips.** A small start card shows Start and the best score; each round opens with its
-  name on a banner; the screen teaches the rest (the gold pulse, the cracked stick, the grey back of
-  a turned target) (Claude, 2026-11-09, following Reef's owner decision).
-- **Interruptible.** When the page is hidden during play, a round intro or the moment between
-  rounds (a round won or lost), play and sound pause
-  and a "Tap to go on" card shows; a pending tap is cancelled. The tap that resumes counts in for
-  1 s, with play frozen, and never fires; a round intro's banner then carries on where it was. On
-  the start or over card, hiding the page only pauses the sound (Claude, 2026-11-09).
-- **Sound**, all Kenney, as MP3: a cork-gun pop on every shot (two impacts layered), a wood knock on
-  a hit, a tin clank on a far target, a bright ding then a shell clink for a bullseye, a snap for a
-  stick shot, a soft plip on a miss, a splash as a pop-up rises or sinks, a pizzicato rise at each
-  round's start, a pizzicato run at the quota, a falling pizzicato on a lost round, a closing-time
-  finale (Music Jingles' pizzicato set), and the "Polka Train" loop (Music Loops) underneath, quiet, all under the site-wide mute
-  (Claude, 2026-11-09).
-- **Art** is the pack's own: the wood, red, blue and green backdrops, curtains, water, grass, trees,
-  clouds, ducks, targets, sticks, shell icons, shot holes and the rifle, which follows the
-  crosshair from the counter and kicks on each shot. The cracked stick is the pack's taped stick
-  (`stick_woodFixed`); the crosshair (ring and dot) and the gold sheen are drawn by the game. No "Time up", "Ready" or "Go" lettering from
-  the pack (Claude, 2026-11-09).
-- **Tuning targets:** the first hit within 5 s of Start; a first-timer's first run ends in round 2–3
-  (about 1.5–2 minutes); the first new element (round 2) at about 30 s (Claude, 2026-11-09).
-- **Tuned by simulated play** (scripted shooters with a beginner's, an average and an expert's aim
-  and pace, eight runs each), Claude, 2026-11-09:
-  - The first version doomed a first-timer: spending the bonus down to nothing left 4 shells for
-    round 2's quota of 10, so every beginner run ended in round 2 within 30 s. Now a quota round
-    never starts with fewer than 6 shells, round 2's quota is 8 and round 3's 11.
-  - Measured after: the first hit at 1.5 s; round 2 at about 21 s; a beginner's run ends in rounds
-    2–5, mostly 3, after 36–100 s (a person, slower than the script, takes longer); an average
-    player reaches rounds 5–8; an expert usually reaches closing time, in about 2.7 minutes, at
-    about 5 times a beginner's score. A full run is about 2.5–3 minutes, not the 4–5 first guessed,
-    because the bonus speeds the parade up.
-- The game is one slice, one PR: the concept fits the size of Reef's first PR. If it outgrows that,
-  the keyboard speed-up, the rifle's kick and the overflow payout are the first to cut (Claude,
-  2026-11-09).
-- **The landing tile** becomes `<a class="tile tone-rose" href="shooting-gallery/">`, without the
-  coming-soon label and badge, and its line reads "Drag to aim, tap to fire: hit the bullseye and
-  the shell comes back." Its picture is drawn from the game. `sw.js` needs no change: a game's
-  files are cached when it first loads. The game exposes `window.__gallery` for the tests, like
-  Reef's `window.__reef` (Claude, 2026-11-09).
+- **Aim the gun, with no crosshair.** "The game has no challenge because you just have to tap on
+  the animal and then it hits perfectly … you only control near the gun … 2 degrees of freedom …
+  the pitch and the jaw angle … it should be on the center, the gun … don't put the crosshair so
+  that you don't know exactly where you're aiming." The gun stands at the bottom centre; there is
+  no crosshair. Two controls (Claude's mapping, after an adversarial review found that a ray from
+  the gun makes the same drag land differently in every lane):
+  - **Turn (yaw, ±55°)** moves the landing point along the lanes: x = the centre + (yaw / 55°) ×
+    0.47 × the stage width, the same in every lane. The barrel points at the landing point.
+  - **Raise (pitch)** picks the lane, one step per lane; a gauge beside the gun has one notch per
+    lane and lights the one aimed at. The shot lands on that lane's line, where its targets' centres
+    run. Which lane is readable; where along it is the skill.
+  - **Controls** live on the counter, near the gun ("you only control near the gun"): a drag there
+    turns the gun (3 px of horizontal movement per degree) and raises or lowers it (a step per 44 px
+    of vertical movement); a tap there fires (down and up within 250 ms, moving under 8 px); while a
+    finger drags, a second finger's tap fires. Touches on the lanes do nothing. Mouse: dragging with
+    the button down turns and raises the gun, and a click without a drag fires. Keyboard: Left and
+    Right turn (faster the longer they're held, Shift for fine), Up and Down raise and lower, Space
+    or Enter fires.
+- **Paintball.** "instead of having shooting … we're shooting paintball … splashes with many
+  different shapes … every time you throw it's like a different color … paint sound, liquid sound
+  when they hit, and then the paint stays … The whole thing is becoming colorful because the paint
+  is accumulating." Each shot is a paintball of the next colour in a palette of 8 (blues, purples,
+  pinks, greens; never the gold or red that mark bullseyes and the gold duck). It flies for
+  0.18 s to the nearest lane and up to 0.42 s to the farthest, so a moving target must be led; it's
+  judged where it lands, when it lands. It splats with one of the Kenney Splat Pack's 36 shapes,
+  tinted, and a wet splat sound. A splat on a target goes down with it. A splat on the scenery (the
+  lane strips, the wall) stays for the run, keeping its colour: fresh for 1 s, then it settles to
+  80% opacity. It is always drawn behind every target in front of it, so it never hides one; at
+  most 70 stay, the oldest dissolving (Claude, 2026-11-09: the review proposed fading old paint to
+  55% and greying it, which made the booth dull rather than colourful).
+- **Lanes, from the sides, from below and from above.** "targets that come from below, not only
+  from side to side. Also multiple lanes, so you have some coming from the left, some coming from
+  the right … some coming from the top, some definitely coming from the bottom at any of the lanes
+  … If the game is gonna be portrait, you definitely need to have multiple, many lanes … If it's
+  horizontal, then do three lanes." Portrait has 5 lanes, landscape 3, stacked in depth (far lanes
+  smaller). Lanes run alternately left-to-right and right-to-left. Pop-ups rise from behind any
+  lane's strip, stay 1.8 s and sink. Drop-downs are lowered on a rope from the valance into a lane,
+  hang 1.8 s and are pulled up; in portrait only into the front three lanes, so ropes don't cross
+  the far lanes' targets.
+- **Orientation follows the screen.** "if the aspect ratio of where you load it is landscape, then
+  the game loads landscape … portrait … if you switch from one aspect ratio to another, it shows
+  some dialogue, like the game pauses, grayed out … restart game if you want to play in this other
+  orientation. But if you return to the previous orientation, the game continues." The layout is
+  chosen when a run starts (landscape when width / height > 1). If the screen turns during a run
+  (past 1.15 or below 0.87, held for 0.4 s), play and music freeze under a grey veil with
+  "Restart in landscape?" (or portrait) and a Restart button; turning back hides it and play goes
+  on after a 1 s count-in. On the start or over card the booth simply lays itself out again. A
+  restart from the veil doesn't count as a lost run for the assist. Each layout keeps its own best.
+- **A timer.** "there should be like a timer as well." Each round lasts 30 s, shown as a draining
+  bar on the counter. The timer is the only way to lose: a round whose quota isn't met when its
+  time runs out ends the run (Claude, from the review: a second way to lose, running out of paint,
+  punished the learning that no-crosshair aim needs).
+- **Paint, not shells.** The hopper holds 6 balls and refills one every 0.6 s; a bullseye puts one
+  back at once; an empty hopper just clicks. It paces the shooting rather than ending the run
+  (Claude, from the review).
+- **Frenzy.** "some frenzy mode where many targets show up suddenly … being raised and shot up on
+  your face … a different song, things move faster, and then you can go crazy, and then it returns
+  to the normal. Maybe that's just for bonus points." From round 2, once a round, at a random
+  moment 8–18 s in: 6 s of "Frenzy!", the galop instead of the waltz, pop-ups and drop-downs
+  springing up across every lane, targets 1.6× as fast (the paintball's flight unchanged), shots
+  free, points ×2 and no pips. The round's timer stops during it; frenzy shots don't move the
+  assist (Claude's rules, from the review: a frenzy late in a round must not lose the run).
+- **Carnival music.** "the music should sound more like carnival." An original calliope waltz
+  (oom-pah-pah, steam-whistle pipes with a flutter) plays under the booth, and an original fast
+  galop under a frenzy, both synthesised by `scripts/shooting-gallery/make-music.py` into MP3.
+
+### The game as it now stands (Claude, 2026-11-09, unless marked)
+
+- **Hook:** a fairground paintball booth: turn and raise the gun, no crosshair, and paint
+  everything you miss. **Differs in kind** from Reef in its verb (aim a gun by its angle and lead a
+  flying ball, not steer a body) and in what failure means (a round's clock runs out before you've
+  scored enough; nothing attacks you, there are no lives), and from Googly Faces in its structure
+  (timed rounds with a quota) and in having failure at all.
+- **Short-form**: 6 rounds of 30 s plus frenzies, about 3.5 minutes for a full run.
+- **Rounds**, each adding one thing; starting values, the knobs to tune by playing:
+
+  | Round | Name | What's new | Quota (pips) | Lane speeds (units/s, near → far) |
+  | ----- | ---- | ---------- | ------------ | --------------------------------- |
+  | 1 | Warm-up | ducks and targets crossing every lane | 7 | 30 → 55 |
+  | 2 | Pop-ups | pop-ups from behind any lane; the first frenzy | 13 | 34 → 62 |
+  | 3 | Drop-downs | drop-downs on ropes | 18 | 38 → 68 |
+  | 4 | Turnabouts | targets and ducks turn on their sticks (face 2.2 s, back 1.2 s, a 0.25 s turn that counts as back); a back scores nothing and blocks what's behind it | 24 | 40 → 72 |
+  | 5 | Gold rush | two gold ducks, everything a quarter faster | 30 | 50 → 90 |
+  | 6 | Closing time | everything at once, all points ×2, the lamps lit | 34 | 50 → 90 |
+
+  The first target of round 1 is a big one crossing the middle of the nearest lane slowly, with the
+  gun already pointing at that lane, so a first-timer hits within seconds.
+- **Scoring.** A hit is worth pips by depth: the nearest lane 1, the middle lanes 2, the farthest
+  3 (in landscape: 1, 2, 3); points are 10 per pip. A bullseye (a target's painted centre and the
+  ring around it, or the painted target on a target-duck; plain ducks have none) scores ×2 and puts
+  a ball back. The gold duck is worth 100 points and 2 pips and refills the hopper. Meeting the
+  quota before the timer ends starts the **Bonus**: the rest of the round scores ×1 in the nearest
+  lane, ×2 in the middle lanes and ×3 in the farthest and on the gold duck, so the choice is the safe
+  near target or the far one. Frenzy scores ×2 and doesn't stack with the bonus (the higher counts).
+  Closing time doubles everything. No hit scores more than ×8.
+- **Occlusion.** Front to back, lane by lane from the nearest: its strip (water or grass), then its
+  targets; the wall behind everything. A pop-up still behind its strip can't be hit, and a back
+  blocks what's behind it.
+- **Sizes.** Portrait: one unit is min(width / 400, height / 720) CSS px, the stage 400 units wide
+  (up to 520). Landscape: min(width / 800, height / 450), up to 1000 wide. Targets are drawn at
+  0.36 → 0.6 of the pack's size from the far lane to the near one in portrait (the far ones about 51
+  units), 0.38 → 0.52 in landscape. The stage keeps its size for the whole run and is letterboxed
+  when the screen changes. The pixel ratio is capped at 2. The pack's sprites are rasterised at 2×
+  by `scripts/shooting-gallery/build-atlas.mjs`; the splats by `scripts/shooting-gallery/build-splats.py`.
+- **Hidden assist** (0 to 1): grows the body hit area of every target by up to 15% (never the
+  bullseye). It rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or 2, falls
+  0.05 with each hit, ignores frenzy shots, starts at 0.3 for a new player, is kept in localStorage,
+  and is off in round 6.
+- **No written tips.** The start card shows Start and the best; each round opens with its name on a
+  banner; mid-play banners ("Bonus!", "Frenzy!") are slim pills on the counter, where nothing can
+  be hit.
+- **Interruptible.** Hiding the page during a round (its intro, play, a frenzy or the moment between
+  rounds) pauses play and music under a "Tap to go on" card; the tap that resumes counts in 1 s,
+  with play frozen, and never fires. On the start or over card it only pauses the sound.
+- **Sound**, all under the site-wide mute: the waltz and the galop (synthesised), and Kenney sounds
+  as MP3: a pneumatic pop on each shot, a wet splat on landing (two variants, varied pitch), a wood
+  knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
+  empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
+  at the quota, a falling pizzicato when the time runs out, and a finale at closing time.
+- **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
+  targets, sticks, the rifle as the gun) and its Splat Pack's; the gauge, the timer bar, the ropes
+  and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
+- **Tuning targets:** a first hit within 5 s of Start; a first-timer ends in round 2–3 (about
+  1.5–2 minutes); an expert reaches closing time.
+- **Tuned by simulated play** (Claude, 2026-11-09): scripted shooters that aim along a lane with a
+  beginner's, an average and an expert's spread and lead, six runs each, in both layouts. With the
+  first quotas (4 to 12) everyone reached closing time, so they became 7, 13, 18, 24, 30 and 34.
+  Measured after: the first hit about 2 s after Start; a beginner's run ends in rounds 2–4, mostly
+  3–4, after about 2–2.5 minutes (a real first-timer, still learning aim without a crosshair, does
+  worse than the script, which knows where its shots land); an average player reaches rounds 4–6;
+  an expert reaches closing time, with 4 to 15 times a beginner's score.
+- **The landing tile** links to `shooting-gallery/`, its line "Turn the gun, lead the shot and paint
+  the booth", its picture drawn from the game. The game exposes `window.__gallery` for the tests.
+- The owner's whole round of changes goes in this PR, as asked; the adversarial review suggested
+  three PRs (Claude, 2026-11-09).
+
+### Replaced
+
+The first version's decisions that the owner's changes replaced, kept as a record: a relative
+crosshair with tap-to-fire judged at touch-down; shells in a tray of 10 with an overflow payout and
+a 6-shell floor; stick shots; 8 rounds with free rounds 4 and 7 and a Crosswind card; losing when
+the tray emptied or the parade passed; the "Polka Train" loop; a full run of 2.5–3 minutes.
 
 ## Acceptance items
 
-- **AC-1** The booth is alive behind the start card (ducks change position over 1 s); Start begins
-  round 1 with 8 shells, a quota of 6 and the crosshair in the booth; no errors —
+- **AC-1** The booth is alive behind the start card (targets change position over 1 s); Start
+  begins round 1 with a 30 s timer, a quota of 7, a full hopper of 6 and the gun pointing at the
+  nearest lane; there is no crosshair; no errors — `tests/shooting-gallery.test.mjs`.
+- **AC-2** Turning the gun moves the landing point along the lanes by (yaw / 55°) × 0.47 × the
+  stage width, the same in every lane; raising it steps one lane at a time, never past the nearest
+  or the farthest; the barrel points at the landing point — `tests/shooting-gallery.test.mjs`.
+- **AC-3** On a touch screen a drag on the counter turns (3 px per degree) and raises (a lane per
+  44 px) the gun and its lift doesn't fire; a tap on the counter fires; a second finger's tap fires
+  while the first drags; touches on the lanes neither aim nor fire — `tests/shooting-gallery.test.mjs`.
+- **AC-4** The mouse turns and raises the gun by dragging and fires with a click; the arrow keys
+  turn and raise it and Space fires — `tests/shooting-gallery.test.mjs`.
+- **AC-5** A paintball takes 0.18 s to the nearest lane and longer to farther ones, up to 0.42 s; it
+  is judged where it lands when it lands, so a target that moved away in the meantime is missed —
   `tests/shooting-gallery.test.mjs`.
-- **AC-2** A shot spends a shell; a body hit scores the target's points and pips (near 10/1, duck
-  20/2, tin 30/3); a miss scores nothing — `tests/shooting-gallery.test.mjs`.
-- **AC-3** A bullseye scores double and returns the shell; a stick shot snaps the stick, drops the
-  target and scores triple with one more pip and no shell back; a stick hit counts as a stick even
-  inside the bullseye's reach — `tests/shooting-gallery.test.mjs`.
-- **AC-4** The frontmost thing takes the shot: a pop-up hidden behind the front water can't be hit,
-  and a shot on the water is a miss — `tests/shooting-gallery.test.mjs`.
-- **AC-5** Meeting the quota starts the bonus: the parade moves 1.5× as fast, points are doubled,
-  a bullseye returns no shell and the gold duck gives none; meeting it with the last shell wins the
-  round at once — `tests/shooting-gallery.test.mjs`.
-- **AC-6** A round is lost, and the run ends with the over card, when the tray is empty or the
-  parade has gone by with the quota unmet, but a last-shell bullseye refills the tray and play goes
-  on; the over card shows the score, the round reached and the
-  best, and Play again starts a new run with 8 shells — `tests/shooting-gallery.test.mjs`.
-- **AC-7** A won round leads to the next; entering a quota round the tray is the carried shells
-  plus 4, at least 6 and capped at 10, each shell past 10 paying 50 points; a free round leaves the tray as it was
-  — `tests/shooting-gallery.test.mjs`.
-- **AC-8** Rounds bring in their elements as in the table: ducks only in round 1, tins from 2,
-  pop-ups and a gold duck from 3, free rounds at 4 and 7 that don't touch the tray, Turnabouts and
-  Crosswind at 5 and 6 in either order, both in round 8 with points doubled — `tests/shooting-gallery.test.mjs`.
-- **AC-9** In Turnabouts a hit on a target's back (or mid-turn) scores nothing and spends the
-  shell, and its stick still snaps —
+- **AC-6** A hit scores 10 points a pip with pips 1 near to 3 far; a bullseye scores double and
+  puts a ball back in the hopper; the gold duck scores 100 and 2 pips and refills the hopper; a miss
+  scores nothing — `tests/shooting-gallery.test.mjs`.
+- **AC-7** Each shot is the next colour of the palette; it leaves a splat where it lands, on the
+  target (going down with it) or on the scenery; scenery splats keep their colour, settle to 80% after 1 s, and at
+  most 70 stay — `tests/shooting-gallery.test.mjs`.
+- **AC-8** The frontmost thing takes the shot: a lane's strip in front of a target behind it, a
+  pop-up not yet risen above its strip can't be hit, and a target's back blocks what's behind it —
   `tests/shooting-gallery.test.mjs`.
-- **AC-10** Finishing round 8 ends the run as closing time, paying 60 points for each shell left —
+- **AC-9** The hopper holds 6, spends one a shot, refills one every 0.6 s, and an empty hopper fires
+  nothing — `tests/shooting-gallery.test.mjs`.
+- **AC-10** When a round's time runs out, a met quota leads to the next round and an unmet one ends
+  the run with the over card (score, round reached, best), whose Play again starts a new run —
   `tests/shooting-gallery.test.mjs`.
-- **AC-11** On a touch screen, a drag moves the crosshair by 1.5× the finger's movement and lifting
-  after it doesn't fire; a tap fires at the crosshair; a still hold over 250 ms doesn't fire; a
-  second finger fires at once while the first is down, and the first's lift then doesn't fire —
+- **AC-11** Meeting the quota starts the bonus: ×1 near, ×2 middle, ×3 far and on the gold duck;
+  closing time doubles everything; no hit scores more than ×8 — `tests/shooting-gallery.test.mjs`.
+- **AC-12** A frenzy comes once a round from round 2, 8–18 s in, for 6 s: the galop plays, targets
+  spring up across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it
+  and the bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz
+  returns — `tests/shooting-gallery.test.mjs`.
+- **AC-13** Rounds bring in their elements as in the table: movers in every lane in round 1,
+  pop-ups from 2, drop-downs from 3 (only into the front three lanes in portrait), turnabouts from
+  4, gold ducks in 5, everything in 6 with points doubled — `tests/shooting-gallery.test.mjs`.
+- **AC-14** A screen wider than tall starts a 3-lane landscape booth, a taller one a 5-lane portrait
+  booth; turning the screen mid-run freezes play under a grey veil offering a restart in the new
+  orientation, turning back resumes after a 1 s count-in, and Restart starts a new run in the new
+  layout without moving the assist; on the start card the booth just lays itself out again; each
+  layout keeps its own best — `tests/shooting-gallery.test.mjs`.
+- **AC-15** Hiding the page during a round pauses it under the pause card; the tap that resumes it
+  doesn't fire and play stays frozen for the 1 s count-in; on the start card no pause card shows —
   `tests/shooting-gallery.test.mjs`.
-- **AC-12** A tap's shot is tested where the targets were at touch-down, not where they are when the
-  finger lifts — `tests/shooting-gallery.test.mjs`.
-- **AC-13** The mouse aims and clicks to fire; the arrow keys move the crosshair and Space fires —
+- **AC-16** The assist grows a target's body hit area but never its bullseye; a new player starts at
+  0.3; it rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or 2, falls 0.05
+  with a hit, and is off in round 6 — `tests/shooting-gallery.test.mjs`.
+- **AC-17** The best score is kept across reloads — `tests/shooting-gallery.test.mjs`.
+- **AC-18** Each state shows only its own card, banner and HUD, as in the state table —
   `tests/shooting-gallery.test.mjs`.
-- **AC-14** Hiding the page in play, or between rounds, pauses it and shows the pause card; the tap that resumes it
-  doesn't fire and play stays frozen for the 1 s count-in; a round intro resumes where it was; on
-  the start card no pause card shows — `tests/shooting-gallery.test.mjs`.
-- **AC-15** The assist grows a target's body hit area but never its bullseye or stick; a new player
-  starts at 0.3; it rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or 2,
-  falls 0.05 with a hit, ignores free-round shots, and is 0 in round 8 — `tests/shooting-gallery.test.mjs`.
-- **AC-16** The best score is kept across reloads — `tests/shooting-gallery.test.mjs`.
-- **AC-17** Each state shows only its own card and HUD, as in the state table — `tests/shooting-gallery.test.mjs`.
-- **AC-18** A shot, a hit, a bullseye, a stick, a round start, the quota and a lost round each play
-  their sound — `tests/shooting-gallery.test.mjs`.
-- **AC-19** The game plays offline once it has been played — `tests/shooting-gallery.test.mjs`.
+- **AC-19** A shot, a splat, a hit, a bullseye, an empty hopper, a round's start, the quota and the
+  time running out each play their sound — `tests/shooting-gallery.test.mjs`.
 - **AC-20** The landing page's Shooting Gallery tile is a link to `shooting-gallery/` with no
-  coming-soon badge, and it opens the game —
-  `tests/site.test.mjs`.
-- **AC-21** At 390×844 and 360×640 the whole booth, the tray and the pips fit on screen without
-  scrolling, and the far tins are drawn at least 44 px wide — `tests/shooting-gallery.test.mjs`.
+  coming-soon badge, and it opens the game — `tests/site.test.mjs`.
+- **AC-21** The game plays offline once it has been played — `tests/shooting-gallery.test.mjs`.
+- **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the gun, the gauge,
+  the hopper, the pips and the timer fit without scrolling, the far targets are at least 44 px wide,
+  and the counter, where the thumb works, holds no target — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 
 1. Tap the Shooting Gallery tile: the booth is alive behind a small start card.
-2. Tap Start: round 1's ducks start to cross.
-3. Drag to aim, tap to fire; meet each round's quota before the shells run out.
-4. Reach closing time, or run dry: see the score, the round and the best, then play again.
+2. Tap Start: round 1's targets cross every lane, the gun pointing at the nearest.
+3. On the counter, drag to turn and raise the gun and tap to fire; lead the moving targets and
+   meet the quota before the timer runs out.
+4. Reach closing time, or run out of time: see the score, the round and the best, then play again.
 
 ## States
 
-| State | Start card | Round banner | Pause card | Over card | Tray, pips, score |
-| ----- | ---------- | ------------ | ---------- | --------- | ----------------- |
-| Start (the booth moves behind) | shown | hidden | hidden | hidden | hidden |
-| Round intro (about 1.2 s) | hidden | shown | hidden | hidden | shown |
-| Playing | hidden | hidden | hidden | hidden | shown |
-| Bonus (quota met) | hidden | "Bonus! ×2 points" briefly, a slim pill above the counter where nothing can be hit | hidden | hidden | shown, the pips lit gold |
-| Free round | hidden | shown at its start | hidden | hidden | shown, the pips hidden and the tray dimmed |
-| Round won (about 1.5 s) | hidden | the round's tally | hidden | hidden | shown |
-| Paused (page was hidden) | hidden | hidden | shown | hidden | shown |
-| Resuming (1 s count-in) | hidden | "Ready…", drawn by the game | hidden | hidden | shown |
-| Over (lost, or closing time with its shell payout) | hidden | hidden | hidden | shown | shown |
+| State | Start card | Banner | Pause card | Orientation veil | Over card | Gun, gauge, hopper, pips, timer, score |
+| ----- | ---------- | ------ | ---------- | ---------------- | --------- | -------------------------------------- |
+| Start (the booth moves behind) | shown | hidden | hidden | hidden | hidden | hidden |
+| Round intro (about 1.2 s) | hidden | the round's number and name | hidden | hidden | hidden | shown |
+| Playing | hidden | hidden | hidden | hidden | hidden | shown |
+| Bonus (quota met) | hidden | "Bonus!" briefly, a pill on the counter | hidden | hidden | hidden | shown, the pips lit gold |
+| Frenzy (6 s) | hidden | "Frenzy!" while it lasts, a pill on the counter | hidden | hidden | hidden | shown, the timer stopped |
+| Round won (about 1.5 s) | hidden | "Round cleared" and the round's score | hidden | hidden | hidden | shown |
+| Paused (page was hidden) | hidden | hidden | shown | hidden | hidden | shown |
+| Turned (the screen's orientation changed) | hidden | hidden | hidden | shown, offering a restart | hidden | shown, greyed |
+| Resuming (1 s count-in) | hidden | "Ready…" | hidden | hidden | hidden | shown |
+| Over (time ran out, or closing time) | hidden | hidden | hidden | hidden | shown | shown |
 
 ## Out of scope
 
 - Leaderboards, accounts, round codes or choosing a starting round.
-- A pause button: the game pauses only when the page is hidden.
+- Rounds beyond 6, a pause button, and a choice of paint colours; they'd be later changes.
 - Music settings beyond the site-wide mute.
-- Rounds beyond 8, and more rule cards for rounds 5 and 6; they'd be a later change.

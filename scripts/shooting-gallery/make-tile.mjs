@@ -16,7 +16,7 @@ for (let i = 0; i < 50; i++) {
 
 const browser = await chromium.launch();
 try {
-  const page = await browser.newPage({ viewport: { width: 1024, height: 640 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
   await page.goto(`http://127.0.0.1:${PORT}/shooting-gallery/`);
   await page.waitForFunction(() => window.__gallery);
   await page.addStyleTag({ content: 'body > :not(canvas) { display: none !important; }' });
@@ -24,30 +24,46 @@ try {
     const g = window.__gallery;
     g.manual = true;
     g.startRun({ seed: 7 });
-    g.startRound(3);
+    g.startRound(2);
     g.clear();
     g.game.mode = 'play';
     g.game.banner = null;
-    const { SW, k, ox } = g.stage();
+    g.game.frenzyAt = 0;
+    g.game.spawn = { movers: g.L.lanes.map(() => 999), pop: 999, drop: 999, gold: [] };
+    const { SW, k, ox, oy } = g.stage();
     const L = g.L;
-    const at = (kind, x, face, opts = {}) => {
-      const t = g.makeTarget(kind, { x, face, ...opts });
-      t.turn = false;
-      return t;
-    };
-    at('tin', SW * 0.3, 'target_colored');
-    at('tin', SW * 0.72, 'target_red1');
-    at('duck', SW * 0.2, 'duck_yellow');
-    at('duck', SW * 0.5, 'duck_target_brown');
-    at('duck', SW * 0.82, 'duck_white', { dir: -1 });
-    at('pop', SW * 0.64, 'target_red3', { up: true, upFor: 99 });
-    g.step(0.4);
-    g.cross.x = SW * 0.5 + 6;
-    g.cross.y = L.duckY + 22;
-    // The tile: the booth from the valance down to the front water, at the tile's 1.6 aspect.
+    const at = (kind, lane, x, face, opts = {}) => g.makeTarget(kind, { lane, x, face, speed: 0, turn: false, ...opts });
+    at('target', 0, SW * 0.28, 'target_colored');
+    at('target', 0, SW * 0.7, 'target_red1');
+    at('duck', 1, SW * 0.18, 'duck_yellow');
+    at('duck', 1, SW * 0.52, 'duck_target_brown');
+    at('target', 2, SW * 0.36, 'target_red3');
+    at('pop', 2, SW * 0.74, 'target_colored', { up: true, upFor: 99 });
+    // Paint already on the booth: a few misses, and one shot on its way.
+    for (const [yaw, lane] of [[-42, 0], [-12, 1], [22, 0], [38, 1], [-30, 2], [8, 2], [46, 0], [-50, 1]]) {
+      g.aim.yaw = yaw;
+      g.aim.lane = lane;
+      g.game.lastFire = -1;
+      g.fire();
+      for (let i = 0; i < 30; i++) g.step(1 / 60);
+    }
+    g.clear();
+    at('target', 0, SW * 0.28, 'target_colored');
+    at('target', 0, SW * 0.7, 'target_red1');
+    at('duck', 1, SW * 0.18, 'duck_yellow');
+    at('duck', 1, SW * 0.52, 'duck_target_brown');
+    at('target', 2, SW * 0.36, 'target_red3');
+    at('pop', 2, SW * 0.74, 'target_colored', { up: true, upFor: 99 });
+    g.aim.yaw = 6;
+    g.aim.lane = 1;
+    g.game.lastFire = -1;
+    g.fire();
+    g.step(0.12);
+    // The tile: the booth from the valance to the gun, at the tile's 1.6 aspect.
     const w = SW * k;
     const h = w / 1.6;
-    return { x: ox, y: Math.max(0, (L.frontY + 40) * k - h), width: w, height: h };
+    const bottom = oy + (L.C + 60) * k;
+    return { x: ox, y: Math.max(0, bottom - h), width: w, height: Math.min(h, bottom) };
   });
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const shot = await page.screenshot({ clip });

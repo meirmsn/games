@@ -33,6 +33,7 @@ export const FAKE_AUDIO = () => {
         start() {
           window.__played.push({ state: ctx.state, bytes: this.buffer.bytes, rate: this.playbackRate.value });
         },
+        stop() {},
       };
     }
   }

@@ -1,33 +1,33 @@
-// Shooting Gallery: a fairground booth where every shell counts (specs/shooting-gallery.md).
+// Shooting Gallery: a fairground paintball booth (specs/shooting-gallery.md).
 //
-// The booth is drawn on one canvas in logical units: the stage is 400 units wide (up to 640 on wide
-// screens) and one unit is min(width / 400, height / 700) CSS px. Three rails stand in depth: small
-// targets on sticks at the back, ducks riding the water in the middle, and big targets that pop up
-// from behind the front water. The counter at the bottom holds the pips, the shells and the rifle.
+// The booth is drawn on one canvas in logical units. Portrait stacks 5 lanes, landscape 3, from the
+// far lane (small, worth the most) to the near one. Each lane is a strip of water or grass with its
+// targets running along it, one way or the other; pop-ups rise from behind any lane's strip and
+// drop-downs are lowered into a lane on a rope.
 //
-// Drag to aim (the crosshair moves by the finger's movement), tap to fire. A tap's shot is judged
-// against the booth as it was when the finger touched down, so the tap's own latency costs nothing.
+// There is no crosshair. The gun stands at the bottom centre: turning it (yaw) moves the landing
+// point along the lanes, raising it (pitch) picks the lane, and the paintball takes a moment to fly,
+// so a moving target has to be led. Every miss leaves its paint on the booth.
 import { mountShell } from '../shared/game-shell.js';
 import { FRAMES, ATLAS_SCALE } from './atlas.js';
 
 const { sound } = mountShell({
   sounds: {
     shot: 'sounds/shot.mp3',
+    splat: 'sounds/splat.mp3',
+    splat2: 'sounds/splat2.mp3',
+    plip: 'sounds/plip.mp3',
     hit: 'sounds/hit.mp3',
     tin: 'sounds/tin.mp3',
     ding: 'sounds/ding.mp3',
-    shell: 'sounds/shell.mp3',
-    snap: 'sounds/snap.mp3',
-    miss: 'sounds/miss.mp3',
-    thud: 'sounds/thud.mp3',
+    dry: 'sounds/tick.mp3',
     splash: 'sounds/splash.mp3',
-    pay: 'sounds/pay.mp3',
-    tick: 'sounds/tick.mp3',
     round: 'sounds/round.mp3',
     quota: 'sounds/quota.mp3',
     lost: 'sounds/lost.mp3',
     finale: 'sounds/finale.mp3',
     music: 'sounds/music.mp3',
+    frenzy: 'sounds/frenzy.mp3',
   },
 });
 
@@ -35,54 +35,46 @@ const { sound } = mountShell({
 const heard = [];
 function sfx(name, opts) {
   heard.push(name);
-  if (heard.length > 40) heard.shift();
+  if (heard.length > 60) heard.shift();
   sound.play(name, opts);
 }
 
 // ---------- Rules ----------
 
-const TRAY_MAX = 10;
-const START_SHELLS = 8;
-const ROUND_SHELLS = 4;
-const ROUND_FLOOR = 6;
-const OVERFLOW_PAY = 50;
-const END_SHELL_PAY = 60;
-const BONUS_SPEED = 1.5;
+const ROUND_TIME = 30;
+const HOPPER = 6;
+const REFILL = 0.6;
+const YAW_MAX = 55;
+const YAW_REACH = 0.47; // of the stage width, either side
+const PX_PER_DEG = 3;
+const PX_PER_LANE = 44;
 const TAP_MS = 250;
-const TAP_PX = 6;
-const DRAG_GAIN = 1.5;
+const TAP_PX = 8;
+const FLIGHT_NEAR = 0.18;
+const FLIGHT_FAR = 0.42;
+const FRENZY_LEN = 6;
+const FRENZY_SPEED = 1.6;
+const MULT_CAP = 8;
+const PAINT_KEEP = 70;
+// Blues, purples, pinks and greens: never the gold or red that mark bullseyes and the gold duck.
+const PALETTE = ['#2f80ed', '#9b51e0', '#eb4f9b', '#27ae60', '#00b5c8', '#7ac143', '#6c5ce7', '#16a085'];
 
-// Each kind of target: its points, its pips, its drawn scale, and the rail it runs on.
-const KINDS = {
-  tin: { points: 30, pips: 3, scale: 0.4, sound: 'tin' },
-  duck: { points: 20, pips: 2, scale: 0.75, sound: 'hit' },
-  gold: { points: 100, pips: 2, scale: 0.75, sound: 'hit' },
-  pop: { points: 10, pips: 1, scale: 0.9, sound: 'hit' },
-};
-// The bullseye of each target face: its painted centre with the first ring around it, as a share
-// of the sprite's half-width (measured from the pack's art).
+const ROUNDS = [
+  null,
+  { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55 },
+  { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true },
+  { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true },
+  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true },
+  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true },
+  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true },
+];
+const LAST_ROUND = 6;
+
+// The bullseye of each target face: its painted centre with the ring around it, as a share of the
+// sprite's half-width (measured from the pack's art).
 const BULL = { target_red1: 0.232, target_red2: 0.268, target_red3: 0.366, target_colored: 0.366 };
 // A target-duck's painted target: its centre and radius as shares of the sprite's width and height.
 const DUCK_BULL = { u: 0.467, v: 0.686, r: 0.164 };
-
-const CARD_TURN = { key: 'turn', name: 'Turnabouts', bg: 'green', turn: true };
-const CARD_WIND = { key: 'wind', name: 'Crosswind', bg: 'wood', dusk: true, wind: true };
-
-function roundPlan(order) {
-  const [a, b] = order;
-  return [
-    null,
-    { name: 'Ducks', bg: 'wood', quota: 6, ducks: 9, tins: 0, pops: 0, duckV: 60, tinV: 110 },
-    { name: 'Tin row', bg: 'red', shade: true, quota: 8, ducks: 6, tins: 5, pops: 0, duckV: 65, tinV: 110, hint: true },
-    { name: 'Pop-ups', bg: 'blue', quota: 11, ducks: 5, tins: 4, pops: 6, duckV: 70, tinV: 115, gold: true },
-    { name: 'Free round', bg: 'wood', free: true, duration: 12, flockV: 100 },
-    { ...a, quota: 14, ducks: 5, tins: 5, pops: 6, duckV: 75, tinV: 120, gold: true },
-    { ...b, quota: 15, ducks: 5, tins: 5, pops: 6, duckV: 75, tinV: 120, gold: true },
-    { name: 'Free round', bg: 'blue', free: true, duration: 12, flockV: 130 },
-    { name: 'Closing time', bg: 'blue', dusk: true, quota: 16, ducks: 6, tins: 6, pops: 6, duckV: 80, tinV: 125, gold: true, turn: true, wind: true, double: true, lamps: true },
-  ];
-}
-const LAST_ROUND = 8;
 
 // ---------- Randomness (seedable, so a run can be replayed in tests) ----------
 
@@ -100,8 +92,9 @@ let rng = mulberry32(Date.now());
 const rand = (a, b) => a + rng() * (b - a);
 const pick = (xs) => xs[Math.floor(rng() * xs.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
 
-// ---------- Memory: the best and the hidden assist ----------
+// ---------- Memory: the bests and the hidden assist ----------
 
 const STORE = 'shooting-gallery';
 function load() {
@@ -118,7 +111,12 @@ function save(v) {
     // Blocked storage: the best lasts until the page reloads.
   }
 }
-const memory = { best: 0, bestRound: 0, assist: 0.3, ...load() };
+const stored = load();
+const memory = {
+  best: { portrait: 0, landscape: 0, ...(stored.best && typeof stored.best === 'object' ? stored.best : {}) },
+  bestRound: { portrait: 0, landscape: 0, ...(stored.bestRound && typeof stored.bestRound === 'object' ? stored.bestRound : {}) },
+  assist: typeof stored.assist === 'number' ? stored.assist : 0.3,
+};
 
 // ---------- Canvas and layout ----------
 
@@ -126,15 +124,19 @@ const canvas = document.getElementById('booth');
 const ctx = canvas.getContext('2d');
 const atlas = new Image();
 atlas.src = 'img/atlas.png';
+const splatImg = new Image();
+splatImg.src = 'img/splats.png';
 
 let dpr = 1;
 let k = 1; // CSS px per unit
-let SW = 400; // stage width, units
-let SH = 700; // stage height, units
 let ox = 0; // CSS px from the screen's left to the stage's left
+let oy = 0; // and from its top
+let SW = 400; // the stage, in units, fixed for a run
+let SH = 760;
+let orient = 'portrait'; // the stage's layout
 let insetTop = 0;
 let insetBottom = 0;
-const L = {}; // the booth's lines, in units
+const L = { lanes: [], n: 5 }; // the booth's lines, in units
 
 function readInsets() {
   const cs = getComputedStyle(document.documentElement);
@@ -142,34 +144,63 @@ function readInsets() {
   insetBottom = parseFloat(cs.getPropertyValue('--sab')) || 0;
 }
 
-function layout() {
+const screenOrient = () => (window.innerWidth / window.innerHeight > 1 ? 'landscape' : 'portrait');
+
+// Lay out a stage for an orientation, from the screen as it is now.
+function layoutStage(o) {
+  orient = o;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const land = o === 'landscape';
+  const k0 = land ? Math.min(w / 800, h / 450) : Math.min(w / 400, h / 720);
+  SW = Math.min(w / k0, land ? 1000 : 520);
+  SH = h / k0;
+  const top = insetTop / k0;
+  const bottom = insetBottom / k0;
+  L.top = top;
+  L.bottom = bottom;
+  L.T = top + (land ? 58 : 72); // the lanes start below the valance
+  L.counterH = land ? 104 : 168;
+  L.C = SH - bottom - L.counterH; // the counter's top edge: the thumb's pad, never a target
+  const n = land ? 3 : 5;
+  const band = (L.C - L.T) / n;
+  const [sFar, sNear] = land ? [0.38, 0.52] : [0.36, 0.6];
+  L.lanes = [];
+  for (let i = 0; i < n; i++) {
+    const s = lerp(sFar, sNear, n === 1 ? 1 : i / (n - 1));
+    const top0 = L.T + i * band;
+    const lineY = top0 + band * 0.52;
+    const duckH = 109 * s * 1.15;
+    L.lanes.push({
+      i,
+      s,
+      top: top0,
+      line: lineY, // where the targets' centres run, and where a shot aimed at this lane lands
+      strip: lineY + duckH * 0.32, // the crest of the lane's water or grass
+      kind: (n - 1 - i) % 2 === 0 ? 'water' : 'grass',
+      dir: i % 2 === 0 ? 1 : -1,
+      pips: i === 0 ? 3 : i === n - 1 ? 1 : 2,
+    });
+  }
+  L.n = n;
+  L.gunX = SW / 2;
+  L.gunY = SH - bottom - (land ? 6 : 10);
+  fit();
+}
+
+// Fit the stage to the screen, letterboxed when the screen no longer matches it.
+function fit() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(w * dpr);
   canvas.height = Math.round(h * dpr);
-  k = Math.min(w / 400, h / 700);
-  SW = Math.min(w / k, 640);
-  SH = h / k;
+  k = Math.min(w / SW, h / SH);
   ox = (w - SW * k) / 2;
-  const top = insetTop / k;
-  const bottom = insetBottom / k;
-  L.T = top + 76; // the booth starts below the valance
-  L.C = SH - 172 - bottom; // the counter's top edge
-  const S = L.C - L.T;
-  const extra = Math.max(0, S - 444); // tall phones: the extra height spreads the rails
-  L.farY = L.T + 0.2 * S; // the small targets' centres
-  L.grassY = L.farY + 52; // the grass that hides their sticks
-  L.duckY = L.T + 0.47 * S; // the ducks' centres
-  L.midY = L.duckY + 26; // the middle water's crest: a duck's painted target stays above it
-  L.frontY = L.C - 66 - 0.25 * extra; // the front water's crest
-  L.popUp = L.frontY - 57 - 30; // a pop-up target's centre when up
-  L.popDown = L.frontY + 70; // and when down, hidden
-  L.bottom = bottom;
-  L.top = top;
+  oy = (h - SH * k) / 2;
 }
 
-// ---------- Sprites and masks ----------
+// ---------- Sprites, masks and paint ----------
 
 const masks = {};
 function makeMasks() {
@@ -178,7 +209,7 @@ function makeMasks() {
   c.height = atlas.naturalHeight;
   const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(atlas, 0, 0);
-  for (const name of ['duck_yellow', 'duck_back', 'water1', 'water2', 'grass1', 'curtain']) {
+  for (const name of ['duck_yellow', 'water1', 'water2', 'grass1', 'curtain']) {
     const [x, y, w, h] = FRAMES[name];
     const d = g.getImageData(x, y, w, h).data;
     const a = new Uint8Array(w * h);
@@ -198,7 +229,6 @@ function maskAt(name, u, v) {
   if (!m || u < 0 || u >= 1 || v < 0 || v >= 1) return false;
   return m.a[Math.floor(v * m.h) * m.w + Math.floor(u * m.w)] === 1;
 }
-// The 1x size of a sprite, in the pack's own pixels.
 const size = (name) => [FRAMES[name][2] / ATLAS_SCALE, FRAMES[name][3] / ATLAS_SCALE];
 
 function sprite(name, x, y, w, h, flip = false) {
@@ -214,14 +244,30 @@ function sprite(name, x, y, w, h, flip = false) {
   }
 }
 
-// Water and grass are rows of tiles; these are their sizes in units and their contour.
-const WATER_SCALE = 0.6;
-const GRASS_SCALE = 0.6;
-function contourY(name, scale, top, x, offset) {
+// A lane's strip: a row of water or grass tiles, scaled with the lane.
+const stripName = (lane) => (lane.kind === 'water' ? (lane.i % 4 === 0 ? 'water2' : 'water1') : 'grass1');
+const stripScale = (lane) => 0.32 + lane.s * 0.45;
+function stripY(lane, x) {
+  const name = stripName(lane);
   const [w, h] = size(name);
-  const tw = w * scale;
-  const u = (((x - offset) % tw) + tw) % tw / tw;
-  return top + masks[name].top[Math.floor(u * masks[name].w)] * h * scale;
+  const sc = stripScale(lane);
+  const tw = w * sc;
+  const off = lane.i * 37;
+  const u = ((((x - off) % tw) + tw) % tw) / tw;
+  return lane.strip + masks[name].top[Math.floor(u * masks[name].w)] * h * sc;
+}
+
+// A splat, tinted: drawn once into its own small canvas.
+const SPLAT_CELL = 128;
+function tinted(shape, color, px) {
+  const c = document.createElement('canvas');
+  c.width = c.height = Math.max(16, Math.min(160, Math.round(px)));
+  const g = c.getContext('2d');
+  g.drawImage(splatImg, (shape % 12) * SPLAT_CELL, Math.floor(shape / 12) * SPLAT_CELL, SPLAT_CELL, SPLAT_CELL, 0, 0, c.width, c.height);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = color;
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
 }
 
 // ---------- State ----------
@@ -229,102 +275,98 @@ function contourY(name, scale, top, x, offset) {
 const game = {
   mode: 'start', // start | intro | play | won | lost | over
   paused: false,
-  resumeT: 0, // the count-in after a pause
+  turned: false, // the screen turned away from the run's layout
+  resumeT: 0,
   run: 0,
   round: 0,
-  plan: roundPlan([CARD_TURN, CARD_WIND]),
   cfg: null,
   score: 0,
-  shells: START_SHELLS,
+  roundScore: 0,
   pips: 0,
   bonus: false,
-  speedMul: 1,
-  clock: 0, // the parade's own clock, which runs faster in the bonus
+  time: ROUND_TIME, // left in the round
+  elapsed: 0, // in the round, on the timer's own clock
   T: 0, // the simulation's time
-  modeT: 0, // time in the current mode
-  queue: [], // the parade still to come: { at, kind, ... }
-  ended: '', // why the run ended: 'empty', 'away' or 'closing'
+  modeT: 0,
+  hopper: HOPPER,
+  refillT: 0,
+  frenzy: 0, // seconds of frenzy left
+  frenzyAt: 0, // when in the round it comes; 0 = not this round
+  frenzyDone: false,
+  spawn: {},
+  colour: 0,
   missRow: 0,
   assist: memory.assist,
-  banner: null, // { text, sub, t, life }
-  shake: 0,
+  banner: null,
+  ended: '',
   kick: 0,
-  overflowPaid: 0,
   lastFire: -1,
   attract: true,
 };
+const aim = { yaw: 0, lane: 4, acc: 0 };
 let targets = [];
-let fx = []; // short effects: popups, splinters, splashes, flying shells, rings
-let holes = []; // shot holes on the backdrop
-let decor = [];
-const cross = { x: 200, y: 300 };
+let balls = [];
+let paint = []; // splats on the scenery
+let fx = [];
 let nextId = 1;
-
-function bgName() {
-  const cfg = game.cfg;
-  return 'bg_' + (cfg ? cfg.bg : 'wood');
-}
+let decor = [];
 
 // ---------- Targets ----------
 
-function faceFor(kind, variant) {
-  if (kind === 'tin') return variant || pick(['target_red1', 'target_red2', 'target_colored']);
-  if (kind === 'pop') return variant || pick(['target_red3', 'target_colored', 'target_red2']);
+function faceFor(kind, face) {
+  if (face) return face;
   if (kind === 'gold') return 'duck_target_yellow';
-  return variant || pick(['duck_yellow', 'duck_brown', 'duck_white']);
+  if (kind === 'duck') return pick(['duck_yellow', 'duck_brown', 'duck_white', 'duck_target_yellow', 'duck_target_brown', 'duck_target_white']);
+  return pick(['target_red1', 'target_red2', 'target_red3', 'target_colored']);
 }
 
+// kind: duck | target (movers along a lane) | pop (rises from behind a strip) | drop (lowered on a
+// rope) | gold (a fast gold duck).
 function makeTarget(kind, opts = {}) {
-  const K = KINDS[kind];
+  const lane = L.lanes[opts.lane ?? L.n - 1];
   const cfg = game.cfg || {};
-  const face = faceFor(kind, opts.face);
   const t = {
     id: nextId++,
     kind,
-    face,
-    scale: K.scale,
-    state: 'live', // live | knocked | snapped
+    lane: lane.i,
+    face: faceFor(kind, opts.face),
+    state: 'live', // live | knocked | gone
     anim: 0,
-    dir: opts.dir ?? 1,
-    speed: opts.speed ?? 60,
-    x: opts.x ?? 0,
-    y: 0,
+    dir: opts.dir ?? lane.dir,
+    speed: opts.speed ?? 40,
+    x: opts.x ?? SW / 2,
+    y: lane.line,
     phase: rand(0, Math.PI * 2),
     turn: opts.turn ?? !!cfg.turn,
     turnT: opts.turnT ?? rand(0, 3.9),
-    hint: !!opts.hint,
-    cracked: !!opts.cracked,
-    holes: [],
-    popT: 0,
-    vy: 0,
-    rot: 0,
+    upFor: opts.upFor ?? 1.8,
+    popT: opts.up ? 0.35 : 0,
+    splats: [],
+    big: opts.big ?? 1,
   };
-  if (kind === 'tin') t.y = L.farY;
-  if (kind === 'duck' || kind === 'gold') t.y = L.duckY;
-  if (kind === 'pop') {
-    t.y = opts.up ? L.popUp : L.popDown;
-    t.popT = opts.up ? 0.35 : 0;
-    t.upFor = opts.upFor ?? 1.8;
-  }
-  t.hasStick = kind === 'tin' || kind === 'pop';
-  t.bull = kind === 'gold' || (kind === 'duck' ? face.startsWith('duck_target') : true);
+  t.isDuck = kind === 'duck' || kind === 'gold';
+  t.bull = kind === 'gold' || (t.isDuck ? t.face.startsWith('duck_target') : true);
+  if (kind === 'pop') t.y = opts.up ? lane.line : hiddenY(t);
+  if (kind === 'drop') t.y = opts.up ? lane.line : dropTop(t);
   targets.push(t);
   return t;
 }
 
-// The sprite's drawn size in units.
 function dims(t) {
-  const [w, h] = size(t.kind === 'duck' || t.kind === 'gold' ? 'duck_yellow' : 'target_colored');
-  return [w * t.scale, h * t.scale];
+  const s = L.lanes[t.lane].s * t.big;
+  if (t.isDuck) return [114 * s * 1.15, 109 * s * 1.15];
+  return [142 * s, 142 * s];
 }
+const hiddenY = (t) => L.lanes[t.lane].strip + dims(t)[1] * 0.6;
+const dropTop = (t) => L.top + 40 - dims(t)[1];
 
 // Turnabouts: 2.2 s facing, a 0.25 s turn, 1.2 s showing the back, a 0.25 s turn. A turn counts as
-// back. Returns whether the back shows to a shot, and the drawn width's share and side.
+// back.
 const TURN = [2.2, 0.25, 1.2, 0.25];
-function turnState(t, time = t.turnT) {
+function turnState(t) {
   if (!t.turn) return { back: false, sx: 1, showBack: false };
   const cyc = TURN.reduce((a, b) => a + b, 0);
-  let u = ((time % cyc) + cyc) % cyc;
+  let u = ((t.turnT % cyc) + cyc) % cyc;
   if (u < TURN[0]) return { back: false, sx: 1, showBack: false };
   u -= TURN[0];
   if (u < TURN[1]) {
@@ -338,207 +380,154 @@ function turnState(t, time = t.turnT) {
   return { back: true, sx: Math.abs(Math.cos(Math.PI * p)), showBack: p < 0.5 };
 }
 
-function stickWidth(t) {
-  return 30 * t.scale * (t.kind === 'tin' ? 1.15 : 0.8);
-}
-// Where a stick ends: the grass hides the small targets' sticks, the front water the pop-ups'.
-function stickBottom(t) {
-  return t.kind === 'tin' ? L.grassY + 30 : L.C;
+function laneSpeed(cfg, i) {
+  const n = L.n;
+  return lerp(cfg.vNear, cfg.vFar, n === 1 ? 0 : (n - 1 - i) / (n - 1));
 }
 
-// A target's pose at this moment: all a shot needs to judge it later.
-function pose(t) {
-  const ts = turnState(t);
-  return { t, x: t.x, y: t.y, back: ts.back };
-}
-
-// ---------- The parade ----------
-
-function buildParade(cfg) {
-  const q = [];
-  const ducks = cfg.ducks || 0;
-  let at = 0.2;
-  for (let i = 0; i < ducks; i++) {
-    // A third of the ducks carry a painted target; the first is always plain and easy.
-    const target = i > 0 && i % 3 === 1;
-    q.push({ at, kind: 'duck', face: target ? pick(['duck_target_yellow', 'duck_target_brown', 'duck_target_white']) : null });
-    at += rand(1.7, 2.6) * (60 / cfg.duckV);
-  }
-  at = 3;
-  for (let i = 0; i < (cfg.tins || 0); i++) {
-    q.push({ at, kind: 'tin', hint: cfg.hint && i < 2, cracked: cfg.hint && i === 2 });
-    at += rand(2.6, 4);
-  }
-  at = 4;
-  for (let i = 0; i < (cfg.pops || 0); i++) {
-    q.push({ at, kind: 'pop' });
-    at += rand(2.8, 4.2);
-  }
-  if (cfg.gold) q.push({ at: rand(6, 14), kind: 'gold' });
-  return q.sort((a, b) => a.at - b.at);
-}
-
-function launch(item) {
-  const cfg = game.cfg;
-  if (item.kind === 'pop') {
-    // Pick a spot along the counter that no other pop-up holds.
-    const taken = targets.filter((t) => t.kind === 'pop' && t.state === 'live').map((t) => t.x);
-    let x = 0;
-    for (let tries = 0; tries < 12; tries++) {
-      x = rand(70, SW - 70);
-      if (taken.every((o) => Math.abs(o - x) > 120)) break;
-    }
-    return makeTarget('pop', { x });
-  }
-  const tin = item.kind === 'tin';
-  const dir = tin && cfg.wind ? -1 : 1;
-  const speed = tin ? cfg.tinV : item.kind === 'gold' ? cfg.duckV * 1.6 : cfg.duckV;
-  const t = makeTarget(item.kind, { dir, speed, face: item.face, hint: item.hint, cracked: item.cracked });
+function launchMover(i, cfg, gold = false) {
+  const lane = L.lanes[i];
+  const kind = gold ? 'gold' : lane.kind === 'water' ? 'duck' : 'target';
+  const t = makeTarget(kind, { lane: i, speed: laneSpeed(cfg, i) * (gold ? 1.6 : 1) });
   const [w] = dims(t);
-  t.x = dir > 0 ? -w / 2 - 4 : SW + w / 2 + 4;
+  t.x = t.dir > 0 ? -w / 2 - 4 : SW + w / 2 + 4;
   return t;
 }
 
-function paradeOver() {
-  return game.queue.length === 0 && targets.every((t) => t.state !== 'live' && t.anim > 1.2);
+function freeSpot(i, w) {
+  const taken = targets.filter((t) => t.lane === i && t.state === 'live').map((t) => t.x);
+  let x = SW / 2;
+  for (let tries = 0; tries < 12; tries++) {
+    x = rand(60, SW - 60);
+    if (taken.every((o) => Math.abs(o - x) > w)) return x;
+  }
+  return x;
+}
+// In portrait, drop-downs only come into the front three lanes, so their ropes don't cross the far
+// lanes' targets.
+function dropLanes() {
+  const n = L.n;
+  return L.lanes.filter((l) => n < 5 || l.i >= n - 3).map((l) => l.i);
+}
+function launchPop(i, upFor = 1.8) {
+  const t = makeTarget('pop', { lane: i, upFor });
+  t.x = freeSpot(i, dims(t)[0] * 1.2);
+  return t;
+}
+function launchDrop(i, upFor = 1.8) {
+  const t = makeTarget('drop', { lane: i, upFor });
+  t.x = freeSpot(i, dims(t)[0] * 1.2);
+  return t;
 }
 
 // ---------- Rounds and the run ----------
 
-function startRun({ seed = Date.now(), order } = {}) {
+let stopMusic = null;
+let musicName = '';
+function music(name) {
+  if (musicName === name) return;
+  if (stopMusic) stopMusic();
+  musicName = name;
+  stopMusic = name ? sound.loop(name, { gain: name === 'frenzy' ? 0.3 : 0.24 }) : null;
+}
+
+function startRun({ seed = Date.now(), restart = false } = {}) {
   rng = mulberry32(seed);
-  const cards = order || (rng() < 0.5 ? ['turn', 'wind'] : ['wind', 'turn']);
-  game.plan = roundPlan(cards.map((c) => (c === 'turn' ? CARD_TURN : CARD_WIND)));
+  if (screenOrient() !== orient || restart) layoutStage(screenOrient());
   game.run++;
   game.score = 0;
-  game.shells = START_SHELLS;
   game.missRow = 0;
   game.assist = memory.assist;
   game.attract = false;
   game.ended = '';
+  game.turned = false;
+  game.paused = false;
+  game.resumeT = 0;
+  game.hopper = HOPPER;
+  game.colour = 0;
   ui.start.hidden = true;
   ui.over.hidden = true;
+  ui.turned.hidden = true;
+  ui.pause.hidden = true;
+  paint = [];
+  targets = [];
+  balls = [];
+  makeDecor();
+  aim.yaw = 0;
+  aim.lane = L.n - 1;
+  aim.acc = 0;
   startRound(1);
-  if (!stopMusic) stopMusic = sound.loop('music', { gain: 0.22 });
+  music('music');
 }
-let stopMusic = null;
 
 function startRound(n) {
   game.round = n;
-  const cfg = game.plan[n];
+  const cfg = ROUNDS[n];
   game.cfg = cfg;
-  if (!cfg.free && n > 1) {
-    // Carried shells plus 4, never fewer than 6: a player who spent the bonus down to nothing
-    // isn't doomed by a rule they couldn't see, and carrying more than 2 still pays.
-    const total = Math.max(ROUND_FLOOR, game.shells + ROUND_SHELLS);
-    const over = Math.max(0, total - TRAY_MAX);
-    game.shells = Math.min(TRAY_MAX, total);
-    if (over > 0) {
-      game.score += over * OVERFLOW_PAY;
-      game.overflowPaid = over;
-      for (let i = 0; i < over; i++) popup(trayX(TRAY_MAX - 1), trayY() - 10 - i * 14, `+${OVERFLOW_PAY}`, '#ffd23f', 0.3 + i * 0.15);
-      setTimeout(() => sfx('pay'), 400);
-    } else game.overflowPaid = 0;
-  }
   game.pips = 0;
+  game.roundScore = 0;
   game.bonus = false;
-  game.speedMul = 1;
-  game.clock = 0;
-  game.flockIn = 0;
+  game.time = ROUND_TIME;
+  game.elapsed = 0;
+  game.frenzy = 0;
+  game.frenzyDone = false;
+  game.frenzyAt = cfg.frenzy ? rand(8, 18) : 0;
   game.missRow = 0;
+  game.spawn = { movers: L.lanes.map(() => rand(0.2, 1.8)), pop: rand(1.5, 3), drop: rand(2.5, 4), gold: [] };
+  if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
   targets = targets.filter((t) => t.state !== 'live');
-  game.queue = cfg.free ? [] : buildParade(cfg);
   game.mode = 'intro';
   game.modeT = 0;
   banner(`Round ${n}`, cfg.name, 1.3);
   sfx('round');
-  // Round 1's first duck is already in view, so the first hit comes within seconds.
-  if (n === 1 && game.queue.length) {
-    const first = game.queue.shift();
-    const t = launch(first);
-    t.x = 70;
-  }
   if (n === 1) {
-    cross.x = SW / 2;
-    cross.y = L.duckY;
+    // A big, slow target crosses the middle of the nearest lane, where the gun already points.
+    const i = L.n - 1;
+    const t = makeTarget(L.lanes[i].kind === 'water' ? 'duck' : 'target', { lane: i, speed: 26, big: 1.15, face: L.lanes[i].kind === 'water' ? 'duck_target_yellow' : 'target_colored', turn: false });
+    t.x = SW / 2 - t.dir * 60;
+    game.spawn.movers[i] = 3.5;
   }
 }
 
-// A banner between rounds sits over the pond; one during play (`small`) is a slim pill in the front
-// water's band above the counter, where nothing can be hit, so it never hides a target.
+// A banner between rounds sits over the lanes; one during play (`small`) is a slim pill on the
+// counter, where nothing can be hit, so it never hides a target.
 function banner(text, sub = '', life = 1.2, small = false) {
   game.banner = { text, sub, t: 0, life, small };
 }
 
-function quotaRound() {
-  return game.cfg && !game.cfg.free && (game.mode === 'play' || game.mode === 'intro');
-}
-
-function checkRound() {
-  if (game.mode !== 'play' || !game.cfg) return;
-  const cfg = game.cfg;
-  if (cfg.free) {
-    if (game.clock >= cfg.duration && (game.clock >= cfg.duration + 3 || targets.every((t) => t.state !== 'live'))) roundWon();
-    return;
+function roundOver() {
+  endFrenzy();
+  if (game.pips >= game.cfg.quota) {
+    game.mode = 'won';
+    game.modeT = 0;
+    if (game.round === LAST_ROUND) banner('Closing time!', `${game.score.toLocaleString('en-US')} points`, 2);
+    else banner('Round cleared', `+${game.roundScore.toLocaleString('en-US')} points`, 1.5);
+  } else {
+    game.mode = 'lost';
+    game.modeT = 0;
+    game.ended = 'time';
+    sfx('lost');
+    music('');
+    if (game.round <= 2) game.assist = Math.min(1, game.assist + 0.3);
   }
-  const met = game.pips >= cfg.quota;
-  if (met && !game.bonus) {
-    sfx('quota');
-    if (game.shells > 0 && !paradeOver()) {
-      game.bonus = true;
-      game.speedMul = BONUS_SPEED;
-      banner('Bonus! ×2 points', '', 1.3, true);
-      return;
-    }
-    roundWon();
-    return;
-  }
-  if (met && (paradeOver() || game.shells === 0)) {
-    roundWon();
-    return;
-  }
-  if (!met && (game.shells === 0 || paradeOver())) lose(game.shells === 0 ? 'empty' : 'away');
-}
-
-function roundWon() {
-  game.mode = 'won';
-  game.modeT = 0;
-  game.speedMul = BONUS_SPEED;
-  const cfg = game.cfg;
-  if (game.round === LAST_ROUND) {
-    banner('Closing time!', game.shells ? `${game.shells} × ${END_SHELL_PAY} for shells left` : '', 2);
-  } else banner(cfg.free ? 'Time!' : 'Round cleared', cfg.free ? '' : `${game.shells} shell${game.shells === 1 ? '' : 's'} carried`, 1.5);
-}
-
-function finishRun() {
-  game.score += game.shells * END_SHELL_PAY;
-  game.ended = 'closing';
-  sfx('finale');
-  gameOver();
-}
-
-function lose(why) {
-  game.mode = 'lost';
-  game.modeT = 0;
-  game.ended = why;
-  sfx('lost');
-  if (game.round <= 2) game.assist = Math.min(1, game.assist + 0.3);
 }
 
 function gameOver() {
   game.mode = 'over';
   game.modeT = 0;
   game.attract = true;
-  game.speedMul = 1;
-  const newBest = game.score > memory.best;
-  if (newBest) memory.best = game.score;
-  memory.bestRound = Math.max(memory.bestRound || 0, game.round);
+  game.spawn = {};
+  music('');
+  const best = memory.best[orient] || 0;
+  const newBest = game.score > best;
+  if (newBest) memory.best[orient] = game.score;
+  memory.bestRound[orient] = Math.max(memory.bestRound[orient] || 0, game.round);
   memory.assist = game.assist;
   save(memory);
-  ui.overTitle.textContent = game.ended === 'closing' ? 'Closing time!' : game.ended === 'empty' ? 'Out of shells' : 'They got away';
+  ui.overTitle.textContent = game.ended === 'closing' ? 'Closing time!' : 'Out of time';
   ui.finalScore.textContent = game.score.toLocaleString('en-US');
-  ui.finalDetail.textContent = `Round ${game.round} · ${game.plan[game.round].name}`;
-  ui.finalBest.textContent = newBest && game.score > 0 ? 'A new best!' : `Best ${memory.best.toLocaleString('en-US')}`;
+  ui.finalDetail.textContent = `Round ${game.round} · ${ROUNDS[game.round].name}`;
+  ui.finalBest.textContent = newBest && game.score > 0 ? 'A new best!' : `Best ${(memory.best[orient] || 0).toLocaleString('en-US')}`;
   ui.finalBest.classList.toggle('is-new', newBest && game.score > 0);
   ui.over.hidden = false;
   ui.again.focus({ preventScroll: true });
@@ -547,197 +536,213 @@ function gameOver() {
 function showStart() {
   game.mode = 'start';
   game.attract = true;
-  game.speedMul = 1;
   game.cfg = null;
   ui.over.hidden = true;
   ui.start.hidden = false;
-  ui.best.hidden = !memory.best;
-  ui.best.textContent = `Best ${memory.best.toLocaleString('en-US')} · round ${memory.bestRound}`;
+  const best = memory.best[orient] || 0;
+  ui.best.hidden = !best;
+  ui.best.textContent = `Best ${best.toLocaleString('en-US')} · round ${memory.bestRound[orient] || 0}`;
 }
 
-// ---------- Shooting ----------
+function startFrenzy() {
+  game.frenzy = FRENZY_LEN;
+  game.frenzyDone = true;
+  game.spawn.frenzy = 0;
+  banner('Frenzy!', '', FRENZY_LEN, true);
+  music('frenzy');
+}
+function endFrenzy() {
+  const was = game.frenzy > 0 || musicName === 'frenzy';
+  game.frenzy = 0;
+  if (game.banner && game.banner.text === 'Frenzy!') game.banner = null;
+  if (was && (game.mode === 'play' || game.mode === 'won')) music('music');
+}
 
-// The assist in effect now: none in the last round.
+// ---------- Aiming and shooting ----------
+
+function aimPoint() {
+  const lane = L.lanes[aim.lane];
+  return { x: SW / 2 + (aim.yaw / YAW_MAX) * YAW_REACH * SW, y: lane.line };
+}
+function turnBy(deg) {
+  aim.yaw = clamp(aim.yaw + deg, -YAW_MAX, YAW_MAX);
+}
+// Raise by `steps` lanes (toward the far lane), one at a time, never past the ends.
+function raiseBy(steps) {
+  aim.lane = clamp(aim.lane - steps, 0, L.n - 1);
+}
+function flightTime(i) {
+  const n = L.n;
+  return lerp(FLIGHT_NEAR, FLIGHT_FAR, n === 1 ? 0 : (n - 1 - i) / (n - 1));
+}
+// The pack's rifle is drawn on a slant: from the stock's foot (0.75, 1) to the muzzle (0.12, 0) of
+// its sprite. The gun turns about the stock's foot, corrected by that slant.
+const RIFLE_FOOT = [0.75, 1];
+const RIFLE_TIP = [0.12, 0.02];
+const gunScale = () => (orient === 'landscape' ? 0.24 : 0.34);
+function rifleAxis() {
+  const [w, h] = size('rifle');
+  const dx = (RIFLE_TIP[0] - RIFLE_FOOT[0]) * w;
+  const dy = (RIFLE_TIP[1] - RIFLE_FOOT[1]) * h;
+  return { len: Math.hypot(dx, dy), slant: Math.atan2(dx, -dy) };
+}
+const gunLen = () => rifleAxis().len * gunScale();
+function muzzle() {
+  const a = aimPoint();
+  const ang = Math.atan2(a.x - L.gunX, L.gunY - a.y);
+  const len = gunLen();
+  return { x: L.gunX + Math.sin(ang) * len, y: L.gunY - Math.cos(ang) * len, ang };
+}
+
+function canFire() {
+  return !game.paused && !game.turned && game.resumeT <= 0 && game.mode === 'play' && game.T - game.lastFire >= 0.12;
+}
+
+function fire() {
+  if (!canFire()) return null;
+  const free = game.frenzy > 0;
+  if (!free && game.hopper < 1) {
+    sfx('dry');
+    game.lastFire = game.T;
+    return null;
+  }
+  if (!free) {
+    if (game.hopper === HOPPER) game.refillT = 0;
+    game.hopper--;
+  }
+  game.lastFire = game.T;
+  game.kick = 1;
+  const m = muzzle();
+  const a = aimPoint();
+  const colour = PALETTE[game.colour++ % PALETTE.length];
+  const b = { x0: m.x, y0: m.y, x1: a.x, y1: a.y, t: 0, dur: flightTime(aim.lane), colour, lane: aim.lane, free };
+  balls.push(b);
+  sfx('shot', { rate: rand(0.95, 1.08) });
+  return b;
+}
+
+// What is at (px, py): front to back, lane by lane from the nearest, its strip and then its targets;
+// the wall behind everything.
+function resolve(px, py) {
+  const grow = 1 + 0.15 * assistNow();
+  const c = curtainRect();
+  if (curtainAt((px - c.x) / c.w, (py - c.y) / c.h) || curtainAt((SW - c.x - px) / c.w, (py - c.y) / c.h)) return { what: 'curtain' };
+  for (let i = L.n - 1; i >= 0; i--) {
+    const lane = L.lanes[i];
+    if (py >= stripY(lane, px)) return { what: 'strip', lane: i };
+    // Within a lane, the target drawn last is in front: test it first.
+    const here = drawOrder(i);
+    for (let j = here.length - 1; j >= 0; j--) {
+      if (here[j].state !== 'live') continue;
+      const r = hitTest(here[j], px, py, grow);
+      if (r) return r;
+    }
+  }
+  return { what: 'wall' };
+}
+const drawOrder = (i) => targets.filter((t) => t.lane === i && t.kind === 'drop').concat(targets.filter((t) => t.lane === i && t.kind !== 'drop'));
+
+function hitTest(t, px, py, grow) {
+  const [w, h] = dims(t);
+  const back = turnState(t).back;
+  if (t.isDuck) {
+    const flip = t.dir < 0;
+    let u = (px - t.x) / (w * grow) + 0.5;
+    const v = (py - t.y) / (h * grow) + 0.5;
+    if (flip) u = 1 - u;
+    if (!maskAt('duck_yellow', u, v)) return null;
+    if (back) return { what: 'back', t };
+    if (t.bull) {
+      let bu = (px - t.x) / w + 0.5;
+      if (flip) bu = 1 - bu;
+      const bv = (py - t.y) / h + 0.5;
+      if (Math.hypot((bu - DUCK_BULL.u) * w, (bv - DUCK_BULL.v) * h) <= DUCK_BULL.r * w) return { what: 'bull', t };
+    }
+    return { what: 'body', t };
+  }
+  const R = (w / 2) * 0.97;
+  const d = Math.hypot(px - t.x, py - t.y);
+  if (d > R * grow) return null;
+  if (back) return { what: 'back', t };
+  if (d <= (w / 2) * BULL[t.face]) return { what: 'bull', t };
+  return { what: 'body', t };
+}
+
 function assistNow() {
   return game.round === LAST_ROUND ? 0 : game.assist;
 }
 
-// What a shot at (px, py) hits, given the booth's poses and the water's sway at that moment.
-// Front to back: front water, pop-ups, middle water, ducks, grass, small targets, backdrop.
-function resolve(px, py, snap) {
-  const grow = 1 + 0.15 * assistNow();
-  // The curtains at the sides cover the booth.
-  const cw = curtainRect();
-  if (curtainAt((px - cw.x) / cw.w, (py - cw.y) / cw.h) || curtainAt((SW - cw.x - px) / cw.w, (py - cw.y) / cw.h)) {
-    return { what: 'miss', on: 'curtain' };
-  }
-  if (py >= contourY('water1', WATER_SCALE, L.frontY, px, snap.front)) return { what: 'water' };
-  const poses = snap.poses;
-  for (const p of poses) if (p.t.kind === 'pop') {
-    const r = hitTarget(p, px, py, grow);
-    if (r) return r;
-  }
-  if (py >= contourY('water2', WATER_SCALE, L.midY, px, snap.mid)) return { what: 'water' };
-  for (const p of poses) if (p.t.kind === 'duck' || p.t.kind === 'gold') {
-    const r = hitDuck(p, px, py, grow);
-    if (r) return r;
-  }
-  if (py >= contourY('grass1', GRASS_SCALE, L.grassY, px, 0)) return { what: 'miss', on: 'grass' };
-  for (const p of poses) if (p.t.kind === 'tin') {
-    const r = hitTarget(p, px, py, grow);
-    if (r) return r;
-  }
-  return { what: 'miss', on: 'backdrop' };
+// A hit's multiplier: the bullseye's ×2, then the higher of the bonus (by the lane's depth) and the
+// frenzy's ×2, then closing time's ×2; never more than ×8.
+function multiplier(t, bull) {
+  const lane = L.lanes[t.lane];
+  let m = bull ? 2 : 1;
+  const bonusM = game.bonus ? (t.kind === 'gold' ? 3 : lane.pips) : 1;
+  const frenzyM = game.frenzy > 0 ? 2 : 1;
+  m *= Math.max(bonusM, frenzyM);
+  if (game.cfg && game.cfg.double) m *= 2;
+  return Math.min(MULT_CAP, m);
 }
 
-function hitTarget(p, px, py, grow) {
-  const t = p.t;
-  const [w] = dims(t);
-  const R = (w / 2) * 0.97;
-  const dx = px - p.x;
-  const dy = py - p.y;
-  const d = Math.hypot(dx, dy);
-  // The stick first: it wins even where the assist grows the body over it.
-  const sw = stickWidth(t);
-  if (Math.abs(dx) <= sw / 2 && py > p.y + R && py < stickBottom(t)) return { what: 'stick', p };
-  if (d > R * grow) return null;
-  if (p.back) return { what: 'back', p };
-  if (d <= (w / 2) * BULL[t.face]) return { what: 'bull', p };
-  return { what: 'body', p };
-}
-
-function hitDuck(p, px, py, grow) {
-  const t = p.t;
-  const [w, h] = dims(t);
-  const flip = t.dir < 0;
-  let u = (px - p.x) / (w * grow) + 0.5;
-  const v = (py - p.y) / (h * grow) + 0.5;
-  if (flip) u = 1 - u;
-  if (!maskAt('duck_yellow', u, v)) return null;
-  if (p.back) return { what: 'back', p };
-  if (t.bull) {
-    let bu = (px - p.x) / w + 0.5;
-    if (flip) bu = 1 - bu;
-    const bv = (py - p.y) / h + 0.5;
-    if (Math.hypot((bu - DUCK_BULL.u) * w, (bv - DUCK_BULL.v) * h) <= DUCK_BULL.r * w) return { what: 'bull', p };
-  }
-  return { what: 'body', p };
-}
-
-// The booth's state a little while back, for a tap's shot; the newest snapshot when no time is given.
-const history = [];
-function snapshot() {
-  return {
-    T: game.T,
-    poses: targets.filter((t) => t.state === 'live').map(pose),
-    mid: waveOffset('mid'),
-    front: waveOffset('front'),
-  };
-}
-function snapshotAt(T) {
-  for (let i = history.length - 1; i >= 0; i--) if (history[i].T <= T) return history[i];
-  return history[0] || snapshot();
-}
-
-function canFire() {
-  if (game.paused || game.resumeT > 0 || game.mode !== 'play') return false;
-  if (game.T - game.lastFire < 0.1) return false;
-  return game.cfg.free || game.shells > 0;
-}
-
-// Fire at (x, y), judged against the booth as it was at time `at` (now when not given).
-function fire(x = cross.x, y = cross.y, at = null) {
-  if (!canFire()) return null;
-  game.lastFire = game.T;
-  const cfg = game.cfg;
-  const free = !!cfg.free;
-  if (!free) game.shells--;
-  game.kick = 1;
-  sfx('shot', { rate: rand(0.95, 1.05) });
-  const snap = at == null ? snapshot() : snapshotAt(at);
-  const r = resolve(x, y, snap);
-  // The target may have been knocked since the snapshot by another shot: then it's a miss.
-  if (r.p && r.p.t.state !== 'live') r.what = 'gone';
-  apply(r, x, y);
-  checkRound();
+// Where a ball lands, it's judged; the last result is kept for the tests.
+function land(b) {
+  const r = landOn(b);
+  game.lastLand = { what: r.what, kind: r.t ? r.t.kind : null, lane: r.t ? r.t.lane : r.lane ?? null, id: r.t ? r.t.id : null };
   return r;
 }
-
-function apply(r, x, y) {
-  const cfg = game.cfg;
-  const free = !!cfg.free;
-  const mult = (game.bonus ? 2 : 1) * (cfg.double ? 2 : 1);
-  if (r.what === 'water') {
-    splash(x, y);
-    sfx('splash', { gain: 0.5, rate: rand(1.1, 1.3) });
-    missed();
-    return;
+function landOn(b) {
+  const r = resolve(b.x1, b.y1);
+  const free = b.free;
+  splatSound(r.what);
+  if (r.what === 'curtain' || r.what === 'strip' || r.what === 'wall') {
+    addPaint(b.x1, b.y1, r.what === 'strip' ? r.lane : -1, b.colour, b.lane);
+    if (!free) missed();
+    return r;
   }
-  if (r.what === 'miss' || r.what === 'gone') {
-    if (r.on === 'backdrop') holes.push({ x, y, t: 0 });
-    if (holes.length > 24) holes.shift();
-    splinters(x, y, '#8a5a2b', 4);
-    sfx('miss', { rate: rand(0.9, 1.1) });
-    missed();
-    return;
-  }
-  const t = r.p.t;
-  const K = KINDS[t.kind];
-  if (r.what === 'stick') {
-    t.state = 'snapped';
-    t.anim = 0;
-    t.vy = -60;
-    t.rot = 0;
-    t.snapY = y;
-    const pts = K.points * 3 * mult;
-    gain(pts, K.pips + 1, t, x, y);
-    splinters(x, y, '#c98a4b', 10);
-    game.shake = 0.15;
-    sfx('snap', { rate: rand(0.95, 1.08) });
-    hitAssist();
-    return;
-  }
+  const t = r.t;
+  addSplatTo(t, b.x1, b.y1, b.colour);
   if (r.what === 'back') {
-    t.holes.push({ dx: x - t.x, dy: y - t.y });
-    sfx('thud', { rate: rand(0.9, 1.1) });
-    splinters(x, y, '#9fb8ba', 4);
-    popup(x, y - 16, 'back!', '#d8e6e7');
-    missed();
-    return;
+    sfx('hit', { rate: 0.7, gain: 0.6 });
+    popup(b.x1, b.y1 - 16, 'back!', '#d8e6e7');
+    if (!free) missed();
+    return r;
   }
   t.state = 'knocked';
   t.anim = 0;
-  t.holes.push({ dx: x - t.x, dy: y - t.y });
   const bull = r.what === 'bull';
-  const pts = K.points * (bull ? 2 : 1) * mult;
-  gain(pts, K.pips, t, x, y);
-  sfx(K.sound, { rate: rand(0.92, 1.08) });
+  const lane = L.lanes[t.lane];
+  const pips = t.kind === 'gold' ? 2 : lane.pips;
+  const base = t.kind === 'gold' ? 100 : 10 * pips;
+  const pts = base * multiplier(t, bull);
+  game.score += pts;
+  game.roundScore += pts;
+  popup(b.x1, b.y1 - 18, `+${pts}`, '#fff');
+  sfx(lane.pips === 3 ? 'tin' : 'hit', { rate: rand(0.92, 1.08) });
   if (bull) {
     sfx('ding');
-    fx.push({ type: 'ring', x, y, t: 0 });
-    if (!free && !game.bonus) refund(x, y, 1, 0.12);
+    fx.push({ type: 'ring', x: b.x1, y: b.y1, t: 0 });
+    game.hopper = Math.min(HOPPER, game.hopper + 1);
   }
-  if (t.kind === 'gold' && !free && !game.bonus) refund(x, y, 2, 0.3);
-  hitAssist();
+  if (t.kind === 'gold') game.hopper = HOPPER;
+  if (!free) {
+    const was = game.pips;
+    game.pips += pips;
+    if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
+      game.bonus = true;
+      sfx('quota');
+      if (game.frenzy <= 0) banner('Bonus!', '', 1.4, true);
+    }
+    hitAssist();
+  }
+  return r;
 }
 
-function gain(points, pips, t, x, y) {
-  game.score += points;
-  if (!game.cfg.free) game.pips += pips;
-  popup(x, y - 18, `+${points}`, '#fff');
-}
-
-function refund(x, y, n, delay) {
-  for (let i = 0; i < n; i++) {
-    if (game.shells >= TRAY_MAX) break;
-    game.shells++;
-    fx.push({ type: 'shell', x, y, t: -i * 0.15, slot: game.shells - 1 });
-  }
-  setTimeout(() => sfx('shell'), delay * 1000 + 380);
+function splatSound(what) {
+  if (what === 'body' || what === 'bull' || what === 'back') sfx(rng() < 0.5 ? 'splat' : 'splat2', { rate: rand(0.9, 1.15) });
+  else sfx('plip', { rate: rand(0.85, 1.15) });
 }
 
 function missed() {
-  if (game.cfg.free) return;
   game.missRow++;
   if (game.missRow >= 2) {
     game.assist = Math.min(1, game.assist + 0.2);
@@ -745,56 +750,97 @@ function missed() {
   }
 }
 function hitAssist() {
-  if (game.cfg.free) return;
   game.missRow = 0;
   game.assist = Math.max(0, game.assist - 0.05);
 }
 
+// ---------- Paint ----------
+
+const splatSize = (laneIdx) => 30 + 26 * L.lanes[laneIdx].s;
+// A splat on the scenery: `layer` is the lane whose strip it's on, or -1 for the wall.
+function addPaint(x, y, layer, colour, aimedLane) {
+  const sz = splatSize(aimedLane);
+  const shape = Math.floor(rng() * 36);
+  const px = sz * k * dpr;
+  paint.push({ x, y, layer, size: sz, rot: rand(0, Math.PI * 2), born: game.T, colour, fresh: tinted(shape, colour, px), dying: -1 });
+  const live = paint.filter((p) => p.dying < 0);
+  if (live.length > PAINT_KEEP) live[0].dying = game.T;
+}
+function addSplatTo(t, x, y, colour) {
+  const sz = splatSize(t.lane) * 0.7;
+  const shape = Math.floor(rng() * 36);
+  t.splats.push({ dx: x - t.x, dy: y - t.y, size: sz, rot: rand(0, Math.PI * 2), colour, img: tinted(shape, colour, sz * k * dpr) });
+}
+// Fresh for 1 s, then it settles to 80% over 0.4 s, keeping its colour; dissolving ones fade out.
+// Scenery paint is drawn behind every target in front of it, so it never hides one.
+const PAINT_SETTLED = 0.8;
+function paintAlpha(p) {
+  const age = game.T - p.born;
+  let a = age < 1 ? 1 : age < 1.4 ? 1 - ((age - 1) / 0.4) * (1 - PAINT_SETTLED) : PAINT_SETTLED;
+  if (p.dying >= 0) a *= Math.max(0, 1 - (game.T - p.dying) / 0.5);
+  return a;
+}
+
 // ---------- Effects ----------
 
-function popup(x, y, text, color, delay = 0) {
-  fx.push({ type: 'text', x, y, text, color, t: -delay });
-}
-function splinters(x, y, color, n) {
-  for (let i = 0; i < n; i++) {
-    const a = rand(0, Math.PI * 2);
-    const s = rand(40, 140);
-    fx.push({ type: 'bit', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 60, color, t: 0, r: rand(1.5, 3) });
-  }
-}
-function splash(x, y) {
-  for (let i = 0; i < 9; i++) {
-    const a = rand(-Math.PI * 0.9, -Math.PI * 0.1);
-    const s = rand(60, 170);
-    fx.push({ type: 'bit', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, color: '#e8f6ff', t: 0, r: rand(2, 4) });
-  }
+function popup(x, y, text, color) {
+  fx.push({ type: 'text', x, y, text, color, t: 0 });
 }
 
 // ---------- The simulation ----------
 
-function waveOffset(which) {
-  const amp = game.cfg && game.cfg.wind ? 2 : 1;
-  return which === 'mid' ? 14 * amp * Math.sin(game.T * 0.9) : -16 * amp * Math.sin(game.T * 0.75 + 1);
+function spawnStep(dt, cfg) {
+  const sp = game.spawn;
+  const fr = game.frenzy > 0;
+  for (let i = 0; i < L.n; i++) {
+    sp.movers[i] -= dt * (fr ? FRENZY_SPEED : 1);
+    if (sp.movers[i] <= 0) {
+      launchMover(i, cfg);
+      sp.movers[i] = rand(2.4, 4) * (55 / laneSpeed(cfg, i)) * 0.9;
+    }
+  }
+  if (cfg.pops) {
+    sp.pop -= dt;
+    if (sp.pop <= 0) {
+      launchPop(Math.floor(rng() * L.n));
+      sp.pop = rand(2.4, 3.8);
+    }
+  }
+  if (cfg.drops) {
+    sp.drop -= dt;
+    if (sp.drop <= 0) {
+      launchDrop(pick(dropLanes()));
+      sp.drop = rand(3, 4.6);
+    }
+  }
+  for (let g = 0; g < sp.gold.length; g++) {
+    if (sp.gold[g] > 0 && game.elapsed >= sp.gold[g]) {
+      const waters = L.lanes.filter((l) => l.kind === 'water').map((l) => l.i);
+      launchMover(pick(waters), cfg, true);
+      sp.gold[g] = -1;
+    }
+  }
+  if (fr) {
+    // Targets spring up across every lane.
+    sp.frenzy -= dt;
+    if (sp.frenzy <= 0) {
+      if (rng() < 0.55) launchPop(Math.floor(rng() * L.n), 1.4);
+      else launchDrop(pick(dropLanes()), 1.4);
+      sp.frenzy = rand(0.22, 0.4);
+    }
+  }
 }
 
-function attractStep() {
-  // Behind the start and over cards the booth keeps going: ducks and small targets cross.
-  const live = targets.filter((t) => t.state === 'live');
-  if (live.filter((t) => t.kind === 'duck').length < 4 && (game.attractDuck ?? 0) <= game.T) {
-    const saved = game.cfg;
-    game.cfg = { duckV: 55, tinV: 90 };
-    const t = launch({ kind: 'duck', face: rng() < 0.3 ? 'duck_target_yellow' : null });
-    t.turn = false;
-    game.cfg = saved;
-    game.attractDuck = game.T + rand(1.6, 2.6);
-  }
-  if (live.filter((t) => t.kind === 'tin').length < 2 && (game.attractTin ?? 0) <= game.T) {
-    const saved = game.cfg;
-    game.cfg = { duckV: 55, tinV: 90 };
-    const t = launch({ kind: 'tin' });
-    t.turn = false;
-    game.cfg = saved;
-    game.attractTin = game.T + rand(3, 5);
+function attractStep(dt) {
+  const cfg = ROUNDS[1];
+  if (!game.spawn.movers || game.spawn.movers.length !== L.n) game.spawn.movers = L.lanes.map(() => rand(0, 2));
+  for (let i = 0; i < L.n; i++) {
+    game.spawn.movers[i] -= dt;
+    if (game.spawn.movers[i] <= 0) {
+      const t = launchMover(i, cfg);
+      t.turn = false;
+      game.spawn.movers[i] = rand(3, 5.5);
+    }
   }
 }
 
@@ -805,90 +851,91 @@ function update(dt) {
     game.banner.t += dt;
     if (game.banner.t > game.banner.life) game.banner = null;
   }
-  game.shake = Math.max(0, game.shake - dt);
   game.kick = Math.max(0, game.kick - dt * 6);
-  for (const d of decor) d.x = d.x + d.v * dt > SW + 80 ? -80 : d.x + d.v * dt;
+  for (const d of decor) if (d.v) d.x = d.x + d.v * dt > SW + 80 ? -80 : d.x + d.v * dt;
 
   if (game.mode === 'intro' && game.modeT >= 1.2) {
     game.mode = 'play';
     game.modeT = 0;
   }
-  const moving = game.mode === 'play' || game.mode === 'won' || game.mode === 'lost' || game.attract;
-  if (game.attract && (game.mode === 'start' || game.mode === 'over')) attractStep();
-  if (moving) {
-    const step = dt * game.speedMul;
-    game.clock += step;
-    if (game.mode === 'play') {
-      while (game.queue.length && game.queue[0].at <= game.clock) launch(game.queue.shift());
-      if (game.cfg && game.cfg.free && game.clock < game.cfg.duration - 2 && (game.flockIn ?? 0) <= game.clock) {
-        const t = makeTarget('duck', { speed: game.cfg.flockV, dir: rng() < 0.5 ? 1 : -1 });
-        t.face = pick(['duck_yellow', 'duck_brown', 'duck_white', 'duck_target_yellow', 'duck_target_brown']);
-        t.bull = t.face.startsWith('duck_target');
-        const [w] = dims(t);
-        t.x = t.dir > 0 ? -w / 2 : SW + w / 2;
-        game.flockIn = game.clock + rand(0.35, 0.6);
-      }
+  const cfg = game.cfg;
+  if (game.mode === 'play') {
+    if (game.frenzy > 0) {
+      game.frenzy -= dt;
+      if (game.frenzy <= 0) endFrenzy();
+    } else {
+      game.time -= dt;
+      game.elapsed += dt;
+      if (game.frenzyAt && !game.frenzyDone && game.elapsed >= game.frenzyAt) startFrenzy();
     }
-    for (const t of targets) {
-      if (t.kind === 'pop') {
-        if (t.state === 'live') {
-          t.popT += step;
-          const up = t.upFor;
-          let h; // 0 down, 1 up
-          if (t.popT < 0.35) h = t.popT / 0.35;
-          else if (t.popT < 0.35 + up) h = 1;
-          else if (t.popT < 0.7 + up) h = 1 - (t.popT - 0.35 - up) / 0.35;
-          else {
-            h = 0;
-            t.state = 'gone';
-            t.anim = 99;
-          }
-          const e = h * h * (3 - 2 * h);
-          const wasDown = t.y > L.frontY + 20;
-          t.y = L.popDown + (L.popUp - L.popDown) * e;
-          if (wasDown && t.y <= L.frontY + 20 && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.35, rate: rand(1.2, 1.4) });
-        }
-      } else if (t.state === 'live') {
-        t.x += t.dir * t.speed * step;
-        const bob = (game.cfg && game.cfg.wind ? 2 : 1) * 4;
-        if (t.kind !== 'tin') t.y = L.duckY + bob * Math.sin(game.T * 2.2 + t.phase);
-        else t.y = L.farY;
-        const [w] = dims(t);
-        if ((t.dir > 0 && t.x > SW + w / 2 + 8) || (t.dir < 0 && t.x < -w / 2 - 8)) {
-          t.state = 'gone';
-          t.anim = 99;
-        }
+    spawnStep(dt, cfg);
+    // The hopper refills one ball every 0.6 s.
+    if (game.hopper < HOPPER) {
+      game.refillT += dt;
+      while (game.refillT >= REFILL && game.hopper < HOPPER) {
+        game.refillT -= REFILL;
+        game.hopper++;
       }
-      if (t.turn) t.turnT += step;
-      if (t.state === 'knocked') t.anim += dt;
-      if (t.state === 'snapped') {
-        t.anim += dt;
-        t.vy += 900 * dt;
-        t.y += t.vy * dt;
-        t.rot += dt * 3 * t.dir;
-      }
+    } else game.refillT = 0;
+  } else if (game.attract && (game.mode === 'start' || game.mode === 'over')) attractStep(dt);
+
+  const speed = game.frenzy > 0 ? FRENZY_SPEED : 1;
+  const moving = game.mode !== 'intro' || game.attract;
+  for (const t of targets) {
+    if (t.turn) t.turnT += dt * speed;
+    if (t.state === 'knocked') {
+      t.anim += dt;
+      continue;
     }
-    targets = targets.filter((t) => t.anim < 1.5 && t.y < SH + 200);
-  }
-  for (const f of fx) {
-    f.t += dt;
-    if (f.type === 'bit') {
-      f.vy += 500 * dt;
-      f.x += f.vx * dt;
-      f.y += f.vy * dt;
+    if (t.state !== 'live' || !moving) continue;
+    const lane = L.lanes[t.lane];
+    if (t.kind === 'pop' || t.kind === 'drop') {
+      t.popT += dt * speed;
+      const up = t.upFor;
+      let h;
+      if (t.popT < 0.35) h = t.popT / 0.35;
+      else if (t.popT < 0.35 + up) h = 1;
+      else if (t.popT < 0.7 + up) h = 1 - (t.popT - 0.35 - up) / 0.35;
+      else {
+        h = 0;
+        t.state = 'gone';
+      }
+      const e = h * h * (3 - 2 * h);
+      const from = t.kind === 'pop' ? hiddenY(t) : dropTop(t);
+      const wasHidden = t.y > lane.strip;
+      t.y = from + (lane.line - from) * e;
+      if (t.kind === 'pop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
+    } else {
+      t.x += t.dir * t.speed * dt * speed;
+      t.y = lane.line + (t.isDuck ? 2.5 * Math.sin(game.T * 2.4 + t.phase) : 0);
+      const [w] = dims(t);
+      if ((t.dir > 0 && t.x > SW + w / 2 + 8) || (t.dir < 0 && t.x < -w / 2 - 8)) t.state = 'gone';
     }
   }
-  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : f.type === 'shell' ? 0.55 : 0.7));
-  for (const h of holes) h.t += dt;
-  holes = holes.filter((h) => h.t < 5);
+  targets = targets.filter((t) => t.state === 'live' || (t.state === 'knocked' && t.anim < 0.9));
 
-  history.push(snapshot());
-  while (history.length && history[0].T < game.T - 0.6) history.shift();
+  for (const b of balls) {
+    b.t += dt;
+    if (b.t >= b.dur && !b.landed) {
+      b.landed = true;
+      land(b);
+    }
+  }
+  balls = balls.filter((b) => !b.landed);
+  for (const f of fx) f.t += dt;
+  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : 0.7));
+  paint = paint.filter((p) => p.dying < 0 || game.T - p.dying < 0.5);
 
-  if (game.mode === 'play') checkRound();
+  if (game.mode === 'play' && game.time <= 0) {
+    game.time = 0;
+    roundOver();
+  }
   if (game.mode === 'won' && game.modeT >= (game.round === LAST_ROUND ? 2 : 1.6)) {
-    if (game.round === LAST_ROUND) finishRun();
-    else startRound(game.round + 1);
+    if (game.round === LAST_ROUND) {
+      game.ended = 'closing';
+      sfx('finale');
+      gameOver();
+    } else startRound(game.round + 1);
   }
   if (game.mode === 'lost' && game.modeT >= 1.5) gameOver();
   updateKeys(dt);
@@ -896,128 +943,113 @@ function update(dt) {
 
 // ---------- Drawing ----------
 
-// The side curtains hang from the valance to the counter, tied back; most of each is off the stage.
-// Only the curtain's top swag (CURTAIN_PART of the sprite) is drawn, stretched to that height.
 const CURTAIN_PART = 0.5;
 function curtainRect() {
   const [w] = size('curtain');
-  const ch = L.C - L.top - 30;
-  const cw = Math.min(w * 0.7, SW * 0.2);
-  return { x: -cw * 0.45, y: L.top + 10, w: cw, h: ch };
+  const ch = L.C - L.top - 20;
+  const cw = Math.min(w * 0.7, SW * (orient === 'landscape' ? 0.1 : 0.18));
+  return { x: -cw * 0.5, y: L.top + 10, w: cw, h: ch };
 }
 function curtainAt(u, v) {
   return maskAt('curtain', u, v * CURTAIN_PART);
 }
 
-// A row of water or grass tiles; only their top part is drawn (their bottom edge has an outline),
-// and below it their colour carries on down to `bottom`.
-function tileRow(name, scale, x0, top, bottom) {
-  const [w, h] = size(name);
-  const f = FRAMES[name];
-  const part = 0.6;
-  const tw = w * scale;
-  const th = h * scale * part;
-  ctx.fillStyle = name.startsWith('water') ? '#3ea3df' : '#3c9f45';
-  ctx.fillRect(-4, top + th - 1, SW + 8, Math.max(0, bottom - top - th + 1));
-  let x = (((x0 % tw) + tw) % tw) - tw;
-  for (; x < SW + tw; x += tw) ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * part, x, top, tw + 0.5, th);
-}
-
-function drawBackdrop() {
-  const name = bgName();
+function drawWall() {
+  const name = 'bg_' + (game.cfg ? game.cfg.bg : 'wood');
   const ts = 128;
   for (let y = L.top; y < L.C; y += ts) for (let x = 0; x < SW; x += ts) sprite(name, x, y, ts + 0.5, ts + 0.5);
   if (game.cfg && game.cfg.shade) {
-    // A red wall a shade darker, so the orange curtains stand out from it.
     ctx.fillStyle = 'rgba(70, 14, 0, 0.3)';
     ctx.fillRect(0, L.top, SW, L.C - L.top);
   }
   if (game.cfg && game.cfg.dusk) {
-    ctx.fillStyle = 'rgba(60, 30, 80, 0.28)';
+    ctx.fillStyle = 'rgba(40, 20, 70, 0.3)';
     ctx.fillRect(0, L.top, SW, L.C - L.top);
   }
-  for (const d of decor) if (d.cloud) sprite(d.name, d.x, d.y, d.w, d.h);
-  for (const h of holes) {
-    ctx.globalAlpha = Math.min(1, 5 - h.t);
-    sprite('shot_hole', h.x - 5, h.y - 5, 10, 10);
-  }
-  ctx.globalAlpha = 1;
-  for (const d of decor) if (!d.cloud) sprite(d.name, d.x, d.y, d.w, d.h);
+  for (const d of decor) sprite(d.name, d.x, d.y, d.w, d.h);
 }
 
-function drawStick(t) {
-  const sw = stickWidth(t);
-  const bottom = stickBottom(t);
-  const name = t.cracked ? 'stick_wood_fixed' : 'stick_wood';
-  if (t.state === 'snapped') {
-    // The stump stays behind.
-    const y0 = t.snapY;
-    sprite('stick_wood_broken', t.x - sw / 2, y0 - 4, sw, bottom - y0 + 4);
-    return;
+function drawStrip(lane) {
+  const name = stripName(lane);
+  const [w, h] = size(name);
+  const f = FRAMES[name];
+  const sc = stripScale(lane);
+  const tw = w * sc;
+  const part = 0.6;
+  const th = h * sc * part;
+  ctx.fillStyle = lane.kind === 'water' ? '#3ea3df' : '#3c9f45';
+  ctx.fillRect(-4, lane.strip + th - 1, SW + 8, Math.max(0, L.C - lane.strip - th + 1));
+  const off = lane.i * 37;
+  let x = (((off % tw) + tw) % tw) - tw;
+  for (; x < SW + tw; x += tw) ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * part, x, lane.strip, tw + 0.5, th);
+}
+
+function drawPaint(layer) {
+  for (const p of paint) {
+    if (p.layer !== layer) continue;
+    const a = paintAlpha(p);
+    if (a <= 0) continue;
+    const age = game.T - p.born;
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    const s = p.size * (age < 0.12 ? 0.6 + 0.4 * (age / 0.12) : 1);
+    ctx.globalAlpha = a;
+    ctx.drawImage(p.fresh, -s / 2, -s / 2, s, s);
+    ctx.restore();
   }
-  sprite(name, t.x - sw / 2, t.y, sw, bottom - t.y);
+  ctx.globalAlpha = 1;
 }
 
 function drawTarget(t) {
   const [w, h] = dims(t);
-  if (t.hasStick && t.state !== 'knocked') drawStick(t);
+  const lane = L.lanes[t.lane];
   const ts = turnState(t);
+  if (t.kind === 'drop') {
+    // The rope, from the valance down to the target.
+    ctx.strokeStyle = '#6b4a2a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(t.x, L.top + 30);
+    ctx.lineTo(t.x, t.y - h / 2 + 2);
+    ctx.stroke();
+  } else if (!t.isDuck && t.state === 'live') {
+    // The stick under a target, down behind its lane's strip.
+    const sw = 30 * lane.s * 0.8;
+    sprite('stick_wood', t.x - sw / 2, t.y, sw, Math.max(4, lane.strip + 30 - t.y));
+  }
   ctx.save();
   ctx.translate(t.x, t.y);
+  let fade = 1;
   if (t.state === 'knocked') {
     // Knocked flat: it tips back over its base.
     const p = Math.min(1, t.anim / 0.25);
     ctx.translate(0, h * 0.5);
     ctx.scale(1, Math.max(0.02, 1 - p));
     ctx.translate(0, -h * 0.5);
-    if (t.anim > 0.6) ctx.globalAlpha = Math.max(0, 1 - (t.anim - 0.6) / 0.5);
+    if (t.anim > 0.5) fade = Math.max(0, 1 - (t.anim - 0.5) / 0.4);
   }
-  if (t.state === 'snapped') ctx.rotate(t.rot);
+  ctx.globalAlpha = fade;
   ctx.scale(ts.sx, 1);
-  const isDuck = t.kind === 'duck' || t.kind === 'gold';
   let name = t.face;
-  if (ts.showBack) name = isDuck ? 'duck_back' : 'target_back';
-  sprite(name, -w / 2, -h / 2, w, h, isDuck && t.dir < 0);
+  if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
+  sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
   if (t.kind === 'gold' && !ts.showBack) {
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha *= 0.25 + 0.2 * Math.sin(game.T * 8);
+    ctx.globalAlpha = fade * (0.25 + 0.2 * Math.sin(game.T * 8));
     sprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = fade;
   }
-  if (!ts.showBack) for (const hole of t.holes) sprite(t.kind === 'tin' ? 'shot_hole_tin' : 'shot_hole', hole.dx - 4, hole.dy - 4, 8, 8);
+  for (const s of t.splats) {
+    ctx.save();
+    ctx.translate(s.dx, s.dy);
+    ctx.rotate(s.rot);
+    ctx.drawImage(s.img, -s.size / 2, -s.size / 2, s.size, s.size);
+    ctx.restore();
+  }
   ctx.restore();
-  if (t.kind === 'gold' && t.state === 'live') {
-    // A few twinkles around the gold duck.
-    for (let i = 0; i < 3; i++) {
-      const a = game.T * 2 + i * 2.1;
-      twinkle(t.x + Math.cos(a) * w * 0.55, t.y + Math.sin(a * 1.3) * h * 0.45, 3 + 2 * Math.sin(game.T * 6 + i));
-    }
-  }
-  if (t.hint && t.state === 'live' && !ts.showBack) {
-    // Round 2's first targets show their reward: the bullseye pulses gold, a shell above.
-    const r = (w / 2) * BULL[t.face];
-    ctx.strokeStyle = `rgba(255, 210, 63, ${0.6 + 0.4 * Math.sin(game.T * 6)})`;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(t.x, t.y, r + 2 + Math.sin(game.T * 6), 0, Math.PI * 2);
-    ctx.stroke();
-    sprite('shell', t.x - 5, t.y - h / 2 - 26, 10, 20);
-  }
-}
-
-function twinkle(x, y, r) {
-  ctx.fillStyle = '#fff6c2';
-  ctx.beginPath();
-  ctx.moveTo(x, y - r * 2);
-  ctx.lineTo(x + r * 0.5, y - r * 0.5);
-  ctx.lineTo(x + r * 2, y);
-  ctx.lineTo(x + r * 0.5, y + r * 0.5);
-  ctx.lineTo(x, y + r * 2);
-  ctx.lineTo(x - r * 0.5, y + r * 0.5);
-  ctx.lineTo(x - r * 2, y);
-  ctx.lineTo(x - r * 0.5, y - r * 0.5);
-  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 function drawCurtains() {
@@ -1032,9 +1064,8 @@ function drawCurtains() {
     ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * CURTAIN_PART, c.x, c.y, c.w, c.h);
     ctx.restore();
   }
-  // The valance across the top.
   const [vw, vh] = size('curtain_straight');
-  const s = 0.95;
+  const s = orient === 'landscape' ? 0.75 : 0.95;
   for (let x = -10; x < SW + 10; x += vw * s - 1) sprite('curtain_straight', x, L.top - 6, vw * s, vh * s);
   if (L.top > 0) {
     ctx.fillStyle = '#e86a17';
@@ -1042,16 +1073,7 @@ function drawCurtains() {
   }
 }
 
-const pipR = 6.5;
-function pipX(i, n) {
-  const gap = Math.min(16, (SW * 0.58) / n);
-  return 24 + i * gap + pipR;
-}
-const trayX = (i) => 24 + i * 22 + 8;
-const trayY = () => L.C + 70;
-
 function drawCounter() {
-  // The counter: a wooden bar across the bottom.
   const ts = 128;
   ctx.save();
   ctx.beginPath();
@@ -1067,40 +1089,123 @@ function drawCounter() {
   ctx.fillRect(-4, L.C - 4, SW + 8, 3);
 }
 
-function hudVisible() {
-  return game.mode !== 'start' && game.mode !== 'over';
+const hudVisible = () => game.mode !== 'start';
+
+// The HUD's places on the counter, in units.
+function hudLayout() {
+  const land = orient === 'landscape';
+  return {
+    timer: { x: 20, y: L.C + 12, w: SW - 40, h: 8 },
+    label: { x: 22, y: L.C + 32 },
+    pips: { x: 22, y: L.C + (land ? 52 : 56), r: land ? 5.5 : 6.5 },
+    hopper: { x: 22, y: L.C + (land ? 80 : 92), r: land ? 7 : 8.5 },
+    gauge: { x: L.gunX + (land ? 52 : 66), y: L.gunY - 8, step: land ? 11 : 13 },
+  };
 }
 
 function drawHud() {
-  if (!hudVisible() && game.mode !== 'over') return;
+  if (!hudVisible()) return;
   const cfg = game.cfg;
-  // The score, on the valance.
-  label(game.score.toLocaleString('en-US'), SW / 2, L.top + 34, 30, 'center');
+  label(game.score.toLocaleString('en-US'), SW / 2, L.top + (orient === 'landscape' ? 26 : 34), orient === 'landscape' ? 24 : 30, 'center');
   if (!cfg) return;
-  label(`Round ${game.round} · ${cfg.name}`, 24, L.C + 24, 15, 'left', '#fff4dc');
-  if (!cfg.free) {
-    const n = cfg.quota;
-    const flash = game.mode === 'lost' && Math.floor(game.modeT * 6) % 2 === 0;
-    for (let i = 0; i < n; i++) {
-      const x = pipX(i, n);
-      const y = L.C + 46;
+  const H = hudLayout();
+  // The round's timer: a bar that drains; in a frenzy it stops and turns pink.
+  const frac = clamp(game.time / ROUND_TIME, 0, 1);
+  ctx.fillStyle = 'rgba(255, 244, 220, 0.2)';
+  roundRect(H.timer.x, H.timer.y, H.timer.w, H.timer.h, 4);
+  ctx.fill();
+  ctx.fillStyle = game.frenzy > 0 ? '#ff5fa2' : frac < 0.2 ? '#e8452c' : '#ffd23f';
+  if (frac > 0) {
+    roundRect(H.timer.x, H.timer.y, Math.max(8, H.timer.w * frac), H.timer.h, 4);
+    ctx.fill();
+  }
+  label(`Round ${game.round} · ${cfg.name}`, H.label.x, H.label.y, 14, 'left', '#fff4dc');
+  // The quota: a bar that fills with every pip, and the count beside it; gold in the bonus, the
+  // missing part flashing red when the time runs out.
+  const flash = game.mode === 'lost' && Math.floor(game.modeT * 6) % 2 === 0;
+  // It stays left of the gun: the count sits inside it.
+  const bw = Math.min(SW * 0.42, L.gunX - 52 - H.pips.x);
+  const bh = H.pips.r * 2.4;
+  const by = H.pips.y - bh / 2;
+  ctx.fillStyle = flash ? '#d0342c' : 'rgba(255, 244, 220, 0.18)';
+  roundRect(H.pips.x, by, bw, bh, bh / 2);
+  ctx.fill();
+  const f = clamp(game.pips / cfg.quota, 0, 1);
+  if (f > 0) {
+    ctx.fillStyle = game.bonus ? '#ffd23f' : '#e86a17';
+    roundRect(H.pips.x, by, Math.max(bh, bw * f), bh, bh / 2);
+    ctx.fill();
+  }
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 244, 220, 0.6)';
+  roundRect(H.pips.x, by, bw, bh, bh / 2);
+  ctx.stroke();
+  label(`${Math.min(game.pips, 999)} / ${cfg.quota}`, H.pips.x + bw / 2, H.pips.y + 1, 12, 'center', '#fff');
+  // The hopper: the paintballs ready to fire, in the colours they'll be.
+  for (let i = 0; i < HOPPER; i++) {
+    const x = H.hopper.x + H.hopper.r + i * H.hopper.r * 2.6;
+    ctx.beginPath();
+    ctx.arc(x, H.hopper.y, H.hopper.r, 0, Math.PI * 2);
+    const ready = game.frenzy > 0 || i < game.hopper;
+    ctx.fillStyle = ready ? PALETTE[(game.colour + i) % PALETTE.length] : 'rgba(255, 244, 220, 0.15)';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255, 244, 220, 0.7)';
+    ctx.stroke();
+    if (ready) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
       ctx.beginPath();
-      ctx.arc(x, y, pipR, 0, Math.PI * 2);
-      const lit = i < game.pips;
-      ctx.fillStyle = lit ? (game.bonus ? '#ffd23f' : '#e86a17') : flash ? '#d0342c' : 'rgba(255, 244, 220, 0.18)';
+      ctx.arc(x - H.hopper.r * 0.3, H.hopper.y - H.hopper.r * 0.3, H.hopper.r * 0.3, 0, Math.PI * 2);
       ctx.fill();
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = lit ? '#fff4dc' : 'rgba(255, 244, 220, 0.6)';
-      ctx.stroke();
     }
   }
-  // The tray of shells.
-  const flying = fx.filter((f) => f.type === 'shell').length;
-  const shown = game.shells - flying;
-  ctx.globalAlpha = cfg.free ? 0.45 : 1;
-  for (let i = 0; i < TRAY_MAX; i++) sprite(i < shown ? 'shell' : 'shell_empty', trayX(i) - 8, trayY() - 16, 16, 32);
-  ctx.globalAlpha = 1;
-  if (cfg.free) label('free shots', trayX(0) - 8, trayY() + 34, 13, 'left', '#ffd23f');
+}
+
+// The gun and its gauge: the barrel points at where the ball will land; the gauge lights the lane.
+function drawGun() {
+  const [w, h] = size('rifle');
+  const s = gunScale();
+  const m = muzzle();
+  ctx.save();
+  ctx.translate(L.gunX, L.gunY + game.kick * 6);
+  ctx.rotate(m.ang - rifleAxis().slant);
+  sprite('rifle', -RIFLE_FOOT[0] * w * s, -RIFLE_FOOT[1] * h * s, w * s, h * s);
+  ctx.restore();
+  if (!hudVisible() || !game.cfg) return;
+  const g = hudLayout().gauge;
+  for (let i = 0; i < L.n; i++) {
+    const y = g.y - (L.n - 1 - i) * g.step;
+    const on = i === aim.lane;
+    ctx.fillStyle = on ? '#ffd23f' : 'rgba(255, 244, 220, 0.28)';
+    roundRect(g.x, y - 4, on ? 22 : 16, 8, 4);
+    ctx.fill();
+  }
+}
+
+function drawBalls() {
+  for (const b of balls) {
+    const p = Math.min(1, b.t / b.dur);
+    const at = (q) => [b.x0 + (b.x1 - b.x0) * q, b.y0 + (b.y1 - b.y0) * q - Math.sin(Math.PI * q) * 18];
+    const r = lerp(7, 3 + 4 * L.lanes[b.lane].s, p);
+    for (let j = 3; j >= 1; j--) {
+      const [tx, ty] = at(Math.max(0, p - j * 0.06));
+      ctx.globalAlpha = (0.18 * (4 - j)) / 3;
+      ctx.fillStyle = b.colour;
+      ctx.beginPath();
+      ctx.arc(tx, ty, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const [x, y] = at(p);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = b.colour;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.beginPath();
+    ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function label(text, x, y, px, align = 'center', color = '#fff') {
@@ -1115,30 +1220,9 @@ function label(text, x, y, px, align = 'center', color = '#fff') {
   ctx.fillText(text, x, y);
 }
 
-function drawRifle() {
-  if (game.mode === 'start') return;
-  const [w, h] = size('rifle');
-  const s = 0.55;
-  const bx = SW - 62;
-  const by = SH + 46 - L.bottom * 0;
-  const ang = clamp(Math.atan2(cross.x - bx, by - cross.y), -0.45, 0.25);
-  ctx.save();
-  ctx.translate(bx, by + game.kick * 10);
-  ctx.rotate(ang);
-  sprite('rifle', -w * s * 0.42, -h * s, w * s, h * s);
-  ctx.restore();
-}
-
 function drawFx() {
   for (const f of fx) {
-    if (f.t < 0) continue;
-    if (f.type === 'bit') {
-      ctx.globalAlpha = Math.max(0, 1 - f.t / 0.7);
-      ctx.fillStyle = f.color;
-      ctx.beginPath();
-      ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (f.type === 'text') {
+    if (f.type === 'text') {
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, f.t - 0.5) / 0.4);
       label(f.text, f.x, f.y - f.t * 36, 18, 'center', f.color);
     } else if (f.type === 'ring') {
@@ -1148,73 +1232,9 @@ function drawFx() {
       ctx.beginPath();
       ctx.arc(f.x, f.y, 6 + f.t * 60, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (f.type === 'shell') {
-      // The shell arcs back to its slot in the tray.
-      const p = Math.min(1, f.t / 0.55);
-      const tx = trayX(f.slot);
-      const ty = trayY();
-      const x = f.x + (tx - f.x) * p;
-      const y = f.y + (ty - f.y) * p - Math.sin(Math.PI * p) * 80;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(p * Math.PI * 2);
-      sprite('shell', -8, -16, 16, 32);
-      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
-}
-
-function drawBanner() {
-  let text = null;
-  let sub = '';
-  if (game.paused) return;
-  if (game.resumeT > 0) text = 'Ready…';
-  else if (game.banner) ({ text, sub } = game.banner);
-  if (!text) return;
-  const b = game.banner;
-  const p = b ? Math.min(1, b.t / 0.18) : 1;
-  const out = b ? Math.max(0, (b.t - (b.life - 0.25)) / 0.25) : 0;
-  ctx.globalAlpha = 1 - out;
-  if (b && b.small) {
-    const y = (L.frontY + L.C) / 2 + 8;
-    const w = Math.min(SW - 60, 230);
-    ctx.save();
-    ctx.translate(SW / 2, y);
-    ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
-    ctx.fillStyle = '#fff4dc';
-    ctx.strokeStyle = '#b9773a';
-    ctx.lineWidth = 4;
-    roundRect(-w / 2, -19, w, 38, 19);
-    ctx.fill();
-    ctx.stroke();
-    label(text, 0, 1, 21, 'center', '#e86a17');
-    ctx.restore();
-    ctx.globalAlpha = 1;
-    return;
-  }
-  // Between rounds: over the pond between the ducks and the front water.
-  const y = Math.min((L.midY + L.frontY) / 2 + 24, L.frontY - 40);
-  const s = 0.7 + 0.3 * p;
-  ctx.save();
-  ctx.translate(SW / 2, y);
-  ctx.scale(s, s);
-  const w = Math.min(SW - 40, 300);
-  ctx.fillStyle = '#fff4dc';
-  ctx.strokeStyle = '#b9773a';
-  ctx.lineWidth = 5;
-  roundRect(-w / 2, -42, w, sub ? 88 : 66, 18);
-  ctx.fill();
-  ctx.stroke();
-  label(text, 0, sub ? -14 : -9, 30, 'center', '#e86a17');
-  if (sub) {
-    ctx.font = '700 16px system-ui, sans-serif';
-    ctx.fillStyle = '#7a4a22';
-    ctx.textAlign = 'center';
-    ctx.fillText(sub, 0, 20);
-  }
-  ctx.restore();
-  ctx.globalAlpha = 1;
 }
 
 function roundRect(x, y, w, h, r) {
@@ -1227,156 +1247,201 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawCrosshair() {
-  if (game.mode === 'start' || game.mode === 'over') return;
-  const { x, y } = cross;
-  ctx.lineCap = 'round';
-  for (const [color, lw] of [
-    ['rgba(40, 20, 6, 0.7)', 4.5],
-    ['#fff', 2],
-  ]) {
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lw;
-    ctx.beginPath();
-    ctx.arc(x, y, 15, 0, Math.PI * 2);
+function bannerShown() {
+  if (game.paused || game.turned) return null;
+  if (game.resumeT > 0) return { text: 'Ready…', sub: '', t: 1, life: 2, small: false };
+  return game.banner;
+}
+
+function drawBanner() {
+  const b = bannerShown();
+  if (!b) return;
+  const p = Math.min(1, b.t / 0.18);
+  const out = Math.max(0, (b.t - (b.life - 0.25)) / 0.25);
+  ctx.globalAlpha = 1 - out;
+  if (b.small) {
+    const frenzy = b.text === 'Frenzy!';
+    // On the counter's right side, clear of every lane.
+    const w = Math.min(SW * 0.4, 200);
+    ctx.save();
+    ctx.translate(SW - w / 2 - 14, L.C + (orient === 'landscape' ? 44 : 50));
+    ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
+    ctx.fillStyle = frenzy ? '#ffe3f1' : '#fff4dc';
+    ctx.strokeStyle = frenzy ? '#d63384' : '#b9773a';
+    ctx.lineWidth = 4;
+    roundRect(-w / 2, -18, w, 36, 18);
+    ctx.fill();
     ctx.stroke();
-    ctx.beginPath();
-    for (const [dx, dy] of [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ]) {
-      ctx.moveTo(x + dx * 8, y + dy * 8);
-      ctx.lineTo(x + dx * 21, y + dy * 21);
-    }
-    ctx.stroke();
+    label(b.text, 0, 1, 21, 'center', frenzy ? '#d63384' : '#e86a17');
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    return;
   }
-  ctx.fillStyle = '#d0342c';
-  ctx.beginPath();
-  ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+  const s = 0.7 + 0.3 * p;
+  ctx.save();
+  ctx.translate(SW / 2, (L.T + L.C) / 2);
+  ctx.scale(s, s);
+  const w = Math.min(SW - 40, 300);
+  ctx.fillStyle = '#fff4dc';
+  ctx.strokeStyle = '#b9773a';
+  ctx.lineWidth = 5;
+  roundRect(-w / 2, -42, w, b.sub ? 88 : 66, 18);
   ctx.fill();
+  ctx.stroke();
+  label(b.text, 0, b.sub ? -14 : -9, 30, 'center', '#e86a17');
+  if (b.sub) {
+    ctx.font = '700 16px system-ui, sans-serif';
+    ctx.fillStyle = '#7a4a22';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.sub, 0, 20);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+function drawLamps() {
+  for (let x = 20; x < SW; x += 34) {
+    const on = Math.sin(game.T * 5 + x * 0.3) > -0.3;
+    ctx.fillStyle = on ? '#ffe27a' : '#a5772a';
+    ctx.beginPath();
+    ctx.arc(x, L.T - 6 + Math.sin(x * 0.13) * 3, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  const sx = game.shake > 0 ? rand(-2, 2) : 0;
-  const sy = game.shake > 0 ? rand(-2, 2) : 0;
-  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (ox + sx * k), dpr * sy * k);
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
   ctx.save();
   ctx.beginPath();
   ctx.rect(0, 0, SW, SH);
   ctx.clip();
-  drawBackdrop();
-  const live = (kind) => targets.filter((t) => (Array.isArray(kind) ? kind.includes(t.kind) : t.kind === kind));
-  for (const t of live('tin')) drawTarget(t);
-  tileRow('grass1', GRASS_SCALE, 0, L.grassY, L.midY + 30);
-  for (const t of live(['duck', 'gold'])) drawTarget(t);
-  tileRow('water2', WATER_SCALE, waveOffset('mid'), L.midY, L.frontY + 30);
-  for (const t of live('pop')) drawTarget(t);
-  tileRow('water1', WATER_SCALE, waveOffset('front'), L.frontY, L.C);
+  drawWall();
+  drawPaint(-1);
+  for (let i = 0; i < L.n; i++) {
+    for (const t of drawOrder(i)) drawTarget(t);
+    drawStrip(L.lanes[i]);
+    drawPaint(i);
+  }
   if (game.cfg && game.cfg.lamps) drawLamps();
   drawCurtains();
   drawCounter();
   drawHud();
-  drawRifle();
+  drawBalls();
+  drawGun();
   drawFx();
   drawBanner();
-  drawCrosshair();
-  ctx.restore();
-}
-
-function drawLamps() {
-  // Closing time: a string of lamps under the valance.
-  for (let x = 20; x < SW; x += 34) {
-    const on = Math.sin(game.T * 5 + x * 0.3) > -0.3;
-    ctx.fillStyle = on ? '#ffe27a' : '#a5772a';
-    ctx.beginPath();
-    ctx.arc(x, L.T - 2 + Math.sin(x * 0.13) * 3, 4.5, 0, Math.PI * 2);
-    ctx.fill();
+  if (game.frenzy > 0) {
+    // A frenzy tints the edges pink, never the middle of the booth.
+    const g = ctx.createRadialGradient(SW / 2, SH / 2, Math.min(SW, SH) * 0.45, SW / 2, SH / 2, Math.max(SW, SH) * 0.75);
+    g.addColorStop(0, 'rgba(255, 80, 160, 0)');
+    g.addColorStop(1, `rgba(255, 80, 160, ${0.18 + 0.06 * Math.sin(game.T * 10)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, SW, SH);
   }
+  ctx.restore();
 }
 
 function makeDecor() {
   decor = [];
   const [cw, ch] = size('cloud1');
-  decor.push({ cloud: true, name: 'cloud1', x: SW * 0.15, y: L.T + 4, w: cw * 0.5, h: ch * 0.5, v: 6 });
-  decor.push({ cloud: true, name: 'cloud2', x: SW * 0.7, y: L.T + 26, w: cw * 0.45, h: ch * 0.45, v: 4 });
+  const top = L.T - 6;
+  decor.push({ name: 'cloud1', x: SW * 0.15, y: top, w: cw * 0.45, h: ch * 0.45, v: 6 });
+  decor.push({ name: 'cloud2', x: SW * 0.7, y: top + 16, w: cw * 0.4, h: ch * 0.4, v: 4 });
   const [pw, ph] = size('tree_pine');
   const [ow, oh] = size('tree_oak');
-  const base = L.grassY + 26;
-  decor.push({ name: 'tree_pine', x: SW * 0.08, y: base - ph * 0.55, w: pw * 0.55, h: ph * 0.55, v: 0 });
-  decor.push({ name: 'tree_oak', x: SW * 0.78, y: base - oh * 0.5, w: ow * 0.5, h: oh * 0.5, v: 0 });
-  decor.push({ name: 'tree_pine', x: SW * 0.55, y: base - ph * 0.38, w: pw * 0.38, h: ph * 0.38, v: 0 });
+  const base = L.lanes[0].strip + 10;
+  decor.push({ name: 'tree_pine', x: SW * 0.08, y: base - ph * 0.42, w: pw * 0.42, h: ph * 0.42, v: 0 });
+  decor.push({ name: 'tree_oak', x: SW * 0.8, y: base - oh * 0.38, w: ow * 0.38, h: oh * 0.38, v: 0 });
 }
 
 // ---------- Input ----------
 
-const toUnits = (clientX, clientY) => ({ x: (clientX - ox) / k, y: clientY / k });
-function clampCross() {
-  cross.x = clamp(cross.x, 6, SW - 6);
-  cross.y = clamp(cross.y, L.T, L.C - 4);
-}
+const toUnits = (cx, cy) => ({ x: (cx - ox) / k, y: (cy - oy) / k });
+// The counter is the thumb's pad; the lanes aren't for touching.
+const onPad = (cx, cy) => toUnits(cx, cy).y >= L.C - 8;
 
-let primary = null; // the finger that aims: { id, x, y, t0, T0, moved, cancelled, cx, cy }
+let finger = null; // the finger on the counter: { id, x, y, t0, moved, cancelled, second }
+let mouse = null; // a mouse press: { x, y, moved }
 canvas.addEventListener('pointerdown', (e) => {
-  if (game.paused) return;
+  if (game.paused || game.turned) return;
   if (e.pointerType === 'mouse') {
     if (e.button !== 0) return;
-    Object.assign(cross, toUnits(e.clientX, e.clientY));
-    clampCross();
-    fire();
+    mouse = { x: e.clientX, y: e.clientY, moved: 0 };
     return;
   }
-  if (!primary) {
+  if (!finger) {
+    if (!onPad(e.clientX, e.clientY)) return;
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch (err) {
       // A synthetic pointer can't be captured; it still aims.
     }
-    primary = { id: e.pointerId, x: e.clientX, y: e.clientY, t0: performance.now(), T0: game.T, moved: 0, cancelled: false, cx: cross.x, cy: cross.y };
+    finger = { id: e.pointerId, x: e.clientX, y: e.clientY, t0: performance.now(), moved: 0, cancelled: false };
     return;
   }
-  if (primary.second == null) {
-    // A second finger fires at once, where the crosshair is now; the first finger's lift won't.
-    primary.second = e.pointerId;
-    primary.cancelled = true;
+  if (finger.second == null) {
+    // A second finger fires at once; the first finger's lift then won't.
+    finger.second = e.pointerId;
+    finger.cancelled = true;
     fire();
   }
 });
+// A drag: across turns the gun, 3 px a degree; up and down raises it a lane every 44 px.
+function drag(dx, dy) {
+  turnBy(dx / PX_PER_DEG);
+  aim.acc -= dy;
+  while (aim.acc >= PX_PER_LANE) {
+    raiseBy(1);
+    aim.acc -= PX_PER_LANE;
+  }
+  while (aim.acc <= -PX_PER_LANE) {
+    raiseBy(-1);
+    aim.acc += PX_PER_LANE;
+  }
+}
 canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse') {
-    Object.assign(cross, toUnits(e.clientX, e.clientY));
-    clampCross();
+    if (!mouse || game.paused || game.turned) return;
+    const dx = e.clientX - mouse.x;
+    const dy = e.clientY - mouse.y;
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+    mouse.moved += Math.hypot(dx, dy);
+    drag(dx, dy);
     return;
   }
-  if (!primary || e.pointerId !== primary.id) return;
-  const dx = e.clientX - primary.x;
-  const dy = e.clientY - primary.y;
-  primary.x = e.clientX;
-  primary.y = e.clientY;
-  primary.moved += Math.hypot(dx, dy);
-  if (game.paused) return;
-  cross.x += (dx * DRAG_GAIN) / k;
-  cross.y += (dy * DRAG_GAIN) / k;
-  clampCross();
+  if (!finger || e.pointerId !== finger.id) return;
+  const dx = e.clientX - finger.x;
+  const dy = e.clientY - finger.y;
+  finger.x = e.clientX;
+  finger.y = e.clientY;
+  finger.moved += Math.hypot(dx, dy);
+  if (game.paused || game.turned) return;
+  drag(dx, dy);
 });
-function endTouch(e) {
-  if (!primary) return;
-  if (e.pointerId === primary.second) {
-    primary.second = undefined;
+function release(e) {
+  if (e.pointerType === 'mouse') {
+    const m = mouse;
+    mouse = null;
+    if (m && m.moved < 6 && e.type === 'pointerup') fire();
     return;
   }
-  if (e.pointerId !== primary.id) return;
-  const p = primary;
-  primary = null;
-  if (e.type === 'pointercancel' || p.cancelled || game.paused) return;
-  if (p.moved < TAP_PX && performance.now() - p.t0 < TAP_MS) fire(p.cx, p.cy, p.T0);
+  if (!finger) return;
+  if (e.pointerId === finger.second) {
+    finger.second = undefined;
+    return;
+  }
+  if (e.pointerId !== finger.id) return;
+  const f = finger;
+  finger = null;
+  if (e.type === 'pointercancel' || f.cancelled || game.paused || game.turned) return;
+  if (f.moved < TAP_PX && performance.now() - f.t0 < TAP_MS) fire();
 }
-canvas.addEventListener('pointerup', endTouch);
-canvas.addEventListener('pointercancel', endTouch);
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 const keys = new Set();
@@ -1384,9 +1449,12 @@ let held = 0;
 window.addEventListener('keydown', (e) => {
   const t = e.target;
   if (t instanceof HTMLElement && t.closest('button') && (e.key === ' ' || e.key === 'Enter')) return;
-  if (e.key.startsWith('Arrow')) {
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     keys.add(e.key);
     e.preventDefault();
+  } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!game.paused && !game.turned) raiseBy(e.key === 'ArrowUp' ? 1 : -1);
   } else if (e.key === 'Shift') keys.add('Shift');
   else if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
     if (game.mode === 'play' || game.mode === 'intro') {
@@ -1395,40 +1463,86 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
-window.addEventListener('keyup', (e) => {
-  keys.delete(e.key);
-});
+window.addEventListener('keyup', (e) => keys.delete(e.key));
 window.addEventListener('blur', () => keys.clear());
 function updateKeys(dt) {
   const ax = (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0);
-  const ay = (keys.has('ArrowDown') ? 1 : 0) - (keys.has('ArrowUp') ? 1 : 0);
-  if (!ax && !ay) {
+  if (!ax) {
     held = 0;
     return;
   }
   held += dt;
-  const v = keys.has('Shift') ? 60 : Math.min(480, 160 + held * 500);
-  cross.x += ax * v * dt;
-  cross.y += ay * v * dt;
-  clampCross();
+  const v = keys.has('Shift') ? 12 : Math.min(90, 30 + held * 90); // degrees a second
+  turnBy(ax * v * dt);
 }
 
-// ---------- Pause ----------
+// ---------- Pause and orientation ----------
 
+const inRun = () => ['intro', 'play', 'won', 'lost'].includes(game.mode);
 function pause() {
-  primary = null;
-  if (game.mode === 'intro' || game.mode === 'play' || game.mode === 'won' || game.mode === 'lost') {
+  finger = null;
+  mouse = null;
+  if (inRun()) {
     game.paused = true;
-    ui.pause.hidden = false;
+    ui.pause.hidden = game.turned;
   }
   sound.suspend();
 }
 function resume() {
   ui.pause.hidden = true;
   game.paused = false;
-  game.resumeT = 1;
+  if (!game.turned) game.resumeT = 1;
   sound.unlock();
   last = performance.now();
+}
+
+// The screen turned: on the cards the booth just lays itself out again; in a run, play freezes under
+// the veil until the screen turns back (play goes on) or the player restarts in the new layout. A
+// turn counts only past 1.15 or below 0.87, held for 0.4 s, so a near-square window doesn't flicker.
+let turnTimer = 0;
+const wanted = () => {
+  const r = window.innerWidth / window.innerHeight;
+  return r > 1.15 ? 'landscape' : r < 0.87 ? 'portrait' : orient;
+};
+function onResize() {
+  readInsets();
+  if (!inRun()) {
+    const o = screenOrient();
+    if (o !== orient) {
+      layoutStage(o);
+      targets = [];
+      paint = [];
+      game.spawn = {};
+      aim.lane = L.n - 1;
+    } else layoutStage(orient);
+    makeDecor();
+    if (game.mode === 'start') showStart();
+    return;
+  }
+  fit();
+  clearTimeout(turnTimer);
+  turnTimer = setTimeout(checkTurn, wanted() === orient ? 0 : 400);
+}
+function checkTurn() {
+  if (!inRun()) return;
+  const w = wanted();
+  if (w !== orient && !game.turned) {
+    game.turned = true;
+    finger = null;
+    mouse = null;
+    ui.turned.hidden = false;
+    ui.pause.hidden = true;
+    ui.turnedText.textContent = `Restart in ${w}?`;
+    sound.suspend();
+  } else if (w === orient && game.turned) {
+    game.turned = false;
+    ui.turned.hidden = true;
+    if (game.paused) ui.pause.hidden = false;
+    else {
+      game.resumeT = 1;
+      sound.unlock();
+    }
+  }
 }
 
 // ---------- UI ----------
@@ -1438,6 +1552,9 @@ const ui = {
   start: $('[data-screen="start"]'),
   over: $('[data-screen="over"]'),
   pause: $('[data-screen="pause"]'),
+  turned: $('[data-screen="turned"]'),
+  turnedText: $('[data-turned-text]'),
+  restart: $('[data-restart]'),
   play: $('[data-play]'),
   again: $('[data-again]'),
   best: $('[data-best]'),
@@ -1450,6 +1567,14 @@ const ui = {
 ui.play.addEventListener('click', () => startRun());
 ui.again.addEventListener('click', () => startRun());
 ui.pause.addEventListener('click', resume);
+ui.restart.addEventListener('click', () => {
+  // A restart from the veil isn't a lost run: the assist stays as it was.
+  game.turned = false;
+  ui.turned.hidden = true;
+  sound.unlock();
+  music('');
+  startRun({ restart: true });
+});
 function syncMute() {
   ui.mute.setAttribute('aria-pressed', String(sound.muted));
   ui.mute.setAttribute('aria-label', sound.muted ? 'Unmute' : 'Mute');
@@ -1467,7 +1592,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
-  if (!manual && !game.paused) {
+  if (!manual && !game.paused && !game.turned) {
     if (game.resumeT > 0) game.resumeT = Math.max(0, game.resumeT - dt);
     else update(dt);
   }
@@ -1479,71 +1604,70 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
   else last = performance.now();
 });
+window.addEventListener('resize', onResize);
 
-window.addEventListener('resize', () => {
-  readInsets();
-  layout();
-  makeDecor();
-});
-
-atlas.decode().then(
+Promise.all([atlas.decode(), splatImg.decode()]).then(
   () => {
     readInsets();
-    layout();
+    layoutStage(screenOrient());
     makeMasks();
     makeDecor();
-    cross.x = SW / 2;
-    cross.y = L.duckY;
+    aim.lane = L.n - 1;
     // The booth is already moving behind the start card.
-    for (let i = 0; i < 3; i++) {
-      attractStep();
-      const t = targets[targets.length - 1];
-      t.x = 60 + i * 130;
-      game.attractDuck = 0;
+    game.spawn = { movers: L.lanes.map(() => rand(2, 4)) };
+    for (let i = 0; i < L.n; i++) {
+      const t = launchMover(i, ROUNDS[1]);
+      t.turn = false;
+      t.x = rand(70, SW - 70);
     }
     showStart();
     requestAnimationFrame(frame);
     // For tests and tuning: read the state, and step the simulation without drawing.
     window.__gallery = {
-      game, cross, heard, memory, KINDS, BULL, DUCK_BULL, TRAY_MAX,
-      L, step: update, startRun, startRound, fire, resolve, snapshot, makeTarget, dims, turnState, stickWidth, stickBottom, assistNow, pause, resume,
+      game, aim, heard, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
+      step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
+      aimPoint, muzzle, flightTime, launchPop, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
+      balls: () => balls,
+      paint: () => paint,
       clear() {
         targets.length = 0;
-        game.queue.length = 0;
+        balls.length = 0;
       },
       set manual(v) { manual = v; },
       get manual() { return manual; },
-      stage: () => ({ SW, SH, k, ox }),
-      toClient: (x, y) => ({ x: ox + x * k, y: y * k }),
-      // What each state shows: the cards, the banner (and its line under it), and the HUD's parts as
-      // drawHud draws them.
+      stage: () => ({ SW, SH, k, ox, oy, orient }),
+      toClient: (x, y) => ({ x: ox + x * k, y: oy + y * k }),
+      music: () => musicName,
       ui: () => {
-        const shown = hudVisible() || game.mode === 'over';
-        const cfg = game.cfg;
-        let pips = 'hidden';
-        if (shown && cfg && !cfg.free) pips = game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown';
+        const b = bannerShown();
+        const shown = hudVisible();
         return {
           start: !ui.start.hidden,
           over: !ui.over.hidden,
           pause: !ui.pause.hidden,
-          banner: game.paused ? null : game.resumeT > 0 ? 'Ready…' : game.banner ? game.banner.text : null,
-          bannerSub: !game.paused && game.resumeT <= 0 && game.banner ? game.banner.sub : '',
-          hud: hudVisible(),
-          score: shown,
-          tray: !shown || !cfg ? 'hidden' : cfg.free ? 'dimmed' : 'shown',
-          pips,
+          turned: !ui.turned.hidden,
+          banner: b ? b.text : null,
+          bannerSub: b ? b.sub : '',
+          hud: shown,
+          pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
+          timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',
         };
       },
-      // The HUD's drawn bounds in CSS px, from the same numbers drawHud uses.
-      hudBounds: () => ({
-        pipsTop: (L.C + 46 - pipR) * k,
-        pipsBottom: (L.C + 46 + pipR) * k,
-        trayTop: (trayY() - 16) * k,
-        trayBottom: (trayY() + 16) * k,
-        trayRight: ox + (trayX(TRAY_MAX - 1) + 8) * k,
-        boothTop: L.T * k,
-      }),
+      // The HUD's drawn bounds in CSS px, from the same numbers the drawing uses.
+      hudBounds: () => {
+        const H = hudLayout();
+        const c = (x, y) => ({ x: ox + x * k, y: oy + y * k });
+        return {
+          counterTop: c(0, L.C).y,
+          timer: c(H.timer.x + H.timer.w, H.timer.y + H.timer.h),
+          hopper: c(H.hopper.x + H.hopper.r * (2.6 * (HOPPER - 1) + 2), H.hopper.y + H.hopper.r),
+          gauge: c(H.gauge.x + 22, H.gauge.y + 4),
+          gaugeTop: c(H.gauge.x, H.gauge.y - (L.n - 1) * H.gauge.step - 4),
+          gun: c(L.gunX, L.gunY),
+          boothTop: c(0, L.T).y,
+        };
+      },
     };
   },
   () => {}

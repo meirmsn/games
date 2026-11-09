@@ -1,7 +1,7 @@
 // End-to-end tests for Shooting Gallery (specs/shooting-gallery.md). Run: scripts/check-slow.sh.
 // The game exposes window.__gallery: its state, step() to advance the simulation without drawing,
-// makeTarget() to place a target, and fire() to shoot at a point in the booth's units. A test that
-// sets `manual` owns the clock: the page's frames only draw.
+// makeTarget() to place a target, and the aim. A test that sets `manual` owns the clock: the page's
+// frames only draw.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -33,8 +33,11 @@ after(async () => {
   server?.kill();
 });
 
+const PORTRAIT = { width: 390, height: 844 };
+const LANDSCAPE = { width: 844, height: 390 };
+
 async function open(opts = {}) {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, ...opts });
+  const context = await browser.newContext({ viewport: PORTRAIT, ...opts });
   await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
   const errors = [];
@@ -45,459 +48,531 @@ async function open(opts = {}) {
   return { context, page, errors };
 }
 
-// Start a run at `round` with an empty booth that the test fills; the parade never runs out (a
-// far-off item stays in the queue), the assist is off, and the test owns the clock.
+// Start a run at `round` with an empty booth that the test fills: nothing spawns, no frenzy comes,
+// the assist is off, and the test owns the clock.
 async function ready(page, round = 1, { assist = 0 } = {}) {
   await page.evaluate(
     ({ round, assist }) => {
       const g = window.__gallery;
       g.manual = true;
-      g.startRun({ seed: 1, order: ['turn', 'wind'] });
+      g.startRun({ seed: 1 });
       if (round !== 1) g.startRound(round);
       g.clear();
-      g.game.queue.push({ at: 9999, kind: 'duck' });
-      g.game.mode = 'play';
-      g.game.banner = null;
-      g.game.assist = assist;
-      g.game.lastFire = -1;
+      const G = g.game;
+      G.mode = 'play';
+      G.banner = null;
+      G.assist = assist;
+      G.lastFire = -1;
+      G.frenzyAt = 0;
+      G.spawn = { movers: g.L.lanes.map(() => 999), pop: 999, drop: 999, gold: [] };
     },
     { round, assist }
   );
 }
 
-// Place a target in the booth's middle and return what a shot needs: its id, centre and size.
+// Place a still target and return what a shot needs: its id, centre and size.
 async function place(page, kind, opts = {}) {
   return page.evaluate(
     ({ kind, opts }) => {
       const g = window.__gallery;
-      const t = g.makeTarget(kind, { x: g.stage().SW / 2, turn: false, ...opts });
+      const t = g.makeTarget(kind, { x: g.stage().SW / 2, turn: false, speed: 0, ...opts });
       const [w, h] = g.dims(t);
-      return { id: t.id, x: t.x, y: t.y, w, h, face: t.face };
+      return { id: t.id, x: t.x, y: t.y, w, h, lane: t.lane, face: t.face };
     },
     { kind, opts }
   );
 }
 
-const shoot = (page, x, y) =>
+// Aim at x in a lane, fire, and let the ball land. Returns what it landed on.
+const shoot = (page, x, lane, { wait = true } = {}) =>
   page.evaluate(
-    ({ x, y }) => {
+    ({ x, lane, wait }) => {
       const g = window.__gallery;
+      const { SW } = g.stage();
+      g.aim.yaw = ((x - SW / 2) / (0.47 * SW)) * 55;
+      g.aim.lane = lane;
       g.game.lastFire = -1;
-      const r = g.fire(x, y);
-      return r && { what: r.what, on: r.on };
+      g.game.lastLand = null;
+      const b = g.fire();
+      if (!b) return null;
+      if (!wait) return { fired: true };
+      for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
+      return g.game.lastLand;
     },
-    { x, y }
+    { x, lane, wait }
   );
 const state = (page) =>
   page.evaluate(() => {
     const g = window.__gallery.game;
-    return { mode: g.mode, score: g.score, shells: g.shells, pips: g.pips, bonus: g.bonus, speedMul: g.speedMul, round: g.round, assist: g.assist };
+    return { mode: g.mode, score: g.score, pips: g.pips, bonus: g.bonus, round: g.round, assist: g.assist, hopper: g.hopper, time: g.time, frenzy: g.frenzy };
   });
 const steps = (page, seconds) =>
   page.evaluate((s) => {
-    for (let t = 0; t < s; t += 1 / 60) window.__gallery.step(1 / 60);
+    for (let t = 0; t < s - 1e-9; t += 1 / 60) window.__gallery.step(1 / 60);
   }, seconds);
+const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
-test('shooting-gallery AC-1: the booth moves behind the start card; Start begins round 1', async () => {
+test('shooting-gallery AC-1: the booth moves behind the start card; Start begins round 1 at the nearest lane, with no crosshair', async () => {
   const { context, page, errors } = await open();
   assert.ok(await page.locator('[data-screen="start"]').isVisible());
-  const before = await page.evaluate(() => window.__gallery.targets().filter((t) => t.kind === 'duck').map((t) => [t.id, t.x]));
-  assert.ok(before.length > 0, 'ducks are on the rail');
+  const before = await page.evaluate(() => window.__gallery.targets().map((t) => [t.id, t.x]));
+  assert.ok(before.length > 0, 'targets are in the lanes');
   await page.waitForTimeout(1000);
   const after = await page.evaluate(() => Object.fromEntries(window.__gallery.targets().map((t) => [t.id, t.x])));
-  assert.ok(before.some(([id, x]) => after[id] !== undefined && Math.abs(after[id] - x) > 10), 'a duck moved in a second');
+  assert.ok(before.some(([id, x]) => after[id] !== undefined && Math.abs(after[id] - x) > 10), 'a target moved in a second');
   await page.click('[data-play]');
-  const s = await state(page);
-  assert.equal(s.round, 1);
-  assert.equal(s.shells, 8);
-  assert.equal(await page.evaluate(() => window.__gallery.game.cfg.quota), 6);
-  const inBooth = await page.evaluate(() => {
+  const s = await page.evaluate(() => {
     const g = window.__gallery;
-    return g.cross.x > 0 && g.cross.x < g.stage().SW && g.cross.y > g.L.T && g.cross.y < g.L.C;
+    return { round: g.game.round, time: g.game.time, quota: g.game.cfg.quota, hopper: g.game.hopper, lane: g.aim.lane, n: g.L.n, yaw: g.aim.yaw, cross: 'cross' in g || 'crosshair' in g };
   });
-  assert.ok(inBooth, 'the crosshair is in the booth');
+  assert.deepEqual(s, { round: 1, time: 30, quota: 7, hopper: 6, lane: 4, n: 5, yaw: 0, cross: false });
   assert.ok(await page.locator('[data-screen="start"]').isHidden());
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('shooting-gallery AC-2: a shot spends a shell; hits score points and pips by kind; a miss scores nothing', async () => {
+test('shooting-gallery AC-2: turning moves the landing point linearly, the same in every lane; raising steps a lane; the barrel points at it', async () => {
   const { context, page } = await open();
-  await ready(page, 3);
-  const s0 = await state(page);
-  // A miss on the backdrop, above the small targets.
-  const L = await page.evaluate(() => window.__gallery.L);
-  assert.equal((await shoot(page, 200, L.T + 20)).what, 'miss');
-  let s = await state(page);
-  assert.equal(s.shells, s0.shells - 1);
-  assert.equal(s.score, s0.score);
-  // A small target's body (off-centre, outside the bullseye): 30 points, 3 pips.
-  const tin = await place(page, 'tin', { face: 'target_red1' });
-  assert.equal((await shoot(page, tin.x + tin.w * 0.38, tin.y)).what, 'body');
-  s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips], [30, 3]);
-  // A plain duck's body: 20 points, 2 pips.
-  const duck = await place(page, 'duck', { face: 'duck_yellow' });
-  assert.equal((await shoot(page, duck.x, duck.y)).what, 'body');
-  s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips], [50, 5]);
-  // A pop-up's body: 10 points, 1 pip.
-  const pop = await place(page, 'pop', { up: true, upFor: 99, face: 'target_red3' });
-  assert.equal((await shoot(page, pop.x + pop.w * 0.38, pop.y)).what, 'body');
-  s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips, s.shells], [60, 6, s0.shells - 4]);
-  await context.close();
-});
-
-test('shooting-gallery AC-3: a bullseye scores double and returns the shell; a stick snaps for triple and a pip more', async () => {
-  const { context, page } = await open();
-  await ready(page, 3);
-  const s0 = await state(page);
-  const tin = await place(page, 'tin', { face: 'target_colored' });
-  assert.equal((await shoot(page, tin.x + 2, tin.y - 2)).what, 'bull');
-  let s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips, s.shells], [60, 3, s0.shells], 'double points, shell back');
-  // A duck's painted target is its bullseye.
-  const duck = await place(page, 'duck', { face: 'duck_target_brown' });
-  const bull = await page.evaluate(({ duck }) => {
-    const B = window.__gallery.DUCK_BULL;
-    return { x: duck.x + (B.u - 0.5) * duck.w, y: duck.y + (B.v - 0.5) * duck.h };
-  }, { duck });
-  assert.equal((await shoot(page, bull.x, bull.y)).what, 'bull');
-  s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips, s.shells], [100, 5, s0.shells]);
-  // The stick under a small target: snapped, 3 × 30 points, 3 + 1 pips, the shell spent.
-  const tin2 = await place(page, 'tin', { face: 'target_red2' });
-  assert.equal((await shoot(page, tin2.x, tin2.y + tin2.w / 2 + 8)).what, 'stick');
-  s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips, s.shells], [190, 9, s0.shells - 1]);
-  assert.equal(await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).state, tin2.id), 'snapped');
-  // With the assist growing the body over the top of the stick, the stick still wins.
-  await page.evaluate(() => (window.__gallery.game.assist = 1));
-  const tin3 = await place(page, 'tin', { face: 'target_red2' });
-  assert.equal((await shoot(page, tin3.x, tin3.y + (tin3.w / 2) * 1.05)).what, 'stick');
-  await context.close();
-});
-
-test('shooting-gallery AC-4: the frontmost thing takes the shot: a hidden pop-up is safe, water is a miss', async () => {
-  const { context, page } = await open();
-  await ready(page, 3);
-  const s0 = await state(page);
-  const pop = await place(page, 'pop', { face: 'target_colored' }); // down, behind the front water
-  assert.equal((await shoot(page, pop.x, pop.y)).what, 'water');
-  assert.equal(await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).state, pop.id), 'live');
-  const L = await page.evaluate(() => window.__gallery.L);
-  assert.equal((await shoot(page, 120, L.frontY + 50)).what, 'water');
-  // A duck standing behind a raised pop-up can't be hit through it.
-  const duck = await place(page, 'duck', { face: 'duck_yellow' });
-  const front = await place(page, 'pop', { up: true, upFor: 99, face: 'target_red3' });
-  const r = await page.evaluate(({ x, y }) => {
+  await ready(page);
+  const r = await page.evaluate(() => {
     const g = window.__gallery;
-    const hit = g.resolve(x, y, g.snapshot());
-    return hit.p ? hit.p.t.kind : hit.what;
-  }, { x: duck.x, y: Math.max(duck.y, front.y - front.w * 0.3) });
-  assert.equal(r, 'pop');
-  const s = await state(page);
-  assert.equal(s.score, s0.score);
-  await context.close();
-});
-
-test('shooting-gallery AC-5: the quota starts the bonus: faster, double points, no shells back; the last shell wins at once', async () => {
-  const { context, page } = await open();
-  await ready(page, 3);
-  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
-  const tin = await place(page, 'tin', { face: 'target_red1' });
-  await shoot(page, tin.x + tin.w * 0.38, tin.y);
-  let s = await state(page);
-  assert.equal(s.bonus, true);
-  assert.equal(s.speedMul, 1.5);
-  // A target now moves 1.5 times as far in the same time.
-  const mover = await place(page, 'duck', { speed: 60, x: 150 });
-  await steps(page, 1);
-  const moved = await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).x, mover.id);
-  assert.ok(Math.abs(moved - 150 - 90) < 3, `moved ${moved - 150}`);
-  // A bullseye in the bonus: 30 × 2 × 2, and the shell stays spent.
-  const s1 = await state(page);
-  const tin2 = await place(page, 'tin', { face: 'target_colored' });
-  assert.equal((await shoot(page, tin2.x, tin2.y)).what, 'bull');
-  s = await state(page);
-  assert.deepEqual([s.score - s1.score, s.shells], [120, s1.shells - 1]);
-  // The gold duck gives no shells in the bonus.
-  const gold = await place(page, 'gold', { x: 100 });
-  assert.equal((await shoot(page, gold.x, gold.y)).what, 'body');
-  const s2 = await state(page);
-  assert.equal(s2.shells, s.shells - 1);
-  assert.equal(s2.score - s.score, 200, 'gold duck 100 × 2 (bonus)');
-  // Before the bonus the gold duck gives 2 shells (its own spent one comes back as one of them).
-  await ready(page, 3);
-  await page.evaluate(() => (window.__gallery.game.shells = 5));
-  const gold2 = await place(page, 'gold', { x: 200 });
-  await shoot(page, gold2.x, gold2.y);
-  assert.equal((await state(page)).shells, 6, '5 − 1 + 2');
-  // Meeting the quota with the last shell wins the round at once.
-  await ready(page, 2);
-  await page.evaluate(() => {
-    const g = window.__gallery.game;
-    g.shells = 1;
-    g.pips = g.cfg.quota - 1;
+    const { SW } = g.stage();
+    const out = {};
+    g.aim.yaw = 55;
+    g.aim.lane = 4;
+    out.right = g.aimPoint().x - SW / 2;
+    g.aim.lane = 0;
+    out.rightFar = g.aimPoint().x - SW / 2;
+    g.aim.yaw = -27.5;
+    out.half = g.aimPoint().x - SW / 2;
+    out.reach = 0.47 * SW;
+    out.lines = g.L.lanes.map((l) => l.line);
+    out.ys = [0, 1, 2, 3, 4].map((i) => ((g.aim.lane = i), g.aimPoint().y));
+    // The barrel points at the landing point.
+    g.aim.yaw = 30;
+    g.aim.lane = 1;
+    const a = g.aimPoint();
+    const m = g.muzzle();
+    out.barrel = Math.abs(m.ang - Math.atan2(a.x - g.L.gunX, g.L.gunY - a.y));
+    return out;
   });
-  const t3 = await place(page, 'tin', { face: 'target_red1' });
-  await shoot(page, t3.x + t3.w * 0.38, t3.y);
-  s = await state(page);
-  assert.equal(s.mode, 'won');
-  assert.equal(s.bonus, false);
+  assert.ok(near(r.right, r.reach) && near(r.rightFar, r.reach), 'the same x in the nearest and farthest lane');
+  assert.ok(near(r.half, -r.reach / 2));
+  assert.deepEqual(r.ys, r.lines);
+  assert.ok(r.barrel < 1e-9);
   await context.close();
 });
 
-test('shooting-gallery AC-6: an empty tray or a parade gone by loses; a last-shell bullseye plays on; Play again restarts', async () => {
+test('shooting-gallery AC-3: on touch, a drag on the counter turns and raises the gun without firing; a tap there fires; a second finger fires; the lanes ignore touches', async () => {
+  const { context, page } = await open({ hasTouch: true });
+  await ready(page);
+  const cdp = await context.newCDPSession(page);
+  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  const pad = await page.evaluate(() => window.__gallery.hudBounds().counterTop + 60);
+  // Drag 30 px right and 44 px up: 10 degrees right and one lane farther; the lift doesn't fire.
+  await touch('touchStart', [{ x: 150, y: pad, id: 1 }]);
+  for (let i = 1; i <= 10; i++) await touch('touchMove', [{ x: 150 + i * 3, y: pad - i * 4.4, id: 1 }]);
+  await touch('touchEnd', []);
+  let a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw, lane: window.__gallery.aim.lane, balls: window.__gallery.balls().length }));
+  assert.ok(near(a.yaw, 10, 0.05), `yaw ${a.yaw}`);
+  assert.deepEqual([a.lane, a.balls], [3, 0]);
+  // Raising never goes past the farthest lane.
+  await touch('touchStart', [{ x: 150, y: pad + 40, id: 2 }]);
+  for (let i = 1; i <= 30; i++) await touch('touchMove', [{ x: 150, y: pad + 40 - i * 10, id: 2 }]);
+  await touch('touchEnd', []);
+  assert.equal(await page.evaluate(() => window.__gallery.aim.lane), 0);
+  // A tap on the counter fires.
+  await touch('touchStart', [{ x: 200, y: pad, id: 3 }]);
+  await touch('touchEnd', []);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1);
+  // A second finger fires at once while the first is down; the first's lift then doesn't.
+  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
+  await touch('touchStart', [{ x: 120, y: pad, id: 4 }]);
+  await touch('touchStart', [{ x: 120, y: pad, id: 4 }, { x: 300, y: pad, id: 5 }]);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 2);
+  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
+  await touch('touchEnd', [{ x: 120, y: pad, id: 4 }]);
+  await touch('touchEnd', []);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 2);
+  // A tap or a drag on the lanes does nothing.
+  const before = await page.evaluate(() => ({ ...window.__gallery.aim }));
+  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
+  await touch('touchStart', [{ x: 200, y: 300, id: 6 }]);
+  await touch('touchMove', [{ x: 260, y: 200, id: 6 }]);
+  await touch('touchEnd', []);
+  await touch('touchStart', [{ x: 200, y: 300, id: 7 }]);
+  await touch('touchEnd', []);
+  const after = await page.evaluate(() => ({ ...window.__gallery.aim, balls: window.__gallery.balls().length }));
+  assert.deepEqual([after.yaw, after.lane, after.balls], [before.yaw, before.lane, 2]);
+  await context.close();
+});
+
+test('shooting-gallery AC-4: the mouse turns the gun by dragging and fires with a click; the arrow keys aim and Space fires', async () => {
+  const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
+  await ready(page);
+  await page.mouse.move(500, 400);
+  await page.mouse.down();
+  await page.mouse.move(530, 400, { steps: 5 });
+  await page.mouse.move(530, 356, { steps: 5 });
+  await page.mouse.up();
+  let a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw, lane: window.__gallery.aim.lane, balls: window.__gallery.balls().length }));
+  assert.ok(near(a.yaw, 10, 0.05), `yaw ${a.yaw}`);
+  assert.equal(a.balls, 0, 'a drag never fires');
+  assert.equal(a.lane, 1, 'raised one of 3 lanes');
+  await page.mouse.click(500, 400);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'a click fires');
+  await page.keyboard.down('ArrowLeft');
+  await steps(page, 0.5);
+  await page.keyboard.up('ArrowLeft');
+  a = await page.evaluate(() => ({ yaw: window.__gallery.aim.yaw }));
+  assert.ok(a.yaw < 0, `the left arrow turned the gun: ${a.yaw}`);
+  await page.keyboard.press('ArrowUp');
+  assert.equal(await page.evaluate(() => window.__gallery.aim.lane), 0);
+  await page.evaluate(() => {
+    window.__gallery.game.lastFire = -1;
+    window.__gallery.heard.length = 0;
+  });
+  await page.keyboard.press('Space');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'shot')), ['shot'], 'Space fires');
+  await context.close();
+});
+
+test('shooting-gallery AC-5: the ball flies 0.18 s to the nearest lane and 0.42 s to the farthest, and is judged when it lands', async () => {
   const { context, page } = await open();
-  // The last shell is a bullseye: the tray refills and play goes on.
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 1));
-  const duck = await place(page, 'duck', { face: 'duck_target_yellow' });
-  const bull = await page.evaluate(({ duck }) => {
-    const B = window.__gallery.DUCK_BULL;
-    return { x: duck.x + (B.u - 0.5) * duck.w, y: duck.y + (B.v - 0.5) * duck.h };
-  }, { duck });
-  assert.equal((await shoot(page, bull.x, bull.y)).what, 'bull');
+  await ready(page);
+  const times = await page.evaluate(() => [window.__gallery.flightTime(4), window.__gallery.flightTime(0)]);
+  assert.ok(near(times[0], 0.18) && near(times[1], 0.42));
+  // A still target is hit; one moving fast across is gone by the time the ball lands.
+  const still = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
+  assert.equal((await shoot(page, still.x + still.w * 0.38, 3)).what, 'body');
+  const fast = await place(page, 'target', { lane: 3, x: 200, speed: 300, face: 'target_red1' });
+  const r = await shoot(page, fast.x, 3);
+  assert.notEqual(r.id, fast.id, 'the fast target moved away before the ball landed');
+  await context.close();
+});
+
+test('shooting-gallery AC-6: hits score 10 a pip, 1 near to 3 far; a bullseye doubles and returns a ball; the gold duck scores 100 and refills', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const s0 = await state(page);
+  const far = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  assert.equal((await shoot(page, far.x + far.w * 0.38, 0)).what, 'body');
   let s = await state(page);
-  assert.deepEqual([s.mode, s.shells], ['play', 1]);
-  // The last shell misses with the quota unmet: lost, then the over card.
-  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
+  assert.deepEqual([s.score - s0.score, s.pips], [30, 3]);
+  const nearT = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
+  assert.equal((await shoot(page, nearT.x, 4)).what, 'body');
   s = await state(page);
-  assert.equal(s.mode, 'lost');
+  assert.deepEqual([s.score - s0.score, s.pips], [40, 4]);
+  // Below the quota still, so no bonus multiplies the next hits.
+  await page.evaluate(() => {
+    window.__gallery.game.pips = 0;
+    window.__gallery.game.bonus = false;
+  });
+  const mid = await place(page, 'target', { lane: 2, x: 200, face: 'target_colored' });
+  const h0 = (await state(page)).hopper;
+  assert.equal((await shoot(page, mid.x, 2)).what, 'bull');
+  s = await state(page);
+  assert.deepEqual([s.score - s0.score, s.hopper], [80, h0], 'a bullseye: 20 × 2, and the ball comes back');
+  // The gold duck: 100 points, 2 pips and a full hopper.
+  await page.evaluate(() => (window.__gallery.game.hopper = 2));
+  const gold = await place(page, 'gold', { lane: 4, x: 200 });
+  assert.ok(['body', 'bull'].includes((await shoot(page, gold.x, 4)).what));
+  s = await state(page);
+  assert.equal(s.hopper, 6);
+  assert.ok(s.score - s0.score >= 180, 'the gold duck scored 100');
+  // A miss scores nothing.
+  const s2 = await state(page);
+  const miss = await shoot(page, 60, 0);
+  assert.ok(['wall', 'strip', 'curtain'].includes(miss.what));
+  assert.equal((await state(page)).score, s2.score);
+  await context.close();
+});
+
+test('shooting-gallery AC-7: each shot is the next colour; splats land on targets or stay on the scenery, settling to 80% after 1 s, 70 at most', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const colours = await page.evaluate(() => {
+    const g = window.__gallery;
+    const out = [];
+    for (let i = 0; i < 3; i++) {
+      g.game.lastFire = -1;
+      out.push(g.fire().colour);
+    }
+    return { out, palette: g.PALETTE.slice(0, 3) };
+  });
+  assert.deepEqual(colours.out, colours.palette);
+  await steps(page, 0.5);
+  const t = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 3);
+  assert.equal(await page.evaluate((id) => window.__gallery.targets().find((x) => x.id === id).splats.length, t.id), 1, 'the splat is on the target');
+  const p = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.paint().length = 0;
+    g.game.lastFire = -1;
+    g.aim.yaw = -40;
+    g.aim.lane = 0;
+    g.fire();
+    for (let i = 0; i < 40; i++) g.step(1 / 60);
+    const fresh = g.paintAlpha(g.paint()[0]);
+    for (let i = 0; i < 90; i++) g.step(1 / 60);
+    return { n: g.paint().length, fresh, settled: g.paintAlpha(g.paint()[0]) };
+  });
+  assert.deepEqual([p.n, p.fresh], [1, 1]);
+  assert.ok(near(p.settled, 0.8, 0.01), `settled at ${p.settled}`);
+  const kept = await page.evaluate(() => {
+    const g = window.__gallery;
+    for (let i = 0; i < 80; i++) {
+      g.game.lastFire = -1;
+      g.game.hopper = 6;
+      g.aim.yaw = -50 + (i % 20) * 5;
+      g.aim.lane = i % 5;
+      g.fire();
+      for (let j = 0; j < 30; j++) g.step(1 / 60);
+    }
+    for (let j = 0; j < 60; j++) g.step(1 / 60);
+    return g.paint().length;
+  });
+  assert.ok(kept <= 70, `${kept} splats kept`);
+  await context.close();
+});
+
+test('shooting-gallery AC-8: the frontmost thing takes the shot: a strip before its targets, a hidden pop-up is safe, a back blocks', async () => {
+  const { context, page } = await open();
+  await ready(page, 4);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const lane = g.L.lanes[2];
+    const out = {};
+    // Just under the strip's crest, a target standing behind it is covered.
+    const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: false, face: 'target_colored' });
+    const y = g.stripY(lane, 200) + 3;
+    out.strip = g.resolve(200, y).what;
+    out.above = g.resolve(200, lane.line).what;
+    // A pop-up still behind its strip can't be hit.
+    g.clear();
+    const pop = g.makeTarget('pop', { lane: 1, x: 200, speed: 0, turn: false });
+    const r1 = g.resolve(200, pop.y);
+    out.pop = r1.t ? r1.t.kind : r1.what;
+    // A turned mover in front of a drop-down in the same lane: its back takes the shot.
+    g.clear();
+    g.makeTarget('drop', { lane: 3, x: 200, up: true, turn: false });
+    g.makeTarget('target', { lane: 3, x: 200, speed: 0, turn: true, turnT: 3.0 });
+    const r2 = g.resolve(200, g.L.lanes[3].line);
+    out.back = [r2.what, r2.t && r2.t.kind];
+    return out;
+  });
+  assert.equal(r.strip, 'strip');
+  assert.equal(r.above, 'bull');
+  assert.notEqual(r.pop, 'pop');
+  assert.deepEqual(r.back, ['back', 'target']);
+  await context.close();
+});
+
+test('shooting-gallery AC-9: the hopper holds 6, spends one a shot, refills one every 0.6 s; an empty hopper fires nothing', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const fired = [];
+    for (let i = 0; i < 7; i++) {
+      g.game.lastFire = -1;
+      fired.push(!!g.fire());
+    }
+    const empty = g.game.hopper;
+    g.step(0.61);
+    const one = g.game.hopper;
+    for (let i = 0; i < 200; i++) g.step(1 / 60);
+    return { fired, empty, one, full: g.game.hopper };
+  });
+  assert.deepEqual(r.fired, [true, true, true, true, true, true, false]);
+  assert.deepEqual([r.empty, r.one, r.full], [0, 1, 6]);
+  await context.close();
+});
+
+test('shooting-gallery AC-10: when the time runs out, a met quota goes on to the next round and an unmet one ends the run', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  await page.evaluate(() => {
+    window.__gallery.game.pips = window.__gallery.game.cfg.quota;
+    window.__gallery.game.time = 0.01;
+  });
+  await steps(page, 0.05);
+  assert.equal((await state(page)).mode, 'won');
+  await steps(page, 1.7);
+  let s = await state(page);
+  assert.deepEqual([s.round, s.mode, s.time], [2, 'intro', 30]);
+  await ready(page);
+  await page.evaluate(() => {
+    window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1;
+    window.__gallery.game.score = 120;
+    window.__gallery.game.time = 0.01;
+  });
+  await steps(page, 0.05);
+  assert.equal((await state(page)).mode, 'lost');
   await steps(page, 1.6);
   assert.ok(await page.locator('[data-screen="over"]').isVisible());
-  assert.equal(await page.locator('[data-over-title]').textContent(), 'Out of shells');
-  assert.equal(await page.locator('[data-final-score]').textContent(), String(s.score));
+  assert.equal(await page.locator('[data-over-title]').textContent(), 'Out of time');
+  assert.equal(await page.locator('[data-final-score]').textContent(), '120');
   assert.match(await page.locator('[data-final-detail]').textContent(), /Round 1/);
   assert.match(await page.locator('[data-final-best]').textContent(), /best/i);
   await page.click('[data-again]');
   s = await state(page);
-  assert.deepEqual([s.mode, s.shells, s.round, s.score], ['intro', 8, 1, 0]);
-  // The parade goes by with the quota unmet: lost too.
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.queue.length = 0));
-  await steps(page, 0.1);
-  s = await state(page);
-  assert.equal(s.mode, 'lost');
-  await steps(page, 1.6);
-  assert.equal(await page.locator('[data-over-title]').textContent(), 'They got away');
+  assert.deepEqual([s.mode, s.round, s.score, s.hopper], ['intro', 1, 0, 6]);
   await context.close();
 });
 
-// Win the current round by meeting its quota with the parade over, and step into the next.
-async function winRound(page) {
+test('shooting-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3 far and gold); closing time doubles; never more than ×8', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  const m = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.bonus = true;
+    const mk = (kind, lane) => g.makeTarget(kind, { lane, speed: 0, turn: false });
+    const r = [mk('duck', 4), mk('target', 2), mk('target', 0), mk('gold', 4)].map((t) => g.multiplier(t, false));
+    g.startRound(6);
+    g.game.bonus = true;
+    const far = mk('target', 0);
+    return { r, closingFar: g.multiplier(far, false), capped: g.multiplier(far, true) };
+  });
+  assert.deepEqual(m.r, [1, 2, 3, 3]);
+  assert.equal(m.closingFar, 6);
+  assert.equal(m.capped, 8, '2 × 3 × 2 = 12, capped at 8');
+  await context.close();
+});
+
+test('shooting-gallery AC-12: a frenzy comes once a round from round 2, 8–18 s in: the galop, faster targets, free shots for points only, the timer stopped', async () => {
+  const { context, page } = await open();
+  const at = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    g.startRun({ seed: 9 });
+    const out = [];
+    for (let n = 1; n <= 6; n++) {
+      g.startRound(n);
+      out.push(g.game.frenzyAt);
+    }
+    return out;
+  });
+  assert.equal(at[0], 0, 'none in round 1');
+  assert.ok(at.slice(1).every((t) => t >= 8 && t <= 18), `${at}`);
+  await ready(page, 2, { assist: 0.5 });
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.frenzyAt = 0.1;
+    g.game.frenzyDone = false;
+  });
+  await steps(page, 0.2);
+  let s = await state(page);
+  assert.ok(s.frenzy > 0);
+  assert.equal(await page.evaluate(() => window.__gallery.music()), 'frenzy');
+  const t0 = s.time;
+  const before = await page.evaluate(() => window.__gallery.targets().length);
+  const mover = await place(page, 'target', { lane: 2, x: 100, speed: 50, dir: 1, face: 'target_red1' });
+  await steps(page, 1);
+  const moved = await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).x, mover.id);
+  assert.ok(near(moved - 100, 80, 1), `moved ${moved - 100} in a second at 1.6×`);
+  s = await state(page);
+  assert.ok(near(s.time, t0), 'the timer stopped');
+  assert.ok((await page.evaluate(() => window.__gallery.targets().length)) > before + 2, 'targets sprang up');
+  // A shot in the frenzy is free, scores double, gives no pips and doesn't move the assist.
   await page.evaluate(() => {
     const g = window.__gallery;
     g.clear();
-    if (!g.game.cfg.free) g.game.pips = g.game.cfg.quota;
-    else g.game.clock = 99;
+    g.game.hopper = 3;
   });
-  await steps(page, 0.1);
-  assert.equal((await state(page)).mode, 'won');
-  await steps(page, 2.1);
-}
-
-test('shooting-gallery AC-7: a won round carries its shells plus 4, capped at 10, paying 50 for each one over; free rounds leave the tray', async () => {
-  const { context, page } = await open();
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 3));
-  await winRound(page);
-  let s = await state(page);
-  assert.deepEqual([s.round, s.shells], [2, 7]);
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 9));
-  const before = (await state(page)).score;
-  await winRound(page);
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  const s1 = await state(page);
+  assert.equal((await shoot(page, t.x + t.w * 0.38, 0)).what, 'body');
   s = await state(page);
-  assert.deepEqual([s.round, s.shells, s.score - before], [2, 10, 150]);
-  // A round never starts with fewer than 6, however few were carried.
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 0));
-  await winRound(page);
-  assert.equal((await state(page)).shells, 6);
-  // Into the free round and out of it: the tray is untouched both ways.
-  await ready(page, 3);
-  await page.evaluate(() => (window.__gallery.game.shells = 5));
-  await winRound(page);
+  assert.deepEqual([s.score - s1.score, s.pips, s.assist], [60, 0, 0.5]);
+  assert.ok(s.hopper >= 3, 'the shot was free');
+  await shoot(page, 60, 0);
+  await shoot(page, 60, 0);
+  assert.equal((await state(page)).assist, 0.5, 'frenzy misses leave the assist');
+  await steps(page, 6);
   s = await state(page);
-  assert.deepEqual([s.round, s.shells], [4, 5]);
-  await page.evaluate(() => (window.__gallery.game.mode = 'play'));
-  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
-  assert.equal((await state(page)).shells, 5, 'a free shot costs nothing');
-  await winRound(page);
-  s = await state(page);
-  assert.deepEqual([s.round, s.shells], [5, 9]);
+  assert.equal(s.frenzy, 0);
+  assert.equal(await page.evaluate(() => window.__gallery.music()), 'music', 'the waltz is back');
+  assert.ok(s.time < t0, 'the timer runs again');
   await context.close();
 });
 
-test('shooting-gallery AC-8: each round brings its elements in, as in the table', async () => {
+test('shooting-gallery AC-13: rounds bring in their elements as in the table', async () => {
   const { context, page } = await open();
-  const plan = await page.evaluate(() => {
+  const seen = await page.evaluate(() => {
     const g = window.__gallery;
-    const kinds = (n) => {
-      g.startRun({ seed: 2 });
-      g.startRound(n);
-      const c = g.game.cfg;
-      return { kinds: [...new Set(g.game.queue.map((q) => q.kind).concat(g.targets().filter((t) => t.state === 'live' && !g.game.attract).map((t) => t.kind)))].sort(), free: !!c.free, turn: !!c.turn, wind: !!c.wind, double: !!c.double, name: c.name };
-    };
-    return [1, 2, 3, 4, 5, 6, 7, 8].map(kinds);
-  });
-  assert.deepEqual(plan[0].kinds, ['duck']);
-  assert.ok(plan[1].kinds.includes('tin') && !plan[1].kinds.includes('pop'));
-  assert.ok(plan[2].kinds.includes('pop') && plan[2].kinds.includes('gold'));
-  assert.ok(plan[3].free && plan[6].free, 'free rounds at 4 and 7');
-  assert.ok(!plan[0].free && !plan[1].free && !plan[2].free && !plan[4].free && !plan[5].free && !plan[7].free);
-  assert.deepEqual([plan[4].turn || plan[5].turn, plan[4].wind || plan[5].wind, plan[4].turn && plan[4].wind], [true, true, false]);
-  assert.deepEqual([plan[7].turn, plan[7].wind, plan[7].double, plan[7].name], [true, true, true, 'Closing time']);
-  // In Crosswind the small targets run against the ducks; otherwise both run the same way.
-  const dirs = await page.evaluate(() => {
-    const g = window.__gallery;
-    const run = (n) => {
-      g.startRun({ seed: 3, order: ['turn', 'wind'] });
-      g.startRound(n);
+    g.manual = true;
+    const out = [];
+    for (let n = 1; n <= 6; n++) {
+      g.startRun({ seed: 4 + n });
+      if (n > 1) g.startRound(n);
+      g.game.frenzyAt = 0;
       g.game.mode = 'play';
-      g.manual = true;
-      for (let i = 0; i < 60 * 8; i++) g.step(1 / 60);
-      const live = g.targets().filter((t) => t.state === 'live');
-      return [...new Set(live.filter((t) => t.kind === 'tin').map((t) => t.dir))].concat('|', [...new Set(live.filter((t) => t.kind === 'duck').map((t) => t.dir))]);
-    };
-    return { turn: run(5), wind: run(6) };
-  });
-  assert.deepEqual(dirs.turn, [1, '|', 1]);
-  assert.deepEqual(dirs.wind, [-1, '|', 1]);
-  // The order of rounds 5 and 6 follows the run's seed: both orders happen.
-  const orders = await page.evaluate(() => {
-    const g = window.__gallery;
-    const seen = new Set();
-    for (let seed = 1; seed < 40; seed++) {
-      g.startRun({ seed });
-      seen.add(g.game.plan[5].key);
+      const kinds = new Set();
+      const lanes = { drop: new Set(), mover: new Set() };
+      let turning = false;
+      for (let i = 0; i < 60 * 28; i++) {
+        g.step(1 / 60);
+        g.game.time = 30;
+        for (const t of g.targets()) {
+          kinds.add(t.kind);
+          if (t.kind === 'drop') lanes.drop.add(t.lane);
+          if (t.kind === 'duck' || t.kind === 'target') lanes.mover.add(t.lane);
+          if (t.turn) turning = true;
+        }
+      }
+      out.push({ kinds: [...kinds].sort(), drop: [...lanes.drop].sort(), mover: [...lanes.mover].sort(), turning, double: !!g.ROUNDS[n].double });
     }
-    return [...seen].sort();
+    return out;
   });
-  assert.deepEqual(orders, ['turn', 'wind']);
+  assert.deepEqual(seen[0].mover, [0, 1, 2, 3, 4], 'round 1: movers in every lane');
+  assert.ok(!seen[0].kinds.includes('pop') && !seen[0].kinds.includes('drop'));
+  assert.ok(seen[1].kinds.includes('pop') && !seen[1].kinds.includes('drop'), 'round 2: pop-ups');
+  assert.ok(seen[2].kinds.includes('drop'), 'round 3: drop-downs');
+  assert.ok(seen[2].drop.every((i) => i >= 2), `drop-downs only in the front three lanes: ${seen[2].drop}`);
+  assert.ok(!seen[2].turning && seen[3].turning, 'round 4: turnabouts');
+  assert.ok(seen[4].kinds.includes('gold'), 'round 5: gold ducks');
+  assert.ok(seen[5].double && ['pop', 'drop', 'duck', 'target'].every((k) => seen[5].kinds.includes(k)) && seen[5].turning);
   await context.close();
 });
 
-test('shooting-gallery AC-9: in Turnabouts a hit on a back, or mid-turn, scores nothing and spends the shell; its stick still snaps', async () => {
-  const { context, page } = await open();
-  await ready(page, 5);
-  const s0 = await state(page);
-  const back = await place(page, 'tin', { turn: true, turnT: 3.0, face: 'target_colored' });
-  assert.equal((await shoot(page, back.x, back.y)).what, 'back');
-  const turning = await place(page, 'duck', { turn: true, turnT: 2.3, face: 'duck_yellow', x: 150 });
-  assert.equal((await shoot(page, turning.x, turning.y)).what, 'back');
-  let s = await state(page);
-  assert.deepEqual([s.score, s.shells, s.pips], [s0.score, s0.shells - 2, 0]);
-  // A turned pop-up's back blocks a duck behind it.
-  const duckBehind = await place(page, 'duck', { face: 'duck_yellow', x: 200 });
-  const popBack = await place(page, 'pop', { up: true, upFor: 99, turn: true, turnT: 3.0, x: 200 });
-  const blocked = await page.evaluate(({ x, y }) => {
-    const g = window.__gallery;
-    const r = g.resolve(x, y, g.snapshot());
-    return [r.what, r.p && r.p.t.kind];
-  }, { x: 200, y: Math.max(duckBehind.y, popBack.y - popBack.w * 0.3) });
-  assert.deepEqual(blocked, ['back', 'pop']);
-  const back2 = await place(page, 'tin', { turn: true, turnT: 3.0, face: 'target_red1', x: 260 });
-  assert.equal((await shoot(page, back2.x, back2.y + back2.w / 2 + 8)).what, 'stick');
-  await context.close();
-});
-
-test('shooting-gallery AC-10: finishing round 8 is closing time, paying 60 for each shell left', async () => {
-  const { context, page } = await open();
-  await ready(page, 8);
-  await page.evaluate(() => (window.__gallery.game.shells = 4));
-  const before = (await state(page)).score;
-  await winRound(page);
-  const s = await state(page);
-  assert.equal(s.mode, 'over');
-  assert.equal(s.score - before, 240);
-  assert.equal(await page.locator('[data-over-title]').textContent(), 'Closing time!');
-  await context.close();
-});
-
-test('shooting-gallery AC-11: on touch, a drag aims at 1.5× and its lift never fires; a tap fires; a long hold does not; a second finger fires', async () => {
-  const { context, page } = await open({ hasTouch: true });
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.queue.push({ at: 9999, kind: 'duck' }), 0));
-  const cdp = await context.newCDPSession(page);
-  const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
-  const k = await page.evaluate(() => window.__gallery.stage().k);
-  const c0 = await page.evaluate(() => ({ ...window.__gallery.cross }));
-  // Drag 40 px right: the crosshair moves 60 px, and lifting doesn't fire.
-  await touch('touchStart', [{ x: 200, y: 760, id: 1 }]);
-  for (let i = 1; i <= 8; i++) await touch('touchMove', [{ x: 200 + i * 5, y: 760, id: 1 }]);
-  await touch('touchEnd', []);
-  const c1 = await page.evaluate(() => ({ ...window.__gallery.cross }));
-  assert.ok(Math.abs((c1.x - c0.x) * k - 60) < 1.5, `moved ${(c1.x - c0.x) * k} px`);
-  assert.equal((await state(page)).shells, 8, 'a drag never fires');
-  // A tap fires.
-  await touch('touchStart', [{ x: 120, y: 760, id: 2 }]);
-  await touch('touchEnd', []);
-  assert.equal((await state(page)).shells, 7, 'a tap fires');
-  // A still hold over 250 ms fires nothing.
-  await touch('touchStart', [{ x: 120, y: 760, id: 3 }]);
-  await page.waitForTimeout(320);
-  await touch('touchEnd', []);
-  assert.equal((await state(page)).shells, 7, 'a long hold does not fire');
-  // A second finger fires at once while the first is down; the first's lift then doesn't.
-  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await touch('touchStart', [{ x: 120, y: 760, id: 4 }]);
-  await touch('touchStart', [{ x: 120, y: 760, id: 4 }, { x: 300, y: 760, id: 5 }]);
-  assert.equal((await state(page)).shells, 6, 'the second finger fired');
-  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await touch('touchEnd', [{ x: 120, y: 760, id: 4 }]);
-  await touch('touchEnd', []);
-  assert.equal((await state(page)).shells, 6, 'and the first finger did not');
-  await context.close();
-});
-
-test('shooting-gallery AC-12: a tap is judged where the targets were at touch-down', async () => {
-  const { context, page } = await open({ hasTouch: true });
-  await ready(page, 3);
-  const tin = await place(page, 'tin', { speed: 300, face: 'target_colored', x: 200 });
-  await page.evaluate(({ tin }) => {
-    const g = window.__gallery;
-    g.cross.x = tin.x;
-    g.cross.y = tin.y;
-    g.step(1 / 60); // the moment of touch-down is in the history
-  }, { tin });
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 200, y: 780, id: 1 }] });
-  // The booth moves on before the finger lifts: the target is 50 units away by then.
-  await page.evaluate(() => {
-    for (let i = 0; i < 10; i++) window.__gallery.step(1 / 60);
-  });
-  const now = await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).x, tin.id);
-  assert.ok(now - tin.x > 40, 'the target moved away before the lift');
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  assert.equal(await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).state, tin.id), 'knocked');
-  await context.close();
-});
-
-test('shooting-gallery AC-13: the mouse aims and clicks to fire; the arrow keys aim and Space fires', async () => {
-  const { context, page } = await open();
-  await ready(page, 3);
-  const tin = await place(page, 'tin', { face: 'target_red1', x: 200 });
-  const at = await page.evaluate(({ x, y }) => window.__gallery.toClient(x, y), { x: tin.x + tin.w * 0.38, y: tin.y });
-  await page.mouse.move(at.x, at.y);
-  const c = await page.evaluate(() => ({ ...window.__gallery.cross }));
-  assert.ok(Math.abs(c.x - (tin.x + tin.w * 0.38)) < 1 && Math.abs(c.y - tin.y) < 1, 'the crosshair follows the mouse');
-  await page.mouse.down();
-  await page.mouse.up();
-  assert.equal(await page.evaluate((id) => window.__gallery.targets().find((t) => t.id === id).state, tin.id), 'knocked');
-  const x0 = c.x;
-  await page.keyboard.down('ArrowLeft');
-  await steps(page, 0.3);
-  await page.keyboard.up('ArrowLeft');
-  const x1 = await page.evaluate(() => window.__gallery.cross.x);
-  assert.ok(x1 < x0 - 30, `the left arrow moved the crosshair from ${x0} to ${x1}`);
-  const shells = (await state(page)).shells;
-  await page.evaluate(() => (window.__gallery.game.lastFire = -1));
-  await page.keyboard.press('Space');
-  assert.equal((await state(page)).shells, shells - 1, 'Space fires');
+test('shooting-gallery AC-14: the layout follows the screen; turning mid-run freezes play under a veil; turning back resumes; Restart starts over in the new layout', async () => {
+  const { context, page } = await open({ viewport: LANDSCAPE });
+  assert.deepEqual(await page.evaluate(() => [window.__gallery.stage().orient, window.__gallery.L.n]), ['landscape', 3]);
+  // On the start card, the booth just lays itself out again.
+  await page.setViewportSize(PORTRAIT);
+  await page.waitForTimeout(100);
+  assert.deepEqual(await page.evaluate(() => [window.__gallery.stage().orient, window.__gallery.L.n]), ['portrait', 5]);
+  assert.ok(await page.locator('[data-screen="turned"]').isHidden());
+  await page.click('[data-play]');
+  await page.evaluate(() => (window.__gallery.game.assist = 0.42));
+  await page.waitForTimeout(1400);
+  // Turned mid-run: the veil, play frozen.
+  await page.setViewportSize(LANDSCAPE);
+  await page.waitForTimeout(600);
+  assert.ok(await page.locator('[data-screen="turned"]').isVisible());
+  assert.equal(await page.locator('[data-turned-text]').textContent(), 'Restart in landscape?');
+  const t0 = await page.evaluate(() => window.__gallery.game.T);
+  await page.waitForTimeout(400);
+  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'frozen under the veil');
+  // Turned back: play goes on after the count-in, in the same 5-lane run.
+  await page.setViewportSize(PORTRAIT);
+  await page.waitForTimeout(150);
+  assert.ok(await page.locator('[data-screen="turned"]').isHidden());
+  assert.ok(await page.evaluate(() => window.__gallery.game.resumeT > 0));
+  await page.waitForTimeout(1300);
+  assert.ok((await page.evaluate(() => window.__gallery.game.T)) > t0, 'play goes on');
+  assert.equal(await page.evaluate(() => window.__gallery.L.n), 5);
+  // Turned again, and Restart: a new run in landscape, the assist as it was.
+  await page.setViewportSize(LANDSCAPE);
+  await page.waitForTimeout(600);
+  await page.click('[data-restart]');
+  const r = await page.evaluate(() => ({ n: window.__gallery.L.n, orient: window.__gallery.stage().orient, round: window.__gallery.game.round, score: window.__gallery.game.score, assist: window.__gallery.game.assist }));
+  assert.deepEqual(r, { n: 3, orient: 'landscape', round: 1, score: 0, assist: 0.3 });
+  assert.ok(await page.locator('[data-screen="turned"]').isHidden());
+  // Each layout keeps its own best.
+  const best = await page.evaluate(() => Object.keys(window.__gallery.memory.best).sort());
+  assert.deepEqual(best, ['landscape', 'portrait']);
   await context.close();
 });
 
@@ -509,195 +584,185 @@ const hide = (page) =>
     document.dispatchEvent(new Event('visibilitychange'));
   });
 
-test('shooting-gallery AC-14: hiding the page pauses play; the resuming tap never fires and play waits out the count-in', async () => {
+test('shooting-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in', async () => {
   const { context, page } = await open({ hasTouch: true });
-  // On the start card no pause card shows.
   await hide(page);
-  assert.ok(await page.locator('[data-screen="pause"]').isHidden());
+  assert.ok(await page.locator('[data-screen="pause"]').isHidden(), 'no pause card on the start card');
   await page.click('[data-play]');
-  // Hidden during the round intro: the intro resumes where it was.
-  await page.evaluate(() => (window.__gallery.manual = true));
-  await page.evaluate(() => window.__gallery.step(0.5));
-  await page.evaluate(() => (window.__gallery.manual = false));
+  await page.waitForTimeout(1500);
   await hide(page);
-  const introT = await page.evaluate(() => window.__gallery.game.modeT);
   assert.ok(await page.locator('[data-screen="pause"]').isVisible());
-  await page.waitForTimeout(400);
-  assert.equal(await page.evaluate(() => window.__gallery.game.modeT), introT, 'nothing moves while paused');
-  const shells = (await state(page)).shells;
+  const t0 = await page.evaluate(() => window.__gallery.game.T);
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'nothing moves while paused');
+  const hopper = (await state(page)).hopper;
   await page.locator('[data-screen="pause"]').tap();
   assert.ok(await page.locator('[data-screen="pause"]').isHidden());
-  assert.equal((await state(page)).shells, shells, 'the resuming tap does not fire');
+  assert.equal((await state(page)).hopper, hopper, 'the resuming tap does not fire');
   await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(() => window.__gallery.game.modeT), introT, 'frozen through the count-in');
-  await page.waitForTimeout(700);
-  const t = await page.evaluate(() => window.__gallery.game.modeT);
-  assert.ok(t > introT && t < introT + 0.5, `the intro carries on from ${introT}: ${t}`);
-  // Hidden between rounds: the next round waits.
-  await page.evaluate(() => {
-    const g = window.__gallery;
-    g.manual = true;
-    g.game.resumeT = 0;
-    g.game.mode = 'play';
-    g.clear();
-    g.game.pips = g.game.cfg.quota;
-    g.step(1 / 60);
-    g.manual = false;
-  });
-  assert.equal((await state(page)).mode, 'won');
-  await hide(page);
-  const wonT = await page.evaluate(() => window.__gallery.game.modeT);
-  assert.ok(await page.locator('[data-screen="pause"]').isVisible());
-  await page.waitForTimeout(2000);
-  assert.deepEqual([(await state(page)).mode, await page.evaluate(() => window.__gallery.game.modeT)], ['won', wonT], 'the next round waits');
+  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'frozen through the count-in');
+  await page.waitForTimeout(800);
+  assert.ok((await page.evaluate(() => window.__gallery.game.T)) > t0, 'and then it goes on');
   await context.close();
 });
 
-test('shooting-gallery AC-15: the assist grows only the body, starts at 0.3, rises after misses and a lost early run, falls with hits, and is off in round 8', async () => {
+test('shooting-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in round 6', async () => {
   const { context, page } = await open();
   assert.equal(await page.evaluate(() => window.__gallery.memory.assist), 0.3, 'a new player');
-  await page.click('[data-play]');
-  assert.equal((await state(page)).assist, 0.3);
-  // The body grows by up to 15%; the bullseye doesn't.
-  await ready(page, 3, { assist: 1 });
-  const tin = await place(page, 'tin', { face: 'target_colored', x: 200 });
-  const R = (tin.w / 2) * 0.97;
-  const fx = (f) => shoot(page, tin.x + R * f, tin.y);
-  assert.equal((await page.evaluate(({ x, y }) => window.__gallery.resolve(x, y, window.__gallery.snapshot()).what, { x: tin.x + R * 1.1, y: tin.y })), 'body');
-  const bullR = (tin.w / 2) * 0.366;
-  assert.equal((await page.evaluate(({ x, y }) => window.__gallery.resolve(x, y, window.__gallery.snapshot()).what, { x: tin.x + bullR * 1.08, y: tin.y })), 'body');
+  await ready(page, 2, { assist: 1 });
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: false, face: 'target_colored' });
+    const [w] = g.dims(t);
+    const R = (w / 2) * 0.97;
+    const at = (dx) => g.resolve(200 + dx, t.y).what;
+    const out = { grown: at(R * 1.1), bullEdge: at((w / 2) * 0.366 * 1.08) };
+    g.game.assist = 0;
+    out.plain = at(R * 1.1);
+    return out;
+  });
+  assert.deepEqual([r.grown, r.bullEdge], ['body', 'body']);
+  assert.ok(['wall', 'strip'].includes(r.plain), `without the assist it's a miss: ${r.plain}`);
   await page.evaluate(() => (window.__gallery.game.assist = 0));
-  assert.equal((await page.evaluate(({ x, y }) => window.__gallery.resolve(x, y, window.__gallery.snapshot()).what, { x: tin.x + R * 1.1, y: tin.y })), 'miss');
-  // Two misses in a row raise it by 0.2; a hit lowers it by 0.05.
-  const sky = (await page.evaluate(() => window.__gallery.L.T)) + 20;
-  await shoot(page, 200, sky);
-  await shoot(page, 200, sky);
-  assert.ok(Math.abs((await state(page)).assist - 0.2) < 1e-9);
-  await fx(0.6);
-  assert.ok(Math.abs((await state(page)).assist - 0.15) < 1e-9);
-  // Free-round shots don't count.
-  await ready(page, 4, { assist: 0.5 });
-  await shoot(page, 200, sky);
-  await shoot(page, 200, sky);
-  assert.equal((await state(page)).assist, 0.5);
-  // Off in round 8.
-  await ready(page, 8, { assist: 1 });
+  await shoot(page, 60, 0);
+  await shoot(page, 60, 0);
+  assert.ok(near((await state(page)).assist, 0.2));
+  const t = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 3);
+  assert.ok(near((await state(page)).assist, 0.15));
+  await ready(page, 6, { assist: 1 });
   assert.equal(await page.evaluate(() => window.__gallery.assistNow()), 0);
-  // A run lost in round 1 or 2 raises it by 0.3.
   await ready(page, 2, { assist: 0.1 });
-  await page.evaluate(() => (window.__gallery.game.shells = 1));
-  await shoot(page, 200, sky);
-  assert.ok(Math.abs((await state(page)).assist - 0.4) < 1e-9);
+  await page.evaluate(() => (window.__gallery.game.time = 0.01));
+  await steps(page, 0.05);
+  assert.ok(near((await state(page)).assist, 0.4), 'a run lost in round 2');
   await context.close();
 });
 
-test('shooting-gallery AC-16: the best score is kept across reloads', async () => {
+test('shooting-gallery AC-17: the best score is kept across reloads', async () => {
   const { context, page } = await open();
-  await ready(page, 1);
+  await ready(page);
   await page.evaluate(() => {
     const g = window.__gallery.game;
     g.score = 1234;
-    g.shells = 1;
+    g.time = 0.01;
   });
-  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
-  await steps(page, 1.6);
+  await steps(page, 1.7);
   await page.reload();
   await page.waitForFunction(() => window.__gallery);
-  assert.equal(await page.evaluate(() => window.__gallery.memory.best), 1234);
+  assert.equal(await page.evaluate(() => window.__gallery.memory.best.portrait), 1234);
   assert.match(await page.locator('[data-best]').textContent(), /1,234/);
   await context.close();
 });
 
-test('shooting-gallery AC-17: each state shows only its own card and HUD', async () => {
+test('shooting-gallery AC-18: each state shows only its own card, banner and HUD', async () => {
   const { context, page } = await open();
   const ui = () => page.evaluate(() => window.__gallery.ui());
-  const row = (u) => [u.start, u.over, u.pause, u.banner, u.score, u.pips, u.tray];
-  // Start: only the start card; no banner, no HUD.
-  assert.deepEqual(row(await ui()), [true, false, false, null, false, 'hidden', 'hidden'], 'start');
+  const row = (u) => [u.start, u.over, u.pause, u.turned, u.banner, u.hud, u.pips, u.timer];
+  assert.deepEqual(row(await ui()), [true, false, false, false, null, false, 'hidden', 'hidden'], 'start');
   await page.click('[data-play]');
   await page.evaluate(() => (window.__gallery.manual = true));
-  // The round intro: its banner over the HUD.
   let u = await ui();
-  assert.deepEqual(row(u), [false, false, false, 'Round 1', true, 'shown', 'shown'], 'round intro');
-  assert.equal(u.bannerSub, 'Ducks');
+  assert.deepEqual(row(u), [false, false, false, false, 'Round 1', true, 'shown', 'running'], 'round intro');
+  assert.equal(u.bannerSub, 'Warm-up');
   await steps(page, 1.4);
-  assert.deepEqual(row(await ui()), [false, false, false, null, true, 'shown', 'shown'], 'playing');
-  // Paused: the pause card, no banner, the HUD under it.
+  assert.deepEqual(row(await ui()), [false, false, false, false, null, true, 'shown', 'running'], 'playing');
   await page.evaluate(() => window.__gallery.pause());
-  assert.deepEqual(row(await ui()), [false, false, true, null, true, 'shown', 'shown'], 'paused');
+  assert.deepEqual(row(await ui()), [false, false, true, false, null, true, 'shown', 'running'], 'paused');
   await page.evaluate(() => window.__gallery.resume());
-  assert.deepEqual(row(await ui()), [false, false, false, 'Ready…', true, 'shown', 'shown'], 'resuming');
+  assert.equal((await ui()).banner, 'Ready…', 'resuming');
+  await page.evaluate(() => (window.__gallery.game.resumeT = 0));
+  // The bonus.
+  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
+  await page.evaluate(() => window.__gallery.clear());
+  const t = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
+  await shoot(page, t.x, 4);
+  assert.deepEqual(row(await ui()), [false, false, false, false, 'Bonus!', true, 'gold', 'running'], 'bonus');
+  // Round won: the tally.
+  await page.evaluate(() => (window.__gallery.game.time = 0.01));
+  await steps(page, 0.05);
+  u = await ui();
+  assert.deepEqual([u.banner, u.pips], ['Round cleared', 'gold']);
+  assert.match(u.bannerSub, /^\+\d+ points$/);
+  // A frenzy: its pill, the timer stopped.
+  await steps(page, 3);
   await page.evaluate(() => {
     const g = window.__gallery.game;
-    g.resumeT = 0;
-    g.pips = 6;
-    g.queue.push({ at: 9999, kind: 'duck' });
+    g.mode = 'play';
+    g.banner = null;
+    g.frenzyAt = 0.05;
+    g.frenzyDone = false;
+  });
+  await steps(page, 0.1);
+  assert.deepEqual(row(await ui()), [false, false, false, false, 'Frenzy!', true, 'shown', 'stopped'], 'frenzy');
+  // Over.
+  await page.evaluate(() => {
+    const g = window.__gallery.game;
+    g.frenzy = 0;
+    g.time = 0.01;
   });
   await steps(page, 0.05);
-  assert.deepEqual(row(await ui()), [false, false, false, 'Bonus! ×2 points', true, 'gold', 'shown'], 'bonus: the pips lit gold');
-  // Round won: the banner shows the round's tally.
-  await page.evaluate(() => {
-    window.__gallery.clear();
-    window.__gallery.game.shells = 3;
-  });
-  await steps(page, 0.05);
-  u = await ui();
-  assert.deepEqual(row(u), [false, false, false, 'Round cleared', true, 'gold', 'shown'], 'round won');
-  assert.equal(u.bannerSub, '3 shells carried');
-  // The free round: its banner at its start, the pips hidden and the tray dimmed.
-  await page.evaluate(() => {
-    const g = window.__gallery;
-    g.startRound(4);
-  });
-  u = await ui();
-  assert.deepEqual(row(u), [false, false, false, 'Round 4', true, 'hidden', 'dimmed'], 'free round');
-  assert.equal(u.bannerSub, 'Free round');
-  // Over: the over card, the HUD still shown under it.
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 1));
-  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
-  assert.equal((await ui()).pips, 'flash', 'a lost round flashes the missing pips');
+  assert.equal((await ui()).pips, 'flash', 'the missing pips flash');
   await steps(page, 1.6);
-  assert.deepEqual(row(await ui()), [false, true, false, null, true, 'shown', 'shown'], 'over');
+  assert.deepEqual(row(await ui()), [false, true, false, false, null, true, 'shown', 'running'], 'over');
   await context.close();
+  // Turned: only the veil.
+  const L = await open({ viewport: PORTRAIT });
+  await L.page.click('[data-play]');
+  await L.page.waitForTimeout(300);
+  await L.page.setViewportSize(LANDSCAPE);
+  await L.page.waitForTimeout(600);
+  const v = await L.page.evaluate(() => window.__gallery.ui());
+  assert.deepEqual([v.start, v.over, v.pause, v.turned, v.banner, v.hud], [false, false, false, true, null, true], 'turned');
+  await L.context.close();
 });
 
-test('shooting-gallery AC-18: a shot, a hit, a bullseye, a stick, a round start, the quota and a lost round each have their sound', async () => {
+test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota and the time running out have their sounds', async () => {
   const { context, page } = await open();
   await page.click('[data-play]');
   assert.ok(await page.evaluate(() => window.__gallery.heard.includes('round')));
-  await ready(page, 3);
+  await ready(page);
   const heard = () => page.evaluate(() => window.__gallery.heard.slice());
   const clearHeard = () => page.evaluate(() => (window.__gallery.heard.length = 0));
   await clearHeard();
-  const tin = await place(page, 'tin', { face: 'target_red1', x: 200 });
-  await shoot(page, tin.x + tin.w * 0.38, tin.y);
-  assert.deepEqual(await heard(), ['shot', 'tin']);
+  const t = await place(page, 'target', { lane: 3, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 3);
+  let h = await heard();
+  assert.equal(h[0], 'shot');
+  assert.ok(h.includes('splat') || h.includes('splat2'), `a wet splat: ${h}`);
+  assert.ok(h.includes('hit'));
   await clearHeard();
-  const tin2 = await place(page, 'tin', { face: 'target_colored', x: 200 });
-  await shoot(page, tin2.x, tin2.y);
-  assert.deepEqual(await heard(), ['shot', 'tin', 'ding']);
+  const b = await place(page, 'target', { lane: 0, x: 200, face: 'target_colored' });
+  await shoot(page, b.x, 0);
+  h = await heard();
+  assert.ok(h.includes('ding') && h.includes('tin'), `${h}`);
   await clearHeard();
-  const tin3 = await place(page, 'tin', { face: 'target_colored', x: 200 });
-  await shoot(page, tin3.x, tin3.y + tin3.w / 2 + 8);
-  assert.deepEqual(await heard(), ['shot', 'snap']);
+  await shoot(page, 60, 0);
+  assert.ok((await heard()).includes('plip'), 'a miss lands with a plip');
+  await page.evaluate(() => (window.__gallery.game.hopper = 0));
   await clearHeard();
-  await page.evaluate(() => (window.__gallery.game.pips = 11));
-  const tin4 = await place(page, 'tin', { face: 'target_red1', x: 200 });
-  await shoot(page, tin4.x + tin4.w * 0.38, tin4.y);
+  await page.evaluate(() => {
+    window.__gallery.game.lastFire = -1;
+    window.__gallery.fire();
+  });
+  assert.deepEqual(await heard(), ['dry']);
+  await page.evaluate(() => (window.__gallery.game.hopper = 6));
+  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
+  const q = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
+  await clearHeard();
+  await shoot(page, q.x, 4);
   assert.ok((await heard()).includes('quota'));
-  await ready(page, 1);
-  await page.evaluate(() => (window.__gallery.game.shells = 1));
+  await ready(page);
   await clearHeard();
-  await shoot(page, 200, (await page.evaluate(() => window.__gallery.L.T)) + 20);
-  assert.deepEqual(await heard(), ['shot', 'miss', 'lost']);
-  // The sounds are really played through the audio context, not only listed.
-  assert.ok(await page.evaluate(() => window.__played.length > 0));
+  await page.evaluate(() => (window.__gallery.game.time = 0.01));
+  await steps(page, 0.05);
+  assert.ok((await heard()).includes('lost'));
+  assert.ok(await page.evaluate(() => window.__played.length > 0), 'played through the audio context');
   await context.close();
 });
 
-test('shooting-gallery AC-19: the gallery plays offline once it has been played', async () => {
-  const context = await browser.newContext();
+test('shooting-gallery AC-21: the gallery plays offline once it has been played', async () => {
+  const context = await browser.newContext({ viewport: PORTRAIT });
   const page = await context.newPage();
   await page.goto(BASE + 'shooting-gallery/');
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
@@ -713,32 +778,38 @@ test('shooting-gallery AC-19: the gallery plays offline once it has been played'
   await context.close();
 });
 
-test('shooting-gallery AC-21: at 390×844 and 360×640 the booth, tray and pips fit without scrolling, and small targets are at least 44 px', async () => {
-  for (const viewport of [
-    { width: 390, height: 844 },
-    { width: 360, height: 640 },
-  ]) {
+test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, far targets are at least 44 px, and the counter holds no target', async () => {
+  for (const viewport of [PORTRAIT, { width: 360, height: 640 }, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await page.click('[data-play]');
     const m = await page.evaluate(() => {
       const g = window.__gallery;
       const { k } = g.stage();
-      const t = g.makeTarget('tin', { x: 200 });
-      const [w] = g.dims(t);
+      const far = g.makeTarget('target', { lane: 0, x: 200, speed: 0 });
+      const lowest = Math.max(
+        ...g.L.lanes.map((l) => {
+          const d = g.makeTarget('duck', { lane: l.i, speed: 0 });
+          return l.line + g.dims(d)[1] / 2;
+        })
+      );
       const hb = g.hudBounds();
       return {
-        tin: w * k,
-        trayBottom: hb.trayBottom,
-        trayRight: hb.trayRight,
-        pips: hb.pipsBottom,
-        boothTop: hb.boothTop,
+        far: g.dims(far)[0] * k,
+        lowest: g.toClient(0, lowest).y,
+        hb,
+        n: g.L.n,
         scrollW: document.documentElement.scrollWidth,
         scrollH: document.documentElement.scrollHeight,
       };
     });
-    assert.ok(m.tin >= 44, `small targets ${m.tin} px at ${viewport.width}`);
-    assert.ok(m.trayBottom <= viewport.height && m.trayRight <= viewport.width, `the tray fits at ${viewport.width}×${viewport.height}`);
-    assert.ok(m.pips < m.trayBottom && m.boothTop > 0);
+    const where = `${viewport.width}×${viewport.height}`;
+    assert.equal(m.n, viewport.width > viewport.height ? 3 : 5, where);
+    assert.ok(m.far >= 44, `far targets ${m.far} px at ${where}`);
+    for (const key of ['timer', 'hopper', 'gauge', 'gun']) {
+      assert.ok(m.hb[key].x <= viewport.width && m.hb[key].y <= viewport.height, `${key} fits at ${where}`);
+    }
+    assert.ok(m.hb.gaugeTop.y > m.hb.counterTop, `the gauge is on the counter at ${where}`);
+    assert.ok(m.lowest <= m.hb.counterTop + 1, `no target on the counter at ${where}: ${m.lowest} vs ${m.hb.counterTop}`);
     assert.ok(m.scrollW <= viewport.width && m.scrollH <= viewport.height, 'no scrolling');
     await context.close();
   }

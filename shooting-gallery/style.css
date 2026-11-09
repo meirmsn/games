@@ -24,7 +24,7 @@ body {
   height: 100%;
   display: block;
   touch-action: none;
-  cursor: none;
+  cursor: default;
 }
 
 .mute {
@@ -185,4 +185,35 @@ body {
   color: #4a2a12;
   font-size: 22px;
   font-weight: 800;
+}
+
+.veil {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(60 60 60 / 62%);
+  -webkit-backdrop-filter: grayscale(1);
+  backdrop-filter: grayscale(1);
+}
+
+.veil[hidden] {
+  display: none;
+}
+
+.turned {
+  width: min(300px, calc(100vw - 48px));
+  text-align: center;
+}
+
+.turned p {
+  margin: 0 0 14px;
+}
+
+.turned .hint {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a4a22;
 }
