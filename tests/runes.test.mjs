@@ -207,14 +207,14 @@ test('runes AC-6: leaving a Sink sinks its plain neighbours except the next, nev
   await context.close();
 });
 
-test('runes AC-7: the gate takes the light only last; then the level is solved, marked, remembered, and Next follows', async () => {
+test('runes AC-7: the gate solves only as the last stone; then the result panel shows, the mark is remembered, and Next opens the next level', async () => {
   const { context, page } = await open();
-  // An early step onto the gate is refused and changes nothing.
+  // An early step onto the gate ends the attempt unsolved (AC-20 checks the panel).
   await board(page, ['SoG', 'ooo']);
   await page.evaluate(() => window.__runes.stepTo(1));
-  const before = await page.evaluate(() => JSON.stringify(window.__runes.game.s));
-  assert.equal(await page.evaluate(() => window.__runes.stepTo(2)), false);
-  assert.equal(await page.evaluate(() => JSON.stringify(window.__runes.game.s)), before);
+  assert.equal(await page.evaluate(() => window.__runes.stepTo(2)), true);
+  assert.equal(await page.evaluate(() => window.__runes.game.done), false, 'not solved');
+  assert.equal(await page.evaluate(() => window.__runes.game.failed), true, 'the attempt ended');
   // A Sink beside the gate that sinks the last dark stone as the light leaves it lets the gate in.
   await board(page, ['SKG', '.o.']);
   await page.evaluate(() => window.__runes.stepTo(1));
@@ -225,9 +225,9 @@ test('runes AC-7: the gate takes the light only last; then the level is solved, 
   for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
     await page.keyboard.press(k);
   }
-  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
   assert.deepEqual(await page.evaluate(() => window.__runes.solvedSet()), [0]);
-  await page.click('[data-solved-levels]');
+  await page.click('[data-result-levels]');
   assert.ok(await page.locator('.lv[data-level="1"]').evaluate((el) => el.classList.contains('is-solved')));
   await page.reload();
   await page.waitForFunction(() => window.__runes);
@@ -242,11 +242,11 @@ test('runes AC-7: the gate takes the light only last; then the level is solved, 
   await context.close();
 });
 
-test('runes AC-7: each state shows only its own card, and the board takes input only while playing', async () => {
+test('runes AC-7: each state shows only its own panel, and the board takes input only while playing', async () => {
   const { context, page } = await open();
   const seen = () =>
     page.evaluate(() => ({
-      solved: !document.querySelector('[data-screen="solved"]').hidden,
+      solved: !document.querySelector('[data-result]').hidden,
       levels: !document.querySelector('[data-screen="levels"]').hidden,
     }));
   const c = await cellSize(page);
@@ -263,8 +263,9 @@ test('runes AC-7: each state shows only its own card, and the board takes input 
   for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
     await page.keyboard.press(k);
   }
-  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
   assert.deepEqual(await seen(), { solved: true, levels: false });
+  assert.equal(await page.locator('.bar').isVisible(), false, 'the panel takes the bar’s place');
   const solvedLine = await path(page);
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('Backspace');
@@ -273,8 +274,10 @@ test('runes AC-7: each state shows only its own card, and the board takes input 
   await context.close();
 });
 
-test('runes AC-8: a line that can no longer finish dims the gate and marks stranded stones; a step back restores it', async () => {
+test('runes AC-8: with Guidance on (off by default), a line that can no longer finish dims the gate and marks stranded stones; a step back restores it', async () => {
   const { context, page } = await open({ hash: '2' });
+  assert.equal(await page.evaluate(() => window.__runes.guidance()), false, 'Guidance starts off');
+  assert.equal(await page.locator('[data-guidance]').getAttribute('aria-pressed'), 'false');
   // Find a line on level 2 that dies with a stone stranded.
   const found = await page.evaluate(() => {
     const r = window.__runes;
@@ -300,11 +303,21 @@ test('runes AC-8: a line that can no longer finish dims the gate and marks stran
   });
   assert.ok(found, 'level 2 has a line that strands a stone');
   for (const c of found.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
+  // Guidance off: nothing tells you yet.
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => window.__runes.game.dead), false, 'no live feedback without Guidance');
+  assert.equal(await page.evaluate(() => window.__runes.game.stranded.length), 0);
+  // Guidance on (and remembered): the gate dims and the stranded stones show.
+  await page.click('[data-guidance]');
+  assert.equal(await page.locator('[data-guidance]').getAttribute('aria-pressed'), 'true');
   await page.waitForFunction(() => window.__runes.game.dead === true);
   assert.ok((await page.evaluate(() => window.__runes.game.stranded.length)) > 0, 'a stranded stone is marked');
   await page.evaluate(() => window.__runes.stepBack());
   await page.waitForFunction(() => window.__runes.game.dead === false && window.__runes.game.deadKnown);
   assert.equal(await page.evaluate(() => window.__runes.game.stranded.length), 0);
+  await page.reload();
+  await page.waitForFunction(() => window.__runes);
+  assert.equal(await page.evaluate(() => window.__runes.guidance()), true, 'Guidance is remembered');
   await context.close();
 });
 
@@ -333,7 +346,7 @@ test('runes AC-9: every level is sound: 1–3 solutions, greedy fails, every run
   }
 });
 
-test('runes AC-10: two chapters of five core and two deep levels; Tide locked until Dawn is done; the URL opens any level', async () => {
+test('runes AC-10: two chapters of five core and two bonus levels; Tide locked until Dawn is done; Next goes in order; the URL opens any level', async () => {
   assert.deepEqual(
     CHAPTERS.map((c) => [c.name, LEVELS.slice(c.from, c.to).map((l) => !!l.deep)]),
     [
@@ -343,7 +356,8 @@ test('runes AC-10: two chapters of five core and two deep levels; Tide locked un
   );
   const { context, page } = await open();
   assert.equal(await page.evaluate(() => window.__runes.locked(7)), true, 'Tide starts locked');
-  assert.equal(await page.evaluate(() => window.__runes.nextAfter(4)), 7, 'after level 5, Next opens level 8');
+  assert.equal(await page.evaluate(() => window.__runes.nextAfter(4)), 5, 'after level 5, Next opens level 6');
+  assert.equal(await page.evaluate(() => window.__runes.nextAfter(6)), -1, 'after level 7, Next opens the level select while Tide is locked');
   await page.click('[data-levels]');
   assert.equal(await page.locator('.lv[data-level="8"]').getAttribute('aria-disabled'), 'true');
   await page.locator('.lv[data-level="8"]').click({ force: true });
@@ -354,6 +368,7 @@ test('runes AC-10: two chapters of five core and two deep levels; Tide locked un
   const solved = open({ init: () => localStorage.setItem('runes-solved', '[0,1,2,3,4]') });
   const s = await solved;
   assert.equal(await s.page.evaluate(() => window.__runes.locked(7)), false);
+  assert.equal(await s.page.evaluate(() => window.__runes.nextAfter(6)), 7, 'after level 7, Next opens level 8 once Tide is open');
   await s.page.click('[data-levels]');
   await s.page.locator('.lv[data-level="8"]').click();
   assert.equal(await s.page.evaluate(() => window.__runes.game.index), 7);
@@ -541,7 +556,7 @@ test('runes AC-18: with localStorage throwing, the game plays and solves a level
     await page.keyboard.press(k);
   }
   assert.equal(await page.evaluate(() => window.__runes.game.done), true);
-  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  await page.locator('[data-result][data-kind="solved"]').waitFor({ state: 'visible' });
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -558,5 +573,152 @@ test('runes AC-19: Runes plays offline once it has been played', async () => {
   await page.waitForFunction(() => window.__runes);
   await page.keyboard.press('ArrowRight');
   assert.deepEqual(await path(page), [0, 1]);
+  await context.close();
+});
+
+test('runes AC-20: a line that ends unsolved shows a loud panel below the board with why, and a tip; Undo and Try again carry on', async () => {
+  const { context, page } = await open({ hash: '2' });
+  // Level 2: stepping onto the gate with stones still dark.
+  const toGate = await page.evaluate(() => {
+    const r = window.__runes;
+    const s = r.game.s;
+    const L = r.game.level;
+    // A shortest line from the source to the gate.
+    const prev = new Map([[L.source, -1]]);
+    const queue = [L.source];
+    while (queue.length) {
+      const c = queue.shift();
+      for (let d = 0; d < 4; d++) {
+        const n = r.rules.neighbour(L, c, d);
+        if (n >= 0 && s.up[n] && !prev.has(n)) {
+          prev.set(n, c);
+          queue.push(n);
+        }
+      }
+    }
+    const line = [];
+    for (let c = L.gate; c !== -1; c = prev.get(c)) line.unshift(c);
+    return line;
+  });
+  for (const c of toGate.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
+  const panel = page.locator('[data-result][data-kind="failed"]');
+  await panel.waitFor({ state: 'visible' });
+  assert.match(await panel.textContent(), /didn’t make it/);
+  assert.match(await panel.textContent(), /still dark/);
+  assert.match(await page.locator('[data-result-tip]').textContent(), /Light every stone before you step on the gate/);
+  // The panel sits below the board, never over it.
+  const m = await page.evaluate(() => {
+    const r = window.__runes;
+    return {
+      boardBottom: r.box.oy + r.box.cell * (r.game.level.h + 0.2),
+      panelTop: document.querySelector('[data-result]').getBoundingClientRect().top,
+    };
+  });
+  assert.ok(m.boardBottom <= m.panelTop, `board ends at ${m.boardBottom}, panel starts at ${m.panelTop}`);
+  // Undo takes the last step back and the panel away.
+  await page.click('[data-result-undo]');
+  await panel.waitFor({ state: 'hidden' });
+  assert.equal(await page.evaluate(() => window.__runes.game.failed), false);
+  assert.deepEqual(await path(page), toGate.slice(0, -1));
+
+  // A dead end away from the gate: the line has nowhere to go.
+  const stuck = await page.evaluate(() => {
+    const r = window.__runes;
+    r.restart();
+    const s = r.game.s;
+    const L = r.game.level;
+    const open = () => [0, 1, 2, 3].map((d) => r.rules.neighbour(L, r.rules.head(s), d)).filter((n) => n >= 0 && !r.rules.blocked(s, n));
+    function walk() {
+      const m = open();
+      if (!m.length && r.rules.head(s) !== L.gate) return s.path.slice();
+      for (const n of m) {
+        if (n === L.gate) continue;
+        r.rules.step(s, n);
+        const found = walk();
+        r.rules.back(s);
+        if (found) return found;
+      }
+      return null;
+    }
+    return walk();
+  });
+  assert.ok(stuck, 'level 2 has a dead end');
+  for (const c of stuck.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
+  await panel.waitFor({ state: 'visible' });
+  assert.match(await page.locator('[data-result-tip]').textContent(), /way in and a way out/);
+  await page.click('[data-again]');
+  await panel.waitFor({ state: 'hidden' });
+  assert.deepEqual(await path(page), [await page.evaluate(() => window.__runes.game.level.source)], 'Try again restarts');
+  // A tip for each rune's trap.
+  const tips = await page.evaluate(() => window.__runes.tips);
+  assert.match(tips.rise, /Rise/);
+  assert.match(tips.sink, /Sink/);
+  await context.close();
+});
+
+test('runes AC-21: with a mouse, the cursor is a hand over stones the line can act on, a closed hand while dragging, and the arrow elsewhere', async () => {
+  const { context, page } = await open();
+  const cursor = () => page.evaluate(() => getComputedStyle(document.querySelector('#pool')).cursor);
+  const at = async (c) => center(page, c);
+  const mouse = async (x, y) => {
+    await page.evaluate(
+      ({ x, y }) => document.querySelector('#pool').dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerType: 'mouse', bubbles: true })),
+      { x, y }
+    );
+  };
+  let p = await at(1); // a stone next to the head
+  await mouse(p.x, p.y);
+  assert.equal(await cursor(), 'pointer');
+  p = await at(0); // the head
+  await mouse(p.x, p.y);
+  assert.equal(await cursor(), 'pointer');
+  p = await at(3); // water
+  await mouse(p.x, p.y);
+  assert.equal(await cursor(), 'auto');
+  p = await at(8); // a stone too far away
+  await mouse(p.x, p.y);
+  assert.equal(await cursor(), 'auto');
+  // While dragging: a closed hand.
+  const c = await cellSize(page);
+  p = await at(0);
+  await pointer(page, 'pointerdown', 1, p.x, p.y);
+  for (let i = 1; i <= 6; i++) await pointer(page, 'pointermove', 1, p.x + (c * 0.3 * i) / 6, p.y);
+  assert.equal(await cursor(), 'grabbing');
+  await pointer(page, 'pointerup', 1, p.x + c * 0.3, p.y);
+  await context.close();
+});
+
+test('runes AC-22: every button at the bottom says what it does on hover', async () => {
+  const { context, page } = await open();
+  for (const sel of ['[data-levels]', '[data-undo]', '[data-restart]', '[data-hint]', '[data-guidance]']) {
+    const title = await page.locator(sel).getAttribute('title');
+    assert.ok(title && title.length > 3, `${sel} has a hover label`);
+  }
+  await context.close();
+});
+
+test('runes AC-23: the level select names each chapter with its difficulty, locks what can’t be opened yet, ticks solved levels, and sits on the board', async () => {
+  const { context, page } = await open({ init: () => localStorage.setItem('runes-solved', '[0,1]') });
+  await page.click('[data-levels]');
+  const names = await page.locator('.ch-name').allTextContents();
+  assert.deepEqual(names, ['Dawn (easy)', 'Tide (challenging)']);
+  assert.equal(await page.locator('.lv.is-locked').count(), 7, 'all of Tide is locked');
+  assert.equal(await page.locator('.lv[data-level="8"] svg').count(), 1, 'a locked level shows a lock');
+  assert.equal(await page.locator('.lv.is-solved').count(), 2);
+  assert.equal(await page.locator('.ch-bonus').count(), 2, 'each chapter’s bonus pair is labelled');
+  assert.match(await page.locator('.ch-bonus').first().textContent(), /bonus/i);
+  await page.waitForTimeout(400); // the card's slide-in
+  const m = await page.evaluate(() => {
+    const r = window.__runes;
+    const card = document.querySelector('[data-screen="levels"]').getBoundingClientRect();
+    return {
+      card: (card.top + card.bottom) / 2,
+      board: r.box.oy + (r.box.cell * (r.game.level.h + 0.2)) / 2,
+      top: card.top,
+      bottom: card.bottom,
+    };
+  });
+  assert.ok(m.top >= 16 && m.bottom <= 844 - 16, 'inside the screen');
+  assert.ok(Math.abs(m.card - m.board) <= 2, `card centre ${m.card}, board centre ${m.board}`);
   await context.close();
 });

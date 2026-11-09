@@ -133,7 +133,9 @@ export function effect(s, cell, d, next = -1) {
 }
 
 // Step the light from the head to `to`. Returns the step ({ cell, dir, changes }) or null.
-export function step(s, to) {
+// The player may step onto the gate early ({ early: true }), which ends the attempt unsolved; the
+// solver never does.
+export function step(s, to, { early = false } = {}) {
   if (blocked(s, to)) return null;
   const from = head(s);
   const d = dirOf(s.level, from, to);
@@ -144,9 +146,9 @@ export function step(s, to) {
   if (s.level.kind[to] !== 'sink') for (const [c, v] of effect(s, to, d)) setUp(s, c, v, changes);
   const st = { cell: to, dir: d, changes };
   s.steps.push(st);
-  // The gate ends the line, so it takes the light only when no other stone is left dark. A step
-  // that would arrive early is refused and leaves no trace.
-  if (to === s.level.gate && left(s) > 0) {
+  // The gate ends the line, so it solves the level only when no other stone is left dark. Unless
+  // the caller allows it, a step that would arrive early is refused and leaves no trace.
+  if (!early && to === s.level.gate && left(s) > 0) {
     back(s);
     return null;
   }

@@ -125,6 +125,12 @@ body[data-chapter='dawn'] .num {
   }
 }
 
+.round[aria-pressed='true'] {
+  color: var(--light-ink);
+  background: var(--light);
+  box-shadow: 0 0 18px rgb(255 216 138 / 55%);
+}
+
 .mute {
   position: fixed;
   z-index: 10;
@@ -149,6 +155,11 @@ body[data-chapter='dawn'] .num {
   display: block;
 }
 
+.bar[hidden],
+.result[hidden] {
+  display: none;
+}
+
 .bar {
   position: fixed;
   z-index: 4;
@@ -157,11 +168,120 @@ body[data-chapter='dawn'] .num {
   bottom: calc(env(safe-area-inset-bottom) + 16px);
   display: flex;
   justify-content: center;
-  gap: 18px;
+  gap: 14px;
+}
+
+/* The result of an attempt: below the board, never over the line you drew. */
+.result {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 14px 16px 12px;
+  text-align: center;
+  border-radius: 22px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+  animation: up 260ms ease-out;
+}
+
+.result[data-kind='solved'] {
+  box-shadow: 0 0 0 2px var(--light), 0 0 36px rgb(255 216 138 / 45%);
+}
+
+.result[data-kind='failed'] {
+  box-shadow: 0 0 0 2px #ff8a7e, 0 10px 40px rgb(0 0 0 / 35%);
+}
+
+@keyframes up {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 24px);
+  }
+}
+
+.result-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.result-title {
+  margin: 2px 0 2px;
+  font-size: 26px;
+  font-weight: 750;
+}
+
+.result[data-kind='failed'] .result-title {
+  color: #ffb3aa;
+}
+
+.result-text {
+  margin: 0;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.result-tip {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  background: rgb(255 216 138 / 14%);
+}
+
+.result-tip::before {
+  content: 'Tip: ';
+  font-weight: 700;
+  color: var(--light);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.result-actions .play {
+  flex: 1 1 100%;
+  min-height: 48px;
+}
+
+.result-actions .play[hidden],
+.result-actions .soft[hidden] {
+  display: none;
+}
+
+.soft {
+  flex: 1 1 0;
+  min-height: 44px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  background: rgb(244 239 230 / 12%);
+  cursor: pointer;
+}
+
+.soft:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
 }
 
 .round:focus-visible,
 .play:focus-visible,
+.soft:focus-visible,
 .link:focus-visible,
 .lv:focus-visible {
   outline: 3px solid #fff;
@@ -271,12 +391,32 @@ body[data-chapter='dawn'] .num {
   gap: 8px;
 }
 
-.ch-deep {
-  margin-left: 6px;
-  padding-left: 12px;
-  border-left: 1px solid rgb(244 239 230 / 25%);
+.ch-level {
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.ch-bonus {
+  position: relative;
+  margin-left: 4px;
+  padding: 16px 8px 6px;
+  border-radius: 12px;
+  background: rgb(244 239 230 / 8%);
   display: flex;
   gap: 8px;
+}
+
+.ch-bonus-label {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .lv {
@@ -294,23 +434,31 @@ body[data-chapter='dawn'] .num {
   cursor: pointer;
 }
 
-.lv.is-deep {
-  box-shadow: inset 0 0 0 2px #e8c36a;
-}
-
 .lv.is-solved {
   color: var(--light-ink);
   background: linear-gradient(#ffe7ae, #f0c66a 86%, #b98c35 86%);
   box-shadow: 0 0 14px rgb(255 216 138 / 55%);
 }
 
-.lv.is-deep.is-solved {
-  box-shadow: 0 0 14px rgb(255 216 138 / 55%), inset 0 0 0 2px #fff4cf;
-}
-
 .lv.is-current {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+.lv.is-solved::after {
+  content: '✓';
+  margin-left: 2px;
+  font-size: 12px;
+}
+
+.lv svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .lv[aria-disabled='true'] {

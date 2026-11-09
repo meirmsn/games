@@ -1,6 +1,6 @@
 # Runes: a calm puzzle of stones that rise and sink
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; the changes after it are the owner's, from their playtest of the preview, in the chat on 2026-11-09 (Decisions)
 
 ## Intent
 
@@ -30,12 +30,12 @@ changes under the line you draw.
 
 - The rules. A portrait board of up to 6 × 8 cells: stones and water, one source, one gate. The line
   of light starts on the source and steps to an orthogonal neighbour stone; each stone holds the light
-  once. **The goal is every stone lit, with the line ending on the gate**; the gate takes the light
+  once. **The goal is every stone lit, with the line ending on the gate**; the gate solves the level
   only as the last stone, counted after that step's own effects (so a Sink beside the gate that
   sinks the last dark stones as the light leaves it lets the gate take the light); an early step onto
-  the gate is refused and changes nothing. Runes fire once, only on cells the light doesn't hold: a **Rise** (the ↑
-  glyph, gold), as the light enters it, raises its water neighbours into stones, which then have to
-  be lit too: a bridge and a burden; a **Sink** (the ᛦ glyph, violet), as the light leaves it, sinks
+  the gate ends the attempt (changed after the go, below). Runes fire once, only on cells the light doesn't hold: a **Rise** (the arch
+  glyph ᚢ, gold; it was ↑, changed after the go), as the light enters it, raises its water neighbours into stones, which then have to
+  be lit too: a bridge and a burden; a **Sink** (the swirl glyph ᛃ, violet; it was ᛦ), as the light leaves it, sinks
   its plain-stone neighbours except the one the light goes on to: fewer stones to light, but it can
   drown your only way back. Neither ever changes a rune, the source or the gate. Rejected: "reach the
   gate" as the goal, under which a Rise is always good and a Sink always bad, so there is no choice
@@ -58,13 +58,12 @@ changes under the line you draw.
   through boards where the rune only fixed checkerboard parity (concept attack, round 2) (session
   proposal, 2026-11-09).
 - Structure, slice 1: two chapters, **Dawn** (plain stones, then the Rise; no Sink) and **Tide** (the
-  Sink alone first, then both), each with five core levels and two optional **deep** levels, harder,
-  drawn with a gold rim. One flat order, levels 1–14: Dawn's core 1–5, its deep 6–7, Tide's core
+  Sink alone first, then both), each with five core levels and two optional **deep** (bonus) levels,
+  harder (shown as a labelled bonus pair, changed after the go). One flat order, levels 1–14: Dawn's core 1–5, its deep 6–7, Tide's core
   8–12, its deep 13–14. Tide opens once Dawn's core levels are solved; deep levels never block
-  anything. Next goes to the next core level (from 5 to 8); the deep ones are chosen on the level
-  select; after a chapter's last level, the level select opens. The level select shows each level as
-  a stone: dark when open, lit when solved, faded and locked when locked, deep ones in their own
-  pair. Rejected: two goals per level (the gate, and every rune), which with free undo is an easy
+  anything. Next goes to the next level in order (it skipped the deep ones until the owner's playtest,
+  changed after the go); the level select shows each level as a stone, with a tick when solved and a
+  lock when locked, the deep ones in a labelled bonus pair. Rejected: two goals per level (the gate, and every rune), which with free undo is an easy
   and a hard mode rather than a choice (concept attack, round 1) (session proposal, 2026-11-09).
 - Long-form and portrait: a puzzle wants sessions of 10–30 minutes, not runs; one hand holds a phone
   and a tall board. The board fits 360 × 640 CSS px with cells of at least 44 px, 16 px clear of the
@@ -119,6 +118,15 @@ changes under the line you draw.
 - The concept check, answered in writing, and both rounds of the concept attack are in this
   change's PR description (session proposal, 2026-11-09).
 
+- Changed after the go, from the owner's playtest of the preview (chat, 2026-11-09), in their words:
+  - **Live guidance is opt-in.** "there should be a button to display those live marks when you make a decision and now it's impossible to reach a tile. That should not be the default … You shouldn't see any feedback of that until you're done." A Guidance button (remembered in this browser) turns on the dimming gate and the cracked stones; off by default.
+  - **A loud result when you're done, below the board.** "when you're done, we should be loud … right below so that we don't block you from seeing what you built … okay, you're done, you didn't make it … make sure to reach all tiles before getting to the last one. That should be the message … on level 2 … as you go along, make sure the messages are pro tips about why you're not finishing or what you need to do to finish." The light may now step onto the gate early, which ends the attempt; so does a line with nowhere to go. The panel takes the bar's place below the board, says how many stones are still dark, outlines them, and gives a tip for why: the gate taken early, a Rise's stones left behind, a Sink's drowning, or a dead end. It offers Try again, Undo last move and All levels. Solving shows the same panel with Next. This replaces "an early step onto the gate is refused" and the solved card.
+  - **The cursor.** "it should be the hand for the tiles … where you can drag … as you're being active … when you're not on top of something that is draggable … it should change as usual." With a mouse: a hand over the head, a lit stone or a stone the line can step to; a closed hand while dragging; the usual arrow elsewhere.
+  - **Hover labels.** "The buttons at the bottom should have hover, tell you what they do."
+  - **The level select.** "put a lock in the ones that you cannot reach yet … next to the done, put in parentheses easy, and then next to the tide, put challenging." Locked levels show a lock, solved ones a tick, the chapters read "Dawn (easy)" and "Tide (challenging)", and each chapter's last two levels sit in a box labelled "bonus" (they were "deep", with a gold rim that read as half-solved: "some of them are just with a yellow border but still gray"). The dialog is centred on the board ("the level indicator square like dialog is not centered").
+  - **Next goes in order.** "when I was done with level 5, it jumped to level 8, and I don't know how that happened or why." Next opens the next level, bonus ones included; after level 7 it opens level 8 once Tide is open, else the level select.
+  - **No arrow on the Rise.** "there's like an arrow, and it's unclear what the direction of the arrow means." The Rise's glyph is now the arch (ᚢ, a bridge rising) and the Sink's the swirl (ᛃ, a whirlpool), so neither reads as a direction.
+
 ## Acceptance items
 
 - **AC-1** Opening `runes/` shows level 1's board already moving (two frames 300 ms apart differ
@@ -135,19 +143,20 @@ changes under the line you draw.
   taking that step back lowers them again — `tests/runes.test.mjs`.
 - **AC-6** Leaving a Sink sinks its unlit plain-stone neighbours except the one the light goes to,
   and never a rune, the source or the gate; taking that step back raises them again — `tests/runes.test.mjs`.
-- **AC-7** A step onto the gate while another stone is dark is refused and changes nothing; a step
-  onto it that leaves no stone dark (counting what that step sinks) solves the level: the solved card
-  shows, the level's stone on the level select is lit, the mark survives a reload, and Next opens the
-  next core level — `tests/runes.test.mjs`.
-- **AC-8** A line that can no longer finish dims the gate, and a stone it cut off for good is marked
-  stranded; taking back the step that lost it restores the gate's glow — `tests/runes.test.mjs`.
+- **AC-7** A step onto the gate while another stone is dark ends the attempt unsolved; a step onto it
+  that leaves no stone dark (counting what that step sinks) solves the level: the result panel shows
+  "Solved!" in the bar's place, the level's stone on the level select is lit, the mark survives a
+  reload, and Next opens the next level — `tests/runes.test.mjs`.
+- **AC-8** Guidance starts off: a line that can no longer finish shows nothing until it ends. With
+  Guidance on (remembered after a reload), such a line dims the gate and marks the stones it cut off
+  for good as stranded; taking back the step that lost it restores the gate's glow — `tests/runes.test.mjs`.
 - **AC-9** Every level in `runes/levels.js` uses only stones, water, the source, the gate, Rise and
   Sink; has 1 to 3 solutions; fails the greedy line when it has a rune; and each of its runes passes
   the generator's checks (a Rise constrains, a Sink is needed, every rune is two-sided), with no
   search cut short. Dawn has no Sink, and the first level with each rune has only that rune — `tests/runes.test.mjs`.
-- **AC-10** There are 14 levels in two chapters, Dawn (core 1–5, deep 6–7) and Tide (core 8–12, deep
-  13–14). Tide is locked until levels 1–5 are solved; deep levels lock nothing; after level 5, Next
-  opens level 8; the URL `runes/#<n>` opens level n even when it is locked; `#0`, `#99` and `#abc`
+- **AC-10** There are 14 levels in two chapters, Dawn (core 1–5, bonus 6–7) and Tide (core 8–12, bonus
+  13–14). Tide is locked until levels 1–5 are solved; bonus levels lock nothing; Next opens the next
+  level in order (after level 5, level 6), and after level 7 opens level 8 only once Tide is open; the URL `runes/#<n>` opens level n even when it is locked; `#0`, `#99` and `#abc`
   open level 1 and rewrite the hash — `tests/runes.test.mjs`.
 - **AC-11** Hint cuts the line back to the longest start it shares with one of the stored solutions
   (the one sharing most, the first listed on a tie) and marks that solution's next stone; Undo
@@ -166,21 +175,34 @@ changes under the line you draw.
   label, and the page still lists seven tiles — `tests/site.test.mjs`.
 - **AC-18** With localStorage throwing, the game plays and solves a level without errors — `tests/runes.test.mjs`.
 - **AC-19** Runes plays offline once it has been played — `tests/runes.test.mjs`.
+- **AC-20** A line that ends unsolved (on the gate early, or with nowhere to go) shows the result panel
+  below the board, clear of it: "You didn't make it", how many stones are still dark, and a tip for
+  why (on level 2's early gate: "Light every stone before you step on the gate"; at a dead end: a way
+  in and a way out); Undo last move takes the step back and the panel away; Try again restarts — `tests/runes.test.mjs`.
+- **AC-21** With a mouse, the cursor is a hand over the head, a lit stone or a stone the line can step
+  to, a closed hand while dragging, and the usual arrow over water and far stones — `tests/runes.test.mjs`.
+- **AC-22** Each button at the bottom (Levels, Undo, Restart, Hint, Guidance) has a hover label that
+  says what it does — `tests/runes.test.mjs`.
+- **AC-23** The level select reads "Dawn (easy)" and "Tide (challenging)", shows a lock on each level
+  that can't be opened yet and a tick on each solved one, labels each chapter's bonus pair, and is
+  centred on the board, inside the screen — `tests/runes.test.mjs`.
 
 ## Core flow
 
 1. Tap the Runes tile: level 1's pool is moving, the source pulsing.
 2. Drag: the line of light steps from stone to stone; runes raise and sink stones as it passes.
 3. Light every stone and end on the gate: the gate opens and the next level follows.
-4. Stuck: the gate dims; drag back, tap a lit stone, Undo, or ask for a Hint.
+4. Stuck: the panel below the board says you didn't make it and why; Undo or Try again. (With
+   Guidance on, the gate dims as soon as the line is lost.)
 
 ## States
 
-| State | Board | Solved card | Level select |
-| ----- | ----- | ----------- | ------------ |
-| Playing | shown, takes input | hidden | hidden |
-| Solved (a moment after the gate opens) | shown, no input | shown, with Next | hidden |
-| Choosing a level | shown behind, no input | hidden | shown |
+| State | Board | Bar | Result panel | Level select |
+| ----- | ----- | --- | ------------ | ------------ |
+| Playing | shown, takes input | shown | hidden | hidden |
+| Solved | shown above the panel, no input | hidden | "Solved!", with Next | hidden |
+| Didn't make it | shown above the panel, missed stones outlined, no input but Undo | hidden | "You didn't make it", a tip, Try again, Undo | hidden |
+| Choosing a level | shown behind, no input | shown | as before | shown, on the board |
 
 ## Out of scope
 

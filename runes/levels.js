@@ -1,11 +1,11 @@
 // The levels of Runes, in play order. Level 1 is hand-made; the rest were picked from
 // scripts/runes/generate.mjs and pass its checks (tests/runes.test.mjs re-solves every one).
 //   .  water   o  stone   S  source   G  gate   R  rise   K  sink
-// `deep` levels are optional: harder, drawn with a gold rim, and they never lock anything.
+// `deep` levels are the bonus pair at the end of each chapter: harder, and they never lock anything.
 
 export const CHAPTERS = [
-  { id: 'dawn', name: 'Dawn', from: 0, to: 7 },
-  { id: 'tide', name: 'Tide', from: 7, to: 14 },
+  { id: 'dawn', name: 'Dawn', level: 'easy', from: 0, to: 7 },
+  { id: 'tide', name: 'Tide', level: 'challenging', from: 7, to: 14 },
 ];
 
 export const LEVELS = [

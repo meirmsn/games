@@ -73,11 +73,17 @@ const ui = {
   undo: $('[data-undo]'),
   restart: $('[data-restart]'),
   hint: $('[data-hint]'),
-  solved: $('[data-screen="solved"]'),
-  solvedChapter: $('[data-solved-chapter]'),
-  solvedName: $('[data-solved-name]'),
+  guidance: $('[data-guidance]'),
+  bar: $('.bar'),
+  result: $('[data-result]'),
+  resultKicker: $('[data-result-kicker]'),
+  resultTitle: $('[data-result-title]'),
+  resultText: $('[data-result-text]'),
+  resultTip: $('[data-result-tip]'),
   next: $('[data-next]'),
-  solvedLevels: $('[data-solved-levels]'),
+  again: $('[data-again]'),
+  resultUndo: $('[data-result-undo]'),
+  resultLevels: $('[data-result-levels]'),
   levels: $('[data-screen="levels"]'),
   chapters: $('[data-chapters]'),
   closeLevels: $('[data-close-levels]'),
@@ -103,6 +109,32 @@ function markSolved(i) {
   }
 }
 
+// Guidance (opt-in): while it is on, the gate dims the moment the line can no longer finish and
+// stones it cut off crack. Off, nothing tells you until the line is done. Kept in this browser.
+const GUIDE_KEY = 'runes-guidance';
+let guidance = false;
+try {
+  guidance = window.localStorage.getItem(GUIDE_KEY) === 'on';
+} catch (e) {
+  guidance = false;
+}
+function setGuidance(on) {
+  guidance = Boolean(on);
+  try {
+    if (guidance) window.localStorage.setItem(GUIDE_KEY, 'on');
+    else window.localStorage.removeItem(GUIDE_KEY);
+  } catch (e) {
+    // Blocked storage: the setting lasts until the page reloads.
+  }
+  ui.guidance.setAttribute('aria-pressed', String(guidance));
+  ui.guidance.title = guidance ? 'Guidance is on: shows when the line can no longer finish' : 'Guidance: show when the line can no longer finish';
+  if (guidance) checkDead(game.s.path.join(','));
+  else {
+    game.dead = false;
+    game.stranded = [];
+  }
+}
+
 const chapterOf = (i) => CHAPTERS.find((c) => i >= c.from && i < c.to);
 const coreOf = (c) => LEVELS.slice(c.from, c.to).map((l, k) => (l.deep ? -1 : c.from + k)).filter((k) => k >= 0);
 function locked(i) {
@@ -110,15 +142,11 @@ function locked(i) {
   if (ch <= 0) return false;
   return !coreOf(CHAPTERS[ch - 1]).every((k) => solvedSet.has(k));
 }
-// What Next opens after level i: the next core level, or -1 for the level select.
+// What Next opens after level i: the next level in order, or -1 (the level select) after the last
+// level or when the next one is still locked.
 function nextAfter(i) {
-  const ch = chapterOf(i);
-  for (let k = i + 1; k < LEVELS.length; k++) {
-    if (LEVELS[k].deep) continue;
-    if (k >= ch.to && LEVELS[i].deep) return -1; // a deep level's Next stays in its chapter
-    return k;
-  }
-  return -1;
+  const k = i + 1;
+  return k < LEVELS.length && !locked(k) ? k : -1;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -129,8 +157,10 @@ const game = {
   s: null,
   solutions: [],
   actions: [], // undo history: { type, cells }
-  done: false,
-  dead: false, // the line can no longer finish
+  done: false, // solved
+  failed: false, // the line ended without lighting every stone
+  tip: '',
+  dead: false, // the line can no longer finish (shown only with guidance on)
   deadKnown: true,
   stranded: [],
   hintCell: -1,
@@ -141,8 +171,9 @@ const game = {
   ghost: { shows: 0, t: -1 },
   openedAt: 0,
   theme: THEMES.dawn,
-  overlay: null, // 'solved' | 'levels' | null
+  overlay: null, // 'levels' | null
 };
+const ended = () => game.done || game.failed;
 
 function loadLevel(i, { push = true, rows = null } = {}) {
   if (!(i >= 0 && i < LEVELS.length)) i = 0;
@@ -152,6 +183,8 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   game.solutions = R.solve(game.level, { max: 3 }).solutions;
   game.actions = [];
   game.done = false;
+  game.failed = false;
+  game.tip = '';
   game.dead = false;
   game.stranded = [];
   game.hintCell = -1;
@@ -164,12 +197,12 @@ function loadLevel(i, { push = true, rows = null } = {}) {
   document.querySelector('meta[name="theme-color"]').setAttribute('content', game.theme.meta);
   document.body.dataset.chapter = chapterOf(i).id;
   const ch = chapterOf(i);
-  ui.chapter.textContent = LEVELS[i].deep ? `${ch.name} · deep` : ch.name;
+  ui.chapter.textContent = LEVELS[i].deep ? `${ch.name} · bonus` : ch.name;
   ui.num.textContent = String(i + 1);
   ui.name.textContent = LEVELS[i].name;
   if (push && location.hash !== `#${i + 1}`) history.replaceState(null, '', `#${i + 1}`);
   showOverlay(null);
-  layout();
+  showResult(null);
   updateButtons();
 }
 
@@ -195,7 +228,9 @@ function layout() {
   ui.canvas.height = Math.round(H * dpr);
   if (!game.level) return;
   const top = ui.levelsBtn ? document.querySelector('.title').getBoundingClientRect().bottom + 16 : 80;
-  const bottom = ui.levelsBtn.getBoundingClientRect().top - 16;
+  // The result panel, while it shows, takes the bar's place: the board moves up to stay in view.
+  const below = ui.result.hidden ? ui.bar : ui.result;
+  const bottom = below.getBoundingClientRect().top - 16;
   const L = game.level;
   const availW = Math.min(W - 40, 520);
   const availH = Math.max(120, bottom - top);
@@ -245,7 +280,9 @@ function applied(st, { quiet = false } = {}) {
 }
 
 function stepTo(cell, { record = true } = {}) {
-  const st = R.step(game.s, cell);
+  if (ended()) return false;
+  // The player may step onto the gate before every stone is lit: that ends the attempt.
+  const st = R.step(game.s, cell, { early: true });
   if (!st) return false;
   if (record) game.actions.push({ type: 'step' });
   sound.play('chime', { rate: chimeRate(game.s.path.length), gain: 0.7 });
@@ -255,6 +292,8 @@ function stepTo(cell, { record = true } = {}) {
 }
 
 function stepBack({ record = true } = {}) {
+  if (game.done) return false;
+  reopen();
   const len = game.s.path.length;
   const st = R.back(game.s);
   if (!st) return false;
@@ -270,8 +309,10 @@ function stepBack({ record = true } = {}) {
 
 // Cut the line back to `cell`; the action remembers the cells cut, so Undo can lay them again.
 function cutTo(cell, type = 'cut') {
+  if (game.done) return false;
   const idx = game.s.path.indexOf(cell);
   if (idx < 0 || idx === game.s.path.length - 1) return false;
+  reopen();
   const cells = game.s.path.slice(idx + 1);
   const len = game.s.path.length;
   while (game.s.path.length > idx + 1) {
@@ -287,16 +328,25 @@ function cutTo(cell, type = 'cut') {
 
 function relay(cells) {
   for (const c of cells) {
-    const st = R.step(game.s, c);
+    const st = R.step(game.s, c, { early: true });
     if (!st) break;
     applied(st, { quiet: true });
   }
+}
+
+// After a failed attempt, any change to the line takes the result panel away again.
+function reopen() {
+  if (!game.failed) return;
+  game.failed = false;
+  game.tip = '';
+  showResult(null);
 }
 
 function undo() {
   if (game.done) return false;
   const a = game.actions.pop();
   if (!a) return false;
+  reopen();
   if (a.type === 'step') {
     stepBack({ record: false });
   } else if (a.type === 'back') {
@@ -317,6 +367,7 @@ function restart() {
 // Hint: cut back to the longest start shared with a stored solution, and show its next stone.
 function hint() {
   if (game.done || !game.solutions.length) return false;
+  reopen();
   const p = game.s.path;
   let best = null;
   let bestLen = -1;
@@ -340,17 +391,64 @@ function afterChange() {
   game.hintCell = game.s.path.includes(game.hintCell) ? -1 : game.hintCell;
   if (R.solved(game.s)) {
     solvedNow();
-  } else {
+  } else if (R.head(game.s) === game.level.gate || !playerMoves().length) {
+    failedNow();
+  } else if (guidance) {
     // Decide after this frame is drawn, so the step itself never waits on the search.
     game.deadKnown = false;
     const token = game.s.path.join(',');
     requestAnimationFrame(() => setTimeout(() => checkDead(token), 0));
+  } else {
+    game.dead = false;
+    game.stranded = [];
   }
   updateButtons();
 }
 
+// The stones the player can step to now (the gate too, even early).
+function playerMoves() {
+  const out = [];
+  for (let d = 0; d < 4; d++) {
+    const n = R.neighbour(game.level, R.head(game.s), d);
+    if (n >= 0 && !R.blocked(game.s, n)) out.push(n);
+  }
+  return out;
+}
+
+// Why the line ended unsolved, as a tip for next time.
+const TIPS = {
+  gate: 'Light every stone before you step on the gate: the gate is always the last stone.',
+  rise: 'Stones a Rise brings up count too: leave yourself a way back to them.',
+  sink: 'A Sink drowns the stones around it as you leave it: light the ones you need first, or let it take the ones you can’t reach.',
+  plain: 'Every stone needs a way in and a way out: plan a line that leaves none behind and ends on the gate.',
+};
+function whyFailed() {
+  const s = game.s;
+  if (R.head(s) === game.level.gate) return 'gate';
+  const dark = (c) => s.up[c] && !s.lit[c];
+  const raisedDark = s.steps.some((st) => st.changes.some(([c, was]) => !was && dark(c)));
+  if (raisedDark) return 'rise';
+  if (s.steps.some((st) => st.changes.some(([, was]) => was))) return 'sink';
+  return 'plain';
+}
+
+function failedNow() {
+  game.failed = true;
+  game.dead = false;
+  game.stranded = [];
+  game.tip = whyFailed();
+  sound.play('dim', { gain: 0.9 });
+  const left = R.left(game.s);
+  ui.resultKicker.textContent = 'Not this time';
+  ui.resultTitle.textContent = 'You didn’t make it';
+  ui.resultText.textContent = `${left} ${left === 1 ? 'stone is' : 'stones are'} still dark.`;
+  ui.resultTip.textContent = TIPS[game.tip];
+  ui.resultTip.hidden = false;
+  showResult('failed');
+}
+
 function checkDead(token) {
-  if (token !== game.s.path.join(',') || game.done) return;
+  if (!guidance || token !== game.s.path.join(',') || ended()) return;
   const res = R.solve(game.level, { from: game.s, max: 1, limit: KNOBS.deadBudget });
   const wasDead = game.dead;
   game.dead = !res.solutions.length && !res.cut;
@@ -367,15 +465,13 @@ function solvedNow() {
   sound.play('solved', { gain: 0.9 });
   game.rings.push({ x: cx(game.level.gate), y: cy(game.level.gate), t: performance.now(), hue: HUES.light, big: true });
   const at = game.index;
-  setTimeout(() => {
-    if (game.index !== at || !game.done) return;
-    const ch = chapterOf(at);
-    ui.solvedChapter.textContent = LEVELS[at].deep ? `${ch.name} · deep` : ch.name;
-    ui.solvedName.textContent = LEVELS[at].name;
-    const next = nextAfter(at);
-    ui.next.textContent = next >= 0 ? 'Next' : 'Choose a level';
-    showOverlay('solved');
-  }, 900);
+  ui.resultKicker.textContent = LEVELS[at].name;
+  ui.resultTitle.textContent = 'Solved!';
+  ui.resultText.textContent = 'Every stone is lit.';
+  ui.resultTip.hidden = true;
+  const next = nextAfter(at);
+  ui.next.textContent = next >= 0 ? `Next: level ${next + 1}` : 'Choose a level';
+  showResult('solved');
 }
 
 function updateButtons() {
@@ -384,15 +480,43 @@ function updateButtons() {
   ui.hint.disabled = game.done;
 }
 
+// The result panel below the board: loud, and never over the line you drew.
+function showResult(kind) {
+  ui.result.hidden = !kind;
+  ui.bar.hidden = Boolean(kind);
+  if (kind) {
+    ui.result.dataset.kind = kind;
+    ui.next.hidden = kind !== 'solved';
+    ui.again.hidden = kind !== 'failed';
+    ui.resultUndo.hidden = kind !== 'failed';
+  }
+  layout();
+  if (kind === 'solved') ui.next.focus({ preventScroll: true });
+  if (kind === 'failed') ui.again.focus({ preventScroll: true });
+}
+
 // ---------------------------------------------------------------------------------------------
 // Overlays: the solved card and the level select.
 function showOverlay(which) {
   game.overlay = which;
-  ui.solved.hidden = which !== 'solved';
   ui.levels.hidden = which !== 'levels';
-  if (which === 'levels') buildLevels();
-  if (which === 'solved') ui.next.focus({ preventScroll: true });
+  if (which === 'levels') {
+    buildLevels();
+    centreOnBoard(ui.levels);
+  }
 }
+
+// Centre a card on the board (not the window), kept inside the screen.
+function centreOnBoard(card) {
+  if (!game.level) return;
+  const h = card.getBoundingClientRect().height;
+  const mid = box.oy + (box.cell * (game.level.h + 0.2)) / 2;
+  const top = Math.max(16 + h / 2, Math.min(H - 16 - h / 2, mid));
+  card.style.top = `${Math.round(top)}px`;
+}
+
+const LOCK_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>';
 
 function buildLevels() {
   ui.chapters.textContent = '';
@@ -401,26 +525,35 @@ function buildLevels() {
     wrap.className = 'ch';
     const h = document.createElement('p');
     h.className = 'ch-name';
-    h.textContent = ch.name;
+    h.innerHTML = `${ch.name} <span class="ch-level">(${ch.level})</span>`;
     const row = document.createElement('div');
     row.className = 'ch-row';
-    const deep = document.createElement('div');
-    deep.className = 'ch-deep';
+    const bonus = document.createElement('div');
+    bonus.className = 'ch-bonus';
+    const bonusLabel = document.createElement('span');
+    bonusLabel.className = 'ch-bonus-label';
+    bonusLabel.textContent = 'bonus';
+    bonus.appendChild(bonusLabel);
     for (let i = ch.from; i < ch.to; i++) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'lv';
-      b.textContent = String(i + 1);
       b.dataset.level = String(i + 1);
       const isLocked = locked(i);
-      if (LEVELS[i].deep) b.classList.add('is-deep');
-      if (solvedSet.has(i)) b.classList.add('is-solved');
+      const isSolved = solvedSet.has(i);
+      if (isLocked) {
+        b.classList.add('is-locked');
+        b.innerHTML = LOCK_SVG;
+      } else {
+        b.textContent = String(i + 1);
+      }
+      if (isSolved) b.classList.add('is-solved');
       if (i === game.index) b.classList.add('is-current');
       b.setAttribute('aria-disabled', String(isLocked));
-      b.setAttribute(
-        'aria-label',
-        `${i + 1} ${LEVELS[i].name}${LEVELS[i].deep ? ', deep' : ''}${solvedSet.has(i) ? ', solved' : ''}${isLocked ? ', locked' : ''}`
-      );
+      const name = `Level ${i + 1}, ${LEVELS[i].name}${LEVELS[i].deep ? ', bonus' : ''}`;
+      const state = isLocked ? `locked: solve levels ${coreOf(CHAPTERS[CHAPTERS.indexOf(ch) - 1] || ch).map((k) => k + 1).join(', ')} first` : isSolved ? 'solved' : '';
+      b.setAttribute('aria-label', state ? `${name}, ${state}` : name);
+      b.title = state ? `${name} (${state})` : name;
       b.addEventListener('click', () => {
         if (isLocked) {
           sound.play('dim', { gain: 0.6 });
@@ -428,22 +561,25 @@ function buildLevels() {
         }
         loadLevel(i);
       });
-      (LEVELS[i].deep ? deep : row).appendChild(b);
+      (LEVELS[i].deep ? bonus : row).appendChild(b);
     }
-    row.appendChild(deep);
+    row.appendChild(bonus);
     wrap.append(h, row);
     ui.chapters.appendChild(wrap);
   }
 }
 
 ui.levelsBtn.addEventListener('click', () => showOverlay(game.overlay === 'levels' ? null : 'levels'));
-ui.closeLevels.addEventListener('click', () => showOverlay(game.done ? 'solved' : null));
-ui.solvedLevels.addEventListener('click', () => showOverlay('levels'));
+ui.closeLevels.addEventListener('click', () => showOverlay(null));
+ui.resultLevels.addEventListener('click', () => showOverlay('levels'));
 ui.next.addEventListener('click', () => {
   const n = nextAfter(game.index);
-  if (n >= 0 && !locked(n)) loadLevel(n);
+  if (n >= 0) loadLevel(n);
   else showOverlay('levels');
 });
+ui.again.addEventListener('click', () => restart());
+ui.resultUndo.addEventListener('click', () => undo());
+ui.guidance.addEventListener('click', () => setGuidance(!guidance));
 ui.undo.addEventListener('click', () => undo());
 ui.restart.addEventListener('click', () => restart());
 ui.hint.addEventListener('click', () => hint());
@@ -493,7 +629,7 @@ function feed(dx, dy) {
     if (target === prev) {
       if (lead < KNOBS.backCells * box.cell) break;
       stepBack();
-    } else if (target >= 0 && !R.why(game.s, target)) {
+    } else if (target >= 0 && !R.blocked(game.s, target)) {
       if (lead < stepPx) break;
       stepTo(target);
     } else {
@@ -506,7 +642,7 @@ function feed(dx, dy) {
     moves++;
     drag.ax = 0;
     drag.ay = 0;
-    if (game.done) break;
+    if (ended()) break;
   }
   return moves;
 }
@@ -529,7 +665,7 @@ function bump(c) {
 }
 
 ui.canvas.addEventListener('pointerdown', (e) => {
-  if (drag.id !== null || game.overlay || game.done) return; // a second finger moves nothing
+  if (drag.id !== null || game.overlay || ended()) return; // a second finger moves nothing
   drag.id = e.pointerId;
   drag.x = drag.sx = e.clientX;
   drag.y = drag.sy = e.clientY;
@@ -553,15 +689,33 @@ ui.canvas.addEventListener('pointermove', (e) => {
   if (!drag.moved && Math.hypot(drag.x - drag.sx, drag.y - drag.sy) >= KNOBS.tapPx) {
     // No longer a tap: the whole movement so far counts toward the drag.
     drag.moved = true;
-    if (!game.done) feed(drag.x - drag.sx, drag.y - drag.sy);
-  } else if (drag.moved && !game.done) feed(dx, dy);
+    if (!ended()) feed(drag.x - drag.sx, drag.y - drag.sy);
+  } else if (drag.moved && !ended()) feed(dx, dy);
+  ui.canvas.style.cursor = drag.moved ? 'grabbing' : 'pointer';
 });
 function endDrag(e, cancelled) {
   if (e && e.pointerId !== drag.id) return;
   const wasTap = !drag.moved && performance.now() - drag.t < KNOBS.tapMs;
-  if (!cancelled && wasTap && e && !game.done) tap(drag.sx, drag.sy);
+  if (!cancelled && wasTap && e && !ended()) tap(drag.sx, drag.sy);
   drag.id = null;
+  if (e) hover(e.clientX, e.clientY);
 }
+
+// The mouse cursor: a hand over a stone the line can act on (step to, cut back to, or drag from
+// the head), a closed hand while dragging, the usual arrow everywhere else.
+function actionable(c) {
+  if (c < 0 || ended() || game.overlay) return false;
+  const s = game.s;
+  if (s.lit[c]) return true; // the head (drag from it) or a lit stone (cut back to it)
+  return R.dirOf(game.level, R.head(s), c) >= 0 && !R.blocked(s, c);
+}
+function hover(x, y) {
+  if (drag.id !== null) return;
+  ui.canvas.style.cursor = actionable(cellAt(x, y)) ? 'pointer' : '';
+}
+ui.canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') hover(e.clientX, e.clientY);
+});
 ui.canvas.addEventListener('pointerup', (e) => endDrag(e, false));
 ui.canvas.addEventListener('pointercancel', (e) => endDrag(e, true));
 
@@ -571,7 +725,7 @@ window.addEventListener('keydown', (e) => {
   const keys = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3, w: 0, d: 1, s: 2, a: 3, W: 0, D: 1, S: 2, A: 3 };
   if (e.key in keys) {
     e.preventDefault();
-    if (game.done) return;
+    if (ended()) return;
     startMusic();
     const t = dirCell(keys[e.key]);
     const p = game.s.path;
@@ -645,7 +799,7 @@ function preview() {
   const s = game.s;
   const L = game.level;
   const h = R.head(s);
-  if (game.done) return { cells: [], kind: null };
+  if (ended()) return { cells: [], kind: null };
   if (L.kind[h] === 'sink') return { cells: R.effect(s, h, -1, -1).map(([c]) => c), kind: 'sink' };
   const cells = [];
   for (let d = 0; d < 4; d++) {
@@ -712,7 +866,7 @@ function draw(now) {
 
   const pv = preview();
   const pvSet = new Set(pv.cells);
-  const strandedSet = new Set(game.stranded);
+  const strandedSet = new Set(guidance ? game.stranded : []);
   const lineIdx = new Map(s.path.map((cell, i) => [cell, i]));
   const head = R.head(s);
 
@@ -783,6 +937,14 @@ function draw(now) {
       ctx.fillStyle = `rgba(${HUES.sink}, ${KNOBS.previewAlpha * 0.7})`;
       ctx.fillRect(xx + c * 0.06, y + c * 0.06, c * 0.88, c * 0.88);
     }
+    if (game.failed && !s.lit[i]) {
+      // The attempt is over: the stones it missed pulse, so you see what was left dark.
+      ctx.strokeStyle = `rgba(255, 120, 110, ${0.55 + 0.35 * Math.sin(t * 4)})`;
+      ctx.lineWidth = Math.max(2, c * 0.05);
+      ctx.beginPath();
+      ctx.roundRect(xx + c * 0.05, y + c * 0.05, c * 0.9, c * 0.9, c * 0.12);
+      ctx.stroke();
+    }
     if (strandedSet.has(i)) {
       ctx.fillStyle = 'rgba(10, 14, 24, 0.32)';
       ctx.fillRect(xx + c * 0.04, y + c * 0.04, c * 0.92, c * 0.96);
@@ -840,14 +1002,14 @@ function draw(now) {
   const gy = cy(L.gate) - c * 0.05;
   if (game.done) {
     glow(gx, gy, c * 1.1, HUES.light, 0.8);
-  } else if (game.dead) {
+  } else if (game.failed || (guidance && game.dead)) {
     glow(gx, gy, c * 0.4, '140, 150, 170', 0.15);
   } else {
     glow(gx, gy, c * (0.5 + 0.05 * Math.sin(t * 2)), '170, 225, 255', 0.42);
   }
   // The head: a soft orb that breathes.
   // The head: a ring of light round its stone that breathes.
-  if (!game.done && s.path.length > 1) {
+  if (!ended() && s.path.length > 1) {
     ctx.strokeStyle = `rgba(255, 244, 214, ${0.55 + 0.25 * Math.sin(t * 5)})`;
     ctx.lineWidth = Math.max(2, c * 0.05);
     ctx.beginPath();
@@ -880,7 +1042,7 @@ function draw(now) {
 
 function ghostDraw(now) {
   const g = game.ghost;
-  if (game.index !== 0 || game.s.path.length > 1 || game.done || !game.solutions.length) {
+  if (game.index !== 0 || game.s.path.length > 1 || ended() || !game.solutions.length) {
     g.t = -1;
     return;
   }
@@ -938,6 +1100,7 @@ window.addEventListener('resize', layout);
 const first = levelFromHash();
 if (first < 0 && location.hash) history.replaceState(null, '', '#1');
 loadLevel(first < 0 ? 0 : first);
+setGuidance(guidance);
 requestAnimationFrame(frame);
 
 window.__runes = {
@@ -965,4 +1128,7 @@ window.__runes = {
   solvedSet: () => [...solvedSet],
   // Run the dead-line check now instead of after the next frame.
   checkDead: () => checkDead(game.s.path.join(',')),
+  setGuidance,
+  guidance: () => guidance,
+  tips: TIPS,
 };

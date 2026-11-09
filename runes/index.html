@@ -28,25 +28,34 @@
     </button>
 
     <nav class="bar" aria-label="Level controls">
-      <button class="round" type="button" data-levels aria-label="Levels">
+      <button class="round" type="button" data-levels aria-label="Levels" title="Levels: choose a level">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></svg>
       </button>
-      <button class="round" type="button" data-undo aria-label="Undo">
+      <button class="round" type="button" data-undo aria-label="Undo" title="Undo the last move">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></svg>
       </button>
-      <button class="round" type="button" data-restart aria-label="Restart">
+      <button class="round" type="button" data-restart aria-label="Restart" title="Restart this level">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12a7 7 0 1 0 2.1-5" /><path d="M5 4v4h4" /></svg>
       </button>
-      <button class="round" type="button" data-hint aria-label="Hint">
+      <button class="round" type="button" data-hint aria-label="Hint" title="Hint: show the next stone">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></svg>
+      </button>
+      <button class="round" type="button" data-guidance aria-pressed="false" aria-label="Guidance" title="Guidance: show when the line can no longer finish">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M15.5 8.5l-2 5-5 2 2-5z" /></svg>
       </button>
     </nav>
 
-    <section class="card" data-screen="solved" hidden>
-      <p class="card-kicker" data-solved-chapter>Dawn</p>
-      <h2 data-solved-name>First Light</h2>
-      <button class="play" type="button" data-next>Next</button>
-      <button class="link" type="button" data-solved-levels>All levels</button>
+    <section class="result" data-result hidden aria-live="assertive">
+      <p class="result-kicker" data-result-kicker></p>
+      <h2 class="result-title" data-result-title></h2>
+      <p class="result-text" data-result-text></p>
+      <p class="result-tip" data-result-tip hidden></p>
+      <div class="result-actions">
+        <button class="play" type="button" data-next>Next</button>
+        <button class="play" type="button" data-again>Try again</button>
+        <button class="soft" type="button" data-result-undo>Undo last move</button>
+        <button class="soft" type="button" data-result-levels>All levels</button>
+      </div>
     </section>
 
     <section class="card levels" data-screen="levels" hidden aria-label="Levels">
