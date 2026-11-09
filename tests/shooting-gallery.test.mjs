@@ -1179,5 +1179,10 @@ test('shooting-gallery AC-30: a hit target tips back with its stick, and is lowe
     return { bottom: pv.y + (d.y + h / 2 - pv.y) * k.sy + k.dy, valance: g.L.top + 30 };
   });
   assert.ok(drop.bottom <= drop.valance, `a drop-down is pulled up out of sight: ${JSON.stringify(drop)}`);
+  // By 0.8 s after the hit the target is gone from the booth.
+  const t2 = await place(page, 'target', { lane: 1, x: 120, face: 'target_red1' });
+  await shoot(page, t2.x + t2.w * 0.38, 1);
+  await steps(page, 0.8);
+  assert.equal(await page.evaluate((id) => window.__gallery.targets().some((x) => x.id === id), t2.id), false, 'gone within 0.8 s');
   await context.close();
 });

@@ -1174,7 +1174,8 @@ function update(dt) {
       if ((t.dir > 0 && t.x > SW + w / 2 + 8) || (t.dir < 0 && t.x < -w / 2 - 8)) t.state = 'gone';
     }
   }
-  targets = targets.filter((t) => t.state === 'live' || (t.state === 'knocked' && t.anim < 0.9));
+  // A hit target is out of sight once lowered (0.72 s), and gone just after.
+  targets = targets.filter((t) => t.state === 'live' || (t.state === 'knocked' && t.anim < 0.75));
 
   for (const b of balls) {
     b.t += dt;
@@ -1291,8 +1292,6 @@ function drawTarget(t) {
   }
   ctx.save();
   ctx.translate(t.x, t.y);
-  const fade = 1;
-  ctx.globalAlpha = fade;
   ctx.scale(ts.sx, 1);
   let name = t.face;
   if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
@@ -1309,10 +1308,10 @@ function drawTarget(t) {
   }
   if (t.kind === 'gold' && !ts.showBack) {
     ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = fade * (0.25 + 0.2 * Math.sin(game.T * 8));
+    ctx.globalAlpha = 0.25 + 0.2 * Math.sin(game.T * 8);
     sprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
     ctx.globalCompositeOperation = 'source-over';
-    ctx.globalAlpha = fade;
+    ctx.globalAlpha = 1;
   }
   for (const s of t.splats) {
     ctx.save();
