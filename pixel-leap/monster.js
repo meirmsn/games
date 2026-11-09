@@ -162,7 +162,9 @@ export const POSES = {
 // Bakes every pose at `pxPerTile` (e.g. 18): each frame is a small canvas with the monster's feet at
 // the bottom middle. Alpha is made binary and a 1-px outline in `outline` is added, the way the
 // pack's own characters are drawn. Returns { frames, w, h, footX, footY }.
-export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, faceBoost = 1.4 } = {}) {
+// oneBit ({ ink, dark }): a two-colour world, drawn like the pack's own characters: a solid ink
+// body with its dark features (pupils, mouth) cut out; the outline is the dark of the world.
+export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, faceBoost = 1.4, oneBit = null } = {}) {
   const s = scaleFor(m, pxPerTile);
   const w = Math.ceil(pxPerTile * 4);
   const h = Math.ceil(pxPerTile * 3.6);
@@ -170,6 +172,12 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
   const footY = h - 2;
   const [or, og, ob] = hex(outline);
   const pal = palette(img, m, s, ears, faceBoost, hex(outline));
+  const two = oneBit ? [hex(oneBit.ink), hex(oneBit.dark)] : null;
+  const toTwo = (col) => {
+    if (col === pal[1]) return two[0]; // the body's main colour
+    const lum = col[0] * 0.3 + col[1] * 0.59 + col[2] * 0.11;
+    return lum > 150 ? two[0] : two[1];
+  };
   const frames = {};
   for (const [name, pose] of Object.entries(POSES)) {
     const c = makeCanvas(w, h);
@@ -185,7 +193,8 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
       if (a >= 110) {
         solid[i] = 1;
         // Opaque, and snapped to the monster's own short palette: no in-between shades.
-        const [r, g2, b] = nearest(pal, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+        const snapped = nearest(pal, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+        const [r, g2, b] = two ? toTwo(snapped) : snapped;
         d[i * 4] = r;
         d[i * 4 + 1] = g2;
         d[i * 4 + 2] = b;
