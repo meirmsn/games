@@ -14,7 +14,7 @@ export const VMAX = 18; // the ball's top speed, units a second
 export const BALL_R = 0.3;
 export const EXIT_R = 0.5; // how close the ball's centre must come to the exit's
 export const TOUCH_R = 0.6; // ball centre to a star or the key
-export const REST_SPEED = 0.12;
+export const REST_SPEED = 0.5;
 export const LINGER = 0.75; // seconds a resting or lost ball is watched before the run ends
 export const MAX_TIME = 12;
 export const REC_EVERY = 4; // record a pose every 4 steps: 30 Hz
@@ -216,6 +216,7 @@ export function createRun(room, layout, { kick = 'soft', assist = 0 } = {}) {
     keyed: !room.key,
     closest: { d: Infinity, x: room.ball.x, y: room.ball.y },
     trail: [],
+    spots: [], // where the ball was, every half second
     rec: [], // [ball x, y, angle, (spinner angle), (crate x, y, angle)] at 30 Hz
     events: [], // what happened this step, for sound and effects: {type, ...}
     ball,
@@ -292,14 +293,20 @@ export function createRun(room, layout, { kick = 'soft', assist = 0 } = {}) {
       return;
     }
     const out = y > H + 1 || x < -1 || x > W + 1;
+    // A ball rocking in one place (against the flap, in a dip) is resting too: it has stayed within
+    // 0.4 units for the last 1.5 s.
+    if (run.steps % 60 === 0) run.spots.push(x, y);
+    const n = run.spots.length;
+    const rocking =
+      n >= 8 && Math.max(...[2, 4, 6].map((b) => Math.hypot(run.spots[n - 2] - run.spots[n - 2 - b], run.spots[n - 1] - run.spots[n - 1 - b]))) < 0.4;
     if (!run.ending) {
       if (out) run.ending = 'out';
-      else if (sp < REST_SPEED && run.t > 0.5) run.ending = 'rest';
+      else if ((sp < REST_SPEED && run.t > 0.5) || rocking) run.ending = 'rest';
       if (run.ending) {
         run.lingerT = 0;
         if (run.ending === 'out') run.events.push({ type: 'out' });
       }
-    } else if (run.ending === 'rest' && sp >= REST_SPEED * 2) {
+    } else if (run.ending === 'rest' && sp >= REST_SPEED * 2 && !rocking) {
       run.ending = null; // it was only pausing at the top of a swing
     }
     if (run.ending) run.lingerT += STEP;

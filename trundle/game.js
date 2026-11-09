@@ -210,6 +210,7 @@ function setMode(mode) {
   ui.go.setAttribute('aria-label', mode === 'run' || mode === 'demo' ? 'Stop' : 'Go');
   updateTurn();
   layout();
+  if (ui.tray.childElementCount) renderTray();
 }
 
 function persist() {
@@ -258,7 +259,8 @@ function renderTray() {
   for (const t of types) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'part' + (left[t] > 0 ? '' : ' empty');
+    const hint = G.mode === 'edit' && !G.layout.length && !G.drag && bestStars(G.ri) < 0 && left[t] > 0 && t === G.room.tray[0];
+    b.className = 'part' + (left[t] > 0 ? '' : ' empty') + (hint ? ' hint' : '');
     b.dataset.part = t;
     b.setAttribute('aria-label', `${t === 'plank' ? 'Plank' : 'Wedge'}: ${left[t]} left`);
     b.innerHTML = `<img src="img/${TRAY_ICON[t]}.png" alt="" style="${t === 'plank' ? 'transform:rotate(-60deg)' : ''}" /><span class="count">${left[t]}</span>`;

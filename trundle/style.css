@@ -80,6 +80,13 @@ button:focus-visible {
   font-size: 17px;
 }
 
+.room-text {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+  line-height: 1.1;
+}
+
 .room-name {
   font-size: 17px;
   white-space: nowrap;
@@ -95,8 +102,8 @@ button:focus-visible {
 }
 
 .room-stars img {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
 }
 
 .round {
@@ -203,6 +210,23 @@ button:focus-visible {
   font-size: 13px;
   font-weight: 800;
   line-height: 20px;
+}
+
+/* After the demo kick, the tray's part bobs until the first one is placed: the screen says where
+   to start, with no words. */
+.part.hint {
+  animation: hint 1.4s ease-in-out infinite;
+}
+
+@keyframes hint {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-7px);
+  }
 }
 
 .part.empty {
