@@ -65,7 +65,12 @@ try {
     return c.toDataURL('image/png').split(',')[1];
   }, shot.toString('base64'));
   const { writeFileSync } = await import('node:fs');
-  writeFileSync(`${root}assets/tiles/shooting-gallery.png`, Buffer.from(png, 'base64'));
+  const out = `${root}assets/tiles/shooting-gallery.png`;
+  writeFileSync(out, Buffer.from(png, 'base64'));
+  // The flat art fits 128 colours with no visible change, at a fifth of the size (needs Pillow).
+  const { spawnSync } = await import('node:child_process');
+  const q = spawnSync('python3', ['-I', '-c', 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim.quantize(colors=128, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(sys.argv[1], optimize=True)', out]);
+  if (q.status !== 0) console.warn('not quantized (Pillow missing?): the tile is larger but fine');
   console.log('wrote assets/tiles/shooting-gallery.png');
 } finally {
   await browser.close();
