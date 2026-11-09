@@ -50,9 +50,9 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('reef AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
+test('reef AC-11: landing page lists eight games, Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   const reef = page.locator('.tiles > li').first().locator('.tile');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
@@ -63,9 +63,25 @@ test('reef AC-11: landing page lists seven games, Reef first and playable, with 
   await context.close();
 });
 
-test('runes AC-17: the Runes tile is a playable link, and the page still lists seven tiles', async () => {
+test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const names = await page.locator('.tile h2').allTextContents();
+  assert.equal(names.indexOf('Walk on Red'), names.indexOf('Googly Faces') + 1);
+  const tile = page.locator('.tile', { hasText: 'Walk on Red' });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
+  assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  const img = tile.locator('img');
+  await page.waitForLoadState('networkidle');
+  assert.ok(await img.evaluate((el) => el.complete && el.naturalWidth === 640));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('runes AC-17: the Runes tile is a playable link, and the page lists eight tiles (Walk on Red adds one)', async () => {
   const { context, page } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const runes = page.locator('.tile', { has: page.locator('h2', { hasText: 'Runes' }) });
   assert.equal(await runes.evaluate((el) => el.tagName), 'A');
   assert.equal(await runes.getAttribute('href'), 'runes/');
@@ -75,9 +91,9 @@ test('runes AC-17: the Runes tile is a playable link, and the page still lists s
   await context.close();
 });
 
-test('orbit AC-16: the Orbit tile is a playable link, and the page still shows seven tiles', async () => {
+test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight tiles (Walk on Red adds one)', async () => {
   const { context, page } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const orbit = page.locator('.tile', { has: page.locator('h2', { hasText: /^Orbit$/ }) });
   assert.equal(await orbit.evaluate((el) => el.tagName), 'A');
   assert.equal(await orbit.getAttribute('href'), 'orbit/');
@@ -137,7 +153,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
