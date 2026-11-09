@@ -867,6 +867,12 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
       g.arc(hx, groundY + res * 0.6, res * (2.4 + hash(i + Math.floor(par / (res * 4))) * 1.4), Math.PI, 0);
       g.fill();
     }
+    // Below the ground line the background deepens, so a pit reads as a drop.
+    const deep = g.createLinearGradient(0, groundY, 0, groundY + res * 4);
+    deep.addColorStop(0, '#f7a8cb');
+    deep.addColorStop(1, '#c95b8f');
+    g.fillStyle = deep;
+    g.fillRect(0, groundY + res * 0.55, vw, vh);
     // Cotton-candy clouds drifting high up.
     g.fillStyle = 'rgba(255,255,255,0.7)';
     for (let i = 0; i < 8; i++) {
