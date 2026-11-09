@@ -337,7 +337,7 @@ goes now, and the people waiting start copying him.
   `tests/walk-on-red.test.mjs`.
 - **AC-11** A siren warns 2.5 s before it comes; a car it comes up behind pulls a little aside,
   and back once it has passed — `tests/walk-on-red.test.mjs`.
-- **AC-12** After level 8 the run ends with the game-over card showing the total, the stars and the
+- **AC-12** After level 21 the run ends with the game-over card showing the total, the stars and the
   best; Play again leads back to the start card — `tests/walk-on-red.test.mjs`.
 - **AC-13** A hit raises the hidden assist and a follower across lowers it; a higher assist slows
   traffic; a new player's first run starts at 0.4 and a later run at 60% of the last run's —
