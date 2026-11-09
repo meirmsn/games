@@ -79,11 +79,16 @@ performance item.
   jumps exactly the same everywhere. A world sets only its resolution in pixels per tile and its
   palette: the Meadow is 18 px per tile, drawn into a back buffer and scaled to the screen by a whole
   number with no smoothing; Candy is 70 px per tile, drawn smooth. The monster is drawn by the
-  world's rule too: in the Meadow it is baked to 18 px per tile (about 27 px tall) with binary alpha
-  and the pack's dark 1-px outline, with its eyes and mouth enlarged so the face reads, and animated
+  world's rule too: in the Meadow it is baked to 18 px per tile (about 27 px tall) with binary alpha,
+  a short palette of its own (at most 8 flat colours: its body's, and its face's kept apart so eyes
+  read on a body of the same hue) and the pack's dark 1-px outline, with its eyes and mouth enlarged so the face reads, and animated
   by a few pose frames instead of rotation; in Candy it is the vector parts, drawn smooth with
   swinging limbs. Rejected: drawing every pack at its native size (a 70 px tile beside an 18 px
   one), and one style for the monster everywhere, which looks pasted on in one of the two worlds.
+- **Changed after the go, by the owner (2026-11-09), on seeing the first baked monsters:** "the
+  pixelated looks better BUT don't have those transition pixels … just commit to a short list of
+  colors per character". So a baked monster has no in-between shades: every pixel is one of its
+  short palette's colours or the outline.
 - **The leap between worlds is the event:** a portal ends each world. Entering it takes the
   monster out of physics and freezes the world, and the tally card shows. Its Leap button starts the
   leap, 1.6 s in all: a soft white flash (0.3 s), then the next world drawn blocky at 18 px per tile
@@ -171,8 +176,9 @@ performance item.
 - **AC-4** In the Meadow the screen is drawn at 18 px per tile scaled by a whole number without
   smoothing (the screen is made of uniform blocks of that size), and in Candy at 70 px per tile
   drawn smooth; the screen size of a tile is the same in both — `tests/pixel-leap.test.mjs`.
-- **AC-5** The Meadow monster is baked with binary alpha and a dark outline around it, and has pose
-  frames for standing, running and jumping — `tests/pixel-leap.test.mjs`.
+- **AC-5** The Meadow monster is baked with binary alpha and a dark outline around it, uses at most
+  8 colours plus the outline across all its frames, and has pose frames for standing, running and
+  jumping — `tests/pixel-leap.test.mjs`.
 - **AC-6** Coyote time and the jump buffer work: a jump pressed just after running off a ledge, or
   just before landing, jumps — `tests/pixel-leap.test.mjs`.
 - **AC-7** Spikes, a walker's side and falling off each poof the monster back to the last checkpoint

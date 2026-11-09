@@ -122,7 +122,7 @@ export function drawVector(ctx, img, m, x, y, scale, pose = {}, faceBoost = 1) {
   const fb = faceBoost;
   const faceX = L.bw * 0.08;
   const eyeY = L.bodyTop + L.bh * 0.36;
-  const eyeS = (Math.min(1, (L.bw * 0.78) / (eye[2] * count)) || 1) * fb;
+  const eyeS = (Math.min(1, (L.bw * (count === 3 ? 0.95 : 0.78)) / (eye[2] * count)) || 1) * fb;
   const gap = eye[2] * eyeS * 0.98;
   for (let i = 0; i < count; i++) {
     const ex = faceX + (i - (count - 1) / 2) * gap;
@@ -169,6 +169,7 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
   const footX = Math.floor(w / 2);
   const footY = h - 2;
   const [or, og, ob] = hex(outline);
+  const pal = palette(img, m, s, ears, faceBoost);
   const frames = {};
   for (const [name, pose] of Object.entries(POSES)) {
     const c = makeCanvas(w, h);
@@ -183,11 +184,11 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
       const a = d[i * 4 + 3];
       if (a >= 110) {
         solid[i] = 1;
-        // Undo the premultiplied fringe and make the pixel opaque.
-        const k = 255 / a;
-        d[i * 4] = Math.min(255, d[i * 4] * (a < 250 ? k * 0.92 : 1));
-        d[i * 4 + 1] = Math.min(255, d[i * 4 + 1] * (a < 250 ? k * 0.92 : 1));
-        d[i * 4 + 2] = Math.min(255, d[i * 4 + 2] * (a < 250 ? k * 0.92 : 1));
+        // Opaque, and snapped to the monster's own short palette: no in-between shades.
+        const [r, g2, b] = nearest(pal, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+        d[i * 4] = r;
+        d[i * 4 + 1] = g2;
+        d[i * 4 + 2] = b;
         d[i * 4 + 3] = 255;
       } else d[i * 4 + 3] = 0;
     }
@@ -209,6 +210,91 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
     frames[name] = c;
   }
   return { frames, w, h, footX, footY };
+}
+
+// The monster's palette: the flat colours its parts are drawn in. The parts are drawn large, where
+// anti-aliased edges are a tiny share of the pixels; colours are merged when close, and only those
+// covering a real share of the monster are kept (at most 8), so blends at the edges never become
+// colours of their own.
+export function palette(img, m, s, ears, faceBoost) {
+  const big = 6;
+  const w = Math.ceil((s * big * 1000) / 2.4) || 1;
+  const c = makeCanvas(Math.min(900, w), Math.min(900, w));
+  const g = c.getContext('2d');
+  const scale = scaleFor(m, c.height / 2.3);
+  drawVector(g, img, m, c.width / 2, c.height - 4, scale, { ears }, faceBoost);
+  drawVector(g, img, m, c.width / 2, c.height - 4, scale, { ears, air: -1 }, faceBoost);
+  const d = g.getImageData(0, 0, c.width, c.height).data;
+  const counts = new Map();
+  let total = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 250) continue;
+    total++;
+    const key = ((d[i] >> 2) << 12) | ((d[i + 1] >> 2) << 6) | (d[i + 2] >> 2);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  const pal = [];
+  for (const [key, n] of sorted) {
+    const col = [((key >> 12) & 63) * 4 + 2, ((key >> 6) & 63) * 4 + 2, (key & 63) * 4 + 2];
+    const near = pal.find((p) => dist2(p.col, col) < 34 * 34);
+    if (near) near.n += n;
+    else pal.push({ col, n });
+  }
+  const body = pal.filter((p) => p.n >= total * 0.004).slice(0, 4).map((p) => p.col);
+  // The face keeps its own colours (sclera, iris, pupil, mouth), even where they're close to the
+  // body's, so eyes on a body of the same hue still read.
+  const face = faceColours(img, m);
+  const out = [...body];
+  for (const col of face) if (!out.some((p) => dist2(p, col) < 14 * 14) && out.length < 8) out.push(col);
+  return out.length ? out : [[128, 128, 128]];
+}
+
+function faceColours(img, m) {
+  const [eyeName] = EYES[m.eyes];
+  const parts = [MONSTER[eyeName], MONSTER[MOUTHS[m.mouth]]];
+  const counts = [];
+  for (const f of parts) {
+    const c = makeCanvas(f[2], f[3]);
+    const g = c.getContext('2d');
+    g.drawImage(img, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+    const d = g.getImageData(0, 0, f[2], f[3]).data;
+    const map = new Map();
+    let total = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 250) continue;
+      total++;
+      const key = ((d[i] >> 3) << 10) | ((d[i + 1] >> 3) << 5) | (d[i + 2] >> 3);
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    const pal = [];
+    for (const [key, n] of [...map.entries()].sort((a, b) => b[1] - a[1])) {
+      const col = [((key >> 10) & 31) * 8 + 4, ((key >> 5) & 31) * 8 + 4, (key & 31) * 8 + 4];
+      const near = pal.find((p) => dist2(p.col, col) < 30 * 30);
+      if (near) near.n += n;
+      else pal.push({ col, n });
+    }
+    for (const p of pal) if (p.n >= total * 0.05) counts.push(p.col);
+  }
+  return counts.slice(0, 5);
+}
+function dist2(a, b) {
+  const dr = a[0] - b[0];
+  const dg = a[1] - b[1];
+  const db = a[2] - b[2];
+  return dr * dr * 2 + dg * dg * 3 + db * db;
+}
+function nearest(pal, r, g, b) {
+  let best = pal[0];
+  let bd = Infinity;
+  for (const p of pal) {
+    const dd = dist2(p, [r, g, b]);
+    if (dd < bd) {
+      bd = dd;
+      best = p;
+    }
+  }
+  return best;
 }
 
 function hex(c) {

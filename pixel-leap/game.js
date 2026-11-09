@@ -712,6 +712,7 @@ document.querySelector('[data-rebuild]').addEventListener('click', () => {
 // ---------------------------------------------------------------- music
 function music() {
   stopMusic();
+  heard.push(`loop:${world().sound}-music`);
   stopMusic = sound.loop(`${world().sound}-music`, { gain: 0.35 });
 }
 
@@ -1425,6 +1426,14 @@ deck.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ---------------------------------------------------------------- the loop
+// Physics runs in fixed steps whatever the display's rate, so it is the same at 60 and 120 Hz.
+function advance(dt) {
+  acc += dt;
+  while (acc >= STEP - 1e-9) {
+    update(STEP);
+    acc -= STEP;
+  }
+}
 let last = performance.now();
 let acc = 0;
 const frameWork = []; // milliseconds of update + draw per frame, for the performance test
@@ -1432,13 +1441,7 @@ function frameLoop(now) {
   const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
   last = now;
   const t0 = performance.now();
-  if (!manual) {
-    acc += dt;
-    while (acc >= STEP) {
-      update(STEP);
-      acc -= STEP;
-    }
-  }
+  if (!manual) advance(dt);
   render();
   if (game.mode === 'build') drawPreview(dt);
   updateHud();
@@ -1484,6 +1487,7 @@ Promise.all([
     heard,
     frameWork,
     step: (dt = STEP) => update(dt),
+    advance,
     steps: (n) => {
       for (let i = 0; i < n; i++) update(STEP);
     },
