@@ -42,14 +42,15 @@ Where they differ from the fifth playtest below, these win.
 
 ### The owner's fifth playtest (owner, 2026-11-09)
 
-- **A hit tips the whole thing back, stick and all.** "When you hit one of them, it doesn't look
+- **A hit tips the whole thing back, stick and all** (replaced by the sixth playtest: a hit is now
+  pulled straight down, with no tip back). "When you hit one of them, it doesn't look
   realistic because the stick disappears … do not disappear the stick and actually move everything
   down … the whole dog or target together with the stick bent backward as if mechanically you hit
   them." A hit target and its stick tip back together about the stick's foot (seen foreshortened,
   falling away), in about 0.2 s, then the mechanism lowers them out of sight behind the strip over
   0.5 s; a drop-down swings back and is pulled up behind the valance. Nothing fades, and the stick
   never disappears.
-- **Sticks you can see.** "for the stick, you need to use also some texture … currently it's only
+- **Sticks you can see** (toned down by the sixth playtest: soft, muted browns). "for the stick, you need to use also some texture … currently it's only
   one color, which mixes with the backgrounds … a border or … a shadow or two tones." Every stick is
   outlined, lit on one side and shaded on the other, with a faint grain.
 - **A longer frenzy.** "the frenzy should last … like 1 more second." 7 s instead of 6.
