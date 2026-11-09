@@ -1324,6 +1324,7 @@ $('[data-close-rooms]').addEventListener('click', closeRooms);
 // Closing the list puts back the card it covered.
 function closeRooms() {
   ui.rooms.hidden = true;
+  ui.bar.hidden = G.mode === 'done' || G.mode === 'floor';
   if (G.mode === 'done') showDone(G.lastStars);
   else if (G.mode === 'floor' && G.floor && G.floor.end) ui.floorCard.hidden = false;
 }
@@ -1346,6 +1347,7 @@ function showRooms() {
   ui.floorCard.hidden = true;
   ui.done.hidden = true;
   ui.rooms.hidden = false;
+  ui.bar.hidden = true;
 }
 
 function skipFloor() {

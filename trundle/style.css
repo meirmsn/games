@@ -408,6 +408,10 @@ button:focus-visible {
 }
 
 .rooms {
+  /* the board dims behind the list */
+  box-shadow:
+    0 10px 30px rgb(0 0 0 / 28%),
+    0 0 0 100vmax rgb(10 30 60 / 45%);
   top: 50%;
   bottom: auto;
   transform: translate(-50%, -50%);

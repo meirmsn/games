@@ -243,6 +243,53 @@ test('trundle AC-4: reaching the exit completes the room; Trundle cheers; its st
   await context.close();
 });
 
+test('trundle states: each state shows only its own bar, cards and Go or Stop, as in the state table', async () => {
+  const { context, page, errors } = await open('#1-1');
+  await manual(page);
+  const look = () =>
+    page.evaluate(() => ({
+      mode: window.__trundle.G.mode,
+      bar: document.querySelector('[data-bar]').checkVisibility(),
+      stop: document.querySelector('[data-go]').classList.contains('running'),
+      label: document.querySelector('[data-go]').getAttribute('aria-label'),
+      done: document.querySelector('[data-card="done"]').checkVisibility(),
+      floor: document.querySelector('[data-card="floor"]').checkVisibility(),
+      rooms: document.querySelector('[data-card="rooms"]').checkVisibility(),
+    }));
+  const only = (v, want) => {
+    for (const [key, val] of Object.entries(want)) assert.equal(v[key], val, `${v.mode}: ${key}`);
+  };
+  // demo kick
+  only(await look(), { mode: 'demo', bar: true, stop: true, label: 'Stop', done: false, floor: false, rooms: false });
+  // editing
+  await runOut(page);
+  only(await look(), { mode: 'edit', bar: true, stop: false, label: 'Go', done: false, floor: false, rooms: false });
+  // running
+  await page.evaluate(() => window.__trundle.go());
+  only(await look(), { mode: 'run', bar: true, stop: true, label: 'Stop', done: false, floor: false, rooms: false });
+  // rooms list, over a run: the run stops, the bar hides
+  await page.click('[data-rooms]');
+  only(await look(), { bar: false, done: false, floor: false, rooms: true });
+  await page.click('[data-close-rooms]');
+  only(await look(), { mode: 'edit', bar: true, rooms: false });
+  // room done
+  await solve(page, 0);
+  await page.waitForSelector('[data-card="done"]:not([hidden])');
+  only(await look(), { mode: 'done', bar: false, done: true, floor: false, rooms: false });
+  // floor run: no card until its end, then the floor card
+  for (const i of [1, 2, 3, 4, 5]) await solve(page, i);
+  await page.waitForFunction(() => window.__trundle.G.mode === 'floor', null, { timeout: 4000 });
+  only(await look(), { mode: 'floor', bar: false, done: false, floor: false, rooms: false });
+  await page.evaluate(() => {
+    const T = window.__trundle;
+    let n = 0;
+    while (!T.G.floor.end && n++ < 6000) T.frame(1000 / 60);
+  });
+  only(await look(), { mode: 'floor', bar: false, done: false, floor: true, rooms: false });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('trundle AC-5: a miss ends on its own within 1 s of the ball resting or leaving; the trail and marker stay until Go', async () => {
   const { context, page } = await open('#1-1');
   await manual(page);
