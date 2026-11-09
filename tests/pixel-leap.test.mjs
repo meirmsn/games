@@ -947,3 +947,66 @@ test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the 
   assert.equal(same, true);
   await context.close();
 });
+
+// The spec's state table: in each state, which of the builder, the deck, the paused card and the
+// tally show. The deck is hidden while building and shown (still) otherwise.
+test('pixel-leap AC-12: each state shows only what the state table says, and the end card plays again', async () => {
+  const { context, page, errors } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true });
+  const seen = () =>
+    page.evaluate(() => {
+      const shown = (sel) => {
+        const el = document.querySelector(sel);
+        const cs = getComputedStyle(el);
+        return !el.hidden && cs.display !== 'none' && cs.visibility !== 'hidden';
+      };
+      return {
+        builder: shown('[data-screen="build"]'),
+        deck: shown('[data-deck]'),
+        paused: shown('[data-screen="paused"]'),
+        tally: shown('[data-screen="tally"]'),
+        view: shown('#view'),
+      };
+    });
+  const row = (builder, deck, paused, tally) => ({ builder, deck, paused, tally, view: true });
+  assert.deepEqual(await seen(), row(true, false, false, false), 'building');
+  await page.click('[data-go]');
+  await page.evaluate(() => {
+    window.__leap.manual = true;
+  });
+  assert.deepEqual(await seen(), row(false, true, false, false), 'playing');
+  await page.evaluate(() => window.__leap.pause());
+  assert.deepEqual(await seen(), row(false, true, true, false), 'paused');
+  await page.evaluate(() => {
+    const L = window.__leap;
+    L.resume();
+    L.loadStage(0, 2);
+    const po = L.stage().things.find((t) => t.type === 'portal');
+    Object.assign(L.player, { x: po.x, y: po.y });
+    L.step();
+  });
+  assert.deepEqual(await seen(), row(false, true, false, true), 'tally');
+  assert.match(await page.locator('[data-leap]').textContent(), /Leap/);
+  await page.click('[data-leap]');
+  await page.evaluate(() => {
+    const L = window.__leap;
+    while (L.game.modeT < 0.6) L.step();
+  });
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'leap');
+  assert.deepEqual(await seen(), row(false, true, false, false), 'leaping');
+  await page.evaluate(() => {
+    const L = window.__leap;
+    while (L.game.mode !== 'play') L.step();
+    L.loadStage(1, 1);
+    const po = L.stage().things.find((t) => t.type === 'portal');
+    Object.assign(L.player, { x: po.x, y: po.y });
+    L.step();
+  });
+  assert.deepEqual(await seen(), row(false, true, false, true), 'end of the slice');
+  assert.equal((await page.locator('[data-leap]').textContent()).trim(), 'Play again');
+  assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
+  await page.click('[data-leap]');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'build');
+  assert.deepEqual(await seen(), row(true, false, false, false), 'back to building');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
