@@ -217,3 +217,75 @@ body {
   font-weight: 600;
   color: #7a4a22;
 }
+
+/* Analog: every card is a nailed wooden sign from the pack's own wood, its lettering painted on, its
+   buttons painted boards. (These rules come last and win over the plainer ones above.) */
+.card,
+.card-like {
+  border-radius: 4px;
+  background: #b9773a url('img/wood.png') 0 0 / 128px 128px repeat;
+  border: 3px solid #3b210c;
+  box-shadow:
+    inset 2px 2px 0 rgb(255 222 170 / 45%),
+    inset -2px -2px 0 rgb(40 18 4 / 55%),
+    0 8px 24px rgb(0 0 0 / 45%);
+  color: #fff1d6;
+  font-family: 'Rockwell', 'Georgia', 'Times New Roman', serif;
+  text-shadow: 1px 2px 0 rgb(30 12 2 / 75%);
+}
+
+/* A nail in each corner. */
+.card::before,
+.card-like::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) top left / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) top right / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) bottom left / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) bottom right / 7px 7px no-repeat;
+}
+
+.card-like {
+  position: relative;
+}
+
+.card h2 {
+  color: #ffd23f;
+  font-size: 30px;
+  letter-spacing: 0.5px;
+}
+
+.score-line,
+.detail,
+.best,
+.turned p,
+.turned .hint {
+  color: #fff1d6;
+}
+
+.best.is-new {
+  color: #ffd23f;
+}
+
+/* Buttons: a painted red board, bevelled, with cream lettering. */
+.play {
+  border-radius: 4px;
+  font-family: 'Rockwell', 'Georgia', 'Times New Roman', serif;
+  color: #fff1d6;
+  text-shadow: 1px 2px 0 rgb(40 8 0 / 70%);
+  background: linear-gradient(#d4462f, #a8301c);
+  border: 2px solid #4a160a;
+  box-shadow:
+    inset 2px 2px 0 rgb(255 190 160 / 45%),
+    inset -2px -3px 0 rgb(60 10 0 / 45%),
+    0 3px 0 #3b210c;
+}
+
+@media (hover: hover) {
+  .play:hover {
+    background: linear-gradient(#e0553b, #b53822);
+  }
+}

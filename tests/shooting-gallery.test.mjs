@@ -1023,3 +1023,78 @@ test('shooting-gallery AC-26: the ruler shows how far a pull reaches and a dotte
   assert.ok(r.arc.gap > r.arc.full * 0.7, 'it stops well short of the landing point');
   await context.close();
 });
+
+test('shooting-gallery AC-27: in every lane a length of stick shows between a target and its strip', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page);
+    const gaps = await page.evaluate(() => {
+      const g = window.__gallery;
+      return g.L.lanes.map((lane) => {
+        const t = g.makeTarget('target', { lane: lane.i, speed: 0, turn: false });
+        const d = g.makeTarget('duck', { lane: lane.i, speed: 0, turn: false });
+        const D = g.dims(t)[1];
+        const bottom = Math.max(lane.line + D / 2, lane.line + g.dims(d)[1] / 2);
+        return (lane.strip - bottom) / D;
+      });
+    });
+    assert.ok(gaps.every((x) => x >= 0.2), `stick showing, as shares of the target's size, at ${viewport.width}: ${gaps.map((x) => x.toFixed(2))}`);
+    await context.close();
+  }
+});
+
+test('shooting-gallery AC-28: a frenzy lights a chasing marquee of big bulbs along the top and sides', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const before = g.ui().marquee;
+    g.startFrenzy();
+    g.step(0.5);
+    const a = g.marqueeBulbs();
+    const during = g.ui().marquee;
+    g.step(0.12);
+    const b = g.marqueeBulbs();
+    const { SW } = g.stage();
+    const out = {
+      before,
+      during,
+      n: a.length,
+      top: a.filter((x) => x.y === a[0].y).length,
+      left: a.filter((x) => x.x < 10).length,
+      right: a.filter((x) => x.x > SW - 10).length,
+      litShare: a.filter((x) => x.lit).length / a.length,
+      chased: a.some((x, i) => x.lit !== b[i].lit),
+      ratio: g.MARQUEE_R / g.timerBulbRadius(),
+    };
+    g.step(6);
+    out.after = g.ui().marquee;
+    return out;
+  });
+  assert.deepEqual([r.before, r.during, r.after], [false, true, false]);
+  assert.ok(r.top >= 8 && r.left >= 4 && r.right >= 4, JSON.stringify(r));
+  assert.ok(r.litShare > 0.55 && r.litShare < 0.75, 'two in three lit');
+  assert.ok(r.chased, 'the pattern chases along');
+  assert.ok(r.ratio >= 3, `bulbs ${r.ratio.toFixed(1)} times the timer's`);
+  await context.close();
+});
+
+test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is the loudest', async () => {
+  const { context, page } = await open();
+  const bg = (sel) => page.locator(sel).evaluate((el) => getComputedStyle(el).backgroundImage);
+  assert.match(await bg('[data-screen="start"]'), /wood\.png/);
+  assert.match(await bg('[data-screen="over"]'), /wood\.png/);
+  assert.match(await bg('[data-screen="pause"] .card-like'), /wood\.png/);
+  assert.match(await bg('[data-screen="turned"] .card-like'), /wood\.png/);
+  await ready(page);
+  const gains = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 15.02;
+    g.step(0.05);
+    g.game.time = 10.02;
+    g.step(0.05);
+    return { chime: g.heardOpts.chime.gain, warn: g.heardOpts.warn.gain };
+  });
+  assert.ok(gains.warn > gains.chime, `the 10 s ring is louder: ${JSON.stringify(gains)}`);
+  await context.close();
+});

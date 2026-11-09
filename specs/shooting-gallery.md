@@ -19,6 +19,37 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's fourth playtest (owner, 2026-11-09)
+
+The owner played the bulb-timer version and asked, in the session's chat on 2026-11-09, for more of
+the analog look and a few details. Where they differ from the decisions further down, these win.
+
+- **Everything analog.** "the frame around it to not look stylized … what it says round one, warm
+  up, and that bar, everything should look analog … the message at the end, out of time, all of that
+  should look analog. So see if you can reuse textures." Every sign is the pack's wood
+  (`bg_wood`, and `img/wood.png` for the page's cards), square-cut with bevelled edges, nail heads
+  and a drop shadow, its lettering painted on: the timer's board (a black panel behind the bulbs),
+  the score, the round's name, the quota (a brass bar sliding in a wooden groove, a notch for every
+  pip), the hopper (a carved tray with a cup for each ball), the round banners and the "Bonus!" and
+  "Frenzy!" signs, and the start, over, pause and turn cards, whose buttons are painted red boards.
+- **A better slingshot.** "the lines are too straight and you can see like weird edges." Its limbs
+  curve and taper along their length; all their outlines are drawn before the wood, so the joins
+  show no seams; the shading and grain follow the curves, with a knot or two.
+- **Sticks you can see.** "the sticks below the dogs, they don't show up for the lane at the back,
+  and they also don't show up for the circles … make sure there are sticks below each of the
+  targets that are moving from sideways." Each lane's targets now stand higher above their strip,
+  so a length of stick (about a quarter of the target's size) always shows between a target's
+  bottom and the water or grass, in every lane.
+- **The 10 s chime, unmistakable.** "we're missing like a chime when 10 seconds are left." It was
+  playing, but sounded like the half-time chime; now it's a louder triple ring.
+- **A marquee for the frenzy.** "when it's the frenzy mode … larger light bulbs … 3 times the
+  diameter, maybe 5 times … along the whole border of the top border and maybe side of the game, as
+  if they're coming from just behind the edges on the right, left, and top side, kind of like a
+  carnival, and they are alternating the lights … like a marquee." During a frenzy, big bulbs
+  (about 3.3 times the timer's) line the valance's edge and peek in from behind the left and right
+  edges, two in three lit and the pattern chasing along, in warm white, yellow and pink; they fade in
+  and out with the frenzy.
+
 ### The owner's third playtest (owner, 2026-11-09)
 
 The owner played the slingshot version ("this is getting much better") and asked, in the session's
@@ -334,6 +365,13 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-26** While the slingshot is pulled, the ruler's slider shows how far the ball will go (0 at
   the counter, 1 at the top of the booth, the lanes' notches between) and a dotted arc covers the
   first fifth of its flight, never reaching where it lands — `tests/shooting-gallery.test.mjs`.
+- **AC-27** In every lane a length of stick, at least a fifth of the target's size, shows between
+  a target's bottom and its strip's crest — `tests/shooting-gallery.test.mjs`.
+- **AC-28** During a frenzy big bulbs, at least three times the timer's, line the top and both
+  sides, their lit pattern chasing along; there are none outside a frenzy —
+  `tests/shooting-gallery.test.mjs`.
+- **AC-29** The start, over, pause and turn cards are wooden signs from the pack's wood, and the
+  10 s chime is louder than the others — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

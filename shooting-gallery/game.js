@@ -37,8 +37,10 @@ const { sound } = mountShell({
 
 // Every sound played, newest last, for the tests.
 const heard = [];
+const heardOpts = {}; // the options each sound was last played with
 function sfx(name, opts) {
   heard.push(name);
+  heardOpts[name] = { gain: 1, rate: 1, ...(opts || {}) };
   if (heard.length > 60) heard.shift();
   sound.play(name, opts);
 }
@@ -173,14 +175,16 @@ function layoutStage(o) {
   for (let i = 0; i < n; i++) {
     const s = lerp(sFar, sNear, n === 1 ? 1 : i / (n - 1));
     const top0 = L.T + i * band;
-    const lineY = top0 + band * 0.52;
-    const duckH = 109 * s * 1.15;
+    // Targets stand high enough that a length of their stick always shows above the strip: the
+    // crest sits below the biggest target's bottom by about a third of its size.
+    const lineY = top0 + band * 0.36;
+    const D = 142 * s;
     L.lanes.push({
       i,
       s,
       top: top0,
       line: lineY, // where the targets' centres run, and where a shot aimed at this lane lands
-      strip: lineY + duckH * 0.32, // the crest of the lane's water or grass
+      strip: lineY + D * 0.74, // the crest of the lane's water or grass
       kind: (n - 1 - i) % 2 === 0 ? 'water' : 'grass',
       dir: i % 2 === 0 ? 1 : -1,
       pips: i === 0 ? 3 : i === n - 1 ? 1 : 2,
@@ -374,7 +378,7 @@ const hiddenY = (t) => L.lanes[t.lane].strip + dims(t)[1] * 0.6;
 // the stick's foot (the rope's top), as if on levers: a few degrees, each at its own pace.
 function pivotOf(t) {
   if (t.kind === 'drop') return { x: t.x, y: L.top + 30 };
-  return { x: t.x, y: L.lanes[t.lane].strip + 26 };
+  return { x: t.x, y: L.lanes[t.lane].strip + 30 };
 }
 function rockAngle(t) {
   if (t.state === 'knocked') return t.knockRot || 0;
@@ -914,7 +918,7 @@ function timerCues(before, now) {
     game.pulse = 1;
   }
   if (before > 10 && now <= 10) {
-    sfx('warn');
+    sfx('warn', { gain: 1.6 });
     game.pulse = 1;
   }
   for (const s of [3, 2, 1]) if (before > s && now <= s) sfx('tock');
@@ -932,6 +936,80 @@ const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff
 // The bulbs of a seven-segment digit: segments a (top) to g (middle), three bulbs each.
 const SEGMENTS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcfgd'];
 
+// ---------- Analog pieces: wooden planks, painted lettering, brass ----------
+
+// A wooden plank or sign: the pack's wood, square-cut with bevelled edges, a nail in each corner and
+// a shadow beneath. `tone` darkens (negative) or lightens (positive) the wood.
+function plank(x, y, w, h, { nails = true, tone = 0, shadow = true } = {}) {
+  if (shadow) {
+    ctx.fillStyle = 'rgba(20, 8, 0, 0.35)';
+    ctx.fillRect(x + 2, y + 3, w, h);
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  for (let ty = y - ((y % 96) + 96) % 96; ty < y + h; ty += 96) for (let tx = x - 20; tx < x + w; tx += 96) sprite('bg_wood', tx, ty, 96.5, 96.5);
+  if (tone) {
+    ctx.fillStyle = tone > 0 ? `rgba(255, 230, 190, ${tone})` : `rgba(40, 18, 4, ${-tone})`;
+    ctx.fillRect(x, y, w, h);
+  }
+  ctx.restore();
+  // The bevel: light along the top and left, dark along the bottom and right.
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 222, 170, 0.55)';
+  ctx.beginPath();
+  ctx.moveTo(x + 1, y + h - 1);
+  ctx.lineTo(x + 1, y + 1);
+  ctx.lineTo(x + w - 1, y + 1);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(40, 18, 4, 0.7)';
+  ctx.beginPath();
+  ctx.moveTo(x + w - 1, y + 1);
+  ctx.lineTo(x + w - 1, y + h - 1);
+  ctx.lineTo(x + 1, y + h - 1);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#3b210c';
+  ctx.strokeRect(x, y, w, h);
+  if (nails) for (const [nx, ny] of [[x + 4, y + 4], [x + w - 4, y + 4], [x + 4, y + h - 4], [x + w - 4, y + h - 4]]) nail(nx, ny);
+}
+function nail(x, y) {
+  ctx.fillStyle = '#5a5249';
+  ctx.beginPath();
+  ctx.arc(x, y, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.beginPath();
+  ctx.arc(x - 0.5, y - 0.5, 0.7, 0, Math.PI * 2);
+  ctx.fill();
+}
+// Painted lettering: cream paint with a dark edge below, as if brushed onto the wood.
+function painted(text, x, y, px, align = 'center', color = '#fff1d6') {
+  ctx.font = `800 ${px}px "Rockwell", "Georgia", "Times New Roman", serif`;
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(30, 12, 2, 0.75)';
+  ctx.fillText(text, x + 0.8, y + 1.4);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+// A recessed groove in the wood, and a brass bar sliding in it.
+function groove(x, y, w, h) {
+  ctx.fillStyle = '#24130a';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.fillRect(x, y, w, 2);
+}
+function brass(x, y, w, h, gold = false) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, gold ? '#fff0a8' : '#f2d37a');
+  g.addColorStop(0.5, gold ? '#ffd23f' : '#c99a3a');
+  g.addColorStop(1, gold ? '#b8860b' : '#7a5a1c');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+}
+
 // The timer: a wooden marquee board with two digits of light bulbs, lit in the time's colour, with a
 // little flicker; unlit bulbs stay dark glass. It swells at half time and at 10 s.
 function drawTimerBoard(tm) {
@@ -940,28 +1018,13 @@ function drawTimerBoard(tm) {
   ctx.save();
   ctx.translate(tm.x + tm.w / 2, tm.y + tm.h / 2);
   ctx.scale(swell, swell);
-  // The board: the pack's wood in a dark frame, with a darker panel behind the bulbs.
-  ctx.save();
-  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 8);
-  ctx.clip();
-  sprite('bg_wood', -tm.w / 2 - 20, -tm.h / 2 - 30, 128, 128);
-  ctx.fillStyle = 'rgba(40, 20, 6, 0.25)';
-  ctx.fillRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h);
-  ctx.restore();
-  ctx.fillStyle = 'rgba(25, 12, 4, 0.72)';
-  roundRect(-tm.w / 2 + 5, -tm.h / 2 + 5, tm.w - 10, tm.h - 10, 5);
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#4a2a12';
-  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 8);
-  ctx.stroke();
-  // Two brass screws.
-  ctx.fillStyle = '#c9a24a';
-  for (const sx of [-tm.w / 2 + 4, tm.w / 2 - 4]) {
-    ctx.beginPath();
-    ctx.arc(sx, 0, 1.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  // The board: a nailed wooden sign, with a black-painted panel behind the bulbs.
+  plank(-tm.w / 2, -tm.h / 2, tm.w, tm.h, { tone: -0.12 });
+  ctx.fillStyle = '#17100a';
+  ctx.fillRect(-tm.w / 2 + 6, -tm.h / 2 + 6, tm.w - 12, tm.h - 12);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-tm.w / 2 + 6, -tm.h / 2 + 6, tm.w - 12, tm.h - 12);
   const { digits } = timerBulbs();
   const dh = tm.font;
   const dw = dh * 0.5;
@@ -1324,41 +1387,63 @@ function drawHud() {
   if (!hudVisible()) return;
   const cfg = game.cfg;
   const H = hudLayout();
-  label(game.score.toLocaleString('en-US'), SW / 2, H.score.y, H.score.font, 'center');
+  // The score, painted on a small sign hanging under the valance.
+  const sc = game.score.toLocaleString('en-US');
+  ctx.font = `800 ${H.score.font}px "Rockwell", "Georgia", serif`;
+  const sw = Math.max(48, ctx.measureText(sc).width + 22);
+  plank(SW / 2 - sw / 2, H.score.y - H.score.font * 0.75, sw, H.score.font * 1.5, { tone: 0.05 });
+  painted(sc, SW / 2, H.score.y + 1, H.score.font);
   if (!cfg) return;
   drawTimerBoard(H.timer);
-  label(`Round ${game.round} · ${cfg.name}`, H.label.x, H.label.y, 14, 'left', '#fff4dc');
-  // The quota: a bar that fills with every pip, the count inside it; gold in the bonus, the
-  // missing part flashing red when the time runs out. It stays left of the slingshot.
+  // The round, painted on a nailed sign.
+  const rt = `Round ${game.round} · ${cfg.name}`;
+  ctx.font = '800 13px "Rockwell", "Georgia", serif';
+  const rw = ctx.measureText(rt).width + 20;
+  plank(H.label.x - 6, H.label.y - 10, rw, 20, { tone: 0.08 });
+  painted(rt, H.label.x + 4, H.label.y + 1, 13, 'left');
+  // The quota: a brass bar sliding along a groove in a wooden gauge, a notch for every pip; gold in
+  // the bonus; the empty groove flashing red when the time runs out. It stays left of the slingshot.
   const flash = game.mode === 'lost' && Math.floor(game.modeT * 6) % 2 === 0;
   const bw = Math.min(SW * 0.42, L.slingX - 62 - H.pips.x);
-  const bh = H.pips.r * 2.4;
+  const bh = H.pips.r * 2.6;
   const by = H.pips.y - bh / 2;
-  ctx.fillStyle = flash ? '#d0342c' : 'rgba(255, 244, 220, 0.18)';
-  roundRect(H.pips.x, by, bw, bh, bh / 2);
-  ctx.fill();
+  plank(H.pips.x - 4, by - 4, bw + 8, bh + 8, { nails: false, tone: -0.05 });
+  groove(H.pips.x, by, bw, bh);
+  if (flash) {
+    ctx.fillStyle = 'rgba(208, 52, 44, 0.8)';
+    ctx.fillRect(H.pips.x, by, bw, bh);
+  }
   const f = clamp(game.pips / cfg.quota, 0, 1);
-  if (f > 0) {
-    ctx.fillStyle = game.bonus ? '#ffd23f' : '#e86a17';
-    roundRect(H.pips.x, by, Math.max(bh, bw * f), bh, bh / 2);
+  if (f > 0) brass(H.pips.x, by + 1, bw * f, bh - 2, game.bonus);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < cfg.quota; i++) {
+    const nx = H.pips.x + (bw * i) / cfg.quota;
+    ctx.beginPath();
+    ctx.moveTo(nx, by + bh - 3);
+    ctx.lineTo(nx, by + bh);
+    ctx.stroke();
+  }
+  painted(`${Math.min(game.pips, 999)} / ${cfg.quota}`, H.pips.x + bw / 2, H.pips.y + 1, 11);
+  // The hopper: a carved wooden tray with a cup for each paintball.
+  const hx = H.hopper.x - 5;
+  const hw = H.hopper.r * (2.6 * (HOPPER - 1) + 2) + 10;
+  plank(hx, H.hopper.y - H.hopper.r - 5, hw, H.hopper.r * 2 + 10, { nails: false, tone: -0.1 });
+  for (let i = 0; i < HOPPER; i++) {
+    ctx.fillStyle = '#24130a';
+    ctx.beginPath();
+    ctx.arc(H.hopper.x + H.hopper.r + i * H.hopper.r * 2.6, H.hopper.y + 1, H.hopper.r + 1, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(255, 244, 220, 0.6)';
-  roundRect(H.pips.x, by, bw, bh, bh / 2);
-  ctx.stroke();
-  label(`${Math.min(game.pips, 999)} / ${cfg.quota}`, H.pips.x + bw / 2, H.pips.y + 1, 12, 'center', '#fff');
   // The hopper: the paintballs ready to fire, in the colours they'll be.
   for (let i = 0; i < HOPPER; i++) {
     const x = H.hopper.x + H.hopper.r + i * H.hopper.r * 2.6;
     ctx.beginPath();
     ctx.arc(x, H.hopper.y, H.hopper.r, 0, Math.PI * 2);
     const ready = game.frenzy > 0 || i < game.hopper;
-    ctx.fillStyle = ready ? PALETTE[(game.colour + i) % PALETTE.length] : 'rgba(255, 244, 220, 0.15)';
+    if (!ready) continue;
+    ctx.fillStyle = PALETTE[(game.colour + i) % PALETTE.length];
     ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255, 244, 220, 0.7)';
-    ctx.stroke();
     if (ready) {
       ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
       ctx.beginPath();
@@ -1378,34 +1463,88 @@ function slingGeometry() {
   const forkY = L.slingY - (land ? 20 : 28);
   return { spread, forkY, crotchY: L.slingY + (land ? 18 : 28), limb: land ? 12 : 15 };
 }
-// A limb of wood from (x1, y1) to (x2, y2), tapering from w1 to w2: shaded across its width, outlined,
-// with a little grain along it.
-function limb(x1, y1, x2, y2, w1, w2) {
-  const a = Math.atan2(y2 - y1, x2 - x1);
-  const nx = -Math.sin(a);
-  const ny = Math.cos(a);
+// A limb of wood: a tapering tube along a curve from (x1, y1) through the pull of (cx, cy) to
+// (x2, y2), w1 wide at its start and w2 at its end. tubePath() outlines it; the slingshot draws every
+// limb's outline first and the wood over them, so the joins show no seams.
+function bez(x1, y1, cx, cy, x2, y2, t) {
+  const u = 1 - t;
+  return [u * u * x1 + 2 * u * t * cx + t * t * x2, u * u * y1 + 2 * u * t * cy + t * t * y2];
+}
+function tubePath(L0, shift = 0, scale = 1) {
+  const { x1, y1, cx, cy, x2, y2, w1, w2 } = L0;
+  const n = 14;
+  const left = [];
+  const right = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n;
+    const [x, y] = bez(x1, y1, cx, cy, x2, y2, t);
+    const [xa, ya] = bez(x1, y1, cx, cy, x2, y2, Math.min(1, t + 0.01));
+    const [xb, yb] = bez(x1, y1, cx, cy, x2, y2, Math.max(0, t - 0.01));
+    const a = Math.atan2(ya - yb, xa - xb);
+    const nx = -Math.sin(a);
+    const ny = Math.cos(a);
+    const w = ((w1 + (w2 - w1) * t) / 2) * scale;
+    const o = shift * w;
+    left.push([x + nx * (w + o), y + ny * (w + o)]);
+    right.push([x - nx * (w - o), y - ny * (w - o)]);
+  }
   ctx.beginPath();
-  ctx.moveTo(x1 + (nx * w1) / 2, y1 + (ny * w1) / 2);
-  ctx.lineTo(x2 + (nx * w2) / 2, y2 + (ny * w2) / 2);
-  ctx.arc(x2, y2, w2 / 2, a + Math.PI / 2, a - Math.PI / 2, true);
-  ctx.lineTo(x1 - (nx * w1) / 2, y1 - (ny * w1) / 2);
+  ctx.moveTo(left[0][0], left[0][1]);
+  for (const [x, y] of left) ctx.lineTo(x, y);
+  // A rounded end.
+  const end = left[left.length - 1];
+  const endR = right[right.length - 1];
+  ctx.quadraticCurveTo(x2 + (x2 - cx) * 0.12, y2 + (y2 - cy) * 0.12, endR[0], endR[1]);
+  for (let i = right.length - 1; i >= 0; i--) ctx.lineTo(right[i][0], right[i][1]);
   ctx.closePath();
-  const g = ctx.createLinearGradient(x1 + (nx * w1) / 2, y1 + (ny * w1) / 2, x1 - (nx * w1) / 2, y1 - (ny * w1) / 2);
-  g.addColorStop(0, '#e2a868');
-  g.addColorStop(0.45, '#b9773a');
-  g.addColorStop(1, '#73421a');
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#4a2a12';
-  ctx.stroke();
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(80, 40, 12, 0.4)';
-  for (const o of [-0.22, 0.18]) {
-    ctx.beginPath();
-    ctx.moveTo(x1 + nx * w1 * o, y1 + ny * w1 * o);
-    ctx.lineTo(x2 + nx * w2 * o, y2 + ny * w2 * o);
+  void end;
+}
+function drawWoodLimbs(limbs) {
+  // The outlines, all first, so where the limbs meet only the wood shows.
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#3b210c';
+  ctx.lineWidth = 4;
+  for (const l of limbs) {
+    tubePath(l);
     ctx.stroke();
+  }
+  for (const l of limbs) {
+    tubePath(l);
+    ctx.fillStyle = '#b4743a';
+    ctx.fill();
+  }
+  // Roundness: light along one side, shadow along the other, both following the curve.
+  for (const l of limbs) {
+    tubePath(l, 0.35, 0.55);
+    ctx.fillStyle = 'rgba(244, 196, 132, 0.38)';
+    ctx.fill();
+    tubePath(l, -0.55, 0.45);
+    ctx.fillStyle = 'rgba(70, 36, 12, 0.32)';
+    ctx.fill();
+  }
+  // Grain along each limb, and a knot or two.
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(70, 36, 12, 0.45)';
+  for (const l of limbs) {
+    for (const off of [-0.18, 0.12]) {
+      ctx.beginPath();
+      for (let i = 0; i <= 12; i++) {
+        const t = 0.06 + (i / 12) * 0.86;
+        const [x, y] = bez(l.x1, l.y1, l.cx, l.cy, l.x2, l.y2, t);
+        const w = l.w1 + (l.w2 - l.w1) * t;
+        const wob = Math.sin(t * 9 + off * 20) * 0.6;
+        if (i === 0) ctx.moveTo(x + (off * w) + wob, y);
+        else ctx.lineTo(x + (off * w) + wob, y);
+      }
+      ctx.stroke();
+    }
+    if (l.knot != null) {
+      const [kx, ky] = bez(l.x1, l.y1, l.cx, l.cy, l.x2, l.y2, l.knot);
+      ctx.fillStyle = 'rgba(70, 36, 12, 0.6)';
+      ctx.beginPath();
+      ctx.ellipse(kx + 1, ky, 2.2, 1.5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 }
 function drawSlingshot() {
@@ -1422,10 +1561,14 @@ function drawSlingshot() {
   ctx.ellipse(x + 8, L.slingFoot - 2, g.spread * 0.9, 7, 0, 0, Math.PI * 2);
   ctx.fill();
   if (inPlay) drawRuler();
-  // The fork: the handle, then the two prongs, with the band's dark wrapping at their tips.
-  limb(x, L.slingFoot + 6, x, g.crotchY, g.limb * 1.25, g.limb * 1.1);
-  limb(x, g.crotchY + 4, x - g.spread, g.forkY, g.limb, g.limb * 0.8);
-  limb(x, g.crotchY + 4, x + g.spread, g.forkY, g.limb, g.limb * 0.8);
+  // The fork: a handle and two prongs curving out from the crotch, carved from one piece; the band's
+  // dark wrapping at the prongs' tips.
+  const rise = g.crotchY - g.forkY;
+  drawWoodLimbs([
+    { x1: x + 1, y1: L.slingFoot + 8, cx: x - 3, cy: (L.slingFoot + g.crotchY) / 2, x2: x, y2: g.crotchY - 2, w1: g.limb * 1.3, w2: g.limb * 1.15, knot: 0.45 },
+    { x1: x, y1: g.crotchY + 2, cx: x - g.spread * 0.15, cy: g.crotchY - rise * 0.75, x2: x - g.spread, y2: g.forkY, w1: g.limb * 1.05, w2: g.limb * 0.78 },
+    { x1: x, y1: g.crotchY + 2, cx: x + g.spread * 0.2, cy: g.crotchY - rise * 0.7, x2: x + g.spread, y2: g.forkY, w1: g.limb * 1.05, w2: g.limb * 0.78, knot: 0.6 },
+  ]);
   ctx.fillStyle = '#3b2412';
   for (const sx of [-1, 1]) roundRect(x + sx * g.spread - g.limb * 0.45, g.forkY + 2, g.limb * 0.9, 6, 2);
   ctx.fill();
@@ -1498,7 +1641,7 @@ function notchYs() {
 }
 function drawRuler() {
   const r = rulerBox();
-  limb(r.x, r.bottom, r.x, r.top, r.w, r.w);
+  drawWoodLimbs([{ x1: r.x, y1: r.bottom, cx: r.x, cy: (r.top + r.bottom) / 2, x2: r.x, y2: r.top, w1: r.w, w2: r.w }]);
   // A notch at each lane's height.
   ctx.strokeStyle = '#3b2412';
   ctx.lineWidth = 2;
@@ -1645,13 +1788,8 @@ function drawBanner() {
     ctx.save();
     ctx.translate(pill.x + w / 2, pill.y + pill.h / 2);
     ctx.scale(0.8 + 0.2 * p, 0.8 + 0.2 * p);
-    ctx.fillStyle = frenzy ? '#ffe3f1' : '#fff4dc';
-    ctx.strokeStyle = frenzy ? '#d63384' : '#b9773a';
-    ctx.lineWidth = 4;
-    roundRect(-w / 2, -18, w, 36, 18);
-    ctx.fill();
-    ctx.stroke();
-    label(b.text, 0, 1, Math.min(21, w / 4.6), 'center', frenzy ? '#d63384' : '#e86a17');
+    plank(-w / 2, -18, w, 36, { tone: frenzy ? 0 : 0.05 });
+    painted(b.text, 0, 1, Math.min(20, w / 5), 'center', frenzy ? '#ff9ad2' : '#ffd23f');
     ctx.restore();
     ctx.globalAlpha = 1;
     return;
@@ -1661,20 +1799,70 @@ function drawBanner() {
   ctx.translate(SW / 2, (L.T + L.C) / 2);
   ctx.scale(s, s);
   const w = Math.min(SW - 40, 300);
-  ctx.fillStyle = '#fff4dc';
-  ctx.strokeStyle = '#b9773a';
-  ctx.lineWidth = 5;
-  roundRect(-w / 2, -42, w, b.sub ? 88 : 66, 18);
-  ctx.fill();
-  ctx.stroke();
-  label(b.text, 0, b.sub ? -14 : -9, 30, 'center', '#e86a17');
-  if (b.sub) {
-    ctx.font = '700 16px system-ui, sans-serif';
-    ctx.fillStyle = '#7a4a22';
-    ctx.textAlign = 'center';
-    ctx.fillText(b.sub, 0, 20);
-  }
+  const bh2 = b.sub ? 88 : 66;
+  plank(-w / 2, -42, w, bh2, { tone: 0.04 });
+  painted(b.text, 0, b.sub ? -14 : -9, 30, 'center', '#ffd23f');
+  if (b.sub) painted(b.sub, 0, 20, 16);
   ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+// The frenzy's marquee: big bulbs along the valance's edge and peeking in from behind the left and
+// right edges, about 3.3 times the timer's bulbs, chasing as on a carnival sign. They fade in and
+// out with the frenzy.
+const MARQUEE_R = 12;
+const MARQUEE_COLOURS = ['#fff1c1', '#ffd23f', '#ff6ec7'];
+function marqueeBulbs() {
+  const out = [];
+  const gap = MARQUEE_R * 2.9;
+  const topY = L.top + 62;
+  for (let x = gap / 2, i = 0; x < SW; x += gap, i++) out.push({ x, y: topY, i });
+  let i = out.length;
+  for (let y = topY + gap; y < L.C - MARQUEE_R; y += gap) {
+    out.push({ x: 2, y, i: i++ });
+    out.push({ x: SW - 2, y, i: i++ });
+  }
+  const step = Math.floor(game.T * 9);
+  for (const b of out) b.lit = (b.i + step) % 3 !== 0;
+  return out;
+}
+function drawMarquee() {
+  if (game.frenzy <= 0) return;
+  const fade = Math.min(1, (FRENZY_LEN - game.frenzy) / 0.3, game.frenzy / 0.3);
+  const step = Math.floor(game.T * 9);
+  for (const b of marqueeBulbs()) {
+    ctx.globalAlpha = fade;
+    // The socket.
+    ctx.fillStyle = '#3a2a1c';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, MARQUEE_R + 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    if (!b.lit) {
+      ctx.fillStyle = '#5a4630';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, MARQUEE_R, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    const col = MARQUEE_COLOURS[(b.i + Math.floor(step / 3)) % MARQUEE_COLOURS.length];
+    const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, MARQUEE_R * 2.4);
+    g.addColorStop(0, col);
+    g.addColorStop(1, 'rgba(255, 220, 140, 0)');
+    ctx.globalAlpha = fade * 0.6;
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, MARQUEE_R * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, MARQUEE_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.beginPath();
+    ctx.arc(b.x - MARQUEE_R * 0.35, b.y - MARQUEE_R * 0.35, MARQUEE_R * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.globalAlpha = 1;
 }
 
@@ -1706,6 +1894,7 @@ function draw() {
   }
   if (game.cfg && game.cfg.lamps) drawLamps();
   drawCurtains();
+  drawMarquee();
   drawCounter();
   drawHud();
   drawSlingshot();
@@ -1958,9 +2147,9 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     requestAnimationFrame(frame);
     // For tests and tuning: read the state, and step the simulation without drawing.
     window.__gallery = {
-      game, aim, heard, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
+      game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, timerBulbs, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
@@ -1993,6 +2182,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
           timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',
           timerColour: !shown || !game.cfg ? 'hidden' : timerColour(),
+          marquee: game.frenzy > 0,
           timerText: !shown || !game.cfg ? '' : String(Math.max(0, Math.ceil(game.time - 1e-6))),
           // Under the orientation veil the whole booth, HUD included, is greyed by the veil's filter.
           greyed: !ui.turned.hidden && getComputedStyle(ui.turned).backdropFilter.includes('grayscale'),
