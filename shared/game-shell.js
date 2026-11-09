@@ -11,6 +11,10 @@
 // The back button sits in the top-left corner, clear of the notch, and plays a short sound before
 // going back. The game draws everywhere else. Escape also goes back on desktop, except while a text
 // field or an open dialog has focus, or when the game calls event.preventDefault() on that keydown.
+// Before leaving, the shell always asks "Leave this level? Your progress on this level will be
+// lost." (Stay / Leave), in every game, so leaving the game is never a surprise. A game that knows
+// when it holds unsaved progress can pass mountShell({ unsaved: () => bool }); the browser then also
+// warns before a refresh or closing the tab while it is true.
 import { createSound } from './sound.js';
 
 const BACK_SOUND = new URL('../assets/sounds/back.mp3', import.meta.url).href;
@@ -37,8 +41,12 @@ function keepForOffline() {
     .catch(() => {});
 }
 
-export function mountShell({ sounds = {}, home = HOME } = {}) {
+const ASK_TITLE = 'Leave this level?';
+const ASK_TEXT = 'Your progress on this level will be lost.';
+
+export function mountShell({ sounds = {}, home = HOME, unsaved = null } = {}) {
   const sound = createSound({ back: BACK_SOUND, ...sounds });
+  const shell = { sound, back: null };
 
   const back = document.createElement('a');
   back.className = 'shell-back';
@@ -47,15 +55,47 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
   back.innerHTML =
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>';
 
+  // The question: Stay (the default, and what Escape does) or Leave.
+  const ask = document.createElement('dialog');
+  ask.className = 'shell-leave';
+  ask.setAttribute('aria-labelledby', 'shell-leave-title');
+  ask.innerHTML =
+    '<p class="shell-leave-title" id="shell-leave-title"></p>' +
+    '<p class="shell-leave-text"></p>' +
+    '<div class="shell-leave-actions">' +
+    '<button type="button" class="shell-leave-stay" data-shell-stay autofocus>Stay</button>' +
+    '<button type="button" class="shell-leave-go" data-shell-leave>Leave</button>' +
+    '</div>';
+  ask.querySelector('.shell-leave-title').textContent = ASK_TITLE;
+  ask.querySelector('.shell-leave-text').textContent = ASK_TEXT;
+  ask.querySelector('[data-shell-stay]').addEventListener('click', () => ask.close());
+  ask.querySelector('[data-shell-leave]').addEventListener('click', () => leave());
+  ask.addEventListener('click', (e) => {
+    if (e.target === ask) ask.close(); // a tap outside the box stays
+  });
+
   let leaving = false;
-  function goBack(e) {
-    if (e) e.preventDefault();
+  function leave() {
     if (leaving) return; // a held key or a double tap leaves once
     leaving = true;
     sound.play('back');
     setTimeout(() => {
       window.location.href = home;
     }, 90);
+  }
+  function goBack(e) {
+    if (e) e.preventDefault();
+    if (leaving || ask.open) return;
+    if (typeof ask.showModal === 'function') ask.showModal();
+    else if (window.confirm(`${ASK_TITLE} ${ASK_TEXT}`)) leave();
+  }
+  // A refresh or closing the tab: the browser's own warning, while the game has unsaved progress.
+  if (typeof unsaved === 'function') {
+    window.addEventListener('beforeunload', (e) => {
+      if (leaving || !unsaved()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
   }
   back.addEventListener('click', (e) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
@@ -71,7 +111,9 @@ export function mountShell({ sounds = {}, home = HOME } = {}) {
   });
 
   document.body.appendChild(back);
+  document.body.appendChild(ask);
+  shell.back = back;
   if (document.readyState === 'complete') keepForOffline();
   else window.addEventListener('load', keepForOffline, { once: true });
-  return { sound, back };
+  return shell;
 }

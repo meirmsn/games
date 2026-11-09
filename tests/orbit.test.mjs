@@ -993,6 +993,26 @@ test('orbit AC-27: the top bar says what it counts: the system by number and nam
   await context.close();
 });
 
+test('orbit AC-28: Back asks before leaving; Space while it asks fires nothing; Stay keeps the game', async () => {
+  const { context, page } = await open({ hasTouch: false });
+  await page.locator('.shell-back').click();
+  const ask = page.locator('dialog.shell-leave');
+  await ask.waitFor({ state: 'visible' });
+  assert.match(await ask.textContent(), /Your progress on this level will be lost\./);
+  // Space presses the focused Stay: the question closes and nothing launches behind it
+  await page.keyboard.press(' ');
+  await ask.waitFor({ state: 'hidden' });
+  assert.equal((await state(page)).launches, 0, 'no launch behind the dialog');
+  assert.match(page.url(), /\/orbit\//);
+  // and clicking Stay keeps the game too
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-stay]').click();
+  await ask.waitFor({ state: 'hidden' });
+  assert.match(page.url(), /\/orbit\//);
+  await context.close();
+});
+
 test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolling, clear of the buttons', async () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const { context, page } = await open({ viewport });

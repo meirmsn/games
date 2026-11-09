@@ -217,6 +217,10 @@ three differ.
   the dark. They are synthesised by `scripts/orbit/make-sounds.py` into MP3s, and all play under the
   site-wide mute, unlocked by the first touch. Rejected: Kenney's clips (owner, 2026-11-09: "we need
   better sounds. They don't sound like the space. They sound weird").
+- Leaving asks first: Orbit uses the site shell's "Leave this level? Your progress on this level
+  will be lost." on Back and Escape, which came to `main` with Runes (owner, 2026-11-09: "When I hit
+  back, I didn't see the message to, you're gonna lose your progress, which we just merged with
+  the runes game ... bring latest main").
 - Interruptible: when the page is hidden, play pauses. A flight in progress is undone: its launch
   isn't counted, its motes stay caught, and on return the probe is back at the leg's start and
   waits for a touch. A capture in progress completes instead, and an end card stays as it was
@@ -318,6 +322,8 @@ three differ.
 - **AC-27** The top bar labels what it shows: the system's number and name ("System 2 ·
   Slingshot"), "Jump n of 4" for the leg, and "Stardust" with its count of the system's motes; it
   fits a 360 px wide screen.
+- **AC-28** Back (and Escape) ask "Leave this level?" before leaving, as in every game; while the
+  question shows, Space launches nothing (it presses Stay), and Stay keeps the game.
 
 ## Core flow
 
