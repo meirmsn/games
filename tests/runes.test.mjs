@@ -1,0 +1,522 @@
+// Tests for Runes. Run: scripts/check-slow.sh.
+// The game exposes window.__runes (the state, the rules, and the actions the player can take), so
+// these tests can set up a board and check what the rules and the input do with it. The level
+// checks (AC-9) run in Node, on the same rules the page uses.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { chromium } from 'playwright';
+import { FAKE_AUDIO } from './fake-audio.mjs';
+import * as R from '../runes/rules.js';
+import { LEVELS, CHAPTERS } from '../runes/levels.js';
+import { runesMatter } from '../scripts/runes/generate.mjs';
+import { greedy } from '../scripts/runes/lab.mjs';
+
+// Its own port range: the test files run in parallel, and a shared range can collide.
+const PORT = 9300 + Math.floor(Math.random() * 100);
+const BASE = `http://127.0.0.1:${PORT}/`;
+let server;
+let browser;
+
+before(async () => {
+  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
+    cwd: new URL('..', import.meta.url).pathname,
+    stdio: 'ignore',
+  });
+  for (let i = 0; i < 50; i++) {
+    try {
+      if ((await fetch(BASE)).ok) break;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  browser = await chromium.launch();
+});
+
+after(async () => {
+  await browser?.close();
+  server?.kill();
+});
+
+async function open({ hash = '1', viewport = { width: 390, height: 844 }, init = null } = {}) {
+  const context = await browser.newContext({ viewport, hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  if (init) await context.addInitScript(init);
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await page.goto(`${BASE}runes/#${hash}`);
+  await page.waitForFunction(() => window.__runes);
+  return { context, page, errors };
+}
+
+const path = (page) => page.evaluate(() => window.__runes.game.s.path.slice());
+const board = (page, rows) => page.evaluate((rows) => window.__runes.loadBoard(rows), rows);
+
+// Synthetic pointer events on the canvas, so a test controls every finger.
+async function pointer(page, type, id, x, y) {
+  await page.evaluate(
+    ({ type, id, x, y }) => {
+      const c = document.querySelector('#pool');
+      c.dispatchEvent(
+        new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, bubbles: true, isPrimary: id === 1, pointerType: 'touch' })
+      );
+    },
+    { type, id, x, y }
+  );
+}
+// Drag one finger from (x, y) by (dx, dy), in small moves.
+async function drag(page, x, y, dx, dy, { id = 1, end = true, start = true } = {}) {
+  if (start) await pointer(page, 'pointerdown', id, x, y);
+  const n = 12;
+  for (let i = 1; i <= n; i++) await pointer(page, 'pointermove', id, x + (dx * i) / n, y + (dy * i) / n);
+  if (end) await pointer(page, 'pointerup', id, x + dx, y + dy);
+}
+const cellSize = (page) => page.evaluate(() => window.__runes.box.cell);
+const center = (page, c) => page.evaluate((c) => window.__runes.center(c), c);
+async function tapCell(page, c) {
+  const p = await center(page, c);
+  await pointer(page, 'pointerdown', 1, p.x, p.y);
+  await pointer(page, 'pointerup', 1, p.x, p.y);
+}
+
+// ---------------------------------------------------------------------------------------------
+
+test('runes AC-1: the pool is already moving before any input, with its buttons, and no errors', async () => {
+  const { context, page, errors } = await open();
+  await page.waitForTimeout(300);
+  const a = await page.screenshot();
+  await page.waitForTimeout(300);
+  const b = await page.screenshot();
+  assert.notDeepEqual(a, b, 'two frames 300 ms apart differ');
+  for (const sel of ['[data-undo]', '[data-restart]', '[data-hint]', '[data-levels]']) {
+    assert.ok(await page.locator(sel).isVisible(), sel);
+  }
+  assert.equal(await page.evaluate(() => window.__runes.game.index), 0);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('runes AC-2: a relative drag steps the line, a drag back takes it back, walls store nothing, a second finger moves nothing', async () => {
+  const { context, page } = await open();
+  const c = await cellSize(page);
+  // Start below the board, far from the line's head.
+  const box = await page.evaluate(() => ({ ...window.__runes.box, h: window.__runes.game.level.h }));
+  const y = box.oy + (box.h + 0.6) * c;
+  const x = box.ox + c;
+  await drag(page, x, y, 0.62 * c, 0);
+  assert.deepEqual(await path(page), [0, 1], '0.6 cell right steps one stone right');
+  await drag(page, x, y, -0.5 * c, 0);
+  assert.deepEqual(await path(page), [0, 1], 'half a cell back is not enough');
+  await drag(page, x, y, -0.82 * c, 0);
+  assert.deepEqual(await path(page), [0], '0.8 cell back takes the step back');
+  // Push left (off the board) for three cells, then right: nothing was stored by the push.
+  await drag(page, x, y, -3 * c, 0, { end: false });
+  assert.deepEqual(await path(page), [0]);
+  await drag(page, x - 3 * c, y, 0.95 * c, 0, { start: false });
+  assert.deepEqual(await path(page), [0, 1], 'the push into the wall stored nothing');
+  // Down from stone 1 is water: nothing happens.
+  await drag(page, x, y, 0, 2 * c);
+  assert.deepEqual(await path(page), [0, 1]);
+  // A second finger moves nothing while the first is down.
+  await pointer(page, 'pointerdown', 1, x, y);
+  await drag(page, x + 50, y, 2 * c, 0, { id: 2 });
+  assert.deepEqual(await path(page), [0, 1], 'the second finger was ignored');
+  await pointer(page, 'pointerup', 1, x, y);
+  await context.close();
+});
+
+test('runes AC-3: taps step and cut, Undo restores a cut and a Restart, and takes back a step', async () => {
+  const { context, page } = await open();
+  await tapCell(page, 1);
+  await tapCell(page, 2);
+  await tapCell(page, 5);
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'taps on neighbours step');
+  await tapCell(page, 1);
+  assert.deepEqual(await path(page), [0, 1], 'a tap on a lit stone cuts back to it');
+  await page.click('[data-undo]');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Undo lays the whole cut line again');
+  await page.click('[data-restart]');
+  assert.deepEqual(await path(page), [0], 'Restart clears the line');
+  await page.click('[data-undo]');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Undo brings the line back after a Restart');
+  await page.click('[data-undo]');
+  assert.deepEqual(await path(page), [0, 1, 2], 'Undo after a step takes it back');
+  await context.close();
+});
+
+test('runes AC-4: arrow keys step and step back, Backspace and Z undo, R restarts', async () => {
+  const { context, page } = await open();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  assert.deepEqual(await path(page), [0, 1, 2, 5]);
+  await page.keyboard.press('ArrowUp');
+  assert.deepEqual(await path(page), [0, 1, 2], 'an arrow toward the previous stone steps back');
+  await page.keyboard.press('Backspace');
+  assert.deepEqual(await path(page), [0, 1, 2, 5], 'Backspace undoes the step back');
+  await page.keyboard.press('z');
+  assert.deepEqual(await path(page), [0, 1, 2], 'Z undoes');
+  await page.keyboard.press('r');
+  assert.deepEqual(await path(page), [0], 'R restarts');
+  await context.close();
+});
+
+test('runes AC-5: entering a Rise raises its water neighbours; taking the step back lowers them', async () => {
+  const { context, page } = await open();
+  // S R .     the Rise (1) has water to its right (2) and below (4); the source (0) is lit.
+  // o . .
+  // G . .
+  await board(page, ['SR.', 'o..', 'G..']);
+  const up = () => page.evaluate(() => [...window.__runes.game.s.up].map(Number));
+  assert.deepEqual(await up(), [1, 1, 0, 1, 0, 0, 1, 0, 0]);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 0, 1, 0, 0], 'cells 2 and 4 rose; nothing else changed');
+  await page.evaluate(() => window.__runes.stepBack());
+  assert.deepEqual(await up(), [1, 1, 0, 1, 0, 0, 1, 0, 0], 'they sank again');
+  await context.close();
+});
+
+test('runes AC-6: leaving a Sink sinks its plain neighbours except the next, never a rune, the source or the gate', async () => {
+  const { context, page } = await open();
+  // S K o     leaving the Sink (1) for 2 sinks 4? no: 4 is a Rise and stays. Leaving it for 4
+  // o R o     sinks 2. The source (0) never sinks.
+  // G o o
+  await board(page, ['SKo', 'oRo', 'Goo']);
+  const up = () => page.evaluate(() => [...window.__runes.game.s.up].map(Number));
+  await page.evaluate(() => window.__runes.stepTo(1));
+  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'nothing sinks while the light stands on it');
+  await page.evaluate(() => window.__runes.stepTo(2));
+  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'the next stone is spared, the Rise and the source stay');
+  await page.evaluate(() => window.__runes.stepBack());
+  await board(page, ['SKo', 'ooo', 'Goo']);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  await page.evaluate(() => window.__runes.stepTo(4));
+  assert.deepEqual(await up(), [1, 1, 0, 1, 1, 1, 1, 1, 1], 'stone 2 sank as the light left for 4');
+  await page.evaluate(() => window.__runes.stepBack());
+  assert.deepEqual(await up(), [1, 1, 1, 1, 1, 1, 1, 1, 1], 'taking the step back raises it again');
+  await context.close();
+});
+
+test('runes AC-7: the gate takes the light only last; then the level is solved, marked, remembered, and Next follows', async () => {
+  const { context, page } = await open();
+  // An early step onto the gate is refused and changes nothing.
+  await board(page, ['SoG', 'ooo']);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  const before = await page.evaluate(() => JSON.stringify(window.__runes.game.s));
+  assert.equal(await page.evaluate(() => window.__runes.stepTo(2)), false);
+  assert.equal(await page.evaluate(() => JSON.stringify(window.__runes.game.s)), before);
+  // A Sink beside the gate that sinks the last dark stone as the light leaves it lets the gate in.
+  await board(page, ['SKG', '.o.']);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  assert.equal(await page.evaluate(() => window.__runes.stepTo(2)), true);
+  assert.equal(await page.evaluate(() => window.__runes.game.done), true);
+  // Level 1, played for real.
+  await page.evaluate(() => window.__runes.loadLevel(0));
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
+    await page.keyboard.press(k);
+  }
+  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  assert.deepEqual(await page.evaluate(() => window.__runes.solvedSet()), [0]);
+  await page.click('[data-solved-levels]');
+  assert.ok(await page.locator('.lv[data-level="1"]').evaluate((el) => el.classList.contains('is-solved')));
+  await page.reload();
+  await page.waitForFunction(() => window.__runes);
+  assert.deepEqual(await page.evaluate(() => window.__runes.solvedSet()), [0], 'the mark survives a reload');
+  await page.evaluate(() => {
+    const r = window.__runes;
+    for (const c of r.game.solutions[0].slice(1)) r.stepTo(c);
+  });
+  await page.locator('[data-next]').click();
+  assert.equal(await page.evaluate(() => window.__runes.game.index), 1);
+  assert.equal(new URL(page.url()).hash, '#2');
+  await context.close();
+});
+
+test('runes AC-8: a line that can no longer finish dims the gate and marks stranded stones; a step back restores it', async () => {
+  const { context, page } = await open({ hash: '2' });
+  // Find a line on level 2 that dies with a stone stranded.
+  const found = await page.evaluate(() => {
+    const r = window.__runes;
+    const s = r.game.s;
+    const L = r.game.level;
+    function walk(depth) {
+      if (depth > 6) return null;
+      for (const m of r.rules.moves(s)) {
+        r.rules.step(s, m);
+        const dead = !r.rules.solve(L, { from: s, max: 1 }).solutions.length;
+        if (dead && r.rules.stranded(s).length) {
+          const line = s.path.slice();
+          r.rules.back(s);
+          return line;
+        }
+        const deeper = dead ? null : walk(depth + 1);
+        r.rules.back(s);
+        if (deeper) return deeper;
+      }
+      return null;
+    }
+    return walk(0);
+  });
+  assert.ok(found, 'level 2 has a line that strands a stone');
+  for (const c of found.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
+  await page.waitForFunction(() => window.__runes.game.dead === true);
+  assert.ok((await page.evaluate(() => window.__runes.game.stranded.length)) > 0, 'a stranded stone is marked');
+  await page.evaluate(() => window.__runes.stepBack());
+  await page.waitForFunction(() => window.__runes.game.dead === false && window.__runes.game.deadKnown);
+  assert.equal(await page.evaluate(() => window.__runes.game.stranded.length), 0);
+  await context.close();
+});
+
+test('runes AC-9: every level is sound: 1–3 solutions, greedy fails, every rune matters, no Spark', () => {
+  assert.equal(LEVELS.length, 14);
+  for (const [i, lv] of LEVELS.entries()) {
+    const name = `level ${i + 1} ${lv.name}`;
+    assert.match(lv.rows.join(''), /^[.oSGRK]+$/, `${name}: only stones, water, source, gate, Rise and Sink`);
+    const L = R.parse(lv.rows);
+    const res = R.solve(L, { max: 4, limit: 3e6 });
+    assert.equal(res.cut, false, `${name}: the search finished`);
+    assert.ok(res.solutions.length >= 1 && res.solutions.length <= 3, `${name}: ${res.solutions.length} solutions`);
+    const runes = L.kind.filter(R.isRune).length;
+    if (runes) {
+      assert.equal(greedy(L), false, `${name}: the greedy line fails`);
+      assert.equal(runesMatter(lv.rows, res.solutions.length), '', `${name}: every rune matters`);
+    }
+  }
+  const dawn = LEVELS.slice(CHAPTERS[0].from, CHAPTERS[0].to);
+  assert.ok(dawn.every((lv) => !lv.rows.join('').includes('K')), 'Dawn has no Sink');
+  // The first level with each rune has only that rune.
+  for (const r of ['R', 'K']) {
+    const first = LEVELS.find((lv) => lv.rows.join('').includes(r));
+    const other = r === 'R' ? 'K' : 'R';
+    assert.ok(!first.rows.join('').includes(other), `${first.name} brings in ${r} alone`);
+  }
+});
+
+test('runes AC-10: two chapters of five core and two deep levels; Tide locked until Dawn is done; the URL opens any level', async () => {
+  assert.deepEqual(
+    CHAPTERS.map((c) => [c.name, LEVELS.slice(c.from, c.to).map((l) => !!l.deep)]),
+    [
+      ['Dawn', [false, false, false, false, false, true, true]],
+      ['Tide', [false, false, false, false, false, true, true]],
+    ]
+  );
+  const { context, page } = await open();
+  assert.equal(await page.evaluate(() => window.__runes.locked(7)), true, 'Tide starts locked');
+  assert.equal(await page.evaluate(() => window.__runes.nextAfter(4)), 7, 'after level 5, Next opens level 8');
+  await page.click('[data-levels]');
+  assert.equal(await page.locator('.lv[data-level="8"]').getAttribute('aria-disabled'), 'true');
+  await page.locator('.lv[data-level="8"]').click({ force: true });
+  assert.equal(await page.evaluate(() => window.__runes.game.index), 0, 'a locked level does not open');
+  await context.close();
+
+  // Dawn's five core levels solved (its deep ones not): Tide opens.
+  const solved = open({ init: () => localStorage.setItem('runes-solved', '[0,1,2,3,4]') });
+  const s = await solved;
+  assert.equal(await s.page.evaluate(() => window.__runes.locked(7)), false);
+  await s.page.click('[data-levels]');
+  await s.page.locator('.lv[data-level="8"]').click();
+  assert.equal(await s.page.evaluate(() => window.__runes.game.index), 7);
+  await s.context.close();
+
+  // The URL opens a locked level; a hash that names no level opens level 1 and is rewritten.
+  const deep = await open({ hash: '13' });
+  assert.equal(await deep.page.evaluate(() => window.__runes.game.index), 12);
+  for (const bad of ['0', '99', 'abc']) {
+    await deep.page.goto(`${BASE}runes/#${bad}`);
+    await deep.page.reload();
+    await deep.page.waitForFunction(() => window.__runes);
+    assert.equal(await deep.page.evaluate(() => window.__runes.game.index), 0, `#${bad}`);
+    assert.equal(new URL(deep.page.url()).hash, '#1', `#${bad} is rewritten`);
+  }
+  await deep.context.close();
+});
+
+test('runes AC-11: Hint cuts back to the start shared with a solution and marks its next stone; Undo restores', async () => {
+  const { context, page } = await open({ hash: '2' });
+  const { sol, wrong } = await page.evaluate(() => {
+    const r = window.__runes;
+    const sol = r.game.solutions[0];
+    // Two right steps, then a wrong one.
+    r.stepTo(sol[1]);
+    r.stepTo(sol[2]);
+    const wrong = r.rules.moves(r.game.s).find((m) => m !== sol[3]);
+    r.stepTo(wrong);
+    return { sol, wrong };
+  });
+  assert.ok(wrong != null, 'level 2 has a wrong turn at its third step');
+  await page.click('[data-hint]');
+  assert.deepEqual(await path(page), sol.slice(0, 3));
+  assert.equal(await page.evaluate(() => window.__runes.game.hintCell), sol[3]);
+  await page.click('[data-undo]');
+  assert.deepEqual(await path(page), [...sol.slice(0, 3), wrong]);
+  await context.close();
+});
+
+test('runes AC-12: the chime climbs with the line and falls on a step back; Rise, Sink and solving have their sounds; mute silences all', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => {
+    const r = window.__runes;
+    window.__log = [];
+    const play = r.sound.play.bind(r.sound);
+    r.sound.play = (name, opts = {}) => {
+      if (!r.sound.muted) window.__log.push([name, opts.rate ?? 1]);
+      play(name, opts);
+    };
+  });
+  const log = () => page.evaluate(() => window.__log.splice(0));
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown']) await page.keyboard.press(k);
+  const chimes = (await log()).filter(([n]) => n === 'chime').map(([, r]) => r);
+  assert.equal(chimes.length, 3);
+  assert.ok(chimes[0] < chimes[1] && chimes[1] < chimes[2], `rates climb: ${chimes}`);
+  await page.keyboard.press('ArrowUp');
+  const back = (await log()).find(([n]) => n === 'chime');
+  assert.ok(back[1] < chimes[2], 'a step back plays a falling note');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  assert.ok((await log()).some(([n]) => n === 'solved'), 'solving plays the jingle');
+  await page.evaluate(() => window.__runes.loadBoard(['SR.', 'o..', 'G..']));
+  await page.evaluate(() => window.__runes.stepTo(1));
+  assert.ok((await log()).some(([n]) => n === 'rise'), 'a Rise plays its sound');
+  await page.evaluate(() => {
+    const r = window.__runes;
+    r.loadBoard(['SKo', 'ooo', 'Goo']);
+    r.stepTo(1);
+    r.stepTo(4);
+  });
+  assert.ok((await log()).some(([n]) => n === 'sink'), 'a Sink plays its sound');
+  // Muted: nothing reaches the speakers.
+  await page.click('[data-mute]');
+  const playedBefore = await page.evaluate(() => window.__played.length);
+  await page.evaluate(() => {
+    const r = window.__runes;
+    r.loadLevel(0);
+    r.stepTo(1);
+    r.stepTo(2);
+  });
+  assert.equal(await page.evaluate(() => window.__played.length), playedBefore, 'nothing plays while muted');
+  await context.close();
+});
+
+test('runes AC-13: hiding the page ends a drag, keeps the line and suspends the sound', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => {
+    window.__suspended = 0;
+    window.__runes.sound.suspend = () => window.__suspended++;
+  });
+  const c = await cellSize(page);
+  await drag(page, 100, 700, 0.62 * c, 0, { end: false });
+  assert.deepEqual(await path(page), [0, 1]);
+  assert.equal(await page.evaluate(() => window.__runes.dragging()), true);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  assert.equal(await page.evaluate(() => window.__runes.dragging()), false, 'the drag ended');
+  assert.deepEqual(await path(page), [0, 1], 'the line stayed');
+  assert.equal(await page.evaluate(() => window.__suspended), 1, 'the sound was suspended');
+  await context.close();
+});
+
+for (const viewport of [
+  { width: 360, height: 640 },
+  { width: 390, height: 844 },
+]) {
+  test(`runes AC-14: at ${viewport.width} × ${viewport.height} a 6 × 8 board fits, with big enough cells and buttons, and no scroll`, async () => {
+    const { context, page } = await open({ viewport });
+    await board(page, ['Sooooo', 'oooooo', 'oooooo', 'oooooo', 'oooooo', 'oooooo', 'oooooo', 'oooooG']);
+    const m = await page.evaluate(() => {
+      const r = window.__runes;
+      const b = r.box;
+      const L = r.game.level;
+      const bar = document.querySelector('.bar').getBoundingClientRect();
+      const title = document.querySelector('.title').getBoundingClientRect();
+      const buttons = [...document.querySelectorAll('.round, .shell-back')].map((el) => el.getBoundingClientRect());
+      return {
+        cell: b.cell,
+        left: b.ox,
+        right: innerWidth - (b.ox + b.cell * L.w),
+        top: b.oy,
+        bottom: b.oy + b.cell * (L.h + 0.2),
+        barTop: bar.top,
+        titleBottom: title.bottom,
+        minButton: Math.min(...buttons.map((r) => Math.min(r.width, r.height))),
+        scroll: document.documentElement.scrollHeight - innerHeight,
+      };
+    });
+    assert.ok(m.cell >= 44, `cells are ${m.cell} px`);
+    assert.ok(m.left >= 16 && m.right >= 16, `side margins ${m.left} and ${m.right}`);
+    assert.ok(m.top >= m.titleBottom, 'the board is below the title');
+    assert.ok(m.bottom <= m.barTop, 'the board is above the bar');
+    assert.ok(m.minButton >= 44, `buttons are at least ${m.minButton} px`);
+    assert.ok(m.scroll <= 0, 'the page does not scroll');
+    await context.close();
+  });
+}
+
+test('runes AC-15: on level 1 a ghost light shows the first steps after a pause, again later, and stops once the line moves', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => {
+    const r = window.__runes;
+    r.knobs.ghostDelay = 400; // the real delays are 4 s and 8 s
+    r.knobs.ghostRepeat = 800;
+    r.game.lastInput = performance.now();
+  });
+  await page.waitForFunction(() => window.__runes.game.ghost.shows >= 1, null, { timeout: 3000 });
+  await page.waitForFunction(() => window.__runes.game.ghost.shows >= 2, null, { timeout: 5000 });
+  await page.keyboard.press('ArrowRight');
+  const n = await page.evaluate(() => window.__runes.game.ghost.shows);
+  await page.waitForTimeout(2600);
+  assert.equal(await page.evaluate(() => window.__runes.game.ghost.shows), n, 'no more ghosts once the line moved');
+  await context.close();
+});
+
+test('runes AC-16: the head next to a Rise previews what it raises; the head on a Sink, what it sinks', async () => {
+  const { context, page } = await open();
+  await board(page, ['SoR.', 'o..o', 'Gooo']);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  // The Rise (2) would raise 3 and 6; 1 is lit.
+  assert.deepEqual((await page.evaluate(() => window.__runes.preview().cells)).sort(), [3, 6]);
+  await board(page, ['SKo', 'oRo', 'Goo']);
+  await page.evaluate(() => window.__runes.stepTo(1));
+  // On the Sink (1): its plain neighbour 2 would sink; 0 is lit and 4 is a Rise.
+  assert.deepEqual(await page.evaluate(() => window.__runes.preview().cells), [2]);
+  await context.close();
+});
+
+test('runes AC-18: with localStorage throwing, the game plays and solves a level without errors', async () => {
+  const { context, page, errors } = await open({
+    init: () => {
+      Storage.prototype.getItem = () => {
+        throw new Error('blocked');
+      };
+      Storage.prototype.setItem = () => {
+        throw new Error('blocked');
+      };
+    },
+  });
+  for (const k of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowLeft']) {
+    await page.keyboard.press(k);
+  }
+  assert.equal(await page.evaluate(() => window.__runes.game.done), true);
+  await page.locator('[data-screen="solved"]').waitFor({ state: 'visible' });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('runes AC-19: Runes plays offline once it has been played', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
+  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await page.reload(); // controlled now: this load caches the game's files
+  await page.waitForFunction(() => window.__runes);
+  await page.waitForLoadState('networkidle');
+  await context.setOffline(true);
+  await page.reload();
+  await page.waitForFunction(() => window.__runes);
+  await page.keyboard.press('ArrowRight');
+  assert.deepEqual(await path(page), [0, 1]);
+  await context.close();
+});

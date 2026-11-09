@@ -63,6 +63,18 @@ test('reef AC-11: landing page lists seven games, Reef first and playable, with 
   await context.close();
 });
 
+test('runes AC-17: the Runes tile is a playable link, and the page still lists seven tiles', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 7);
+  const runes = page.locator('.tile', { has: page.locator('h2', { hasText: 'Runes' }) });
+  assert.equal(await runes.evaluate((el) => el.tagName), 'A');
+  assert.equal(await runes.getAttribute('href'), 'runes/');
+  assert.equal(await runes.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.equal(await runes.locator('.badge').count(), 0, 'no coming-soon badge');
+  assert.doesNotMatch((await runes.getAttribute('aria-label')) || '', /coming soon/i);
+  await context.close();
+});
+
 test('a coming-soon tile nudges and does not navigate', async () => {
   const { context, page } = await open();
   const tile = page.locator('.tile.is-soon').first();

@@ -1,0 +1,305 @@
+/* Runes: the canvas fills the screen (sky, pool, stones); the title, the bar and the cards float
+   over it. The game has its own palette, the same in light and dark: the pool is its background. */
+
+:root {
+  --ink: #f4efe6;
+  --ink-soft: rgb(244 239 230 / 72%);
+  --glass: rgb(16 24 32 / 52%);
+  --glass-strong: rgb(16 24 32 / 74%);
+  --light: #ffd88a;
+  --light-ink: #2a1d05;
+}
+
+body {
+  background: #1f3f4a;
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#pool {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.title {
+  position: fixed;
+  z-index: 4;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 64px;
+  right: 64px;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 35%);
+}
+
+.chapter {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.name {
+  margin: 2px 0 0;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.num {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  margin-right: 4px;
+  border-radius: 8px;
+  font-size: 15px;
+  vertical-align: 2px;
+  background: var(--glass);
+}
+
+.round {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, opacity 160ms ease;
+}
+
+.round svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.round:active {
+  transform: scale(0.92);
+}
+
+.round:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .round:not(:disabled):hover {
+    background: var(--glass-strong);
+  }
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.bar {
+  position: fixed;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+}
+
+.round:focus-visible,
+.play:focus-visible,
+.link:focus-visible,
+.lv:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.card {
+  position: fixed;
+  z-index: 6;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px 22px 18px;
+  text-align: center;
+  border-radius: 24px;
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 10px 40px rgb(0 0 0 / 35%);
+  animation: rise 260ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -44%);
+  }
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 4px 0 18px;
+  font-size: 24px;
+  font-weight: 650;
+}
+
+.card-kicker {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.play {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--light-ink);
+  background: var(--light);
+  box-shadow: 0 0 24px rgb(255 216 138 / 45%);
+  cursor: pointer;
+}
+
+.play:active {
+  transform: scale(0.97);
+}
+
+.link {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  border: 0;
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink-soft);
+  background: transparent;
+  cursor: pointer;
+}
+
+.levels h2 {
+  margin-bottom: 10px;
+}
+
+.ch {
+  margin: 12px 0 4px;
+  text-align: left;
+}
+
+.ch-name {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ch-deep {
+  margin-left: 6px;
+  padding-left: 12px;
+  border-left: 1px solid rgb(244 239 230 / 25%);
+  display: flex;
+  gap: 8px;
+}
+
+.lv {
+  width: 44px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  color: #dfe9ea;
+  background: linear-gradient(#7d979a, #657c7e 86%, #4f6264 86%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 15%);
+  cursor: pointer;
+}
+
+.lv.is-deep {
+  box-shadow: inset 0 0 0 2px #e8c36a;
+}
+
+.lv.is-solved {
+  color: var(--light-ink);
+  background: linear-gradient(#ffe7ae, #f0c66a 86%, #b98c35 86%);
+  box-shadow: 0 0 14px rgb(255 216 138 / 55%);
+}
+
+.lv.is-deep.is-solved {
+  box-shadow: 0 0 14px rgb(255 216 138 / 55%), inset 0 0 0 2px #fff4cf;
+}
+
+.lv.is-current {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.lv[aria-disabled='true'] {
+  opacity: 0.38;
+  cursor: default;
+}

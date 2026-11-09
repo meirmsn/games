@@ -5,7 +5,7 @@ import * as R from '../../runes/rules.js';
 
 // A greedy player: fires every rise and spark it can reach, avoids sinks, and otherwise takes the
 // first open neighbour. True if that line happens to solve the level.
-function greedy(level) {
+export function greedy(level) {
   const s = R.newState(level);
   const score = (c) => {
     const k = level.kind[c];

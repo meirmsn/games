@@ -190,40 +190,58 @@ export function moves(s) {
   return out;
 }
 
-// Can the line still possibly finish? A cheap, safe test used to cut the search and to tell the
-// player a stone is stranded. Once no rise or spark is left to fire, the stones can only shrink, so
-// every unlit stone must be reachable from the head through unlit stones, unless a sink that is
-// still to fire could take it away. Returns the stranded stones (empty if none are known).
+// Can the line still possibly finish? A cheap, safe test used to cut the search and to show the
+// player why a line is lost. Water beside a rise still to fire counts as a stone that may come. A
+// dark stone is stranded when it can't be reached from the head through dark stones, or when it has
+// fewer than two ways in and out (dark stones, the head, the gate) and so would trap the line. A
+// stone a sink still to fire could take away is never counted. Returns the stranded stones.
 export function stranded(s) {
   const L = s.level;
   const n = L.w * L.h;
-  let growing = false;
+  const h = head(s);
   const sinkable = new Uint8Array(n);
+  const may = new Uint8Array(n); // water a rise still to fire could raise
   for (let i = 0; i < n; i++) {
     // A sink still to fire: one not yet lit, or the one the light stands on (it fires on leaving).
-    if (!s.up[i] || (s.lit[i] && i !== head(s))) continue;
+    if (!s.up[i] || (s.lit[i] && i !== h)) continue;
     const k = L.kind[i];
-    if (!s.lit[i] && (k === 'rise' || k === 'spark')) growing = true;
-    if (k === 'sink') for (let d = 0; d < 4; d++) {
+    if (!s.lit[i] && k === 'spark') return []; // a spark reaches far: no claims while one waits
+    for (let d = 0; d < 4; d++) {
       const m = neighbour(L, i, d);
-      if (m >= 0) sinkable[m] = 1;
+      if (m < 0) continue;
+      if (k === 'sink') sinkable[m] = 1;
+      if (k === 'rise' && !s.lit[i] && !s.up[m] && !s.lit[m]) may[m] = 1;
     }
   }
-  if (growing) return [];
+  // A dark stone, or water that may yet become one.
+  const dark = (m) => m >= 0 && !s.lit[m] && (s.up[m] || may[m]);
   const seen = new Uint8Array(n);
-  const stack = [head(s)];
-  seen[head(s)] = 1;
+  const stack = [h];
+  seen[h] = 1;
   while (stack.length) {
     const c = stack.pop();
     for (let d = 0; d < 4; d++) {
       const m = neighbour(L, c, d);
-      if (m < 0 || seen[m] || !s.up[m] || s.lit[m]) continue;
+      if (!dark(m) || seen[m]) continue;
       seen[m] = 1;
       if (m !== L.gate) stack.push(m); // the line ends on the gate, so it leads nowhere
     }
   }
   const out = [];
-  for (let i = 0; i < n; i++) if (s.up[i] && !s.lit[i] && !seen[i] && !sinkable[i]) out.push(i);
+  for (let i = 0; i < n; i++) {
+    if (!dark(i) || !s.up[i] || sinkable[i]) continue;
+    if (!seen[i]) {
+      out.push(i);
+      continue;
+    }
+    if (i === L.gate) continue;
+    let ways = 0;
+    for (let d = 0; d < 4; d++) {
+      const m = neighbour(L, i, d);
+      if (m === h || dark(m)) ways++;
+    }
+    if (ways < 2) out.push(i);
+  }
   return out;
 }
 
