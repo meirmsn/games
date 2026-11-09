@@ -50,7 +50,7 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
+test('reef AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 7);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');

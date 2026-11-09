@@ -96,7 +96,7 @@ async function meet(page, species, size, frames = 30) {
   );
 }
 
-test('AC-1: the reef opens behind a start card; Start begins L1, and nothing bites until you move', async () => {
+test('reef AC-1: the reef opens behind a start card; Start begins L1, and nothing bites until you move', async () => {
   const { context, page, errors } = await open();
   const s = await page.evaluate(() => ({
     mode: window.__reef.game.mode,
@@ -128,7 +128,7 @@ test('AC-1: the reef opens behind a start card; Start begins L1, and nothing bit
   await context.close();
 });
 
-test('AC-2: eating a food fish scores and moves the bar one notch', async () => {
+test('reef AC-2: eating a food fish scores and moves the bar one notch', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const after = await meet(page, 'pink', 22);
@@ -138,7 +138,7 @@ test('AC-2: eating a food fish scores and moves the bar one notch', async () => 
   await context.close();
 });
 
-test('AC-2: bigger food is worth more, by (its size / yours) squared', async () => {
+test('reef AC-2: bigger food is worth more, by (its size / yours) squared', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const points = async (size) => {
@@ -155,7 +155,7 @@ test('AC-2: bigger food is worth more, by (its size / yours) squared', async () 
   await context.close();
 });
 
-test('AC-15: food is told by colour: orange, green and pink are food, the rest bite', async () => {
+test('reef AC-15: food is told by colour: orange, green and pink are food, the rest bite', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   // A big orange fish is still food...
@@ -168,7 +168,7 @@ test('AC-15: food is told by colour: orange, green and pink are food, the rest b
   await context.close();
 });
 
-test('AC-16: levels take 4, 7, 9, 11, 13, 15, 17 and 20 fish, then 5 more each', async () => {
+test('reef AC-16: levels take 4, 7, 9, 11, 13, 15, 17 and 20 fish, then 5 more each', async () => {
   const { context, page } = await open();
   const goals = await page.evaluate(() => {
     const r = window.__reef;
@@ -184,7 +184,7 @@ test('AC-16: levels take 4, 7, 9, 11, 13, 15, 17 and 20 fish, then 5 more each',
   await context.close();
 });
 
-test('AC-3: a predator costs a life, and the third ends the run', async () => {
+test('reef AC-3: a predator costs a life, and the third ends the run', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   let s = await meet(page, 'red', 150, 5);
@@ -204,7 +204,7 @@ test('AC-3: a predator costs a life, and the third ends the run', async () => {
   await context.close();
 });
 
-test('AC-17: a bite: the predator swims off, and the player flees to safety on its own', async () => {
+test('reef AC-17: a bite: the predator swims off, and the player flees to safety on its own', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await meet(page, 'blue', 70, 2);
@@ -227,7 +227,7 @@ test('AC-17: a bite: the predator swims off, and the player flees to safety on i
   await context.close();
 });
 
-test('AC-4: getting bitten makes the next stretch easier', async () => {
+test('reef AC-4: getting bitten makes the next stretch easier', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const before = await page.evaluate(() => window.__reef.game.assist);
@@ -237,7 +237,7 @@ test('AC-4: getting bitten makes the next stretch easier', async () => {
   await context.close();
 });
 
-test('AC-4: the assist fades while you do well', async () => {
+test('reef AC-4: the assist fades while you do well', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.assist = 0.5));
@@ -247,7 +247,7 @@ test('AC-4: the assist fades while you do well', async () => {
   await context.close();
 });
 
-test('AC-5: the last fish of a depth dives to the next, with a life back, at most 3', async () => {
+test('reef AC-5: the last fish of a depth dives to the next, with a life back, at most 3', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -275,7 +275,7 @@ test('AC-5: the last fish of a depth dives to the next, with a life back, at mos
   await context.close();
 });
 
-test('AC-6: an eel warns with bubbles first, then strikes across the reef', async () => {
+test('reef AC-6: an eel warns with bubbles first, then strikes across the reef', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -300,7 +300,7 @@ test('AC-6: an eel warns with bubbles first, then strikes across the reef', asyn
   await context.close();
 });
 
-test('AC-7: a pufferfish puffs up when you come close, and bumps you away', async () => {
+test('reef AC-7: a pufferfish puffs up when you come close, and bumps you away', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   const s = await page.evaluate(() => {
@@ -324,7 +324,7 @@ test('AC-7: a pufferfish puffs up when you come close, and bumps you away', asyn
   await context.close();
 });
 
-test('AC-8: a long calm brings a hunter in', async () => {
+test('reef AC-8: a long calm brings a hunter in', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.calm = 30));
@@ -334,7 +334,7 @@ test('AC-8: a long calm brings a hunter in', async () => {
   await context.close();
 });
 
-test('AC-8: a passing school is a feast of fish you can eat', async () => {
+test('reef AC-8: a passing school is a feast of fish you can eat', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.game.feastIn = 0));
@@ -345,7 +345,7 @@ test('AC-8: a passing school is a feast of fish you can eat', async () => {
   await context.close();
 });
 
-test('AC-18: new dangers come in slowly, level by level', async () => {
+test('reef AC-18: new dangers come in slowly, level by level', async () => {
   const { context, page } = await open();
   const levels = await page.evaluate(() => {
     const r = window.__reef;
@@ -379,7 +379,7 @@ test('AC-18: new dangers come in slowly, level by level', async () => {
   await context.close();
 });
 
-test('AC-9: dragging on a touch screen steers the fish', async () => {
+test('reef AC-9: dragging on a touch screen steers the fish', async () => {
   const { context, page } = await open({ hasTouch: true, viewport: { width: 390, height: 844 } });
   await startEmpty(page);
   const start = await page.evaluate(() => window.__reef.player.x);
@@ -395,7 +395,7 @@ test('AC-9: dragging on a touch screen steers the fish', async () => {
   await context.close();
 });
 
-test('AC-10: the reef works offline once it has been played', async () => {
+test('reef AC-10: the reef works offline once it has been played', async () => {
   const { context, page } = await open();
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
   await page.evaluate(
@@ -412,7 +412,7 @@ test('AC-10: the reef works offline once it has been played', async () => {
   await context.close();
 });
 
-test('AC-12: The Deep is dark, with a glow around the player', async () => {
+test('reef AC-12: The Deep is dark, with a glow around the player', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => {
@@ -447,7 +447,7 @@ test('AC-12: The Deep is dark, with a glow around the player', async () => {
   await context.close();
 });
 
-test('AC-13: a new player starts with some help, and a hard run carries over', async () => {
+test('reef AC-13: a new player starts with some help, and a hard run carries over', async () => {
   const { context, page } = await open();
   const first = await page.evaluate(() => {
     window.__reef.startGame(0); // the first run
@@ -468,7 +468,7 @@ test('AC-13: a new player starts with some help, and a hard run carries over', a
   await context.close();
 });
 
-test('AC-14: each state shows only its own card and HUD', async () => {
+test('reef AC-14: each state shows only its own card and HUD', async () => {
   const { context, page } = await open();
   // What shows, read after the page has drawn a couple of frames of the current state.
   const cards = async () => {
@@ -508,7 +508,7 @@ test('AC-14: each state shows only its own card and HUD', async () => {
   await context.close();
 });
 
-test('AC-19: each predator has its own mark, and food has none', async () => {
+test('reef AC-19: each predator has its own mark, and food has none', async () => {
   const { context, page } = await open();
   const marks = await page.evaluate(() => window.__reef.marks());
   assert.deepEqual(marks, { pink: null, green: null, orange: null, blue: 'jaws', red: 'lure', grey: 'zap' });
@@ -530,7 +530,7 @@ test('AC-19: each predator has its own mark, and food has none', async () => {
   await context.close();
 });
 
-test('AC-20: level codes: the game-over card shows one, and entering it starts at that level', async () => {
+test('reef AC-20: level codes: the game-over card shows one, and entering it starts at that level', async () => {
   const { context, page } = await open();
   // The codes are pinned: a code names a level number and never changes from one version to the
   // next, and the codes of earlier versions keep working. Only add to this list.
@@ -570,7 +570,7 @@ test('AC-20: level codes: the game-over card shows one, and entering it starts a
   await context.close();
 });
 
-test('AC-21: losing a life makes a show of it in the HUD', async () => {
+test('reef AC-21: losing a life makes a show of it in the HUD', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await meet(page, 'blue', 70, 3);
@@ -584,7 +584,7 @@ test('AC-21: losing a life makes a show of it in the HUD', async () => {
   await context.close();
 });
 
-test('AC-22: each world looks different from the one before', async () => {
+test('reef AC-22: each world looks different from the one before', async () => {
   const { context, page } = await open();
   const w = await page.evaluate(() => {
     const r = window.__reef;
@@ -605,7 +605,7 @@ test('AC-22: each world looks different from the one before', async () => {
   await context.close();
 });
 
-test('AC-23: currents: a gentle drift at L4, a rip across the top third at L6, the whole sea at L7', async () => {
+test('reef AC-23: currents: a gentle drift at L4, a rip across the top third at L6, the whole sea at L7', async () => {
   const { context, page } = await open();
   const flows = await page.evaluate(() => {
     const r = window.__reef;
@@ -643,7 +643,7 @@ test('AC-23: currents: a gentle drift at L4, a rip across the top third at L6, t
   await context.close();
 });
 
-test('AC-24: L1 has no pufferfish, even behind the start card', async () => {
+test('reef AC-24: L1 has no pufferfish, even behind the start card', async () => {
   const { context, page } = await open();
   await page.evaluate(() => (window.__reef.manual = true));
   await steps(page, 1800); // 30 s of the start card
@@ -661,7 +661,7 @@ test('AC-24: L1 has no pufferfish, even behind the start card', async () => {
   await context.close();
 });
 
-test('AC-25: orange food fish are golden, clearly unlike the player\'s orange', async () => {
+test('reef AC-25: orange food fish are golden, clearly unlike the player\'s orange', async () => {
   const { context, page } = await open();
   const tone = await page.evaluate(() => {
     const avg = (c) => {
@@ -683,7 +683,7 @@ test('AC-25: orange food fish are golden, clearly unlike the player\'s orange', 
   await context.close();
 });
 
-test('AC-26: a bite sounds clearly: the thud, then a short falling phrase, but not on the last life', async () => {
+test('reef AC-26: a bite sounds clearly: the thud, then a short falling phrase, but not on the last life', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.heard.length = 0));
