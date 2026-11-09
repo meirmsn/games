@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Builds Shooting Gallery's three end-of-round alarms into shooting-gallery/sounds/ from real
-recordings: Kenney's Impact Sounds (CC0), a heavy bell and heavy metal struck by hand.
+"""Builds Shooting Gallery's three end-of-round alarms into shooting-gallery/sounds/.
 
-  alert10.mp3  at 10 s: a hand bell rung hard and fast for a second, like a fairground barker's
-  alert5.mp3   at 5 s: the heavy bell struck three times, each lower than the last
-  alarm.mp3    at 3, 2 and 1 s: one low strike of the bell with a metal clang, like a boxing-ring bell
+  alert10.mp3  at 10 s: a hand bell rung hard and fast for a second and a half, like a barker's
+  alert5.mp3   at 5 s: the bell struck in urgent pairs, climbing, ding-ding, ding-ding, ding-ding
+  alarm.mp3    at 3, 2 and 1 s: a short two-tone klaxon blare, with a little rattle and grit
 
-Nothing is synthesised: the recordings are only cut, re-pitched (by playing them slower) and
-layered, so they stay analog. Each is mastered quietly, about as loud as the half-time chime.
+The two bells are cut from real recordings, Kenney's Impact Sounds (CC0): a heavy bell struck by
+hand, only re-pitched (by playing it faster or slower) and layered. The klaxon is synthesised: a
+buzzy, detuned sawtooth leaping a fourth, roughened so it sounds like a horn on a pole.
+Each is mastered a few decibels above the half-time chime: clear, but not as loud as the first
+alarms the owner found too loud.
 Run: python3 scripts/shooting-gallery/make-alarms.py <Kenney "Impact Sounds/Audio" folder>
      (needs numpy and ffmpeg)
 """
@@ -51,34 +53,55 @@ def mix(parts, dur):
 
 
 def master(x, mean_db):
-    """Scales a sound so its average loudness is `mean_db` dBFS, never clipping."""
-    rms = np.sqrt(np.mean(x[np.abs(x) > 1e-4] ** 2))
-    x = x * (10 ** (mean_db / 20) / rms)
-    peak = np.max(np.abs(x))
-    return x / peak * 0.89 if peak > 0.89 else x
+    """Scales a sound so its average loudness is about `mean_db` dBFS; the strikes' peaks are
+    rounded off softly (like an overdriven speaker horn) rather than clipped."""
+    for _ in range(4):
+        rms = np.sqrt(np.mean(x[np.abs(x) > 1e-4] ** 2))
+        x = x * (10 ** (mean_db / 20) / rms)
+        x = 0.89 * np.tanh(x / 0.89)
+    return x
 
 
 def alert10(bells):
-    # A hand bell rung fast: 11 strikes over a second, alternating two recordings, each a touch
+    # A hand bell rung fast: 16 strikes over 1.4 s, alternating two recordings, each a touch
     # different in pitch and force, as a hand would ring it; the last rings out.
     parts = []
-    for i in range(11):
+    for i in range(16):
         b = bells[2 + i % 2]
-        parts.append((pitched(b, 1.5 + rng.uniform(-0.03, 0.03)), i * 0.09, rng.uniform(0.6, 0.9)))
-    parts.append((pitched(bells[1], 1.5), 11 * 0.09, 0.8))
-    return master(mix(parts, 2.1), -19)
+        parts.append((pitched(b, 1.7 + rng.uniform(-0.03, 0.03)), i * 0.088, rng.uniform(0.7, 1.0)))
+    parts.append((pitched(bells[1], 1.7), 16 * 0.088, 0.9))
+    return master(mix(parts, 2.4), -15)
 
 
 def alert5(bells):
-    # The heavy bell struck three times, falling: a fifth, a third, then the root.
-    parts = [(pitched(bells[0], f), i * 0.2, 1.0) for i, f in enumerate((1.5, 1.26, 1.0))]
-    return master(mix(parts, 1.9), -20)
+    # The bell struck in pairs, each pair a step higher: urgent, and nothing like the half-time chime.
+    parts = []
+    for i, f in enumerate((1.5, 1.68, 2.0)):
+        for j in range(2):
+            parts.append((pitched(bells[2 + j], f), i * 0.32 + j * 0.11, 1.0 if j == 0 else 0.85))
+    return master(mix(parts, 1.8), -15)
 
 
-def alarm(bells, metal):
-    # One low, heavy strike with a metal clang under it: the round bell of a boxing ring.
-    parts = [(pitched(bells[1], 0.85), 0, 1.0), (pitched(metal, 0.8), 0, 0.45)]
-    return master(mix(parts, 0.9), -19)
+def t_of(dur):
+    return np.arange(int(dur * SR)) / SR
+
+
+def alarm(_bells=None, _metal=None):
+    # A klaxon: a buzzy, slightly detuned sawtooth leaping from a low to a high pitch, 0.42 s, with
+    # the rattle of the horn's diaphragm and a little bit-crushed grit.
+    dur = 0.42
+    t = t_of(dur)
+    f = np.where(t < 0.12, 330, 494) * (1 + 0.004 * np.sin(2 * np.pi * 7 * t))
+    phase = np.cumsum(f) / SR
+    saw = 2 * (phase % 1) - 1
+    saw2 = 2 * ((phase * 1.007) % 1) - 1
+    env = np.minimum(1, t / 0.01) * np.minimum(1, (dur - t) / 0.05)
+    x = np.tanh((saw + saw2) * env * 2.5)
+    x *= 1 + 0.15 * np.sin(2 * np.pi * 31 * t)
+    x += 0.08 * rng.standard_normal(len(t)) * env
+    q = 2 ** 5
+    x = np.round(x * q) / q
+    return master(x, -18)
 
 
 def write_mp3(name, samples):

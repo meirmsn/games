@@ -19,6 +19,24 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's ninth playtest (owner, 2026-11-09)
+
+Where they differ from the playtests below, these win.
+
+- **The klaxon back, quieter; bells that grab you.** "the sound of the last three should sound more
+  like an alarm like we had before. Just lower volume … the sound for the 5 seconds should also …
+  call more your attention. And same for the 10-second." At 3, 2 and 1 the klaxon of the seventh
+  playtest returns, roughened and mastered about 13 dB below its first version. At 10 s the hand
+  bell rings longer and faster (16 strikes over 1.4 s); at 5 s the bell strikes in climbing pairs.
+  The two bells are 4–6 dB above the half-time chime, softly limited rather than clipped; all three
+  stay under 2.5× the chime's level and at most 1.2× gain.
+- **A frenzy target in lights.** "the target that triggers the frenzy currently has like a weird
+  purple glow … not analog … it should have … some lights … all around it … marquee lights around
+  it, not tiny, not huge … then if you hit it, then it starts the frenzy mode … I connected because
+  they look similar." The pink glow is gone: the frenzy target wears a ring of 14 marquee bulbs just
+  outside its rim, about half the size of the frenzy marquee's, in the same warm white, yellow and
+  orange, chasing round at the same pace.
+
 ### The owner's eighth playtest (owner, 2026-11-09)
 
 Where they differ from the playtests below, these win.
@@ -39,7 +57,7 @@ Where they differ from the playtests below, these win.
 - **No pink in a frenzy's lights.** "you didn't remove the pink from the frenzy mode lights … around
   the edges … Should be removed." The marquee's bulbs are warm white, yellow and orange; the frenzy's
   glow at the edges is amber, and its banner yellow. Only the frenzy target itself stays pink, so it
-  can be told apart.
+  can be told apart (replaced by the ninth playtest: it wears a ring of bulbs instead).
 
 ### The owner's seventh playtest (owner, 2026-11-09)
 
@@ -334,7 +352,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   as MP3: the band's twang on each shot, a wet splat on landing (two variants, varied pitch), a wood
   knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
   empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
-  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time, a rung hand bell at 10 s, a heavy bell's three falling strikes at 5 s, a ring bell at each of the last 3 seconds (all three from Kenney's recorded bells), and a pizzicato flourish when the frenzy target is hit.
+  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time, a rung hand bell at 10 s, a bell struck in climbing pairs at 5 s (both from Kenney's recorded bells), a klaxon at each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
 - **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
   targets, sticks, from which the slingshot is built) and its Splat Pack's; the slingshot's band and pouch, the timer badge, the ropes
   and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
@@ -431,9 +449,9 @@ moment 8–18 s into rounds 2 to 6.
   target — `tests/shooting-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
   half time it chimes and swells; at 10 s a hand bell rings and its bulbs turn yellow; at 5 s a bell
-  strikes three falling notes and they turn orange; at 3 s they turn red and a ring bell sounds at
-  3, 2 and 1, each a different sound from the half-time chime; in a frenzy it stops and its bulbs
-  flash yellow and dark, never pink — `tests/shooting-gallery.test.mjs`.
+  strikes in climbing pairs and they turn orange; at 3 s they turn red and a klaxon blares at 3, 2
+  and 1, each a different sound from the half-time chime; in a frenzy it stops and its bulbs flash
+  yellow and dark, never pink — `tests/shooting-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
   in round 1 a big one rising in the nearest lane for 3.5 s, in round 2 one crossing a middle lane,
   from round 3 one crossing the farthest lane at 1.8× its speed — `tests/shooting-gallery.test.mjs`.
@@ -460,10 +478,11 @@ moment 8–18 s into rounds 2 to 6.
   of luminance and less than 0.4 of what the target's face spans — `tests/shooting-gallery.test.mjs`.
 - **AC-33** The score, the painted signs and the cards are lettered in Rye, a fairground woodtype
   served from the game's folder, its paint chipped in specks — `tests/shooting-gallery.test.mjs`.
-- **AC-34** A frenzy's marquee has no pink bulb; the 10 s, 5 s and last-seconds alarms are about as
-  loud as the half-time chime (their average level under 1.6× its) and played at no more than 1.2×
-  gain; the quota's brass is a textured bar and every paintball is drawn as a textured shell —
-  `tests/shooting-gallery.test.mjs`.
+- **AC-34** No pink shows in a frenzy's marquee, edges or banner, nor on the frenzy target, which
+  wears a chasing ring of at least 12 marquee bulbs round its rim, smaller than the frenzy
+  marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
+  2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar and every
+  paintball is drawn as a textured shell — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

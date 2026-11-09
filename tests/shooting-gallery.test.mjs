@@ -844,7 +844,7 @@ test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits
   }
 });
 
-test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, a rung hand bell at 10 s, a falling bell at 5 s and a ring bell at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
+test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, a rung hand bell at 10 s, a climbing bell at 5 s and a klaxon at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
   const { context, page } = await open();
   await ready(page);
   const ui = () => page.evaluate(() => window.__gallery.ui());
@@ -884,8 +884,8 @@ test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime a
   await steps(page, 2.1);
   u = await ui();
   assert.equal(u.timerColour, 'red');
-  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'alarm')), ['alarm', 'alarm', 'alarm'], 'a ring bell at 3, 2 and 1 s');
-  // The half-time chime, the 10 s bell, the 5 s bell and the ring bell are four different sounds.
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.filter((n) => n === 'alarm')), ['alarm', 'alarm', 'alarm'], 'a klaxon at 3, 2 and 1 s');
+  // The half-time chime, the 10 s bell, the 5 s bell and the klaxon are four different sounds.
   const files = await page.evaluate(async () => {
     const names = ['chime', 'alert10', 'alert5', 'alarm'];
     const sizes = await Promise.all(names.map((n) => fetch(`sounds/${n}.mp3`).then((r) => r.arrayBuffer()).then((b) => b.byteLength)));
@@ -1337,7 +1337,7 @@ test('shooting-gallery AC-33: the score, the signs and the cards are lettered in
   await context.close();
 });
 
-test('shooting-gallery AC-34: no pink lights in a frenzy; the alarms are quiet recordings; the quota’s brass and the paintballs are textured', async () => {
+test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears a ring of marquee bulbs; the alarms stand out without blaring; the quota’s brass and the paintballs are textured', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1376,7 +1376,10 @@ test('shooting-gallery AC-34: no pink lights in a frenzy; the alarms are quiet r
   assert.ok(r.drawn.paintballs >= 5, `the hopper's balls, the pouch's and the flying one are drawn as paintballs: ${r.drawn.paintballs}`);
   assert.ok(r.drawn.brass >= 1, 'the quota is a textured brass bar');
   assert.deepEqual(r.hues.filter((h) => h.pinkish), [], 'no pink in the marquee');
-  for (const n of ['alert10', 'alert5', 'alarm']) assert.ok(r.loud[n] < r.loud.chime * 1.6, `${n} is about as loud as the half-time chime: ${r.loud[n].toFixed(3)} vs ${r.loud.chime.toFixed(3)}`);
+  for (const n of ['alert10', 'alert5', 'alarm']) {
+    const ratio = r.loud[n] / r.loud.chime;
+    assert.ok(ratio > 1.1 && ratio < 2.5, `${n} stands out from the half-time chime without blaring: ${ratio.toFixed(2)}× its level`);
+  }
   // The alarm gains stay modest: the 10 s bell only a little above the rest.
   const gains = await page.evaluate(() => {
     const g = window.__gallery;
@@ -1431,6 +1434,52 @@ test('shooting-gallery AC-34: no pink lights in a frenzy; the alarms are quiet r
   });
   assert.ok(pink.checked > 40, `pixels checked: ${pink.checked}`);
   assert.deepEqual(pink.pink, [], 'no pink in the frenzy’s lights');
+  // The frenzy target wears a ring of little marquee bulbs round its rim, chasing, and no pink glow.
+  const ring = await page.evaluate(async () => {
+    const g = window.__gallery;
+    g.game.frenzy = 0;
+    g.clear();
+    const t = g.launchFrenzyTarget();
+    t.speed = 0;
+    t.x = 200;
+    for (let i = 0; i < 90; i++) g.step(1 / 60);
+    t.speed = 0;
+    const [w] = g.dims(t);
+    const bulbs = g.frenzyRing(t);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const { k, ox, oy } = g.stage();
+    const dpr = cv.width / innerWidth;
+    let pinkPx = 0;
+    let seen = 0;
+    for (let a = 0; a < Math.PI * 2; a += 0.1) {
+      for (const f of [0.3, 0.4, 0.47]) {
+        const x = t.x + Math.cos(a) * w * f;
+        const y = t.y + Math.sin(a) * w * f;
+        const [r, gr, b] = c.getImageData(Math.round((x * k + ox) * dpr), Math.round((y * k + oy) * dpr), 1, 1).data;
+        seen++;
+        if (r > gr + 40 && b > gr + 10) pinkPx++; // magenta: red and blue over green, even blended
+      }
+    }
+    const lit = (s) => {
+      g.game.T = s;
+      return bulbs.filter((b) => (b.i + Math.floor(g.game.T * 9)) % 3 !== 0).map((b) => b.i).join();
+    };
+    return {
+      n: bulbs.length,
+      dist: bulbs.map((b) => Math.hypot(b.x, b.y) / w),
+      size: bulbs[0].r / g.MARQUEE_R,
+      pinkPx,
+      seen,
+      chases: lit(10) !== lit(10.12),
+    };
+  });
+  assert.ok(ring.n >= 12, `a ring of bulbs: ${ring.n}`);
+  assert.ok(ring.dist.every((d) => d > 0.5 && d < 0.7), 'round its rim');
+  assert.ok(ring.size > 0.2 && ring.size < 0.7, `smaller than the frenzy marquee's bulbs, not specks: ${ring.size.toFixed(2)}`);
+  assert.ok(ring.chases, 'its lit bulbs chase round');
+  assert.equal(ring.pinkPx, 0, `no pink glow on it (${ring.seen} pixels looked at)`);
   assert.ok(pink.during <= pink.before + 2, `the frenzy’s glow at the edges is warm, not pink: blue over green ${pink.before.toFixed(1)} → ${pink.during.toFixed(1)}`);
   await context.close();
 });
