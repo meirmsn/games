@@ -71,10 +71,10 @@ Where they differ from the playtests below, these win.
   5 s, a quieter klaxon at 3, 2 and 1). "when there's 10 seconds left, the chime doesn't sound particularly
   different than the rest, so make something that is like … hey, alert, it's happening. And then on
   the last five, do another chime. And then on the last 3, 2, 1 … sound already like an alarm."
-  At 10 s an electric alarm bell rattles for a second; at 5 s a big bell strikes three falling
-  notes; at 3, 2 and 1 a klaxon blares. The board swells with each. All three are synthesised
-  (`scripts/shooting-gallery/make-alarms.py`) and sound nothing like the half-time chime; they
-  replace the triple ring and the ticks.
+  At the time: at 10 s an electric alarm bell rattled for a second; at 5 s a big bell struck three
+  falling notes; at 3, 2 and 1 a klaxon blared, all three synthesised. (The eighth and ninth
+  playtests remade them: recorded bells at 10 and 5 s, the klaxon kept but quieter.) The board
+  swells with each; they replace the triple ring and the ticks.
 - **Analog lettering.** "if by any chance you have a font that looks more analog … on the points at
   the top and then the dialogue that you get at the end … nice texture." The score, every painted
   sign, the floating points and the cards are lettered in Rye, a fairground woodtype (Sorkin Type,
@@ -145,8 +145,8 @@ the analog look and a few details. Where they differ from the decisions further 
   if they're coming from just behind the edges on the right, left, and top side, kind of like a
   carnival, and they are alternating the lights … like a marquee." During a frenzy, big bulbs
   (about 3.3 times the timer's) line the valance's edge and peek in from behind the left and right
-  edges, two in three lit and the pattern chasing along, in warm white, yellow and pink; they fade in
-  and out with the frenzy.
+  edges, two in three lit and the pattern chasing along, in warm white, yellow and pink (orange instead of
+  pink since the eighth playtest); they fade in and out with the frenzy.
 
 ### The owner's third playtest (owner, 2026-11-09)
 
@@ -158,7 +158,8 @@ chat on 2026-11-09, for these details. Where they differ from the decisions furt
   looking." The timer is a small wooden marquee board, framed and screwed, with two seven-segment
   digits of light bulbs (three to a segment) that glow and flicker a little; unlit bulbs stay dark.
   The warning colours of the second playtest are now the bulbs' colour: warm white, then yellow from
-  10 s, orange from 5 s, red from 3 s, pink in a frenzy.
+  10 s, orange from 5 s, red from 3 s, pink in a frenzy (flashing yellow and dark instead since
+  the seventh playtest).
 - **Rougher chimes.** "they could be more noisy … analog feeling." The half-time and 10 s chimes
   layer the bell with metal clatter and a little grit (Kenney's impact sounds, bit-crushed); the
   last seconds' tick is a wooden knock.
