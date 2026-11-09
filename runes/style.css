@@ -366,6 +366,12 @@ body[data-chapter='dawn'] .num {
   cursor: pointer;
 }
 
+.card.levels {
+  width: min(380px, calc(100vw - 24px));
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
 .levels h2 {
   margin-bottom: 10px;
 }
@@ -388,7 +394,7 @@ body[data-chapter='dawn'] .num {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .ch-level {
