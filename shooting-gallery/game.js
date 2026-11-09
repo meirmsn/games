@@ -1457,7 +1457,7 @@ function drawSlingshot() {
     ctx.save();
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = '#fff4dc';
-    ctx.translate(x - 44, L.slingY + 6 + bob);
+    ctx.translate(x, L.slingY + 22 + bob);
     ctx.beginPath();
     ctx.moveTo(-7, -10);
     ctx.lineTo(7, -10);
@@ -1597,9 +1597,11 @@ function roundRect(x, y, w, h, r) {
 
 // Where a mid-play banner's pill sits, in units: on the counter, right of the slingshot.
 function pillBox() {
-  const w = Math.min(SW * 0.4, 200);
+  // Right of the ruler, so it covers nothing.
+  const left = rulerBox().x + 22;
+  const w = Math.min(200, SW - left - 10);
   const cy = L.C + (orient === 'landscape' ? 44 : 50);
-  return { x: SW - w - 14, y: cy - 18, w, h: 36 };
+  return { x: left, y: cy - 18, w, h: 36 };
 }
 
 function bannerShown() {
@@ -1628,7 +1630,7 @@ function drawBanner() {
     roundRect(-w / 2, -18, w, 36, 18);
     ctx.fill();
     ctx.stroke();
-    label(b.text, 0, 1, 21, 'center', frenzy ? '#d63384' : '#e86a17');
+    label(b.text, 0, 1, Math.min(21, w / 4.6), 'center', frenzy ? '#d63384' : '#e86a17');
     ctx.restore();
     ctx.globalAlpha = 1;
     return;
