@@ -727,6 +727,20 @@ test('crumble AC-13: portrait shows the turn card and pauses a battle; landscape
     return c.tanks.map((t) => ({ x: c.view.ox + t.x * c.view.s, y: c.view.oy + (t.y - 40) * c.view.s }));
   });
   for (const t of tanks) assert.ok(t.x > 0 && t.x < 640 && t.y > 0 && t.y < 360, `tank on screen ${JSON.stringify(t)}`);
+  // No button covers a tank (Battlefield 2's CPU starts low by the water, under the buttons' row).
+  const covered = await page.evaluate(() => {
+    const c = window.__crumble;
+    const hits = [];
+    for (const t of c.tanks) {
+      const box = { x: c.view.ox + (t.x - 40) * c.view.s, y: c.view.oy + (t.y - 50) * c.view.s, w: 80 * c.view.s, h: 50 * c.view.s };
+      for (const sel of ['[data-weapon="shell"]', '[data-weapon="auger"]', '.shell-back', '[data-mute]', '[data-hud-top]']) {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        if (box.x < r.right && r.left < box.x + box.w && box.y < r.bottom && r.top < box.y + box.h) hits.push(sel);
+      }
+    }
+    return hits;
+  });
+  assert.deepEqual(covered, [], 'no HUD box covers a tank');
   await context.close();
 });
 

@@ -844,6 +844,7 @@ function updateDemo(dt) {
 
 let dpr = 1;
 const view = { cw: 0, ch: 0, s: 0.5, ox: 0, oy: 0 };
+const HUD_BOTTOM = 62; // CSS px: the weapon buttons' row
 const sky = { cache: null, clouds: [] };
 for (let i = 0; i < 5; i++) sky.clouds.push({ x: Math.random() * W, y: 40 + Math.random() * 140, s: 0.6 + Math.random() * 0.8, v: 6 + Math.random() * 8 });
 
@@ -855,7 +856,9 @@ function resize() {
   ui.canvas.height = Math.round(view.ch * dpr);
   const r = ui.safe.getBoundingClientRect();
   const rw = r.width || view.cw;
-  const rh = r.height || view.ch;
+  // The bottom row of the HUD sits over the sea: the world is fitted above it, so no button ever
+  // covers a tank.
+  const rh = (r.height || view.ch) - HUD_BOTTOM;
   view.s = Math.min(rw / W, rh / H);
   view.ox = (r.left || 0) + (rw - W * view.s) / 2;
   view.oy = (r.top || 0) + rh - H * view.s;
@@ -965,6 +968,37 @@ function drawArmour(t) {
   c.beginPath();
   c.roundRect(x, y, Math.max(2, 52 * (t.armour / 100)), 6, 3);
   c.fill();
+}
+
+// The sea behind the ground: deep and opaque, so no sky shows through below the waterline.
+function drawDeep(f) {
+  const c = ctx;
+  const left = -view.ox / view.s - 5;
+  const right = (view.cw - view.ox) / view.s + 5;
+  const bottom = (view.ch - view.oy) / view.s + 5;
+  const y = game.waterY + 6;
+  const g = c.createLinearGradient(0, y, 0, Math.max(y + 1, bottom));
+  g.addColorStop(0, f.waterDeep);
+  g.addColorStop(1, f.sky[0]);
+  c.fillStyle = g;
+  c.fillRect(left, y, right - left, bottom - y);
+  // The island goes on below the world's bottom, under the sea.
+  if (heights && bottom > H) {
+    let l = 0;
+    let r = W - 1;
+    while (l < W && heights[l] >= H) l++;
+    while (r > 0 && heights[r] >= H) r--;
+    if (r > l) {
+      c.fillStyle = f.ground[2];
+      c.beginPath();
+      c.moveTo(l, H - 1);
+      c.lineTo(r, H - 1);
+      c.lineTo(r + (bottom - H) * 0.35, bottom);
+      c.lineTo(l - (bottom - H) * 0.35, bottom);
+      c.closePath();
+      c.fill();
+    }
+  }
 }
 
 function drawWater(f) {
@@ -1191,6 +1225,7 @@ function draw() {
   const sx = shake ? (Math.random() - 0.5) * 10 * shake : 0;
   const sy = shake ? (Math.random() - 0.5) * 10 * shake : 0;
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * (view.ox + sx), dpr * (view.oy + sy));
+  drawDeep(f);
   if (terrain) ctx.drawImage(terrain.canvas, 0, 0, W, H);
   for (const t of tanks) drawTank(t);
   drawProjectile();
