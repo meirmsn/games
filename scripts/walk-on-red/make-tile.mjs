@@ -1,5 +1,5 @@
 // Draws Walk on Red's landing-page tile (assets/tiles/walk-on-red.png, 640×400) from the game itself:
-// Sunday Morning at a red light: him on the island with the copiers, cars either side of the crossing. Serve the site
+// Market Avenue at a red light: him on the island with a copier, cars either side of the crossing. Serve the site
 // first, then:
 //   PORT=8000 scripts/local-run.sh &
 //   node scripts/walk-on-red/make-tile.mjs http://127.0.0.1:8000/
@@ -14,7 +14,7 @@ await page.waitForFunction(() => window.__walkOnRed);
 await page.evaluate(() => {
   const t = window.__walkOnRed;
   t.seed(4);
-  t.startGame(4);
+  t.startGame(2);
   t.manual = true;
   t.game.grace = 99;
   t.clearTraffic();

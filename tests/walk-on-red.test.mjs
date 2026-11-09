@@ -121,7 +121,7 @@ test('walk-on-red AC-1: traffic drives behind the start card; Start begins level
   await context.close();
 });
 
-test('walk-on-red AC-2: a tap hops forward, a swipe down back, sideways does nothing; keys too; one finger only', async () => {
+test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys too; the street’s edges stop him; one finger only', async () => {
   const { context, page } = await open();
   await startEmpty(page, 1);
   await page.evaluate(() => (window.__walkOnRed.manual = false));
@@ -141,7 +141,9 @@ test('walk-on-red AC-2: a tap hops forward, a swipe down back, sideways does not
   await swipe(0, 80);
   assert.deepEqual(await at(), [col, b], 'a swipe down hops back');
   await swipe(90, 0);
-  assert.deepEqual(await at(), [col, b], 'sideways does nothing');
+  assert.deepEqual(await at(), [col + 1, b], 'a swipe right hops right');
+  await swipe(-90, 0);
+  assert.deepEqual(await at(), [col, b], 'a swipe left hops left');
   await page.keyboard.press('ArrowUp');
   await page.waitForTimeout(200);
   await page.keyboard.press('w');
@@ -153,12 +155,25 @@ test('walk-on-red AC-2: a tap hops forward, a swipe down back, sideways does not
   assert.deepEqual(await at(), [col, b - 2]);
   await page.keyboard.press('ArrowLeft');
   await page.waitForTimeout(200);
-  assert.deepEqual(await at(), [col, b - 2], 'no sideways key');
+  await page.keyboard.press('d');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('d');
+  await page.waitForTimeout(200);
+  assert.deepEqual(await at(), [col + 1, b - 2], 'left and right keys');
+  // The street's sides.
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.put(t.layout().bottom);
+    t.player.col = 0;
+  });
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(200);
+  assert.equal((await at())[0], 0, 'not past the left side');
   // The street's edge: no hop below the near kerb.
   await page.evaluate(() => window.__walkOnRed.put(window.__walkOnRed.layout().bottom));
   await page.keyboard.press('ArrowDown');
   await page.waitForTimeout(200);
-  assert.deepEqual(await at(), [col, b]);
+  assert.deepEqual(await at(), [0, b]);
   // A second finger while the first is down does nothing.
   const two = await page.evaluate(() => {
     const t = window.__walkOnRed;
@@ -231,7 +246,7 @@ test('walk-on-red AC-4: the walk light turns green only once the crossing is cle
     let waited = false;
     for (let i = 0; i < 60 * 12 && t.game.mode !== 'green'; i++) {
       t.step(1 / 60);
-      if (t.game.mode === 'wait') waited = true;
+      if (t.game.stage === 'red' && !t.crossingClear()) waited = true;
     }
     const clearAtGreen = t.crossingClear();
     const mode = t.game.mode;
@@ -268,15 +283,25 @@ test('walk-on-red AC-5: reaching the far kerb fixes the seconds; the level score
     }
     const secs = t.game.closedSecs;
     const mode = t.game.mode;
-    for (let i = 0; i < 60 * 30 && t.game.mode !== 'tally'; i++) t.step(1 / 60);
+    // Copiers still on the way finish fast, then the seconds count up into points.
+    const counts = [];
+    let took = 0;
+    for (let i = 0; i < 60 * 30 && t.game.mode !== 'tally'; i++) {
+      t.step(1 / 60);
+      if (t.game.mode === 'finish' && t.game.stage === 'count') counts.push(t.game.levelScore);
+      if (t.game.mode === 'finish' || t.game.mode === 'wait') took += 1 / 60;
+    }
     const across = t.copiers().filter((p) => p.state === 'across').length;
-    return { mode, secs, across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent };
+    const rising = counts.length > 5 && counts.every((c, i) => i === 0 || c >= counts[i - 1]) && counts[counts.length - 1] > counts[0];
+    return { mode, secs, across, score: t.game.levelScore, banner: document.querySelector('[data-banner-name]').textContent, rising, took };
   });
   assert.equal(r.mode, 'finish');
   assert.ok(r.secs > 20, `seconds fixed on arrival: ${r.secs}`);
   assert.equal(r.across, 2, 'both copiers made it on an empty road');
   assert.equal(r.score, r.secs * 3);
   assert.equal(r.banner, `+${r.score}`);
+  assert.ok(r.rising, 'the points count up as the seconds drain');
+  assert.ok(r.took < 8, `no waiting out the seconds in real time: ${r.took.toFixed(1)} s from across to green`);
   await context.close();
 });
 
@@ -671,19 +696,22 @@ test('walk-on-red AC-17: the game works offline once it has been played', async 
   await context.close();
 });
 
-test('walk-on-red AC-18: the street fits on phones and in landscape, only the street shows on desktop, and a resize changes nothing', async () => {
-  for (const [w, h, minPerson] of [
-    [390, 844, 36],
-    [360, 640, 36],
-    [844, 390, 0],
+test('walk-on-red AC-18: the street takes the screen’s shape at load, keeps one width, fits, and a turn mid-game asks to turn back or start over', async () => {
+  for (const [w, h, minPerson, cols] of [
+    [390, 844, 36, 12],
+    [360, 640, 36, 12],
+    [844, 390, 0, 30],
   ]) {
     const { context, page } = await open({ viewport: { width: w, height: h } });
+    const before = await page.evaluate(() => window.__walkOnRed.view.width);
     for (const level of [0, 7]) {
       const v = await page.evaluate((level) => {
         const t = window.__walkOnRed;
         t.startGame(level);
-        return { ...t.view, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight };
+        return { ...t.view, cols: t.COLS, scrollW: document.documentElement.scrollWidth, scrollH: document.documentElement.scrollHeight };
       }, level);
+      assert.equal(v.cols, cols, `${w}×${h}: ${v.cols} columns`);
+      assert.ok(Math.abs(v.width - before) < 0.5, `${w}×${h}: the width stays ${before} (now ${v.width})`);
       assert.ok(v.top >= 0 && v.bottom <= h + 0.5, `${w}×${h} level ${level}: ${v.top}–${v.bottom}`);
       assert.ok(v.person >= minPerson, `${w}×${h}: a person is ${v.person} px`);
       assert.ok(v.scrollW <= w && v.scrollH <= h, 'no scrolling');
@@ -691,8 +719,10 @@ test('walk-on-red AC-18: the street fits on phones and in landscape, only the st
     await context.close();
   }
   {
+    // Desktop: a wide street, centred, with plain background either side.
     const { context, page } = await open({ viewport: { width: 1280, height: 720 } });
-    await page.evaluate(() => window.__walkOnRed.startGame(7));
+    const w0 = await page.evaluate(() => window.__walkOnRed.view.width);
+    await page.click('[data-play]');
     await page.waitForTimeout(300);
     const d = await page.evaluate(() => {
       const t = window.__walkOnRed;
@@ -701,9 +731,10 @@ test('walk-on-red AC-18: the street fits on phones and in landscape, only the st
       const k = c.width / window.innerWidth;
       const at = (x, y) => Array.from(g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3));
       const mid = (t.view.top + t.view.bottom) / 2;
-      return { ...t.view, side: [at(8, mid), at(window.innerWidth - 8, mid)], inside: at(t.view.left + 4, mid) };
+      return { ...t.view, cols: t.COLS, side: [at(8, mid), at(window.innerWidth - 8, mid)], inside: at(t.view.left + 4, mid) };
     });
-    assert.ok(Math.abs(d.width - 144 * d.scale) < 0.5);
+    assert.ok(d.cols > 12, `a wide street: ${d.cols} columns`);
+    assert.ok(Math.abs(d.width - w0) < 0.5, 'Start keeps the width');
     assert.ok(Math.abs(d.left - (1280 - d.width) / 2) < 1, `centred: ${d.left}`);
     assert.deepEqual(d.side, [[43, 47, 58], [43, 47, 58]], 'plain background either side');
     assert.notDeepEqual(d.inside, [43, 47, 58], 'the street itself');
@@ -723,9 +754,28 @@ test('walk-on-red AC-18: the street fits on phones and in landscape, only the st
       return JSON.stringify({ p: [t.player.col, t.player.row], c: t.copiers().map((p) => [p.col, p.row, p.state]), v: t.vehicles().map((v) => [v.lane, Math.round(v.s * 1000)]), r: t.game.red, s: t.game.score });
     });
   const before = await state();
-  await page.setViewportSize({ width: 800, height: 600 });
+  // A resize in the same shape changes nothing.
+  await page.setViewportSize({ width: 414, height: 896 });
   await page.waitForTimeout(100);
   assert.equal(await state(), before);
+  // Turned sideways mid-game: paused, asking to turn back or start over.
+  await page.setViewportSize({ width: 896, height: 414 });
+  await page.waitForTimeout(100);
+  let r = await page.evaluate(() => ({ paused: window.__walkOnRed.game.paused, rotate: !document.querySelector('[data-screen="rotate"]').hidden }));
+  assert.deepEqual(r, { paused: true, rotate: true });
+  assert.equal(await state(), before, 'nothing changed');
+  // Turned back: the rotate card goes, the paused card waits for a tap.
+  await page.setViewportSize({ width: 414, height: 896 });
+  await page.waitForTimeout(100);
+  r = await page.evaluate(() => ({ rotate: !document.querySelector('[data-screen="rotate"]').hidden, paused: !document.querySelector('[data-screen="paused"]').hidden }));
+  assert.deepEqual(r, { rotate: false, paused: true });
+  // Or start over in the new shape.
+  await page.setViewportSize({ width: 896, height: 414 });
+  await page.waitForTimeout(100);
+  await page.click('[data-restart]');
+  r = await page.evaluate(() => ({ mode: window.__walkOnRed.game.mode, level: window.__walkOnRed.game.level, cols: window.__walkOnRed.COLS, orient: window.__walkOnRed.ORIENT }));
+  assert.deepEqual(r, { mode: 'play', level: 0, cols: r.cols, orient: 'landscape' });
+  assert.ok(r.cols > 12);
   await context.close();
 });
 
@@ -784,6 +834,36 @@ test('walk-on-red AC-20: what the level is worth shows above the far kerb, and t
   });
   assert.equal(label.text, `${label.red} s × 1 = ${label.red}`);
   assert.equal(label.countdown, label.red, 'the walk light’s countdown matches');
+  await context.close();
+});
+
+test('walk-on-red AC-22: a car coming close to him honks, deep for big vehicles and high for small ones', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 1);
+  const r = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const lane = t.layout().bottom - 1;
+    t.put(lane);
+    t.game.grace = 0;
+    const honkFor = (name) => {
+      t.vehicles().length = 0;
+      t.heard.length = 0;
+      const v = t.spawnVehicle(lane, name);
+      const x = t.colX(t.player.col);
+      // Its front 8 art px from him, coming at 20 px/s.
+      if (v.dir === 1) v.s = x - 2.5 - 8 + v.w * 0.1 + t.ENTRY;
+      else v.s = t.PLAY_W + t.ENTRY - (x + 2.5 + 8 - v.w * 0.1);
+      v.speed = 20;
+      v.v = 20;
+      t.step(1 / 60);
+      const h = t.heard.filter((e) => e.name === 'horn');
+      t.vehicles().length = 0;
+      return h.length ? h[0].rate : 0;
+    };
+    return { bus: honkFor('bus'), sedan: honkFor('sedan'), sports: honkFor('sports_red') };
+  });
+  assert.ok(r.bus > 0 && r.sedan > 0 && r.sports > 0, `each honked: ${JSON.stringify(r)}`);
+  assert.ok(r.bus < r.sedan && r.sedan < r.sports, `deep to high: ${JSON.stringify(r)}`);
   await context.close();
 });
 
