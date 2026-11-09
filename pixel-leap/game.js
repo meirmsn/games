@@ -358,7 +358,7 @@ function update(dt) {
     builderPan += dt;
     animateThings(dt, false);
     cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, 2 + (Math.sin(builderPan * 0.12 - Math.PI / 2) + 1) * 8));
-    cam.y = ROWS - view.tilesH;
+    cam.y = ROWS - 1.2 - view.tilesH;
     return;
   }
   if (game.mode === 'wipe') {
@@ -628,7 +628,8 @@ function updateCamera(dt) {
 }
 function clampCamera() {
   cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, cam.x));
-  cam.y = Math.min(ROWS - view.tilesH, cam.y);
+  // Show at most a tile and a bit below the usual ground line's depth: pits still read as bottomless.
+  cam.y = Math.min(ROWS - 1.2 - view.tilesH, cam.y);
   if (stage.cols < view.tilesW) cam.x = (stage.cols - view.tilesW) / 2;
 }
 function snapCamera() {
@@ -732,9 +733,10 @@ function meadowTile(g, idx, x, y, res) {
   const sy = Math.floor(idx / 20) * 18;
   g.drawImage(images.meadowTiles, sx, sy, 18, 18, x, y, res, res);
 }
+let seam = 0; // smooth tiles overlap by a hair, so no hairline shows between them
 function candyTile(g, name, x, y, res, w = 1, h = 1) {
   const f = CANDY[name];
-  g.drawImage(images.candy, f[0], f[1], f[2], f[3], x, y, res * w, res * h);
+  g.drawImage(images.candy, f[0], f[1], f[2], f[3], x, y, res * w + seam, res * h + seam);
 }
 function hash(x) {
   const s = Math.sin(x * 127.1) * 43758.5453;
@@ -846,10 +848,10 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
     }
     // Clouds drifting by.
     g.fillStyle = 'rgba(255,255,255,0.85)';
-    for (let i = 0; i < 4; i++) {
-      const cx = ((i * 9.3 + game.t * 0.25 - cam.x * 0.15) % 40 + 40) % 40;
+    for (let i = 0; i < 9; i++) {
+      const cx = ((i * 7.9 + game.t * (0.2 + (i % 3) * 0.08) - cam.x * 0.15) % 44 + 44) % 44;
       const px = Math.round((cx - 6) * res * 0.9);
-      const py = Math.round(groundY - res * (6 + (i % 3) * 1.7));
+      const py = Math.round(groundY - res * (5.5 + ((i * 5) % 9) * 1.45));
       const u = Math.max(1, Math.round(res / 9));
       g.fillRect(px, py, u * 10, u * 3);
       g.fillRect(px + u * 2, py - u * 2, u * 5, u * 2);
@@ -862,6 +864,18 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
       const hx = i * res * 4 - (par % (res * 4));
       g.beginPath();
       g.arc(hx, groundY + res * 0.6, res * (2.4 + hash(i + Math.floor(par / (res * 4))) * 1.4), Math.PI, 0);
+      g.fill();
+    }
+    // Cotton-candy clouds drifting high up.
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    for (let i = 0; i < 8; i++) {
+      const cx = ((i * 8.3 + game.t * (0.18 + (i % 3) * 0.07) - cam.x * 0.12) % 44 + 44) % 44;
+      const px = (cx - 6) * res * 0.9;
+      const py = groundY - res * (6 + ((i * 5) % 9) * 1.4);
+      g.beginPath();
+      g.arc(px, py, res * 0.55, 0, Math.PI * 2);
+      g.arc(px + res * 0.6, py - res * 0.25, res * 0.7, 0, Math.PI * 2);
+      g.arc(px + res * 1.3, py, res * 0.5, 0, Math.PI * 2);
       g.fill();
     }
     g.globalAlpha = 0.45;
@@ -1133,7 +1147,9 @@ function render() {
 }
 // The smooth path draws straight to the screen, at res pixels per tile scaled by s.
 function drawSceneScaled(res, s) {
+  seam = 0.8 / s;
   drawScene(ctx, res, game.world, false, view.W / s, view.H / s);
+  seam = 0;
 }
 
 // ---------------------------------------------------------------- the builder
