@@ -19,6 +19,42 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's third playtest (owner, 2026-11-09)
+
+The owner played the slingshot version ("this is getting much better") and asked, in the session's
+chat on 2026-11-09, for these details. Where they differ from the decisions further down, these win.
+
+- **A light-bulb timer.** "it looks too smooth and vectorized … these assets … they're built out of
+  wood … maybe that timer can look … more like made out of those light bulbs … more analog
+  looking." The timer is a small wooden marquee board, framed and screwed, with two seven-segment
+  digits of light bulbs (three to a segment) that glow and flicker a little; unlit bulbs stay dark.
+  The warning colours of the second playtest are now the bulbs' colour: warm white, then yellow from
+  10 s, orange from 5 s, red from 3 s, pink in a frenzy.
+- **Rougher chimes.** "they could be more noisy … analog feeling." The half-time and 10 s chimes
+  layer the bell with metal clatter and a little grit (Kenney's impact sounds, bit-crushed); the
+  last seconds' tick is a wooden knock.
+- **Sticks under everything.** "add … vertical sticks, also of wood, on each of the targets or
+  things that are moving … Currently, they're floating." Every target, ducks included, stands on a
+  wooden stick that runs down behind its lane's strip; drop-downs hang on their rope.
+- **Rocking, as on a machine.** "they can also oscillate rotating just a little bit around the axis
+  coming out of the screen, as if they were on a mechanical machine … belts and pulleys and gears,
+  or like levers." Every target rocks a few degrees (ducks 5°, targets 4°) about its stick's foot,
+  each at its own pace; drop-downs swing 3° about the rope's top. A shot is judged in the target's
+  rocked frame, and paint on it rocks with it.
+- **Both bands in front.** "the elastic band on the left … should also be closer to me … both
+  elastic bands should be on the side closer to me." Both bands are drawn in front of the wood.
+- **A wooden slingshot.** "if the slingshot could also look more realistic, some texture, some
+  shadow … to make it look out of wood." A carved fork: tapered limbs shaded across their width,
+  outlined, with grain, the band's wrapping at the tips, a leather pouch, and a shadow on the counter.
+- **Easier to control, still no crosshair.** "it definitely feels it's really hard to use … there's
+  no visual feedback of how much … it just feels really hard to control." Claude's answer:
+  - a wooden ruler beside the slingshot with a notch at each lane's height and a brass slider
+    showing how far the pull will send the ball;
+  - a short dotted arc from the pouch along the first fifth of the flight, showing which way it
+    will go but never where it lands;
+  - a longer pull for the full reach (140 units down instead of 110; 80 in landscape instead of 64),
+    so each bit of finger movement matters less.
+
 ### The owner's second playtest (owner, 2026-11-09)
 
 The owner played the paintball version's preview and asked, in the session's chat on 2026-11-09,
@@ -39,7 +75,7 @@ for these changes. Where they differ from the decisions further down, these win.
   - **Where it lands**, separable and the same everywhere: pulling sideways moves the landing point
     the other way along the lanes, x = the centre − (pull x / 80) × 0.47 × the stage width; pulling
     down sends it farther, y = the counter's top − (pull y / 110) × the booth's height (90 and 64 in
-    landscape). Any height, not lane steps: between lanes it lands on whatever is there.
+    landscape; the third playtest lengthened the pull to 140 and 80). Any height, not lane steps: between lanes it lands on whatever is there.
   - Mouse: press anywhere, pull and release. Keyboard: the arrows set the pull (it's kept between
     shots), Space lets go.
   - Until the run's first shot, a soft arrow under the pouch shows the pull.
@@ -227,7 +263,7 @@ moment 8–18 s into rounds 2 to 6.
   begins round 1 with a 30 s timer, a quota of 7 and a full hopper of 6, the slingshot on the
   counter; there is no crosshair and no gun; no errors — `tests/shooting-gallery.test.mjs`.
 - **AC-2** A pull lands the ball at x = the centre − (pull x / 80) × 0.47 × the stage width and
-  y = the counter's top − (pull y / 110) × the booth's height (90 and 64 in landscape), at any
+  y = the counter's top − (pull y / 140) × the booth's height (90 and 80 in landscape), at any
   height, the pull clamped to those ranges; the pouch follows the pull — `tests/shooting-gallery.test.mjs`.
 - **AC-3** On a touch screen, touching the counter and pulling stretches the slingshot and letting
   go fires; a pull under 10 units fires nothing; touches on the lanes neither aim nor fire —
@@ -284,13 +320,20 @@ moment 8–18 s into rounds 2 to 6.
   hopper, the pips and the timer fit without scrolling, the timer's digits are larger than the
   score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
   target — `tests/shooting-gallery.test.mjs`.
-- **AC-23** The timer shows the whole seconds left on a badge at the top left; at half time it
-  chimes and swells; at 10 s it chimes twice and its background turns yellow, at 5 s orange and at
-  3 s red, ticking each of the last 3 seconds; in a frenzy it is pink and stopped —
+- **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
+  half time it chimes and swells; at 10 s it chimes twice and its bulbs turn yellow, at 5 s orange
+  and at 3 s red, ticking each of the last 3 seconds; in a frenzy they are pink and it stops —
   `tests/shooting-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 5–9 s into every round and again at 17–22 s if no frenzy has come:
   in round 1 a big one rising in the nearest lane for 3.5 s, in round 2 one crossing a middle lane,
   from round 3 one crossing the farthest lane at 1.8× its speed — `tests/shooting-gallery.test.mjs`.
+
+- **AC-25** Every target stands on a stick down behind its strip (a drop-down hangs on its rope)
+  and rocks a few degrees about the stick's foot, each at its own pace; a shot is judged in the
+  rocked frame, so it hits where the target is drawn — `tests/shooting-gallery.test.mjs`.
+- **AC-26** While the slingshot is pulled, the ruler's slider shows how far the ball will go (0 at
+  the counter, 1 at the top of the booth, the lanes' notches between) and a dotted arc covers the
+  first fifth of its flight, never reaching where it lands — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

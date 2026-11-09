@@ -52,7 +52,7 @@ const REFILL = 0.6;
 // PULL_Y down reaches the top of the booth. A pull under PULL_MIN is no shot.
 const REACH = 0.47;
 const pullX = () => (orient === 'landscape' ? 90 : 80);
-const pullY = () => (orient === 'landscape' ? 64 : 110);
+const pullY = () => (orient === 'landscape' ? 80 : 140);
 const PULL_MIN = 10;
 const FLIGHT_NEAR = 0.18;
 const FLIGHT_FAR = 0.45;
@@ -191,6 +191,7 @@ function layoutStage(o) {
   L.slingX = SW / 2;
   L.slingY = L.C + (land ? 50 : 70);
   L.slingFoot = SH - bottom - 2;
+  L.SHbottom = SH - bottom;
   fit();
 }
 
@@ -308,6 +309,7 @@ const game = {
   kick: 0,
   lastFire: -1,
   attract: true,
+  rock: 1, // how much targets rock (tests set 0 to aim exactly)
 };
 // The pull, in units: x to the right, y down. `active` while a finger or the mouse holds the pouch;
 // `kb` once the keyboard has set it (the keyboard's pull stays between shots).
@@ -351,6 +353,7 @@ function makeTarget(kind, opts = {}) {
     popT: opts.up ? 0.35 : 0,
     splats: [],
     big: opts.big ?? 1,
+    rockF: rand(0.75, 1.25),
   };
   t.isDuck = kind === 'duck' || kind === 'gold';
   t.bull = kind === 'gold' || (t.isDuck ? t.face.startsWith('duck_target') : true);
@@ -366,6 +369,18 @@ function dims(t) {
   return [142 * s, 142 * s];
 }
 const hiddenY = (t) => L.lanes[t.lane].strip + dims(t)[1] * 0.6;
+
+// Every target stands on a stick (or hangs on a rope) driven from below, and rocks a little about
+// the stick's foot (the rope's top), as if on levers: a few degrees, each at its own pace.
+function pivotOf(t) {
+  if (t.kind === 'drop') return { x: t.x, y: L.top + 30 };
+  return { x: t.x, y: L.lanes[t.lane].strip + 26 };
+}
+function rockAngle(t) {
+  if (t.state === 'knocked') return t.knockRot || 0;
+  const amp = (t.kind === 'drop' ? 3 : t.isDuck ? 5 : 4) * (Math.PI / 180) * game.rock;
+  return amp * Math.sin(game.T * 1.7 * t.rockF + t.phase);
+}
 const dropTop = (t) => L.top + 40 - dims(t)[1];
 
 // Turnabouts: 2.2 s facing, a 0.25 s turn, 1.2 s showing the back, a 0.25 s turn. A turn counts as
@@ -668,8 +683,21 @@ function resolve(px, py) {
 }
 const drawOrder = (i) => targets.filter((t) => t.lane === i && t.kind === 'drop').concat(targets.filter((t) => t.lane === i && t.kind !== 'drop'));
 
-function hitTest(t, px, py, grow) {
+function hitTest(t, px0, py0, grow) {
   const [w, h] = dims(t);
+  // Into the target's frame: undo its rock about the pivot.
+  const r = rockAngle(t);
+  let px = px0;
+  let py = py0;
+  if (r) {
+    const pv = pivotOf(t);
+    const c = Math.cos(-r);
+    const sn = Math.sin(-r);
+    const dx = px0 - pv.x;
+    const dy = py0 - pv.y;
+    px = pv.x + dx * c - dy * sn;
+    py = pv.y + dx * sn + dy * c;
+  }
   const back = turnState(t).back;
   if (t.isDuck) {
     const flip = t.dir < 0;
@@ -733,6 +761,7 @@ function landOn(b) {
     if (!free) missed();
     return r;
   }
+  t.knockRot = rockAngle(t);
   t.state = 'knocked';
   t.anim = 0;
   if (t.kind === 'frenzy') {
@@ -800,8 +829,15 @@ function addPaint(x, y, layer, colour, aimedLane) {
   const live = paint.filter((p) => p.dying < 0);
   if (live.length > PAINT_KEEP) live[0].dying = game.T;
 }
-function addSplatTo(t, x, y, colour) {
+function addSplatTo(t, x0, y0, colour) {
   const sz = splatSize(t.lane) * 0.7;
+  // Where it landed, in the target's own rocked frame, so the paint rocks with it.
+  const r = rockAngle(t);
+  const pv = pivotOf(t);
+  const dx0 = x0 - pv.x;
+  const dy0 = y0 - pv.y;
+  const x = pv.x + dx0 * Math.cos(-r) - dy0 * Math.sin(-r);
+  const y = pv.y + dx0 * Math.sin(-r) + dy0 * Math.cos(-r);
   const shape = Math.floor(rng() * 36);
   t.splats.push({ dx: x - t.x, dy: y - t.y, size: sz, rot: rand(0, Math.PI * 2), colour, img: tinted(shape, colour, sz * k * dpr) });
 }
@@ -892,7 +928,99 @@ function timerColour() {
   if (game.time <= 10) return 'yellow';
   return 'plain';
 }
-const TIMER_BG = { plain: '#fff4dc', yellow: '#ffd23f', orange: '#f28c28', red: '#e8452c', pink: '#ff7ab8' };
+const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', pink: '#ff6ec7' };
+// The bulbs of a seven-segment digit: segments a (top) to g (middle), three bulbs each.
+const SEGMENTS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcfgd'];
+
+// The timer: a wooden marquee board with two digits of light bulbs, lit in the time's colour, with a
+// little flicker; unlit bulbs stay dark glass. It swells at half time and at 10 s.
+function drawTimerBoard(tm) {
+  const col = BULB[timerColour()];
+  const swell = 1 + 0.3 * Math.sin(Math.PI * Math.min(1, game.pulse || 0));
+  ctx.save();
+  ctx.translate(tm.x + tm.w / 2, tm.y + tm.h / 2);
+  ctx.scale(swell, swell);
+  // The board: the pack's wood in a dark frame, with a darker panel behind the bulbs.
+  ctx.save();
+  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 8);
+  ctx.clip();
+  sprite('bg_wood', -tm.w / 2 - 20, -tm.h / 2 - 30, 128, 128);
+  ctx.fillStyle = 'rgba(40, 20, 6, 0.25)';
+  ctx.fillRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(25, 12, 4, 0.72)';
+  roundRect(-tm.w / 2 + 5, -tm.h / 2 + 5, tm.w - 10, tm.h - 10, 5);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#4a2a12';
+  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 8);
+  ctx.stroke();
+  // Two brass screws.
+  ctx.fillStyle = '#c9a24a';
+  for (const sx of [-tm.w / 2 + 4, tm.w / 2 - 4]) {
+    ctx.beginPath();
+    ctx.arc(sx, 0, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const secs = Math.max(0, Math.ceil(game.time - 1e-6));
+  const digits = [secs >= 10 ? Math.floor(secs / 10) % 10 : -1, secs % 10];
+  const dh = tm.font;
+  const dw = dh * 0.5;
+  const r = dh / 10.5;
+  digits.forEach((d, i) => bulbDigit((i - 0.5) * (dw + r * 5.2), 0, dw, dh, d, col, r));
+  ctx.restore();
+}
+function bulbDigit(cx, cy, dw, dh, digit, col, r) {
+  const on = digit >= 0 ? SEGMENTS[digit] : '';
+  const xl = cx - dw / 2;
+  const xr = cx + dw / 2;
+  const yt = cy - dh / 2;
+  const yb = cy + dh / 2;
+  const seg = {
+    a: [xl, yt, xr, yt],
+    b: [xr, yt, xr, cy],
+    c: [xr, cy, xr, yb],
+    d: [xl, yb, xr, yb],
+    e: [xl, cy, xl, yb],
+    f: [xl, yt, xl, cy],
+    g: [xl, cy, xr, cy],
+  };
+  // The dark bulbs first, so a lit one's glow is never covered by an unlit neighbour at a corner.
+  for (const pass of [false, true]) {
+    for (const [key, [x1, y1, x2, y2]] of Object.entries(seg)) {
+      if (on.includes(key) !== pass) continue;
+      for (const f of [0.17, 0.5, 0.83]) bulb(x1 + (x2 - x1) * f, y1 + (y2 - y1) * f, r, pass ? col : null);
+    }
+  }
+}
+function bulb(x, y, r, col) {
+  if (!col) {
+    ctx.fillStyle = '#3a2a1c';
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+  const flicker = 0.85 + 0.15 * Math.sin(game.T * 31 + x * 7.3 + y * 3.1) * Math.sin(game.T * 13 + x);
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.6);
+  g.addColorStop(0, col);
+  g.addColorStop(1, 'rgba(255, 220, 140, 0)');
+  ctx.globalAlpha = 0.55 * flicker;
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = flicker;
+  ctx.fillStyle = col;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+  ctx.beginPath();
+  ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
 
 function attractStep(dt) {
   const cfg = ROUNDS[1];
@@ -1070,6 +1198,11 @@ function drawTarget(t) {
   const [w, h] = dims(t);
   const lane = L.lanes[t.lane];
   const ts = turnState(t);
+  const pv = pivotOf(t);
+  ctx.save();
+  ctx.translate(pv.x, pv.y);
+  ctx.rotate(rockAngle(t));
+  ctx.translate(-pv.x, -pv.y);
   if (t.kind === 'drop') {
     // The rope, from the valance down to the target.
     ctx.strokeStyle = '#6b4a2a';
@@ -1078,10 +1211,10 @@ function drawTarget(t) {
     ctx.moveTo(t.x, L.top + 30);
     ctx.lineTo(t.x, t.y - h / 2 + 2);
     ctx.stroke();
-  } else if (!t.isDuck && t.state === 'live') {
-    // The stick under a target, down behind its lane's strip.
+  } else if (t.state === 'live') {
+    // The stick it stands on, from its middle down past its lane's strip.
     const sw = 30 * lane.s * 0.8;
-    sprite('stick_wood', t.x - sw / 2, t.y, sw, Math.max(4, lane.strip + 30 - t.y));
+    sprite('stick_wood', t.x - sw / 2, t.y, sw, Math.max(4, pv.y + 16 - t.y));
   }
   ctx.save();
   ctx.translate(t.x, t.y);
@@ -1123,6 +1256,7 @@ function drawTarget(t) {
     ctx.drawImage(s.img, -s.size / 2, -s.size / 2, s.size, s.size);
     ctx.restore();
   }
+  ctx.restore();
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -1170,9 +1304,9 @@ const hudVisible = () => game.mode !== 'start';
 // the counter.
 function hudLayout() {
   const land = orient === 'landscape';
-  const bh = land ? 40 : 48;
   return {
-    timer: { x: Math.max(8, (64 - ox) / k), y: L.top + (land ? 6 : 8), w: land ? 64 : 76, h: bh, font: land ? 30 : 36 },
+    // The timer board; `font` is its digits' height.
+    timer: { x: Math.max(8, (64 - ox) / k), y: L.top + (land ? 3 : 4), w: land ? 70 : 88, h: land ? 46 : 58, font: land ? 30 : 38 },
     score: { y: L.top + (land ? 26 : 34), font: land ? 22 : 26 },
     label: { x: 22, y: L.C + 20 },
     pips: { x: 22, y: L.C + (land ? 42 : 46), r: land ? 5.5 : 6.5 },
@@ -1186,26 +1320,7 @@ function drawHud() {
   const H = hudLayout();
   label(game.score.toLocaleString('en-US'), SW / 2, H.score.y, H.score.font, 'center');
   if (!cfg) return;
-  // The timer badge: whole seconds, large, its background warning as time runs out.
-  const tm = H.timer;
-  const col = timerColour();
-  const swell = 1 + 0.3 * Math.sin(Math.PI * Math.min(1, game.pulse || 0));
-  ctx.save();
-  ctx.translate(tm.x + tm.w / 2, tm.y + tm.h / 2);
-  ctx.scale(swell, swell);
-  ctx.fillStyle = TIMER_BG[col];
-  ctx.strokeStyle = '#7a3f12';
-  ctx.lineWidth = 3;
-  roundRect(-tm.w / 2, -tm.h / 2, tm.w, tm.h, 12);
-  ctx.fill();
-  ctx.stroke();
-  const secs = Math.max(0, Math.ceil(game.time - 1e-6));
-  ctx.font = `800 ${tm.font}px "Trebuchet MS", "Arial Rounded MT Bold", system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = col === 'plain' || col === 'yellow' ? '#4a2a12' : '#fff';
-  ctx.fillText(String(secs), 0, 2);
-  ctx.restore();
+  drawTimerBoard(H.timer);
   label(`Round ${game.round} · ${cfg.name}`, H.label.x, H.label.y, 14, 'left', '#fff4dc');
   // The quota: a bar that fills with every pip, the count inside it; gold in the bonus, the
   // missing part flashing red when the time runs out. It stays left of the slingshot.
@@ -1247,45 +1362,85 @@ function drawHud() {
   }
 }
 
-// The slingshot: a fork of the pack's wooden sticks, a band from its prongs to the pouch, and the
-// next paintball in the pouch. The pouch follows the pull; the band shows which way and how far.
+// The slingshot: a carved wooden fork with a shadow on the counter, both bands in front of the wood,
+// and a leather pouch holding the next paintball. The pouch follows the pull. Beside it, a wooden
+// ruler with a notch for each lane shows how far the pull will send the ball, and a short dotted
+// arc from the pouch shows which way: enough to aim by, never the landing spot itself.
 function slingGeometry() {
   const land = orient === 'landscape';
-  const spread = land ? 32 : 42;
+  const spread = land ? 30 : 40;
   const forkY = L.slingY - (land ? 20 : 28);
-  return { spread, forkY, crotchY: L.slingY + (land ? 18 : 28), stick: land ? 13 : 17 };
+  return { spread, forkY, crotchY: L.slingY + (land ? 18 : 28), limb: land ? 12 : 15 };
+}
+// A limb of wood from (x1, y1) to (x2, y2), tapering from w1 to w2: shaded across its width, outlined,
+// with a little grain along it.
+function limb(x1, y1, x2, y2, w1, w2) {
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  const nx = -Math.sin(a);
+  const ny = Math.cos(a);
+  ctx.beginPath();
+  ctx.moveTo(x1 + (nx * w1) / 2, y1 + (ny * w1) / 2);
+  ctx.lineTo(x2 + (nx * w2) / 2, y2 + (ny * w2) / 2);
+  ctx.arc(x2, y2, w2 / 2, a + Math.PI / 2, a - Math.PI / 2, true);
+  ctx.lineTo(x1 - (nx * w1) / 2, y1 - (ny * w1) / 2);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(x1 + (nx * w1) / 2, y1 + (ny * w1) / 2, x1 - (nx * w1) / 2, y1 - (ny * w1) / 2);
+  g.addColorStop(0, '#e2a868');
+  g.addColorStop(0.45, '#b9773a');
+  g.addColorStop(1, '#73421a');
+  ctx.fillStyle = g;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#4a2a12';
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(80, 40, 12, 0.4)';
+  for (const o of [-0.22, 0.18]) {
+    ctx.beginPath();
+    ctx.moveTo(x1 + nx * w1 * o, y1 + ny * w1 * o);
+    ctx.lineTo(x2 + nx * w2 * o, y2 + ny * w2 * o);
+    ctx.stroke();
+  }
 }
 function drawSlingshot() {
   const g = slingGeometry();
   const x = L.slingX;
-  const wood = (x1, y1, x2, y2, wdt) => {
-    // A stick from the pack, stretched and turned to run from (x1, y1) to (x2, y2).
-    const len = Math.hypot(x2 - x1, y2 - y1);
-    ctx.save();
-    ctx.translate(x1, y1);
-    ctx.rotate(Math.atan2(x2 - x1, -(y2 - y1)));
-    sprite('stick_wood', -wdt / 2, -len, wdt, len + 2);
-    ctx.restore();
-  };
-  const showPull = hudVisible() && game.cfg && (aim.active || aim.kb);
-  const p = showPull ? pouch() : { x: x, y: L.slingY };
+  const inPlay = hudVisible() && game.cfg;
+  const showPull = inPlay && (aim.active || aim.kb);
+  const p = showPull ? pouch() : { x, y: L.slingY };
   const ball = PALETTE[game.colour % PALETTE.length];
   const ready = game.frenzy > 0 || game.hopper >= 1;
-  // The back band, the handle and prongs, then the pouch and the front band.
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#5b3a1e';
-  ctx.lineWidth = 6;
+  // Its shadow on the counter.
+  ctx.fillStyle = 'rgba(20, 8, 0, 0.28)';
   ctx.beginPath();
-  ctx.moveTo(x - g.spread, g.forkY);
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-  wood(x, L.slingFoot, x, g.crotchY, g.stick * 1.25);
-  wood(x, g.crotchY + 2, x - g.spread, g.forkY, g.stick);
-  wood(x, g.crotchY + 2, x + g.spread, g.forkY, g.stick);
-  ctx.fillStyle = '#4a2f18';
-  roundRect(p.x - 13, p.y - 5, 26, 13, 5);
+  ctx.ellipse(x + 8, L.slingFoot - 2, g.spread * 0.9, 7, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (ready && hudVisible() && game.cfg) {
+  if (inPlay) drawRuler();
+  // The fork: the handle, then the two prongs, with the band's dark wrapping at their tips.
+  limb(x, L.slingFoot + 6, x, g.crotchY, g.limb * 1.25, g.limb * 1.1);
+  limb(x, g.crotchY + 4, x - g.spread, g.forkY, g.limb, g.limb * 0.8);
+  limb(x, g.crotchY + 4, x + g.spread, g.forkY, g.limb, g.limb * 0.8);
+  ctx.fillStyle = '#3b2412';
+  for (const sx of [-1, 1]) roundRect(x + sx * g.spread - g.limb * 0.45, g.forkY + 2, g.limb * 0.9, 6, 2);
+  ctx.fill();
+  // Both bands in front of the wood, from the prongs to the pouch's ends.
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#6b4424';
+  ctx.lineWidth = 6;
+  for (const sx of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(x + sx * g.spread, g.forkY + 4);
+    ctx.lineTo(p.x + sx * 11, p.y);
+    ctx.stroke();
+  }
+  // The leather pouch, and the ball in it.
+  const lg = ctx.createLinearGradient(0, p.y - 6, 0, p.y + 9);
+  lg.addColorStop(0, '#6b4424');
+  lg.addColorStop(1, '#3b2412');
+  ctx.fillStyle = lg;
+  roundRect(p.x - 14, p.y - 6, 28, 14, 6);
+  ctx.fill();
+  if (ready && inPlay) {
     ctx.fillStyle = ball;
     ctx.beginPath();
     ctx.arc(p.x, p.y - 4, 8.5, 0, Math.PI * 2);
@@ -1295,19 +1450,14 @@ function drawSlingshot() {
     ctx.arc(p.x - 3, p.y - 7, 2.8, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.strokeStyle = '#6b4424';
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.moveTo(x + g.spread, g.forkY);
-  ctx.lineTo(p.x, p.y);
-  ctx.stroke();
+  if (showPull && pullLen() >= PULL_MIN && game.mode === 'play') drawArc(p);
   // Until the run's first shot, an arrow under the pouch shows the pull.
   if (game.mode === 'play' && aim.shots === 0 && !aim.active) {
     const bob = 6 * Math.sin(game.T * 5);
     ctx.save();
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = '#fff4dc';
-    ctx.translate(x + 40, L.slingY + 6 + bob);
+    ctx.translate(x - 44, L.slingY + 6 + bob);
     ctx.beginPath();
     ctx.moveTo(-7, -10);
     ctx.lineTo(7, -10);
@@ -1320,6 +1470,64 @@ function drawSlingshot() {
     ctx.fill();
     ctx.restore();
   }
+}
+// The ruler's place on the counter, right of the slingshot.
+function rulerBox() {
+  const land = orient === 'landscape';
+  const top = L.C + (land ? 14 : 18);
+  const bottom = L.SHbottom - (land ? 10 : 20);
+  return { x: L.slingX + (land ? 58 : 70), top, bottom, w: land ? 10 : 12 };
+}
+// How far the current pull reaches, 0 (just above the counter) to 1 (the top of the booth).
+const reach = () => clamp(aim.py / pullY(), 0, 1);
+function drawRuler() {
+  const r = rulerBox();
+  const fy = (f) => r.bottom - f * (r.bottom - r.top);
+  limb(r.x, r.bottom, r.x, r.top, r.w, r.w);
+  // A notch at each lane's height.
+  ctx.strokeStyle = '#3b2412';
+  ctx.lineWidth = 2;
+  for (const lane of L.lanes) {
+    const y = fy((L.C - lane.line) / (L.C - L.T));
+    ctx.beginPath();
+    ctx.moveTo(r.x - r.w / 2, y);
+    ctx.lineTo(r.x + r.w / 2 + 3, y);
+    ctx.stroke();
+  }
+  // The brass slider: where the pull will send the ball.
+  const live = aim.active || aim.kb;
+  const y = fy(live ? reach() : 0);
+  ctx.globalAlpha = live ? 1 : 0.45;
+  ctx.fillStyle = '#e6be5a';
+  ctx.strokeStyle = '#6b4a12';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(r.x - r.w / 2 - 8, y - 5);
+  ctx.lineTo(r.x - r.w / 2, y);
+  ctx.lineTo(r.x - r.w / 2 - 8, y + 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  roundRect(r.x - r.w / 2 - 1, y - 2.5, r.w + 2, 5, 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+// The first fifth of the ball's flight, dotted: the way it will go, not where it will land.
+const ARC_SHARE = 0.2;
+function drawArc(p) {
+  const a = aimPoint();
+  for (let i = 1; i <= 6; i++) {
+    const q = (i / 6) * ARC_SHARE;
+    const x = p.x + (a.x - p.x) * q;
+    const y = p.y + (a.y - p.y) * q - Math.sin(Math.PI * q) * 18;
+    ctx.globalAlpha = 0.85 - i * 0.11;
+    ctx.fillStyle = '#fff4dc';
+    ctx.beginPath();
+    ctx.arc(x, y, 3 - i * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawBalls() {
@@ -1729,7 +1937,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, rulerBox, reach, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

@@ -64,6 +64,7 @@ async function ready(page, round = 1, { assist = 0 } = {}) {
       G.assist = assist;
       G.lastFire = -1;
       G.frenzyTimes = [];
+      G.rock = 0; // targets hold still, so a test aims exactly (AC-25 tests the rocking)
       G.spawn = { movers: g.L.lanes.map(() => 999), pop: 999, drop: 999, gold: [] };
       // A pull aimed at the middle lane, so a bare fire() has somewhere to go.
       g.aimAt(g.stage().SW / 2, g.L.lanes[Math.floor(g.L.n / 2)].line);
@@ -177,7 +178,7 @@ test('shooting-gallery AC-2: a pull lands the ball by a separable, linear rule a
   assert.ok(near(r.xAtTop, r.xAtLow));
   assert.deepEqual(r.clamped, [r.P.x, r.P.y]);
   assert.ok(r.pouchMoves);
-  assert.deepEqual([r.P.x, r.P.y], [80, 110]);
+  assert.deepEqual([r.P.x, r.P.y], [80, 140]);
   await context.close();
 });
 
@@ -914,5 +915,69 @@ test('shooting-gallery AC-24: a frenzy target comes 5–9 s in and again 17–22
   assert.deepEqual([r3.lane, r3.motion], [0, 'mover'], 'from round 3: crossing the farthest lane');
   assert.ok(near(r3.speed, r.out[2].laneSpeed * 1.8, 0.01), 'at 1.8× its speed');
   for (const x of r.out.slice(3)) assert.equal(x.target.lane, 0);
+  await context.close();
+});
+
+test('shooting-gallery AC-25: every target stands on a stick and rocks about its foot; a shot is judged where it is drawn', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.rock = 1;
+    const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: false, face: 'target_red1' });
+    const d = g.makeTarget('duck', { lane: 3, x: 120, speed: 0, turn: false, face: 'duck_yellow' });
+    const lane = g.L.lanes[2];
+    const pv = g.pivotOf(t);
+    // Rocking: the angle changes over time, a few degrees at most, each target at its own pace.
+    const angles = [];
+    const duckAngles = [];
+    for (let i = 0; i < 240; i++) {
+      g.step(1 / 60);
+      angles.push(g.rockAngle(t));
+      duckAngles.push(g.rockAngle(d));
+    }
+    const max = Math.max(...angles.map(Math.abs)) * (180 / Math.PI);
+    const duckMax = Math.max(...duckAngles.map(Math.abs)) * (180 / Math.PI);
+    // Freeze it well tilted, then shoot at where its centre is drawn and where it would be upright.
+    while (Math.abs(g.rockAngle(t)) < 0.05) g.step(1 / 60);
+    const a = g.rockAngle(t);
+    const drawnX = pv.x + (t.x - pv.x) * Math.cos(a) - (t.y - pv.y) * Math.sin(a);
+    const drawnY = pv.y + (t.x - pv.x) * Math.sin(a) + (t.y - pv.y) * Math.cos(a);
+    const atDrawn = g.resolve(drawnX, drawnY);
+    return {
+      max,
+      duckMax,
+      pivotBelowStrip: pv.y > lane.strip,
+      atDrawn: [atDrawn.what, atDrawn.t && atDrawn.t.id === t.id],
+      differ: angles.some((x, i) => Math.abs(x - duckAngles[i]) > 1e-3),
+    };
+  });
+  assert.ok(r.max > 2 && r.max <= 4.01, `targets rock up to 4°: ${r.max}`);
+  assert.ok(r.duckMax > 2 && r.duckMax <= 5.01, `ducks up to 5°: ${r.duckMax}`);
+  assert.ok(r.pivotBelowStrip, 'the stick runs down behind the strip');
+  assert.ok(r.differ, 'each at its own pace');
+  assert.deepEqual(r.atDrawn, ['bull', true], 'the drawn centre is the bullseye');
+  await context.close();
+});
+
+test('shooting-gallery AC-26: the ruler shows how far a pull reaches and a dotted arc covers only the first fifth of the flight', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const P = g.pullRange();
+    g.aim.active = true;
+    g.setPull(0, 0);
+    const none = g.reach();
+    g.setPull(0, P.y / 2);
+    const half = g.reach();
+    g.setPull(0, P.y);
+    const full = g.reach();
+    const box = g.rulerBox();
+    return { none, half, full, share: g.ARC_SHARE, onCounter: box.top > g.L.C, hb: g.hudBounds() };
+  });
+  assert.deepEqual([r.none, r.half, r.full], [0, 0.5, 1]);
+  assert.equal(r.share, 0.2, 'the arc stops at a fifth of the way');
+  assert.ok(r.onCounter, 'the ruler is on the counter');
   await context.close();
 });
