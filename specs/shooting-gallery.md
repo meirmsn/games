@@ -139,8 +139,8 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
 
 ### The game as it now stands (Claude, 2026-11-09, unless marked)
 
-- **Hook:** a fairground paintball booth: turn and raise the gun, no crosshair, and paint
-  everything you miss. **Differs in kind** from Reef in its verb (aim a gun by its angle and lead a
+- **Hook:** a fairground paintball booth: pull a slingshot, no crosshair, and paint everything
+  you miss. **Differs in kind** from Reef in its verb (pull and release a slingshot and lead a
   flying ball, not steer a body) and in what failure means (a round's clock runs out before you've
   scored enough; nothing attacks you, there are no lives), and from Googly Faces in its structure
   (timed rounds with a quota) and in having failure at all.
@@ -156,8 +156,8 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   | 5 | Gold rush | two gold ducks, everything a quarter faster | 30 | 50 → 90 |
   | 6 | Closing time | everything at once, all points ×2, the lamps lit | 34 | 50 → 90 |
 
-  The first target of round 1 is a big one crossing the middle of the nearest lane slowly, with the
-  gun already pointing at that lane, so a first-timer hits within seconds.
+  The first target of round 1 is a big one crossing the middle of the nearest lane slowly, where a
+  short, straight pull lands, so a first-timer hits within seconds.
 - **Scoring.** A hit is worth pips by depth: the nearest lane 1, the middle lanes 2, the farthest
   3 (in landscape: 1, 2, 3); points are 10 per pip. A bullseye (a target's painted centre and the
   ring around it, or the painted target on a target-duck; plain ducks have none) scores ×2 and puts
@@ -189,7 +189,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   as MP3: the band's twang on each shot, a wet splat on landing (two variants, varied pitch), a wood
   knock on a hit, a tin clank on a far lane's hit, a bright ding for a bullseye, a dry click from an
   empty hopper, a splash as a pop-up rises, the pizzicato rise at a round's start, a pizzicato run
-  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a bell at half time and a double bell at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
+  at the quota, a falling pizzicato when the time runs out, a finale at closing time, a chime (a struck bell) at half time and a double chime at 10 s, a tick in each of the last 3 seconds, and a pizzicato flourish when the frenzy target is hit.
 - **Art** is the Kenney Shooting Gallery pack's (wall, curtains, water, grass, trees, clouds, ducks,
   targets, sticks, from which the slingshot is built) and its Splat Pack's; the slingshot's band and pouch, the timer badge, the ropes
   and the paintballs are drawn by the game. No "Time up", "Ready" or "Go" lettering from the pack.
