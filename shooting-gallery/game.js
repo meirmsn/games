@@ -962,13 +962,19 @@ function drawTimerBoard(tm) {
     ctx.arc(sx, 0, 1.6, 0, Math.PI * 2);
     ctx.fill();
   }
-  const secs = Math.max(0, Math.ceil(game.time - 1e-6));
-  const digits = [secs >= 10 ? Math.floor(secs / 10) % 10 : -1, secs % 10];
+  const { digits } = timerBulbs();
   const dh = tm.font;
   const dw = dh * 0.5;
   const r = dh / 10.5;
   digits.forEach((d, i) => bulbDigit((i - 0.5) * (dw + r * 5.2), 0, dw, dh, d, col, r));
   ctx.restore();
+}
+// The board's two digits (-1 for a dark one) and how many of its bulbs are lit.
+function timerBulbs() {
+  const secs = Math.max(0, Math.ceil(game.time - 1e-6));
+  const digits = [secs >= 10 ? Math.floor(secs / 10) % 10 : -1, secs % 10];
+  const lit = digits.reduce((n, d) => n + (d >= 0 ? SEGMENTS[d].length * 3 : 0), 0);
+  return { digits, lit, of: 2 * 7 * 3 };
 }
 function bulbDigit(cx, cy, dw, dh, digit, col, r) {
   const on = digit >= 0 ? SEGMENTS[digit] : '';
@@ -1480,15 +1486,23 @@ function rulerBox() {
 }
 // How far the current pull reaches, 0 (just above the counter) to 1 (the top of the booth).
 const reach = () => clamp(aim.py / pullY(), 0, 1);
+// Where the ruler's slider is drawn: at the pull's reach while pulled, at the bottom otherwise.
+function sliderY() {
+  const r = rulerBox();
+  return r.bottom - (aim.active || aim.kb ? reach() : 0) * (r.bottom - r.top);
+}
+// The notches' heights on the ruler, one for each lane.
+function notchYs() {
+  const r = rulerBox();
+  return L.lanes.map((lane) => r.bottom - ((L.C - lane.line) / (L.C - L.T)) * (r.bottom - r.top));
+}
 function drawRuler() {
   const r = rulerBox();
-  const fy = (f) => r.bottom - f * (r.bottom - r.top);
   limb(r.x, r.bottom, r.x, r.top, r.w, r.w);
   // A notch at each lane's height.
   ctx.strokeStyle = '#3b2412';
   ctx.lineWidth = 2;
-  for (const lane of L.lanes) {
-    const y = fy((L.C - lane.line) / (L.C - L.T));
+  for (const y of notchYs()) {
     ctx.beginPath();
     ctx.moveTo(r.x - r.w / 2, y);
     ctx.lineTo(r.x + r.w / 2 + 3, y);
@@ -1496,7 +1510,7 @@ function drawRuler() {
   }
   // The brass slider: where the pull will send the ball.
   const live = aim.active || aim.kb;
-  const y = fy(live ? reach() : 0);
+  const y = sliderY();
   ctx.globalAlpha = live ? 1 : 0.45;
   ctx.fillStyle = '#e6be5a';
   ctx.strokeStyle = '#6b4a12';
@@ -1515,18 +1529,25 @@ function drawRuler() {
 }
 // The first fifth of the ball's flight, dotted: the way it will go, not where it will land.
 const ARC_SHARE = 0.2;
-function drawArc(p) {
+// The arc's dots, as drawn: the first fifth of the ball's own path from the pouch.
+function arcPoints(p = pouch()) {
   const a = aimPoint();
+  const pts = [];
   for (let i = 1; i <= 6; i++) {
     const q = (i / 6) * ARC_SHARE;
-    const x = p.x + (a.x - p.x) * q;
-    const y = p.y + (a.y - p.y) * q - Math.sin(Math.PI * q) * 18;
+    pts.push({ x: p.x + (a.x - p.x) * q, y: p.y + (a.y - p.y) * q - Math.sin(Math.PI * q) * 18 });
+  }
+  return pts;
+}
+function drawArc(p) {
+  arcPoints(p).forEach(({ x, y }, j) => {
+    const i = j + 1;
     ctx.globalAlpha = 0.85 - i * 0.11;
     ctx.fillStyle = '#fff4dc';
     ctx.beginPath();
     ctx.arc(x, y, 3 - i * 0.25, 0, Math.PI * 2);
     ctx.fill();
-  }
+  });
   ctx.globalAlpha = 1;
 }
 
@@ -1939,7 +1960,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, rulerBox, reach, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, timerBulbs, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

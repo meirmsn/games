@@ -847,6 +847,8 @@ test('shooting-gallery AC-23: the timer counts whole seconds on its badge; it ch
   });
   let u = await ui();
   assert.deepEqual([u.timerText, u.timerColour], ['16', 'plain']);
+  // In bulbs: 1 lights segments b and c, 6 lights six, three bulbs a segment, out of 42.
+  assert.deepEqual(await page.evaluate(() => window.__gallery.timerBulbs()), { digits: [1, 6], lit: 24, of: 42 });
   await steps(page, 0.1);
   assert.ok(await page.evaluate(() => window.__gallery.heard.includes('chime')), 'a chime at half time');
   assert.ok(await page.evaluate(() => window.__gallery.game.pulse > 0.5), 'the badge swells');
@@ -950,6 +952,27 @@ test('shooting-gallery AC-25: every target stands on a stick and rocks about its
       pivotBelowStrip: pv.y > lane.strip,
       atDrawn: [atDrawn.what, atDrawn.t && atDrawn.t.id === t.id],
       differ: angles.some((x, i) => Math.abs(x - duckAngles[i]) > 1e-3),
+      // A drop-down swings about its rope's top, 3° at most.
+      drop: (() => {
+        const dd = g.makeTarget('drop', { lane: 3, x: 300, up: true, turn: false });
+        let m = 0;
+        for (let i = 0; i < 240; i++) {
+          g.step(1 / 60);
+          m = Math.max(m, Math.abs(g.rockAngle(dd)));
+        }
+        return { max: m * (180 / Math.PI), pivotY: g.pivotOf(dd).y, top: g.L.top };
+      })(),
+      // A rocked pop-up is hit where it's drawn too.
+      pop: (() => {
+        const pp = g.makeTarget('pop', { lane: 4, x: 120, up: true, upFor: 99, turn: false, face: 'target_colored' });
+        while (Math.abs(g.rockAngle(pp)) < 0.05) g.step(1 / 60);
+        const a2 = g.rockAngle(pp);
+        const q = g.pivotOf(pp);
+        const x = q.x + (pp.x - q.x) * Math.cos(a2) - (pp.y - q.y) * Math.sin(a2);
+        const y = q.y + (pp.x - q.x) * Math.sin(a2) + (pp.y - q.y) * Math.cos(a2);
+        const hit = g.resolve(x, y);
+        return [hit.what, hit.t && hit.t.id === pp.id];
+      })(),
     };
   });
   assert.ok(r.max > 2 && r.max <= 4.01, `targets rock up to 4°: ${r.max}`);
@@ -957,6 +980,9 @@ test('shooting-gallery AC-25: every target stands on a stick and rocks about its
   assert.ok(r.pivotBelowStrip, 'the stick runs down behind the strip');
   assert.ok(r.differ, 'each at its own pace');
   assert.deepEqual(r.atDrawn, ['bull', true], 'the drawn centre is the bullseye');
+  assert.ok(r.drop.max > 1.5 && r.drop.max <= 3.01, `a drop-down swings up to 3°: ${r.drop.max}`);
+  assert.equal(r.drop.pivotY, r.drop.top + 30, 'about its rope’s top');
+  assert.deepEqual(r.pop, ['bull', true], 'a rocked pop-up is hit where it is drawn');
   await context.close();
 });
 
@@ -966,18 +992,34 @@ test('shooting-gallery AC-26: the ruler shows how far a pull reaches and a dotte
   const r = await page.evaluate(() => {
     const g = window.__gallery;
     const P = g.pullRange();
-    g.aim.active = true;
-    g.setPull(0, 0);
-    const none = g.reach();
-    g.setPull(0, P.y / 2);
-    const half = g.reach();
-    g.setPull(0, P.y);
-    const full = g.reach();
     const box = g.rulerBox();
-    return { none, half, full, share: g.ARC_SHARE, onCounter: box.top > g.L.C, hb: g.hudBounds() };
+    const out = { box, notches: g.notchYs(), onCounter: box.top > g.L.C };
+    out.idle = g.sliderY();
+    g.aim.active = true;
+    out.slider = [0, 0.5, 1].map((f) => {
+      g.setPull(0, P.y * f);
+      return g.sliderY();
+    });
+    // The slider sits on a lane's notch when the pull lands on that lane's line.
+    g.aimAt(200, g.L.lanes[1].line);
+    out.onNotch = Math.abs(g.sliderY() - g.notchYs()[1]);
+    // The arc, as drawn, from the pouch toward the landing point.
+    g.setPull(30, P.y * 0.8);
+    const p = g.pouch();
+    const a = g.aimPoint();
+    const pts = g.arcPoints();
+    const last = pts[pts.length - 1];
+    out.arc = { n: pts.length, share: Math.abs(last.x - p.x) / Math.abs(a.x - p.x), shareY: (p.y - last.y) / (p.y - a.y), gap: Math.hypot(a.x - last.x, a.y - last.y), full: Math.hypot(a.x - p.x, a.y - p.y) };
+    return out;
   });
-  assert.deepEqual([r.none, r.half, r.full], [0, 0.5, 1]);
-  assert.equal(r.share, 0.2, 'the arc stops at a fifth of the way');
   assert.ok(r.onCounter, 'the ruler is on the counter');
+  assert.equal(r.idle, r.box.bottom, 'at rest the slider is at the bottom');
+  assert.deepEqual(r.slider.map((y) => Math.round(y * 100) / 100), [r.box.bottom, (r.box.bottom + r.box.top) / 2, r.box.top].map((y) => Math.round(y * 100) / 100));
+  assert.equal(r.notches.length, 5);
+  assert.ok(r.onNotch < 1e-6, 'a pull onto a lane puts the slider on its notch');
+  assert.equal(r.arc.n, 6);
+  assert.ok(near(r.arc.share, 0.2, 1e-6), `the arc ends a fifth of the way across: ${r.arc.share}`);
+  assert.ok(r.arc.shareY > 0.15 && r.arc.shareY < 0.45, `and a little over a fifth of the way up, the ball's arc: ${r.arc.shareY}`);
+  assert.ok(r.arc.gap > r.arc.full * 0.7, 'it stops well short of the landing point');
   await context.close();
 });
