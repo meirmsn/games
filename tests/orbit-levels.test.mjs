@@ -49,8 +49,6 @@ test('orbit AC-12: every leg has a gold route that catches every mote of its leg
       assert.equal(f.result, 'captured', `${sys.name} leg ${l + 1}`);
       assert.equal(f.caught.length, total, `${sys.name} leg ${l + 1} motes`);
     });
-    // a par-length gold run: legs + 2 launches; the gold routes use one per leg
-    assert.ok(sys.legs.length <= sys.legs.length + 2);
   }
 });
 
@@ -115,7 +113,6 @@ test('orbit AC-5: hitting a body, swinging away, looping round another body or 8
   // the clock
   const slow = launch(sys, 0, 0, 0.5, 0);
   Object.assign(slow, { x: 60, y: 60, vx: 0, vy: 0, age: MAX_FLIGHT - DT / 2 });
-  sys.bodies.forEach(() => {});
   const saved = sys.bodies.map((x) => x.mu);
   sys.bodies.forEach((x) => (x.mu = 0));
   step(slow, sys);
