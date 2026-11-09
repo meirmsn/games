@@ -732,7 +732,7 @@ test('walk-on-red AC-17: the street fits on phones and in landscape, only the st
 
 test('walk-on-red AC-18: hops, copiers setting off and arriving, hits, the green light and the end have their sounds', async () => {
   const { context, page } = await open();
-  await startEmpty(page, 2);
+  await startEmpty(page, 4);
   const r = await page.evaluate(() => {
     const t = window.__walkOnRed;
     const names = () => t.heard.map((h) => h.name);
@@ -745,9 +745,10 @@ test('walk-on-red AC-18: hops, copiers setting off and arriving, hits, the green
     t.put(t.layout().rows.indexOf('M'));
     run(2.5);
     const setOff = names();
+    run(3); // all three copiers on the median
     t.heard.length = 0;
     t.put(0);
-    run(3);
+    run(4);
     const arrive = t.heard.filter((h) => h.name === 'arrive').map((h) => h.rate);
     const green = names();
     t.startGame(1);
@@ -769,7 +770,8 @@ test('walk-on-red AC-18: hops, copiers setting off and arriving, hits, the green
   });
   assert.ok(r.hop.some((n) => n === 'step' || n === 'step2'), 'a footstep');
   assert.ok(r.setOff.includes('join'), 'the pluck as a copier sets off');
-  assert.ok(r.arrive.length >= 1, 'the chime as a copier arrives');
+  assert.ok(r.arrive.length >= 2, `the chime as each copier arrives (${r.arrive.length})`);
+  for (let i = 1; i < r.arrive.length; i++) assert.ok(r.arrive[i] > r.arrive[i - 1], `each chime higher: ${r.arrive}`);
   assert.ok(r.green.includes('street') && r.green.includes('walk'), 'the green light');
   assert.ok(r.hit.includes('hit') && r.hit.includes('horn'));
   assert.ok(r.end.includes('over'));
