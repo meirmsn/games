@@ -11,7 +11,7 @@ import { makeWorld, routeLength, DEEP, W, H } from '../high-seas/world.js';
 import { rig, polarAt } from '../high-seas/boat.js';
 
 // Its own port range: the test files run in parallel, and a shared range can collide.
-const PORT = 9300 + Math.floor(Math.random() * 100);
+const PORT = 9600 + Math.floor(Math.random() * 100); // its own range: the others use 8790-9399
 const BASE = `http://127.0.0.1:${PORT}/`;
 let server;
 let browser;
