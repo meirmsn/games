@@ -102,6 +102,18 @@ test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight t
   await context.close();
 });
 
+test('pixel-leap AC-20: the Pixel Leap tile is playable and opens pixel-leap/', async () => {
+  const { context, page } = await open();
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Pixel Leap' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+  assert.equal(await tile.getAttribute('href'), 'pixel-leap/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  await tile.click();
+  await page.waitForURL(/pixel-leap\/(#.*)?$/);
+  await page.waitForFunction(() => window.__leap);
+  await context.close();
+});
+
 test('a coming-soon tile nudges and does not navigate', async () => {
   const { context, page } = await open();
   const tile = page.locator('.tile.is-soon').first();
