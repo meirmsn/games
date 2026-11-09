@@ -373,7 +373,7 @@ body {
   letter-spacing: 0.04em;
   font-size: 13px;
   font-weight: 600;
-  color: #96e1ff;
+  color: var(--zone-colour, #96e1ff);
   font-variant-numeric: tabular-nums;
 }
 
@@ -382,37 +382,47 @@ body {
   height: 44px;
 }
 
-.boost-rail {
+/* The zones: slate for gentle, green, orange, and red for the last tenth. The empty rail shows them
+   faintly; the fill shows them bright up to the power. */
+.boost-rail,
+.boost-fill {
   position: absolute;
   left: 0;
   right: 0;
   top: 50%;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 3px;
+  height: 18px;
+  margin-top: -9px;
+  border-radius: 5px;
+  --zones: linear-gradient(90deg, #7d93b2 0 30%, #4fd18b 30% 70%, #ffa64d 70% 90%, #ff5a4f 90% 100%);
+}
+
+.boost-rail {
   overflow: hidden;
   background:
-    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgb(233 243 255 / 22%) calc(10% - 1px) 10%),
-    rgb(150 225 255 / 10%);
-  box-shadow: inset 0 0 0 1px rgb(150 225 255 / 22%);
+    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgb(0 0 0 / 45%) calc(10% - 1px) 10%),
+    var(--zones);
+  opacity: 0.22;
 }
 
 .boost-fill {
-  height: 100%;
-  width: calc(var(--power) * 100%);
-  background: linear-gradient(90deg, rgb(150 225 255 / 35%), #96e1ff);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), rgb(0 0 0 / 35%) calc(10% - 1px) 10%),
+    var(--zones);
+  clip-path: inset(0 calc((1 - var(--power)) * 100%) 0 0 round 5px);
+  box-shadow: 0 0 14px rgb(255 255 255 / 8%);
 }
 
-.boost-knob {
+/* the fill's leading edge: a bright line, so the exact power reads */
+.boost-edge {
   position: absolute;
   top: 50%;
   left: calc(var(--power) * 100%);
-  width: 16px;
-  height: 16px;
-  margin: -8px 0 0 -8px;
-  border-radius: 50%;
-  background: #e9f7ff;
-  box-shadow: 0 0 0 3px rgb(150 225 255 / 25%), 0 0 12px rgb(150 225 255 / 60%);
+  width: 2px;
+  height: 24px;
+  margin: -12px 0 0 -1px;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 0 6px rgb(255 255 255 / 70%);
   pointer-events: none;
 }
 
@@ -420,10 +430,10 @@ body {
   position: absolute;
   top: 50%;
   width: 2px;
-  height: 14px;
-  margin: -7px 0 0 -1px;
+  height: 28px;
+  margin: -14px 0 0 -1px;
   border-radius: 1px;
-  background: rgb(255 255 255 / 40%);
+  background: rgb(255 255 255 / 35%);
   pointer-events: none;
 }
 

@@ -248,7 +248,7 @@ test('orbit AC-4: a capture parks the probe on the ring and the next leg begins'
     return { worst: (worst * 180) / Math.PI, leg: g.leg };
   });
   assert.equal(turn.leg, 2, 'the second leg was caught too');
-  assert.ok(turn.worst < 6, `no sudden turn: at most ${turn.worst.toFixed(1)} degrees between frames`);
+  assert.ok(turn.worst < 3.5, `no sudden turn: at most ${turn.worst.toFixed(1)} degrees between frames (3 rad/s is 2.9)`);
   assert.equal(parked.from, parked.was, 'that planet starts the next leg');
   await context.close();
 });
@@ -354,40 +354,70 @@ test('orbit AC-7: from System 2 a touch in flight brakes once, by 35%; System 1 
   await context.close();
 });
 
-test('orbit AC-8: the circling probe shows only a short line the way it would leave, longer with more power; no path is previewed', async () => {
+test('orbit AC-8: the probe is a small ship pointing the way it moves, with no line ahead of it and no path previewed', async () => {
   const { context, page } = await open();
   await manual(page);
   const r = await page.evaluate(() => {
     const o = window.__orbit;
     const g = o.game;
     document.querySelector('[data-screen="intro"]').hidden = true;
-    // put the probe on the left of its planet: circling as it starts, it would leave straight down
+    // put the probe on the left of its planet: circling as it starts, it moves straight down
     g.park.phase = Math.PI - (g.park.dir * 2 * Math.PI * (g.clock - g.legStart)) / g.park.period;
+    o.setPower(1);
+    o.draw();
     const c = document.querySelector('#space');
     const ctx = c.getContext('2d');
     const dpr = c.width / innerWidth;
-    const lit = (len, power) => {
-      o.setPower(power);
-      o.draw();
-      const p = o.launchPoint();
-      const x = o.view.x + p.x * o.view.s;
-      const y = o.view.y + p.y * o.view.s + len;
-      const d = ctx.getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data;
+    const p = o.launchPoint();
+    const lit = (dy) => {
+      const d = ctx.getImageData(Math.round((o.view.x + p.x * o.view.s) * dpr), Math.round((o.view.y + p.y * o.view.s + dy) * dpr), 1, 1).data;
       return d[0] + d[1] + d[2];
     };
+    const parked = o.probeHeading();
+    const ship = lit(0);
+    const ahead = [16, 24, 32, 40].map(lit);
+    o.fire(0.5);
+    for (let i = 0; i < 20; i++) o.update(1 / 60);
+    const f = g.flight;
     return {
-      shortNear: lit(10, 0.1),
-      shortFar: lit(40, 0.1),
-      longFar: lit(40, 1),
-      beyond: lit(70, 1),
+      parked,
+      ship,
+      ahead,
+      flying: o.probeHeading(),
+      velocity: Math.atan2(f.vy, f.vx),
       hasPreview: typeof o.previewFor === 'function' || typeof o.previewColours === 'function',
     };
   });
-  assert.ok(r.shortNear > 200, `the heading line is drawn (${r.shortNear})`);
-  assert.ok(r.shortFar < 100, `low power draws a short line (${r.shortFar})`);
-  assert.ok(r.longFar > 200, `full power draws a longer one (${r.longFar})`);
-  assert.ok(r.beyond < 100, `nothing past its end (${r.beyond})`);
+  assert.ok(Math.abs(r.parked - Math.PI / 2) < 1e-6 || Math.abs(r.parked + (3 * Math.PI) / 2) < 1e-6, `parked, it points along its orbit (${r.parked})`);
+  assert.ok(r.ship > 300, `the ship is drawn (${r.ship})`);
+  assert.ok(r.ahead.every((v) => v < 120), `no line ahead of it at full power (${r.ahead})`);
+  assert.ok(Math.abs(Math.atan2(Math.sin(r.flying - r.velocity), Math.cos(r.flying - r.velocity))) < 1e-9, 'in flight, it points along its velocity');
   assert.equal(r.hasPreview, false);
+  await context.close();
+});
+
+test('orbit AC-23: the booster bar is a tall strip filled in zone colours, slate, green, orange and red, with no knob', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const o = window.__orbit;
+    const out = {};
+    for (const p of [0.1, 0.5, 0.8, 0.95]) {
+      o.setPower(p);
+      out[p] = getComputedStyle(document.querySelector('[data-boost-value]')).color;
+    }
+    const fill = document.querySelector('.boost-fill').getBoundingClientRect();
+    return {
+      colours: out,
+      zones: [0.1, 0.5, 0.8, 0.95].map(o.zoneColour),
+      knob: document.querySelectorAll('.boost-knob, [class*="thumb"]').length,
+      fillHeight: fill.height,
+    };
+  });
+  assert.deepEqual(r.zones, ['#9fb3cf', '#4fd18b', '#ffa64d', '#ff5a4f'], 'slate, green, orange, red');
+  const rgb = (hex) => `rgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
+  assert.deepEqual(Object.values(r.colours), r.zones.map(rgb), 'the percentage takes its zone colour');
+  assert.equal(r.knob, 0, 'no slider knob');
+  assert.ok(r.fillHeight >= 16, `tall enough to see the colour (${r.fillHeight})`);
   await context.close();
 });
 

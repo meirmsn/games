@@ -17,6 +17,7 @@ export const BOOST_MAX = 420; // full power adds this much speed on top of the e
 export const MAX_SPEED = 1400; // speed is clamped here, so a close pass never tunnels
 export const CATCH_WIDTH = 26; // the capture band reaches this far outside the drawn ring
 export const CATCH_SPEED = 1.75; // capture needs speed (relative to the target) under this × escape speed at the ring
+export const PROBE_R = 8; // the probe's size: touching a planet means its body reaching the surface
 export const CATCH_ANGLE = 30; // capture needs the path within this many degrees of running along the ring
 export const ASSIST_BAND = 0.15; // the hidden assist widens the band by up to 15% (inside the ring's glow)
 export const ASSIST_SPEED = 0.25; // and raises the speed limit by up to 25%
@@ -154,6 +155,90 @@ export function arrivalDir(f, level) {
   return w >= 0 ? 1 : -1;
 }
 
+// The settle: a caught probe is steered into its parking orbit. Each step it aims for orbit speed
+// along the ring, plus a gentle pull in or out toward the ring's radius, and accelerates toward
+// that, with its braking limited to SETTLE_ACCEL and its turning to SETTLE_TURN radians a second.
+// So however fast it arrives, it never lurches: its path curves no more sharply than that. The
+// planets' pull is set aside while it's steered.
+export const SETTLE_ACCEL = 1400; // units per second², along the way it moves
+export const SETTLE_TURN = 3; // radians per second at most
+export const SETTLE_MAX = 3; // seconds at most; it is then within a hair of the ring and parks
+const SETTLE_GAIN = 5; // how hard it closes the gap to the speed it aims for, per second
+const SETTLE_PULL = 3; // how fast it closes on the ring's radius, per second
+
+export function settlePlan(level, to, t, x, y, vx, vy) {
+  const p = bodyAt(level.bodies, to, t);
+  const v = bodyVel(level.bodies, to, t);
+  const w = (x - p.x) * (vy - v.y) - (y - p.y) * (vx - v.x);
+  return { to, t, x, y, vx, vy, age: 0, done: false, dir: w >= 0 ? 1 : -1, ring: level.bodies[to].ring, a: 0, minR: Infinity };
+}
+
+export function settleStep(level, s) {
+  if (s.done) return s;
+  const p = bodyAt(level.bodies, s.to, s.t);
+  const pv = bodyVel(level.bodies, s.to, s.t);
+  const dx = s.x - p.x;
+  const dy = s.y - p.y;
+  const r = Math.sqrt(dx * dx + dy * dy) || 1;
+  const urx = dx / r;
+  const ury = dy / r;
+  const utx = -ury * s.dir;
+  const uty = urx * s.dir;
+  const vc = (2 * Math.PI * s.ring) / PARK_PERIOD;
+  const vr = Math.max(-250, Math.min(250, -SETTLE_PULL * (r - s.ring)));
+  // the speed it aims for, relative to the planet
+  const wx = utx * vc + urx * vr;
+  const wy = uty * vc + ury * vr;
+  const rvx = s.vx - pv.x;
+  const rvy = s.vy - pv.y;
+  // close the gap to that speed, plus the inward pull a circle at this radius needs (so it settles
+  // on the ring itself, not a little outside it)
+  const cen = (vc * vc) / r;
+  // a moon target accelerates as it circles its planet: follow that too
+  const pa = bodyVel(level.bodies, s.to, s.t + 1e-3, { x: 0, y: 0 });
+  const tax = (pa.x - pv.x) / 1e-3;
+  const tay = (pa.y - pv.y) / 1e-3;
+  let ax = SETTLE_GAIN * (wx - rvx) - urx * cen;
+  let ay = SETTLE_GAIN * (wy - rvy) - ury * cen;
+  // split into along the motion and across it; limit each
+  const sp = Math.sqrt(rvx * rvx + rvy * rvy);
+  if (sp > 1) {
+    const mx = rvx / sp;
+    const my = rvy / sp;
+    let along = ax * mx + ay * my;
+    let across = -ax * my + ay * mx;
+    along = Math.max(-SETTLE_ACCEL, Math.min(SETTLE_ACCEL, along));
+    const turn = SETTLE_TURN * sp;
+    across = Math.max(-turn, Math.min(turn, across));
+    ax = along * mx - across * my;
+    ay = along * my + across * mx;
+  }
+  ax += tax;
+  ay += tay;
+  s.vx += ax * DT;
+  s.vy += ay * DT;
+  s.x += s.vx * DT;
+  s.y += s.vy * DT;
+  s.t += DT;
+  s.age += DT;
+  s.minR = Math.min(s.minR, r);
+  s.a = Math.atan2(s.y - p.y, s.x - p.x);
+  const err = Math.hypot(rvx - wx, rvy - wy);
+  if ((Math.abs(r - s.ring) < 0.6 && err < 3) || s.age >= SETTLE_MAX) s.done = true;
+  return s;
+}
+
+// Does the whole steered settle stay clear of the planet's surface (the probe's size included)?
+export function settleClear(level, plan) {
+  const s = { ...plan };
+  const limit = level.bodies[s.to].r + PROBE_R;
+  while (!s.done) {
+    settleStep(level, s);
+    if (s.minR < limit) return false;
+  }
+  return true;
+}
+
 // One brake: BRAKE less speed relative to the target. Returns false if none is left.
 export function brake(f, level) {
   if (f.result || f.brakeLeft <= 0) return false;
@@ -194,7 +279,7 @@ export function step(f, level, taken = null) {
     const dy = f.y - f.pos[i * 2 + 1];
     const d = Math.sqrt(dx * dx + dy * dy);
     const b = bodies[i];
-    if (d < b.r) {
+    if (d < b.r + PROBE_R) {
       f.result = 'crashed';
       f.why = 'hit';
       f.hit = i;
@@ -231,9 +316,13 @@ export function step(f, level, taken = null) {
     // along the ring, not into it: the part of the speed heading in or out must be small
     const radial = Math.abs((rvx * (f.x - tx) + rvy * (f.y - ty)) / (d || 1));
     const along = radial <= rel * Math.sin((CATCH_ANGLE * Math.PI) / 180);
-    if (rel < catchLimit(level, f.to, f.assist) && along) {
-      f.result = 'captured';
-      return f;
+    // and the ease into the ring must stay clear of the planet: a catch never dips into it
+    if (rel < catchLimit(level, f.to, f.assist) && along && f.age >= (f.noSettleUntil || 0)) {
+      if (settleClear(level, settlePlan(level, f.to, f.t, f.x, f.y, f.vx, f.vy))) {
+        f.result = 'captured';
+        return f;
+      }
+      f.noSettleUntil = f.age + 0.05; // it would touch the planet; look again a moment later
     }
     f.fastPass = true;
   }

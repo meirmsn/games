@@ -29,7 +29,7 @@ next planet's orbit ring: a grand tour hopping world to world across pitch-black
   or a wide arc (risking drifting away), or take the plain capture; brake early (fall inward) or
   late (slow enough to be caught).
 - How it teaches: no path preview, and one line of text only on the first level, until the first
-  firing. The probe circles with a short line showing which way it would leave; a release toward a
+  firing. The probe is a small ship pointing the way it would leave; a release toward a
   planet hits it, and the ghost of that flight, with its release point and power, shows why; a
   release past it swings round into the ring. The brake arrives with a
   slow-motion moment and a pulsing flame on the probe. Moons first appear where waiting for one is
@@ -76,9 +76,10 @@ three differ.
   velocity it has on the planet"); a release at plain orbit speed or a weak boost that only
   stretches the orbit, which can't leave or drifts into the next ring from almost anywhere
   (tuning, 2026-11-09).
-- Gravity is shown by its effect alone, never ahead of the throw. The circling probe shows one thin
-  line out of it along the way it is moving, its length the booster power, with a small dot at its
-  end; nothing previews where the probe will go. Rejected: a preview thread of the path, which made it too easy (owner,
+- Gravity is shown by its effect alone, never ahead of the throw. The probe is a small ship pointing
+  the way it is moving; nothing previews where it will go, and the power shows only on the bar.
+  Rejected: a line ahead of the circling probe showing the power (owner, 2026-11-09: "Don't show
+  the line of the booster on the rotating thing, just on the bottom booster thing"). Rejected: a preview thread of the path, which made it too easy (owner,
   2026-11-09: "It even tells you, the controls are showing you if it's gonna bend or not bend.
   It's very easy to play the game"); and gravity-reach rings, which mislead and look like an
   existing well-known game (first concept review, 2026-11-09).
@@ -87,10 +88,16 @@ three differ.
   direction, and slower than the ring's limit relative to the target: 1.75 × the escape speed at
   the ring by default, with a per-system and per-planet value tuned in `orbit/levels.js`. A throw
   straight at a planet comes in head-on and hits it; you throw past the planet so the probe swings
-  round into its orbit. A caught probe eases into the ring over 1 s, or up to 2.2 s when it arrives
-  much faster than the ring's lap, so it slows in rather than swerving: its distance follows a
-  smooth curve from its own speed in or out and settles in the first 70% of that time, and its
-  speed round the planet blends to the ring's, carrying on the way it was flying. Rejected: catching any probe in the band and snapping it onto
+  round into its orbit. A caught probe is steered into the ring: each moment it aims for the ring's
+  lap speed along the ring plus a gentle pull toward the ring's radius, braking at up to 1,400 units
+  a second² and turning at most 3 radians a second, so however fast it arrives it slows and curves
+  in without a lurch, carrying on the way it was flying; it settles within 3 s and then circles.
+  A catch only counts if that whole path stays clear of the planet by the probe's size: touching a
+  planet is always a crash (owner, 2026-11-09: "when the planet catches the player in orbit, it
+  actually doesn't crash into the planet, even though visually I see it being on top of the planet
+  ... make sure that whenever the player touches the planet, it is a crash always"); rejected: an
+  eased curve that could dip into the planet, and a blend that still lurched (tuning, 2026-11-09).
+  Rejected: catching any probe in the band and snapping it onto
   the ring in 0.4 s (owner, 2026-11-09: "if you pointed towards the planets and it's not going
   straight into it, it seems like it always catches it. It doesn't feel natural. It just goes
   almost at a right angle and then ploop, it clacks. It latches into the orbit").
@@ -98,7 +105,7 @@ three differ.
   relative to the target by 35%. A late brake gets under the ring's limit; an early one drops the
   probe inward. Rejected: a +30% burn, which fought the speed limit (second concept review,
   2026-11-09).
-- A flight fails when the probe hits a body, swings more than 200 units past the field's edge, loops
+- A flight fails when the probe's body (8 units across its middle) touches a planet, swings more than 200 units past the field's edge, loops
   once around a body other than the target or the target's parent while bound to it, or lasts
   8 s. The probe dims over the
   last 2 s before the time runs out. On a failure it rewinds to the leg's start within 1 s, and moons
@@ -130,9 +137,14 @@ three differ.
   slows to 0.4× for 0.6 s when the probe is near the ring too fast with its brake unused, and the
   probe's flame pulses (second concept review, 2026-11-09).
 - Controls: the booster bar at the bottom sets the power: tap a point on it, or drag along it. It
-  is a slim throttle, like a spacecraft's control strip in the game's plain style: a label, a cyan
-  fill over a rail ticked every 10%, a glowing knob, the percentage, and a faint mark at the last
-  failed flight's power; it dims while the probe is away from its orbit, and the power is kept
+  is a tall strip, like a spacecraft's control strip in the game's plain style: a label, a fill in
+  zone colours (slate up to 30%, green to 70%, orange to 90% and red for the last tenth), the zones
+  showing faintly along the empty strip, ticks every 10%, a bright line at the fill's edge, the
+  percentage in its zone's colour, and a faint mark at the last failed flight's power; no knob
+  (owner, 2026-11-09: "red is the last subdivision there, and then some orange before that, and
+  green before, and maybe blue or grayish on the bottom ... instead of making it like a slider that
+  looks too like a web form, like that circle, just make the fill it in the colors, and actually
+  make it taller"); it dims while the probe is away from its orbit, and the power is kept
   between visits. A tap anywhere else fires the boosters, the moment it lands; in flight it brakes
   instead (from System 2; in System 1 it does nothing). There is no fire button. Touches that start
   in the bottom 24 px (plus the safe area), where the phone swipes, are ignored, and so is a second
@@ -155,8 +167,11 @@ three differ.
   Skyboxes Space that differs per system. Planets are the pack's whole planets with a slowly
   turning cloud layer from its parts and a soft shadow on the side away from one sun direction;
   a skim makes the planet's air glow for a moment. The target's ring is one thin plain circle,
-  brighter while it catches; stardust is small plain dots; the probe is a small white-cyan light
-  with a thin trail in one soft colour. Rejected: glow bands, dashed turning rings, a parking
+  brighter while it catches; stardust is small plain dots; the probe is a tiny dart-shaped
+  spacecraft, white with a cyan cockpit, pointing the way it moves, with a flame behind it for a
+  moment when its boosters fire and ahead of it when it brakes, and a thin trail in one soft colour
+  (owner, 2026-11-09: "I don't know if we should make it a circle ... or something that looks like
+  a spacecraft. It's gonna be tiny, but maybe there's something you can do there"). Rejected: glow bands, dashed turning rings, a parking
   circle, sparkle-shaped motes and a trail coloured by speed (owner, 2026-11-09: "we need to make it
   much more visually simpler. It looks ugly, the controls, and also clunky").
 - Sound: a slow pad of low sines for the drone; a tiny soft blip as drag power rises; an airy swell
@@ -204,7 +219,8 @@ three differ.
   release at the same leg time, with a brake tap at the same moment, ends the same way at the same
   place.
 - **AC-4** A probe in the target's band (inside the ring too), moving within 30° of along the ring
-  and under the speed limit, is caught and eases onto the ring with no sudden turn; that planet
+  and under the speed limit, with the steered path into the ring clear of the planet, is caught and
+  steered onto the ring, turning no more than 3 radians a second; that planet
   becomes the next leg's start and the next ring appears. One over the limit, or heading in
   steeper than 30°, is not caught.
 - **AC-5** Hitting a body, swinging out of the field, looping around a non-target body or flying 8 s
@@ -215,8 +231,8 @@ three differ.
 - **AC-6** Motes caught on a failed flight stay caught; a skim is counted apart from motes.
 - **AC-7** From System 2, one tap during flight cuts the probe's speed relative to the target by
   35%, once per flight; System 1 has no brake.
-- **AC-8** The circling probe shows only a short line the way it would leave, longer with more
-  power; nothing previews the probe's path beyond it.
+- **AC-8** The probe is drawn as a small ship pointing the way it moves (along its orbit when
+  parked, along its velocity in flight), with no line ahead of it; nothing previews its path.
 - **AC-9** With 0, 2, 3, 4 and 5 failed flights on a leg, the capture band grows by 0, 0, 5, 10
   and 15% of the ring's radius and the speed limit by 0, 0, 8.3, 16.7 and 25%; the drawn ring
   stays the same size; a capture resets them.
@@ -249,6 +265,11 @@ three differ.
   the bar is at least 44 px tall, above the bottom edge strip.
 - **AC-22** On the first level, after the probe has circled 4 s untouched, the hint to fire shows
   above the bar; firing hides it, and it never shows again in that browser.
+- **AC-23** The booster bar is at least 16 px tall, filled in zone colours (slate below 30%, green
+  to 70%, orange to 90%, red for the last tenth), its percentage in its zone's colour, with no knob.
+- **AC-24** Touching a planet is always a crash: the probe's body reaching a planet's surface in
+  flight crashes it, and no catch steers it within its size of a surface; every catch settles
+  within 3 s.
 
 ## Core flow
 
@@ -265,10 +286,10 @@ three differ.
 | State | Intro card (system name, par) | End card (motes, par, medal) | Probe |
 | ----- | ----------------------------- | ---------------------------- | ----- |
 | System intro | shown, fades on first touch | hidden | circling its planet |
-| Setting the power (on the bar) | hidden | hidden | still circling, its heading line growing with the power |
+| Setting the power (on the bar) | hidden | hidden | still circling |
 | Flying | hidden | hidden | flying with its trail |
 | Rewinding (after a failed flight) | hidden | hidden | back at the leg's start, ghost trail shown |
-| Captured (easing in) | hidden | hidden | easing into the ring |
+| Captured (steered in) | hidden | hidden | steered into the ring |
 | System done | hidden | shown, with Next | parked on the last planet |
 | Paused (page hidden, then back) | hidden | hidden | at the leg's start, waiting for a touch |
 

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SYSTEMS } from '../orbit/levels.js';
-import { fly, launch, step, arrivalDir, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH, CATCH_ANGLE } from '../orbit/physics.js';
+import { fly, launch, step, arrivalDir, settlePlan, settleStep, PROBE_R, DT, MAX_FLIGHT, catchLimit, ASSIST_BAND, CATCH_WIDTH, CATCH_ANGLE } from '../orbit/physics.js';
 import { rate, rateByStart, parkingClear, window as timingWindow } from '../scripts/orbit/solve.mjs';
 
 // Each leg's timing window: at its best booster power and circling direction, how many degrees of
@@ -59,6 +59,37 @@ test('orbit AC-12: a typical captured flight is an arc, not a hop (median at lea
       assert.ok(rate.lastMedianAge >= 0.7, `${sys.name} leg ${l + 1}: ${rate.lastMedianAge}`);
     });
   }
+});
+
+test('orbit AC-24: touching a planet is always a crash: no catch brings the probe within its size of a surface', () => {
+  // over releases all round the orbit, at every power, both ways round, in every system
+  let caught = 0;
+  for (const sys of SYSTEMS) {
+    sys.legs.forEach((leg, l) => {
+      for (const dir of l ? [-1, 1] : [-1]) {
+        for (let d = 0; d < 360; d += 6) {
+          for (let p = 0; p <= 1.0001; p += 0.25) {
+            const f = fly(sys, l, (d * Math.PI) / 180, p, 0, { dir });
+            if (f.result !== 'captured') continue;
+            caught++;
+            const b = sys.bodies[f.to];
+            const s = settlePlan(sys, f.to, f.t, f.x, f.y, f.vx, f.vy);
+            while (!s.done) settleStep(sys, s);
+            assert.ok(s.minR >= b.r + PROBE_R, `${sys.name} leg ${l + 1}: the settle came within ${s.minR - b.r} of the surface`);
+            assert.ok(s.age < 3, `${sys.name} leg ${l + 1}: the settle converged (${s.age} s)`);
+          }
+        }
+      }
+    });
+  }
+  assert.ok(caught > 50, `${caught} catches checked`);
+  // and in flight, the probe's body touching the surface is a crash
+  const sys = SYSTEMS[0];
+  const b = sys.bodies[2];
+  const f = launch(sys, 0, 0, 0.5, 0);
+  Object.assign(f, { x: b.x + b.r + PROBE_R - 1, y: b.y, vx: 0, vy: -300 });
+  step(f, sys);
+  assert.deepEqual([f.result, f.why], ['crashed', 'hit']);
 });
 
 test('orbit AC-5: no body, nor the target band, ever meets the parking ring', () => {

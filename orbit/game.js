@@ -16,6 +16,8 @@ import {
   brake,
   catchLimit,
   relSpeed,
+  settlePlan,
+  settleStep,
 } from './physics.js';
 import { SYSTEMS } from './levels.js';
 
@@ -223,7 +225,9 @@ function bodyPos(i, t = game.clock) {
 function probeParked(t = game.clock) {
   const b = bodyPos(game.parkBody, t);
   const a = game.park.phase + game.park.dir * ((2 * Math.PI * (t - game.legStart)) / game.park.period);
-  return { x: b.x + Math.cos(a) * game.park.r, y: b.y + Math.sin(a) * game.park.r };
+  // just after a catch it may sit a hair off the ring; it drifts onto it within a fraction of a second
+  const r = game.park.r + (game.park.rOff || 0) * Math.exp(-6 * Math.max(0, t - game.legStart));
+  return { x: b.x + Math.cos(a) * r, y: b.y + Math.sin(a) * r };
 }
 
 // ---------- Systems and legs ----------
@@ -368,21 +372,9 @@ function endFlight() {
   game.lastResult = { result: f.result, why: f.why, x: f.x, y: f.y, age: f.age, caught: f.caught.length };
   if (f.result === 'captured') {
     sfx('capture');
-    // The probe eases into the ring: its distance and its speed round the planet blend to the
-    // ring's over SETTLE seconds, carrying on the way it was flying, so there's no snap.
-    const tp = bodyPos(f.to, f.t);
-    const v = bodyVel(game.level.bodies, f.to, f.t);
-    const dx = f.x - tp.x;
-    const dy = f.y - tp.y;
-    const r0 = Math.hypot(dx, dy);
-    const w0 = (dx * (f.vy - v.y) - dy * (f.vx - v.x)) / (r0 * r0); // angular speed, signed
-    const vr0 = (dx * (f.vx - v.x) + dy * (f.vy - v.y)) / r0; // speed in or out
-    const dir = w0 >= 0 ? 1 : -1;
-    const p = park(game.level, f.to);
-    const wc = (dir * 2 * Math.PI) / p.period;
-    // a fast arrival takes longer to settle, so it slows into the ring rather than swerving
-    const T = Math.min(2.2, Math.max(SETTLE, 0.35 * Math.abs(w0 / wc)));
-    game.capture = { t: 0, T, r0, vr0, a: Math.atan2(dy, dx), w0, wc, dir };
+    // The probe eases into the ring (physics.js settlePlan), carrying on the way it was flying.
+    game.capture = settlePlan(game.level, f.to, f.t, f.x, f.y, f.vx, f.vy);
+    game.capture.acc = 0;
     game.mode = 'capture';
     return;
   }
@@ -422,27 +414,16 @@ function updateRewind(dt) {
   }
 }
 
-const SETTLE = 1.0; // the shortest settle; a faster arrival takes up to 2.2 s
-const smooth = (k) => k * k * (3 - 2 * k);
-const SETTLE_R = 0.7; // the distance settles in the first 70% of it, so the end is a clean circle
-function settleAt(c) {
-  const k = smooth(Math.min(1, c.t / c.T));
-  const u = Math.min(1, c.t / (c.T * SETTLE_R));
-  const ring = park(game.level, legOf().to).r;
-  // the distance follows a Hermite curve: it starts at the probe's own speed in or out and ends
-  // level on the ring, so the path curves in with no kink
-  const h10 = u * u * u - 2 * u * u + u;
-  const r = c.r0 + (ring - c.r0) * smooth(u) + h10 * c.vr0 * c.T * SETTLE_R;
-  return { r, w: c.w0 + (c.wc - c.w0) * k };
-}
 function updateCapture(dt) {
   const c = game.capture;
-  c.t += dt;
-  c.a += settleAt(c).w * dt;
-  game.clock += dt;
-  const p = probeWorld();
-  game.trail.push(p.x, p.y, 1);
-  if (c.t >= c.T) finishCapture();
+  c.acc += dt / DT;
+  while (c.acc >= 1 - 1e-6 && !c.done) {
+    c.acc -= 1;
+    settleStep(game.level, c);
+  }
+  game.clock = c.t;
+  game.trail.push(c.x, c.y, 1);
+  if (c.done) finishCapture();
 }
 
 function finishCapture() {
@@ -451,19 +432,21 @@ function finishCapture() {
   const tb = game.level.bodies[leg.to];
   const p = park(game.level, leg.to);
   const a = c.a; // where the settle ended
+  const tp = bodyPos(leg.to);
+  const rOff = Math.hypot(c.x - tp.x, c.y - tp.y) - tb.ring; // within a hair of the ring; drifts onto it
   game.flight = null;
   game.capture = null;
   game.trail = [];
   game.parkBody = leg.to;
   if (game.leg + 1 >= game.level.legs.length) {
-    game.park = { r: tb.ring, period: p.period, phase: a, dir: c.dir };
+    game.park = { r: tb.ring, period: p.period, phase: a, dir: c.dir, rOff };
     game.legStart = game.clock;
     finishSystem();
     return;
   }
   game.leg++;
   game.legStart = game.clock;
-  game.park = { r: p.r, period: p.period, phase: a, dir: c.dir };
+  game.park = { r: p.r, period: p.period, phase: a, dir: c.dir, rOff };
   beginLeg();
   buildLegDots();
 }
@@ -625,7 +608,6 @@ function draw() {
   drawMotes();
   drawGhost();
   drawTrail();
-  drawAim();
   drawProbe();
   drawBursts();
 }
@@ -796,36 +778,6 @@ function drawTrail() {
   }
 }
 
-function drawAim() {
-  if (game.mode !== 'idle') return;
-  const p = probeParked();
-  const a = orbitAngle();
-  const dir = Math.atan2(Math.cos(a) * game.park.dir, -Math.sin(a) * game.park.dir);
-  drawAimLine(p.x, p.y, dir, input.power, 0.55);
-}
-
-// The heading: a thin line out of the probe along the way it's moving (where it goes if you fire
-// now), longer with more power, and a small dot at its end. Where gravity then takes it is for you
-// to read.
-function drawAimLine(wx, wy, angle, power, alpha) {
-  const x = sx(wx);
-  const y = sy(wy);
-  const len = 10 + power * 40;
-  const ex = x + Math.cos(angle) * len;
-  const ey = y + Math.sin(angle) * len;
-  ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.8})`;
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x, y);
-  ctx.lineTo(ex, ey);
-  ctx.stroke();
-  ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-  ctx.beginPath();
-  ctx.arc(ex, ey, 2.4, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 function timeoutDim() {
   const f = game.flight;
   if (!f || game.mode !== 'fly') return 1;
@@ -834,14 +786,36 @@ function timeoutDim() {
 
 function probeWorld() {
   if (game.mode === 'fly' && game.flight) return { x: game.flight.x, y: game.flight.y };
-  if (game.mode === 'capture' && game.capture) {
-    const c = game.capture;
-    const tp = bodyPos(legOf().to);
-    const { r } = settleAt(c);
-    return { x: tp.x + Math.cos(c.a) * r, y: tp.y + Math.sin(c.a) * r };
-  }
+  if (game.mode === 'capture' && game.capture) return { x: game.capture.x, y: game.capture.y };
   if (game.mode === 'rewind') return null;
   return probeParked();
+}
+
+// Which way the probe points: along its orbit while parked, along its velocity in flight, and
+// along its turn round the planet while it eases into a ring.
+function probeHeading() {
+  if (game.mode === 'fly' && game.flight) return Math.atan2(game.flight.vy, game.flight.vx);
+  if (game.mode === 'capture' && game.capture) return Math.atan2(game.capture.vy, game.capture.vx);
+  const a = orbitAngle();
+  return a + (game.park.dir * Math.PI) / 2;
+}
+
+// A flame out of the ship: behind it when the boosters push, ahead of it when the brake fires.
+function drawFlame(x, y, ux, uy, len, width, alpha) {
+  const flick = 0.85 + 0.15 * Math.sin(time * 47) + 0.08 * Math.sin(time * 83);
+  const ex = x + ux * len * flick;
+  const ey = y + uy * len * flick;
+  const g = ctx.createLinearGradient(x, y, ex, ey);
+  g.addColorStop(0, `rgba(255, 236, 190, ${alpha})`);
+  g.addColorStop(0.35, `rgba(${AMBER}, ${alpha * 0.9})`);
+  g.addColorStop(1, `rgba(255, 90, 40, 0)`);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(x - uy * width, y + ux * width);
+  ctx.lineTo(ex, ey);
+  ctx.lineTo(x + uy * width, y - ux * width);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawProbe() {
@@ -850,7 +824,6 @@ function drawProbe() {
   const x = sx(p.x);
   const y = sy(p.y);
   const dim = timeoutDim();
-  const pulse = game.mode === 'idle' ? 1 + 0.25 * Math.sin(time * 4) : 1;
   const off = x < -4 || x > W + 4 || y < -4 || y > H + 4;
   if (off) {
     // an arrow at the edge, pointing to where it went
@@ -866,41 +839,57 @@ function drawProbe() {
     ctx.fill();
     return;
   }
-  const r = Math.max(2.6, 6 * view.s);
-  const g = ctx.createRadialGradient(x, y, 0, x, y, r * 5 * pulse);
-  g.addColorStop(0, `rgba(220, 245, 255, ${0.9 * dim})`);
-  g.addColorStop(0.3, `rgba(${COOL}, ${0.35 * dim})`);
+  const L = Math.max(10, 18 * view.s); // the ship's length on screen
+  const h = probeHeading();
+  const ux = Math.cos(h);
+  const uy = Math.sin(h);
+  // engine flames: the boosters for a moment after firing, the brake ahead of the nose
+  const f = game.flight;
+  if (f && game.mode === 'fly') {
+    if (f.age < 0.45) drawFlame(x - ux * L * 0.4, y - uy * L * 0.4, -ux, -uy, L * (1.1 + f.power) * (1 - f.age / 0.45), L * 0.2, dim);
+    if (f.brakeAge >= 0 && f.age - f.brakeAge < 0.4) {
+      const k = 1 - (f.age - f.brakeAge) / 0.4;
+      drawFlame(x + ux * L * 0.5, y + uy * L * 0.5, ux, uy, L * 1.4 * k, L * 0.16, k * dim);
+    }
+  }
+  // a soft glow, so it reads against the dark
+  const g = ctx.createRadialGradient(x, y, 0, x, y, L * 1.3);
+  g.addColorStop(0, `rgba(${COOL}, ${0.3 * dim})`);
   g.addColorStop(1, `rgba(${COOL}, 0)`);
   ctx.fillStyle = g;
   ctx.beginPath();
-  ctx.arc(x, y, r * 5 * pulse, 0, Math.PI * 2);
+  ctx.arc(x, y, L * 1.3, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = `rgba(255,255,255,${dim})`;
+  // the hull: a slim dart with swept fins, nose forward
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(h);
+  ctx.globalAlpha = dim;
+  ctx.fillStyle = '#eaf6ff';
   ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.moveTo(L * 0.55, 0);
+  ctx.lineTo(-L * 0.4, L * 0.34);
+  ctx.lineTo(-L * 0.22, 0);
+  ctx.lineTo(-L * 0.4, -L * 0.34);
+  ctx.closePath();
   ctx.fill();
-  // the brake: a small flame pip ahead of the probe while it's unused; a flare when fired
-  const f = game.flight;
-  if (f && game.mode === 'fly') {
-    const sp = Math.hypot(f.vx, f.vy) || 1;
-    const ux = f.vx / sp;
-    const uy = f.vy / sp;
-    if (f.brakeLeft > 0) {
-      const big = game.slowmo > 0 ? 1.8 + 0.6 * Math.sin(time * 18) : 1;
-      ctx.fillStyle = `rgba(${AMBER}, ${0.75 * dim})`;
-      ctx.beginPath();
-      ctx.arc(x + ux * r * 2.6, y + uy * r * 2.6, r * 0.55 * big, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (f.brakeAge >= 0 && f.age - f.brakeAge < 0.35) {
-      const k = 1 - (f.age - f.brakeAge) / 0.35;
-      ctx.strokeStyle = `rgba(${AMBER}, ${k})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(x + ux * r, y + uy * r);
-      ctx.lineTo(x + ux * r * (3 + 5 * k), y + uy * r * (3 + 5 * k));
-      ctx.stroke();
-    }
+  // a cyan cockpit stripe
+  ctx.fillStyle = '#7fd8ff';
+  ctx.beginPath();
+  ctx.moveTo(L * 0.34, 0);
+  ctx.lineTo(L * 0.02, L * 0.08);
+  ctx.lineTo(L * 0.02, -L * 0.08);
+  ctx.closePath();
+  ctx.fill();
+  // the brake, while it's unused: a small amber light at the nose (pulsing in its first lesson)
+  if (f && game.mode === 'fly' && f.brakeLeft > 0) {
+    const big = game.slowmo > 0 ? 1.7 + 0.6 * Math.sin(time * 18) : 1;
+    ctx.fillStyle = `rgba(${AMBER}, 0.9)`;
+    ctx.beginPath();
+    ctx.arc(L * 0.62, 0, Math.max(1.4, L * 0.09) * big, 0, Math.PI * 2);
+    ctx.fill();
   }
+  ctx.restore();
 }
 
 function drawBursts() {
@@ -987,9 +976,18 @@ ui.boost.addEventListener('pointerup', endBar);
 ui.boost.addEventListener('pointercancel', endBar);
 ui.boost.addEventListener('lostpointercapture', endBar);
 
+// The bar's zones: slate for gentle, green, orange, and red for the last tenth (style.css matches).
+function zoneColour(p) {
+  if (p >= 0.9) return '#ff5a4f';
+  if (p >= 0.7) return '#ffa64d';
+  if (p >= 0.3) return '#4fd18b';
+  return '#9fb3cf';
+}
+
 function syncBoost() {
   const pct = Math.round(input.power * 100);
   ui.boost.style.setProperty('--power', input.power);
+  ui.boost.style.setProperty('--zone-colour', zoneColour(input.power));
   ui.boost.setAttribute('aria-valuenow', String(pct));
   ui.boostValue.textContent = `${pct}%`;
   ui.boost.classList.toggle('is-off', game.mode !== 'idle');
@@ -1195,6 +1193,8 @@ window.__orbit = {
   tap: (y = 100) => onDown({ isPrimary: true, clientY: y }),
   setPower,
   orbitAngle,
+  probeHeading,
+  zoneColour,
   rewindByHand,
   set manual(v) {
     manual = v;
