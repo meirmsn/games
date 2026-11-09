@@ -253,7 +253,7 @@ test('orbit AC-4: a capture parks the probe on the ring and the next leg begins'
   await context.close();
 });
 
-test('orbit AC-5: a failed flight rewinds within 1 s, with a ghost, and no lives lost; R in flight counts as a failure', async () => {
+test('orbit AC-5: a failed flight rewinds within 1 s, with a ghost, and spends one probe; R in flight counts as a failure', async () => {
   const { context, page } = await open();
   await manual(page);
   // from the left of the first planet, circling as it starts, the probe heads down out of the field
@@ -871,6 +871,19 @@ test('orbit AC-25: a system has 10 probes; when they are spent a card says so, a
   assert.equal(await probes(), '0');
   assert.equal(await page.locator('[data-screen="out"]').isVisible(), true, 'the out-of-probes card');
   assert.match(await page.locator('[data-out-text]').textContent(), /10 probes/);
+  // the state table's row: only the out card, and the probe back at the leg's start
+  const row = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const shown = (sel) => {
+      const el = document.querySelector(sel);
+      return !el.hidden && !el.classList.contains('fade');
+    };
+    const p = o.probeWorld();
+    const b = g.level.bodies[g.level.legs[g.leg].from];
+    return { intro: shown('[data-screen="intro"]'), done: shown('[data-screen="done"]'), atStart: g.clock === g.legStart, onRing: Math.abs(Math.hypot(p.x - b.x, p.y - b.y) - b.ring) < 1e-6 };
+  });
+  assert.deepEqual(row, { intro: false, done: false, atStart: true, onRing: true });
   await page.evaluate(() => window.__orbit.fire(0.5));
   assert.equal((await state(page)).mode, 'out', 'no eleventh launch');
   await page.click('[data-out-retry]');
