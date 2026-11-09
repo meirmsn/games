@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Reef</title>
+    <meta name="description" content="Reef: eat the golden, green and pink fish, dodge the predators with marks, and dive deeper." />
+    <meta name="theme-color" content="#3593cc" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="sea" aria-label="An animated reef with fish swimming"></canvas>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <section class="card start" data-screen="start" hidden>
+      <button class="play" type="button" data-play>Start</button>
+      <form class="code" data-code-form autocomplete="off">
+        <label for="level-code">or enter a level code</label>
+        <div class="code-row">
+          <input id="level-code" data-code maxlength="6" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="CODE" />
+          <button class="go" type="submit">Go</button>
+        </div>
+        <p class="code-msg" data-code-msg aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section class="card" data-screen="over" hidden>
+      <h2 data-over-title>Eaten!</h2>
+      <p class="score-line"><span data-final-score>0</span> points</p>
+      <p class="detail" data-final-detail></p>
+      <div class="level-code" data-level-code>
+        <span class="level-code-label" data-level-code-label>Level code</span>
+        <strong class="level-code-value" data-level-code-value></strong>
+      </div>
+      <button class="play" type="button" data-again>Play again</button>
+    </section>
+
+    <div class="toast" data-toast aria-live="polite" hidden>
+      <p class="toast-title" data-toast-title></p>
+      <p class="toast-text" data-toast-text></p>
+    </div>
+  </body>
+</html>

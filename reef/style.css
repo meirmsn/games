@@ -1,0 +1,311 @@
+/* Reef: the canvas fills the screen; cards and toasts float over it. */
+
+body {
+  background: #3593cc;
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#sea {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active {
+  transform: scale(0.92);
+}
+
+.mute:focus-visible,
+.play:focus-visible,
+.go:focus-visible,
+.code input:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.card {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 28px 24px 24px;
+  text-align: center;
+  border-radius: 24px;
+  background: rgb(10 40 70 / 58%);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgb(0 20 40 / 30%);
+  animation: rise 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.card[hidden],
+.toast[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 36px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #ffd23f;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 18%);
+}
+
+.card p {
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.detail {
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.score-line {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.play {
+  min-width: 160px;
+  min-height: 52px;
+  margin: 8px 0 4px;
+  padding: 0 28px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 700;
+  color: #3b2a00;
+  background: #ffd23f;
+  box-shadow: 0 4px 0 #d9a800;
+  cursor: pointer;
+  transition: transform 100ms ease, box-shadow 100ms ease;
+}
+
+.play:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #d9a800;
+}
+
+.toast {
+  position: fixed;
+  z-index: 4;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 124px);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 12px 20px;
+  text-align: center;
+  border-radius: 18px;
+  background: rgb(10 40 70 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  animation: drop 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.toast.out {
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.toast p {
+  margin: 0;
+}
+
+.toast-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #ffd23f;
+}
+
+.toast-text {
+  margin-top: 4px !important;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -42%);
+  }
+}
+
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .toast {
+    animation: none;
+  }
+}
+
+/* The start card sits low, so the reef stays in view above it. */
+.card.start {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  padding: 20px 20px 16px;
+  animation-name: rise-low;
+}
+
+.card.start .play {
+  width: 100%;
+  min-height: 60px;
+  font-size: 24px;
+  margin: 0 0 14px;
+}
+
+.code label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.code input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-radius: 14px;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgb(0 20 40 / 35%);
+}
+
+.code input::placeholder {
+  color: rgb(255 255 255 / 40%);
+}
+
+.go {
+  min-width: 64px;
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  color: #fff;
+  background: rgb(255 255 255 / 22%);
+  cursor: pointer;
+}
+
+.code-msg {
+  min-height: 1.4em;
+  margin: 8px 0 0 !important;
+  font-size: 14px;
+}
+
+.code.wrong .code-row {
+  animation: shake 360ms ease;
+}
+
+.level-code {
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgb(0 20 40 / 35%);
+}
+
+.level-code-label {
+  display: block;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.level-code-value {
+  display: block;
+  font-size: 34px;
+  letter-spacing: 0.18em;
+  color: #ffd23f;
+}
+
+@keyframes rise-low {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+}
+
+@keyframes shake {
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+.level-code-value[hidden] {
+  display: none;
+}
