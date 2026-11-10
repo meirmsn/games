@@ -429,17 +429,25 @@ test("pwa-updates AC-9: the notice is drawn with the site's theme tokens, in lig
     const r = await page.evaluate(() => {
       const el = document.querySelector('[data-update]');
       const probe = document.createElement('div');
-      probe.style.background = 'var(--card)';
-      probe.style.color = 'var(--card-foreground)';
+      Object.assign(probe.style, {
+        background: 'var(--card)',
+        color: 'var(--card-foreground)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        boxShadow: 'var(--shadow)',
+        padding: 'var(--space-2) var(--space-2) var(--space-2) var(--space-4)',
+        gap: 'var(--space-4)',
+      });
       document.body.appendChild(probe);
       const want = getComputedStyle(probe);
       const got = getComputedStyle(el);
-      const out = { bg: [got.backgroundColor, want.backgroundColor], fg: [got.color, want.color] };
+      const keys = ['backgroundColor', 'color', 'borderTopColor', 'borderTopLeftRadius', 'boxShadow', 'paddingTop', 'paddingLeft', 'columnGap'];
+      const out = Object.fromEntries(keys.map((k) => [k, [got[k], want[k]]]));
+      out.weight = [getComputedStyle(el.querySelector('p')).fontWeight, getComputedStyle(document.body).fontWeight];
       probe.remove();
       return out;
     });
-    assert.equal(r.bg[0], r.bg[1], `${scheme}: background is --card`);
-    assert.equal(r.fg[0], r.fg[1], `${scheme}: text is --card-foreground`);
+    for (const [k, [got, want]] of Object.entries(r)) assert.equal(got, want, `${scheme}: ${k} comes from the theme`);
   }
   const light = await page.evaluate(() => getComputedStyle(document.querySelector('[data-update]')).backgroundColor);
   await page.emulateMedia({ colorScheme: 'light' });
