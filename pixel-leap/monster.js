@@ -562,3 +562,92 @@ export function makeCanvas(w, h) {
   c.height = h;
   return c;
 }
+
+// Line art (Scribble's rule): a picture redrawn as a pen drawing on paper. Its shape is filled with
+// the paper's colour and traced with an ink line `r` px thick; its dark parts and the edges between
+// its colours (eyes, mouth, a slime's face) are drawn in the same ink; nothing else keeps colour.
+// boil (0, 1 or 2) picks one of three slightly different wobbles of the line, so drawn in turn the
+// line boils like a hand-drawn cartoon's.
+export const BOILS = 3;
+export function toLineArt(src, { ink = '#1b1b1f', paper = '#fbf8ef', r = 5, boil = 0 } = {}) {
+  const w = src.width;
+  const h = src.height;
+  const d = src.getContext('2d').getImageData(0, 0, w, h).data;
+  const inside = new Uint8Array(w * h);
+  const lum = new Float32Array(w * h);
+  const wob = 0.55 + r * 0.09;
+  for (let y = 0; y < h; y++) {
+    const dx = Math.round(wob * Math.sin(y * 0.19 + boil * 2.3));
+    for (let x = 0; x < w; x++) {
+      const dy = Math.round(wob * Math.sin(x * 0.23 + boil * 1.7 + 1));
+      const sx = Math.min(w - 1, Math.max(0, x + dx));
+      const sy = Math.min(h - 1, Math.max(0, y + dy));
+      const k = (sy * w + sx) * 4;
+      const i = y * w + x;
+      inside[i] = d[k + 3] >= 110 ? 1 : 0;
+      lum[i] = d[k] * 0.3 + d[k + 1] * 0.59 + d[k + 2] * 0.11;
+    }
+  }
+  // Erode the shape by r (a min filter, rows then columns): what's inside but not in the eroded
+  // shape is the outline.
+  const er1 = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let ok = 1;
+      for (let k = -r; k <= r && ok; k++) {
+        const xx = x + k;
+        if (xx < 0 || xx >= w || !inside[y * w + xx]) ok = 0;
+      }
+      er1[y * w + x] = ok;
+    }
+  }
+  const out = makeCanvas(w, h);
+  const og = out.getContext('2d');
+  const img = og.createImageData(w, h);
+  const o = img.data;
+  const [ir, ig, ib] = hex(ink);
+  const [pr, pg, pb] = hex(paper);
+  const feat = (i, x, y) => lum[i] < 45 || (x + 1 < w && inside[i + 1] && Math.abs(lum[i] - lum[i + 1]) > 55) || (y + 1 < h && inside[i + w] && Math.abs(lum[i] - lum[i + w]) > 55);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!inside[i]) continue;
+      let eroded = 1;
+      for (let k = -r; k <= r && eroded; k++) {
+        const yy = y + k;
+        if (yy < 0 || yy >= h || !er1[yy * w + x]) eroded = 0;
+      }
+      // A feature line: dark, or an edge between colours, thickened by a pixel.
+      const line = !eroded || feat(i, x, y) || (x > 0 && inside[i - 1] && feat(i - 1, x - 1, y)) || (y > 0 && inside[i - w] && feat(i - w, x, y - 1));
+      const q = i * 4;
+      o[q] = line ? ir : pr;
+      o[q + 1] = line ? ig : pg;
+      o[q + 2] = line ? ib : pb;
+      o[q + 3] = 255;
+    }
+  }
+  og.putImageData(img, 0, 0);
+  return out;
+}
+// The monster as Scribble draws it: each pose (POSES) at pxPerTile, in BOILS wobbles, made when
+// first asked for. Returns { frame(name, boil), w, h, footX, footY }.
+export function lineArt(img, m, pxPerTile, { ears = false, ink, paper } = {}) {
+  const s = scaleFor(m, pxPerTile);
+  const w = Math.ceil(pxPerTile * 4);
+  const h = Math.ceil(pxPerTile * 3.6);
+  const footX = Math.floor(w / 2);
+  const footY = h - 2;
+  const r = Math.max(2, Math.round(pxPerTile / 14));
+  const made = {};
+  const frame = (name, boil) => {
+    const key = `${name}:${boil}`;
+    if (!made[key]) {
+      const c = makeCanvas(w, h);
+      const g = c.getContext('2d');
+      drawVector(g, img, m, footX, footY, s, { ...(POSES[name] || POSES.stand0), ears }, 1.15);
+      made[key] = toLineArt(c, { ink, paper, r, boil });
+    }
+    return made[key];
+  };
+  return { frame, w, h, footX, footY };
+}

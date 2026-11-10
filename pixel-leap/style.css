@@ -386,6 +386,10 @@ body.building .deck {
   background: #f4f0fb;
 }
 
+/* A row the card leaves out (lives left, after a game over). */
+.tally-rows div[hidden] {
+  display: none;
+}
 .tally-rows dt {
   opacity: 0.7;
 }
