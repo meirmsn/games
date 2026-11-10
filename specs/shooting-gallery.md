@@ -19,6 +19,20 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's fourteenth playtest (owner, 2026-11-10)
+
+Where they differ from the playtests below, these win.
+
+- **Flat paintballs.** "The balls look really bad with those lines … perhaps just make them flat."
+  Every paintball (in the tray, in the pouch, in flight) is one flat colour with a thin, darker rim;
+  the eighth playtest's shading, seam, specks and gloss are gone.
+- **Rubber bands, not lines.** "on the slingshot it's missing some details so that it doesn't look
+  like the two rubber bands are just simple lines with rounded edges … show me three alternatives."
+  Claude showed an amber latex tube, a flat red rubber strip and a twisted cord; the owner picked the
+  flat strip ("B"). Each band is a strip of dark red rubber, wide at the fork and narrowing toward the
+  pouch and as it stretches, lit along one edge and shaded along the other, outlined, and tied on at
+  the fork with a wrap of leather.
+
 ### The owner's thirteenth playtest (owner, 2026-11-10)
 
 Where they differ from the playtests below, these win.
@@ -544,8 +558,8 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-34** No pink shows in a frenzy's marquee, edges or banner, nor on the frenzy target, which
   wears a chasing ring of at least 12 marquee bulbs set into its white border, smaller than
   the frenzy marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
-  2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar and every
-  paintball is drawn as a textured shell — `tests/shooting-gallery.test.mjs`.
+  2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar —
+  `tests/shooting-gallery.test.mjs`.
 - **AC-35** The slingshot can be pulled and fired only while the round's clock runs: once time is
   up, between rounds, on the over card and in the intro a pull does nothing, and a pull held as time
   runs out is dropped and fires nothing — `tests/shooting-gallery.test.mjs`.
@@ -558,6 +572,8 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-38** Each round draws which way every lane runs, so across games the lanes' ways differ and
   change between rounds; the frenzy target's time spreads over more than 4 s, it comes from both
   sides and in more than one lane — `tests/shooting-gallery.test.mjs`.
+- **AC-39** Every paintball is one flat colour; the slingshot's two bands are flat strips of red
+  rubber — `tests/shooting-gallery.test.mjs`.
 
 ## Core flow
 

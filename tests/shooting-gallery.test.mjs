@@ -1353,7 +1353,7 @@ test('shooting-gallery AC-33: the score, the signs and the cards are lettered in
   await context.close();
 });
 
-test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears marquee bulbs in its white border; the alarms stand out without blaring; the quota’s brass and the paintballs are textured', async () => {
+test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears marquee bulbs in its white border; the alarms stand out without blaring; the quota’s brass is textured', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1730,5 +1730,56 @@ test('shooting-gallery AC-38: no two games run alike: each round draws which way
   assert.ok(offs.every((o) => Math.abs(o) >= 30 && Math.abs(o) <= 90), `round 1's first target starts 30–90 units off the middle: ${offs.map((o) => o.toFixed(0))}`);
   assert.equal(new Set(offs.map(Math.sign)).size, 2, 'on either side');
   if (r.n === 5) assert.ok(distinct((x) => x.r2.lane) >= 2, 'round 2: more than one middle lane');
+  await context.close();
+});
+
+test('shooting-gallery AC-39: the paintballs are flat, one colour each; the slingshot’s bands are flat strips of red rubber', async () => {
+  const { context, page } = await open();
+  await ready(page);
+  const r = await page.evaluate(async () => {
+    const g = window.__gallery;
+    g.game.hopper = 6;
+    const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    await frame();
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const dpr = cv.width / innerWidth;
+    const { k, ox, oy } = g.stage();
+    // The first ball in the tray: every pixel well inside its rim is the same colour.
+    const b = g.hudBounds().hopperBall;
+    const inner = [];
+    for (let dx = -0.6; dx <= 0.6; dx += 0.15) {
+      for (let dy = -0.6; dy <= 0.6; dy += 0.15) {
+        if (dx * dx + dy * dy > 0.36) continue;
+        inner.push(Array.from(c.getImageData(Math.round((b.x + dx * b.r) * dpr), Math.round((b.y + dy * b.r) * dpr), 1, 1).data).slice(0, 3));
+      }
+    }
+    const spread = Math.max(...[0, 1, 2].map((ch) => Math.max(...inner.map((p) => p[ch])) - Math.min(...inner.map((p) => p[ch]))));
+    // A band, halfway along, pulled: red rubber, and narrower than at rest.
+    const bandAt = (pull) => {
+      g.aim.active = pull > 0;
+      g.setPull(0, pull);
+      return frame().then(() => {
+        const p = g.pouch();
+        const sl = g.hudBounds().sling;
+        // The left band runs from the left prong to the pouch's left end; its middle, in units.
+        const fx = (sl.x - ox) / k - (g.stage().orient === 'landscape' ? 30 : 40);
+        const fy = (sl.y - oy) / k - (g.stage().orient === 'landscape' ? 20 : 28) + 4;
+        const mx = (fx + p.x - 11) / 2;
+        const my = (fy + p.y) / 2;
+        const px = Array.from(c.getImageData(Math.round((mx * k + ox) * dpr), Math.round((my * k + oy) * dpr), 1, 1).data).slice(0, 3);
+        return { px, drawn: g.bandsDrawn() };
+      });
+    };
+    const rest = await bandAt(0);
+    const pulled = await bandAt(g.pullRange().y);
+    return { spread, n: inner.length, rest, pulled, band: g.BAND };
+  });
+  assert.ok(r.n > 10 && r.spread <= 6, `the ball is one flat colour: its pixels differ by up to ${r.spread} (of ${r.n})`);
+  assert.equal(r.rest.drawn, 2, 'two bands');
+  for (const s of [r.rest, r.pulled]) {
+    const [R, G, B] = s.px;
+    assert.ok(R > 2 * G && R > 2 * B && R < 200, `red rubber at the band's middle, not the old brown: ${s.px}`);
+  }
   await context.close();
 });

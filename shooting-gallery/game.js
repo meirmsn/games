@@ -1721,7 +1721,7 @@ function drawHud() {
     ctx.arc(x, H.hopper.y, H.hopper.r, 0, Math.PI * 2);
     const ready = game.frenzy > 0 || i < game.hopper;
     if (!ready) continue;
-    paintball(x, H.hopper.y, H.hopper.r, PALETTE[(game.colour + i) % PALETTE.length], i * 1.7);
+    paintball(x, H.hopper.y, H.hopper.r, PALETTE[(game.colour + i) % PALETTE.length]);
   }
 }
 
@@ -1818,6 +1818,48 @@ function drawWoodLimbs(limbs) {
     }
   }
 }
+// A band: a flat strip of dark red rubber, wide at the fork and narrowing toward the pouch, narrower
+// still as it stretches; its face lit along one edge and shaded along the other, outlined, and tied
+// on at the fork with a wrap of leather.
+const BAND = { rubber: '#7a2418', edge: '#3a0e08', wrap: '#3b2412' };
+let bandsDrawn = 0; // for the tests
+function drawBand(x1, y1, x2, y2, rest) {
+  bandsDrawn++;
+  const len = Math.hypot(x2 - x1, y2 - y1);
+  const stretch = Math.max(1, len / Math.max(1, rest));
+  const ang = Math.atan2(y2 - y1, x2 - x1);
+  const nx = -Math.sin(ang);
+  const ny = Math.cos(ang);
+  const w1 = 9 / Math.sqrt(stretch);
+  const w2 = 5 / Math.sqrt(stretch);
+  const quad = (o1, o2) => {
+    ctx.beginPath();
+    ctx.moveTo(x1 + nx * w1 * o1, y1 + ny * w1 * o1);
+    ctx.lineTo(x2 + nx * w2 * o1, y2 + ny * w2 * o1);
+    ctx.lineTo(x2 + nx * w2 * o2, y2 + ny * w2 * o2);
+    ctx.lineTo(x1 + nx * w1 * o2, y1 + ny * w1 * o2);
+    ctx.closePath();
+  };
+  quad(-0.5, 0.5);
+  ctx.fillStyle = BAND.rubber;
+  ctx.fill();
+  ctx.strokeStyle = BAND.edge;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  quad(-0.5, -0.1);
+  ctx.fillStyle = 'rgba(255, 150, 120, 0.35)';
+  ctx.fill();
+  quad(0.3, 0.5);
+  ctx.fillStyle = 'rgba(30, 5, 0, 0.35)';
+  ctx.fill();
+  ctx.fillStyle = BAND.wrap;
+  ctx.save();
+  ctx.translate(x1, y1);
+  ctx.rotate(ang);
+  roundRect(0, -w1 / 2 - 1.5, 5, w1 + 3, 1.5);
+  ctx.fill();
+  ctx.restore();
+}
 function drawSlingshot() {
   const g = slingGeometry();
   const x = L.slingX;
@@ -1843,15 +1885,7 @@ function drawSlingshot() {
   for (const sx of [-1, 1]) roundRect(x + sx * g.spread - g.limb * 0.45, g.forkY + 2, g.limb * 0.9, 6, 2);
   ctx.fill();
   // Both bands in front of the wood, from the prongs to the pouch's ends.
-  ctx.lineCap = 'round';
-  ctx.strokeStyle = '#6b4424';
-  ctx.lineWidth = 6;
-  for (const sx of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(x + sx * g.spread, g.forkY + 4);
-    ctx.lineTo(p.x + sx * 11, p.y);
-    ctx.stroke();
-  }
+  for (const sx of [-1, 1]) drawBand(x + sx * g.spread, g.forkY + 4, p.x + sx * 11, p.y, Math.hypot(g.spread - 11, L.slingY - g.forkY - 4));
   // The leather pouch, and the ball in it.
   const lg = ctx.createLinearGradient(0, p.y - 6, 0, p.y + 9);
   lg.addColorStop(0, '#6b4424');
@@ -1922,54 +1956,26 @@ function drawBalls() {
     }
     const [x, y] = at(p);
     ctx.globalAlpha = 1;
-    paintball(x, y, r, b.colour, p * 9);
+    paintball(x, y, r, b.colour);
   }
 }
 
-// A paintball: a gelatin shell, shaded round with a darker rim, its seam running round the middle,
-// a soft gloss and a few faint specks, so it looks like a real ball rather than a flat dot.
+// A paintball: flat, one colour, with a thin darker rim so it reads against paint of its own colour.
 let paintballsDrawn = 0; // for the tests
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
   const ch = (v) => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f);
   return `rgb(${ch(n >> 16)}, ${ch((n >> 8) & 255)}, ${ch(n & 255)})`;
 }
-function paintball(x, y, r, colour, spin = 0.5) {
+function paintball(x, y, r, colour) {
   paintballsDrawn++;
-  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.1, x, y, r);
-  g.addColorStop(0, shade(colour, 0.35));
-  g.addColorStop(0.55, colour);
-  g.addColorStop(1, shade(colour, -0.45));
-  ctx.fillStyle = g;
+  ctx.fillStyle = colour;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.clip();
-  // The seam: a thin dark ring seen at a slant, turning as the ball flies.
-  ctx.strokeStyle = shade(colour, -0.55);
-  ctx.globalAlpha = 0.3;
-  ctx.lineWidth = Math.max(0.5, r * 0.07);
-  ctx.beginPath();
-  ctx.ellipse(x, y, r * 1.02, r * (0.28 + 0.12 * Math.sin(spin)), 0.5 + spin, 0, Math.PI * 2);
+  ctx.strokeStyle = shade(colour, -0.4);
+  ctx.lineWidth = Math.max(0.6, r * 0.12);
   ctx.stroke();
-  // Faint specks in the shell.
-  if (r >= 4) {
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = ctx.createPattern(wearPattern(), 'repeat');
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
-  }
-  ctx.restore();
-  // A soft gloss, not a flat white dot.
-  const hl = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, 0, x - r * 0.38, y - r * 0.42, r * 0.45);
-  hl.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
-  hl.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  ctx.fillStyle = hl;
-  ctx.beginPath();
-  ctx.arc(x - r * 0.38, y - r * 0.42, r * 0.45, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 function label(text, x, y, px, align = 'center', color = '#fff') {
@@ -2151,6 +2157,7 @@ function draw() {
   paintClipped = 0;
   signsWorn = 0;
   paintballsDrawn = 0;
+  bandsDrawn = 0;
   brassDrawn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
@@ -2442,7 +2449,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
@@ -2494,6 +2501,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           counterTop: c(0, L.C).y,
           timer: c(H.timer.x + H.timer.w, H.timer.y + H.timer.h),
           hopper: c(H.hopper.x + H.hopper.r * (2.6 * (HOPPER - 1) + 2), H.hopper.y + H.hopper.r),
+          hopperBall: { ...c(H.hopper.x + H.hopper.r, H.hopper.y), r: H.hopper.r * k },
           timerBadge: { ...c(H.timer.x, H.timer.y), w: H.timer.w * k, h: H.timer.h * k, font: H.timer.font * k },
           scoreFont: H.score.font * k,
           sling: c(L.slingX, L.slingY),
