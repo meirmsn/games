@@ -239,6 +239,6 @@ export const MISSIONS = [
       { sail: 'marina1' },
       { walk: 'I' },
     ],
-    par: 86.9,
+    par: 90.9,
   },
 ];

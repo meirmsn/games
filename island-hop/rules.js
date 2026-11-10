@@ -178,6 +178,7 @@ export function createMission(index, { phase = 'fly' } = {}) {
     mission: index,
     phase,
     t: 0,
+    tt: 0, // the traffic's clock
     fly: 0,
     clock: 0,
     started: false,
@@ -241,12 +242,13 @@ export function step(s, dt, stick = null) {
 
 function tick(s, dt, stick) {
   s.t += dt;
-  if (s.phase === 'card' || s.phase === 'done') return;
   if (s.phase === 'fly') {
     s.fly += dt;
     if (s.fly >= RULES.flyover) s.phase = 'play';
     return;
   }
+  s.tt += dt; // traffic sails behind the card and in play; it waits for the fly-over
+  if (s.phase === 'card' || s.phase === 'done') return;
   const g = stickToGrid(stick);
   if (!s.started && g.len > 0 && !s.trans) {
     s.started = true;
@@ -334,7 +336,7 @@ function sailStep(s, b, g, dt) {
 export function obstaclesAt(s) {
   const list = WORLD.obstacles.slice();
   for (const id of s.traffic) {
-    const p = trafficAt(id, s.t);
+    const p = trafficAt(id, s.tt);
     list.push({ kind: 'traffic', id, x: p.x, y: p.y, r: TRAFFIC_R[id] });
   }
   return list;

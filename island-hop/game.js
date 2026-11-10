@@ -465,10 +465,15 @@ function snapCamera() {
 let viewTilesAcross = ACROSS.boat; // what the camera shows now, for tests
 function updateCamera(dt) {
   if (finishView || mapHeld) {
-    const z = Math.min(W / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX), H / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 0.96;
+    // The whole archipelago; at the finish, in the space above the card.
+    const top = mapHeld ? 64 : 8;
+    const bottom = finishView ? Math.max(top + 120, screens.finish.getBoundingClientRect().top - 8) : H - 8;
+    const avail = bottom - top;
+    const z = Math.min(W / (MAP_BOUNDS.maxX - MAP_BOUNDS.minX), avail / (MAP_BOUNDS.maxY - MAP_BOUNDS.minY)) * 0.96;
     const k = 1 - Math.exp(-dt / 0.12);
     cam.zoom += (z - cam.zoom) * k;
-    cam.follow({ x: (MAP_BOUNDS.minX + MAP_BOUNDS.maxX) / 2, y: (MAP_BOUNDS.minY + MAP_BOUNDS.maxY) / 2 }, k);
+    const cy = (MAP_BOUNDS.minY + MAP_BOUNDS.maxY) / 2 + (H / 2 - (top + bottom) / 2) / z;
+    cam.follow({ x: (MAP_BOUNDS.minX + MAP_BOUNDS.maxX) / 2, y: cy }, k);
     viewTilesAcross = W / (cam.zoom * TILE);
     return;
   }
@@ -706,7 +711,7 @@ function draw() {
   }
   for (const rk of SEA_ROCKS) items.push({ depth: iso.depth(rk.x, rk.y), draw: () => spr('rock' + rk.rock, iso.toScreen(rk.x, rk.y).x, iso.toScreen(rk.x, rk.y).y + 6) });
   for (const id of world.traffic) {
-    const t = trafficAt(id, world.t);
+    const t = trafficAt(id, world.tt);
     items.push({ depth: iso.depth(t.x, t.y), draw: () => drawBoat(TRAFFIC[id].craft, t.x, t.y, t.h) });
   }
   const tr = world.trans;

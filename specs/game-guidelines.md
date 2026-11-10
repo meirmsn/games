@@ -19,7 +19,7 @@ also set how the next games get built, recorded below.
 - "Without game saves" means no save games, not no memory: a game is whole on a fresh browser and may keep small things such as a best score in localStorage, as Reef does (Claude's reading of the owner's words, 2026-11-09).
 - The next games are built in parallel, one session each. Each session checks its concept against the guidelines, has it attacked adversarially, fixes it, then specs and builds it, without consulting the owner first (owner, 2026-11-09: "don't consult with me, just start building after following this process").
 - Merges go one at a time through a queue that this session manages. A game's branch doesn't take in the latest `main` and doesn't open its PR, which is what starts CI, until its turn comes. Rejected: a PR per game from the start, which reruns CI on every open branch after each merge (owner, 2026-11-09: "you should not be running CI in parallel for them … do not bring the latest main until you're ready to merge each and one of them"). Approval and the merge stay the owner's, as `CLAUDE.md` requires.
-- A game that needs another's groundwork starts after that one merges. Little Town waits for High Seas's isometric engine (Claude, 2026-11-09).
+- A game that needs another's groundwork starts after that one merges. Little Town waits for the shared isometric module, `shared/iso.js` (Claude, 2026-11-09; Island Hop now carries it).
 
 ## Acceptance items
 

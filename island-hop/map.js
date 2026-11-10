@@ -182,7 +182,7 @@ export const BUOYS = [
 // Traffic on fixed routes, in tiles and tiles a second: a loop goes round; a lane goes back and forth.
 // The ferry sails in every mission; the tugs and the container ship join in the last.
 export const TRAFFIC = {
-  ferry: { craft: 5, speed: 1.6, loop: true, path: [[28.5, 6], [29.5, 21.5], [46, 21.5], [46, 8]] },
+  ferry: { craft: 5, speed: 1.6, loop: true, path: [[31, 5], [31, 21.5], [46, 21.5], [46, 8]] },
   tugA: { craft: 23, speed: 1.8, loop: false, path: [[20, 42.5], [47, 42.5]] },
   tugB: { craft: 24, speed: 1.5, loop: false, path: [[15, 23], [15, 41]] },
   ship: { craft: 6, speed: 2.2, loop: false, path: [[2, 45.2], [58, 45.2]] },

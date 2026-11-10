@@ -1,4 +1,4 @@
-// Unit tests for shared/iso.js, the isometric helpers Beacon and later isometric games share.
+// Unit tests for shared/iso.js, the isometric helpers Island Hop and later isometric games share.
 // Plain Node: the module needs no DOM, and attachGestures() is driven through a fake element.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

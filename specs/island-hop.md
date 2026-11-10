@@ -64,7 +64,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   `assets/tiles/beacon.png`, and its lines in `index.html`, `sw.js`, `README.md` and
   `tests/site.test.mjs` ("beacon AC-20" becomes "island-hop AC-18"). Beacon's findings in
   `FINDINGS.md` (F-19 to F-21) are deleted: the files they name are gone. `shared/iso.js` stays
-  unchanged; `tests/iso.test.mjs` changes only its titles, to "island-hop AC-1/2/3".
+  unchanged; `tests/iso.test.mjs` changes only its titles, to "island-hop AC-1/2/3", and its header
+  comment, which named Beacon (owner, 2026-11-10: "and yes remove the old versions fo the game").
 - Assets, all Kenney CC0 from `meirmsn/games-private`, built by `scripts/island-hop/build-assets.py`
   into one atlas and MP3 sounds, each pack with its own scale factor so they share one grid:
   - Isometric Tiles Base: water, grass and sand blocks, roads (straight, corner, T, crossroads, dead
