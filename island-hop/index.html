@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Island Hop</title>
+    <meta name="description" content="Island Hop: errands across an isometric archipelago against the clock: sail, step ashore, grab a car, drive to the door." />
+    <meta name="theme-color" content="#9cd4e2" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="world" aria-label="An archipelago of islands with towns, roads and harbours, seen from above at an angle"></canvas>
+
+    <div class="hud" data-hud hidden>
+      <div class="clock-row">
+        <strong class="clock" data-clock>0:00</strong>
+        <span class="split" data-split hidden></span>
+      </div>
+      <ol class="stops" data-stops aria-label="Stops"></ol>
+      <div class="carrying" data-carrying aria-label="Carrying"></div>
+    </div>
+
+    <button class="round mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+    <button class="round map-btn" type="button" data-map aria-label="Hold to see the whole map" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" fill="none" /><path d="M9 4v14M15 6v14" fill="none" /></svg>
+    </button>
+    <button class="round restart-btn" type="button" data-restart aria-label="Restart the mission" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6" fill="none" /><path d="M4 4v4h4" fill="none" /></svg>
+    </button>
+
+    <section class="card start" data-screen="start" hidden>
+      <div class="pick">
+        <button class="arrow" type="button" data-prev aria-label="Previous mission">‹</button>
+        <h1><span class="eyebrow" data-mission-num>Mission 1</span><span data-mission-name>Island Hop</span></h1>
+        <button class="arrow" type="button" data-next aria-label="Next mission">›</button>
+      </div>
+      <ol class="card-stops" data-card-stops aria-label="Stops"></ol>
+      <p class="best" data-card-best></p>
+      <button class="play" type="button" data-start>Go</button>
+    </section>
+
+    <section class="card" data-screen="pause" hidden>
+      <h2>Paused</h2>
+      <button class="play" type="button" data-resume>Go on</button>
+      <button class="link" type="button" data-restart-pause>Restart</button>
+    </section>
+
+    <section class="card finish" data-screen="finish" hidden>
+      <p class="medal" data-medal aria-live="polite"></p>
+      <p class="time" data-time>0:00</p>
+      <ul class="pars" data-pars></ul>
+      <p class="best" data-best></p>
+      <p class="legend"><span class="you-line"></span>your route <span class="gold-line"></span>gold route</p>
+      <button class="play" type="button" data-next-mission>Next mission</button>
+      <button class="link" type="button" data-again>Try again</button>
+    </section>
+  </body>
+</html>
