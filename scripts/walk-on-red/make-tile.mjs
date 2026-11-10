@@ -34,6 +34,8 @@ const top = await page.evaluate(() => {
   t.game.grace = 99;
   for (let i = 0; i < 4; i++) t.step(1 / 60);
   if (t.game.mode !== 'play' || t.player.tw >= 1) throw new Error('he should be mid-hop, still playing');
+  if ((t.game.time * 1.3) % 1 >= 0.6) throw new Error('his drop of sweat should be showing');
+  if (t.vehicles().length) throw new Error('no vehicle should be on the street');
   for (const sel of ['[data-hud]', '[data-banner]', '.shell-back', '[data-mute]', '[data-screen]']) {
     for (const el of document.querySelectorAll(sel)) el.style.display = 'none';
   }

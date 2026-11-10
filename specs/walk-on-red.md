@@ -123,7 +123,8 @@ Can't Hold It, or some variation riff around that notion, and also the walking o
 like that. I don't know. Keep it child friendly, cute, but funny." Offered Cross Your Legs!, Can't
 Hold It!, Gotta Go! and Potty Dash, the owner chose "Gotta Go!" (2026-11-10). This change makes the
 landing-page tile a close-up of the far end of the crossing and renames the game Gotta Go! wherever
-its name shows: the tile's title, the game page's title and start card, and the README.
+its name shows: the tile's title, the game page's title, description and start card, the README,
+and the code's header comments.
 This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
@@ -329,8 +330,8 @@ goes now, and the people waiting start copying him.
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
 - **Folder and URL stay `walk-on-red/`:** the rename changes only the name people see. Renaming the
   folder would break links people have saved or shared and the copy their browser keeps to play
-  offline, and lose their best scores, kept under the `walk-on-red` key (Claude, 2026-11-10, as the
-  owner's brief for this change asked); rejected: a `gotta-go/` folder with a redirect.
+  offline, and lose their best scores, kept under the `walk-on-red` key (Claude, 2026-11-10);
+  rejected: a `gotta-go/` folder with a redirect.
 - **Tile:** a playable tile on the landing page, right after Googly Faces, titled "Gotta Go!", drawn
   from the game itself (`scripts/walk-on-red/make-tile.mjs`). It is a close-up of the far end of the
   crossing: the game's own portrait view at exactly 6×, cut to the porta-potty, the far sidewalk and
@@ -339,9 +340,9 @@ goes now, and the people waiting start copying him.
   showing the cars on the left and the right. So can you make a zoom … towards the top where the
   WCs and … a little bit of walkway"; this replaces the wide street, with cars either side of the
   crossing, that the tile showed before). Its `?tile` page is the game's own view with no cards or
-  buttons. The service worker's cache version goes up, so returning visitors get the new picture.
-  The landing page shows 8 tiles; games built
-  in parallel add theirs, so the count is set when this brings `main` in. The atlas is the pack's own
+  buttons. The service worker's cache version stays: raising it would empty each visitor's offline
+  copy of every game, and the new picture reaches returning visitors on its own, one visit later
+  (owner, 2026-11-10, unsure; Claude chose to keep it). The landing page shows 8 tiles. The atlas is the pack's own
   spritesheet, its frame list made by `scripts/walk-on-red/build-atlas.mjs`.
 - **Tests** drive the game through `window.__walkOnRed` (its state, a seeded random source and a
   `step(dt)` that advances the simulation), as Reef's tests do.
@@ -423,13 +424,13 @@ goes now, and the people waiting start copying him.
 - **AC-25** The page's text and boxes are 8-bit like the street: the pixel font loads, and the start
   and paused cards, the banner, the HUD, the Start, mute and back buttons use it, square, with no
   blur; the HUD's bar keeps one width whatever the points — `tests/walk-on-red.test.mjs`.
-- **AC-26** The game page's title and start card say "Gotta Go!", and nothing the player sees says
-  "Walk on Red" — `tests/walk-on-red.test.mjs`.
+- **AC-26** The game page's title and start card say "Gotta Go!", and neither its title, its
+  description nor its visible page text says "Walk on Red" — `tests/walk-on-red.test.mjs`.
 - **AC-27** The tile picture is the close-up made by `scripts/walk-on-red/make-tile.mjs` from the
   game: the porta-potty, the far sidewalk, the top of the zebra and him with his drop of sweat, with
-  no vehicle in it — verified by review: serve the site, run the script, and the committed
-  `assets/tiles/walk-on-red.png` is what it makes; the script stops if the view isn't at 6× or he
-  isn't mid-hop.
+  no vehicle in it — verified by review: serve the site and run the script, which stops if the view
+  isn't at 6×, he isn't mid-hop, his drop of sweat isn't showing or a vehicle is on the street; the
+  committed `assets/tiles/walk-on-red.png` looks the same as what it makes.
 
 ## Core flow
 
