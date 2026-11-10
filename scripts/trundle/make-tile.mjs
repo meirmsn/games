@@ -1,5 +1,5 @@
-// Renders the landing tile for Trundle (assets/tiles/trundle.png) with the game itself: room 7 in
-// mid-attempt, Trundle on his girder, a ball off a green plank and a star bursting, cropped to the tile's
+// Renders the landing tile for Trundle (assets/tiles/trundle.png) with the game itself: room 4 in
+// mid-attempt, Trundle with his red and blue balls, a ball on the green plank, cropped to the tile's
 // 640 × 400.
 // Run: node scripts/trundle/make-tile.mjs   (needs Playwright's Chromium, like scripts/check-slow.sh)
 import { spawn } from 'node:child_process';
@@ -28,7 +28,6 @@ try {
     T.manual = true;
     T.openRoom(ROOM);
     const sol = T.ROOMS[ROOM].solution;
-    T.setLayout(sol.layout);
     const att = T.G.att;
     let li = 0;
     const step = att.step;
@@ -41,10 +40,10 @@ try {
     };
     // a moment with balls on the way down
     while (att.t < AT) T.frame(1000 / 120);
-    const a = T.toScreen(0, 0.2);
-    const b = T.toScreen(10, 6.45);
+    const a = T.toScreen(0, 0.4);
+    const b = T.toScreen(10, 6.65);
     return { x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y };
-  }, [+(process.env.TILE_AT || 7.6), +(process.env.TILE_ROOM || 6)]);
+  }, [+(process.env.TILE_AT || 1.25), +(process.env.TILE_ROOM || 3)]);
   await page.waitForTimeout(100);
   const shot = await page.screenshot({ clip });
   // scale the crop to exactly 640 × 400
