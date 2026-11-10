@@ -62,6 +62,10 @@ lockfile_npmjs_only() {
 }
 part lockfile_npmjs_only
 part python3 scripts/check-shell.py
+# A new version is a new sw.js: a change to any file the site serves bumps VERSION there, so players
+# get the Update button (specs/pwa-updates.md), and the check's own test.
+part python3 scripts/version-check.py "${1:-}"
+part node --test tests/version-check.test.mjs
 part node scripts/ui/tokens-check.mjs --theme assets/base.css assets/base.css assets/site.css shared/game-shell.css
 # builds_previews_deploys: all-cloudflare (specs/all-cloudflare-deploys.md): previews never bind
 # production data, and the deploy step's own tests (no network).

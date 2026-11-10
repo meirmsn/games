@@ -236,3 +236,37 @@ a.tile:active {
 .site-footer {
   padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
 }
+
+/* The update notice (specs/pwa-updates.md): a small card at the bottom, above the safe area. */
+.update {
+  position: fixed;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2 * var(--space-4));
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.update p {
+  margin: 0;
+  font-weight: 550;
+}
+
+.update .btn {
+  flex: none;
+}
+
+/* While it shows, the last tiles and the footer can scroll clear of it. */
+body.has-update {
+  padding-bottom: calc(var(--tap) + var(--space-8) + env(safe-area-inset-bottom));
+}

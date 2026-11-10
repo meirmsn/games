@@ -70,9 +70,49 @@ window.addEventListener('appinstalled', () => {
   installBtn.hidden = true;
 });
 
-// ---- Offline ----
+// ---- Offline, and updates (specs/pwa-updates.md) ----
+// A new version waits until the player taps Update here; only this page ever reloads for it, so a
+// game in another tab is never cut short. Checked at load and each time the page is shown again,
+// so an installed app that resumes finds updates too.
+const notice = document.querySelector('[data-update]');
+const updateBtn = notice.querySelector('button');
+let updating = false;
+
+function showUpdate(show) {
+  notice.hidden = !show;
+  document.body.classList.toggle('has-update', show);
+}
+
+function watch(reg) {
+  // A first visit has no worker in charge yet: what installs now is the first version, not an update.
+  const isUpdate = () => !!reg.waiting && !!navigator.serviceWorker.controller;
+  showUpdate(isUpdate());
+  reg.addEventListener('updatefound', () => {
+    const next = reg.installing;
+    next?.addEventListener('statechange', () => showUpdate(isUpdate()));
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') reg.update().catch(() => {});
+  });
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updating) {
+      updating = false;
+      window.location.reload();
+    } else {
+      showUpdate(isUpdate()); // another tab applied it
+    }
+  });
+  updateBtn.addEventListener('click', () => {
+    sound.play('tap');
+    if (!reg.waiting) return window.location.reload();
+    updating = true;
+    updateBtn.disabled = true;
+    reg.waiting.postMessage({ type: 'update' });
+  });
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.register('sw.js').then(watch).catch(() => {});
   });
 }
