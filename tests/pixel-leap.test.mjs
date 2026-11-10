@@ -1598,11 +1598,11 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
     while (L.game.mode === 'map') L.step();
   });
   assert.equal(await page.evaluate(() => window.__leap.game.mode), 'gallery');
+  // The gallery: builder and Paused card hidden, the deck shown (row() checks each).
   assert.deepEqual(await seen(), row(false, true, false, false), 'the gallery');
-  await page.evaluate(() => {
-    const L = window.__leap;
-    while (L.game.mode === 'gallery') L.step();
-  });
+  // A real tap on the view skips it to the card.
+  await page.tap('#view');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'tally');
   assert.deepEqual(await seen(), row(false, true, false, true), "the journey's end");
   assert.equal((await page.locator('[data-leap]').textContent()).trim(), 'Play again');
   assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
