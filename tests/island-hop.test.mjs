@@ -478,8 +478,8 @@ test('island-hop AC-9: at the marina, walking onto the other berth swaps boats; 
 
 // --- Pars and the gold routes (Node) ----------------------------------------------------------------------------
 
-test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, lands in its band and on its par; another order of its stops is slower', () => {
-  const BANDS = [[25, 50], [40, 75], [60, 110], [80, 140], [100, 170], [130, 220]];
+test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, lands in its band and on its par; another order of its stops is slower than gold', () => {
+  const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
   for (const [i, m] of MISSIONS.entries()) {
     const gold = runPilot(i, m.gold);
     const alt = runPilot(i, m.alt);
@@ -488,7 +488,8 @@ test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, land
     const [lo, hi] = BANDS[i];
     assert.ok(gold.clock >= lo && gold.clock <= hi, `mission ${i + 1}: ${gold.clock.toFixed(1)} s in ${lo}–${hi}`);
     near(gold.clock, m.par, 0.5, `mission ${i + 1}'s par`);
-    assert.ok(alt.clock > gold.clock, `mission ${i + 1}: the other order ${alt.clock.toFixed(1)} s is slower than ${gold.clock.toFixed(1)} s`);
+    const goldMedal = medalTimes(i).gold;
+    assert.ok(alt.clock > goldMedal, `mission ${i + 1}: the other order ${alt.clock.toFixed(1)} s is slower than gold, ${goldMedal.toFixed(1)} s`);
   }
 });
 

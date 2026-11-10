@@ -122,8 +122,16 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   hand-written waypoints (the order of stops, the berths and the vehicles). Starting or restarting a
   mission resets the clock, the stops, any pickup, and every boat and car; nothing carries over from
   another mission. Target lengths, as bands for the autopilot's gold route: 1, one island on foot
-  (25–50 s); 2, a car (40–75 s); 3, two islands (60–110 s); 4, a pickup in order (80–140 s); 5, a
-  second boat (100–170 s); 6, everything, with traffic (130–220 s). Any finish opens the next mission.
+  (25–50 s); 2, a car (40–75 s); 3, two islands (60–110 s); 4, a pickup in order (65–120 s); 5, a
+  second boat (75–130 s); 6, everything, with traffic (80–140 s), so a player's run (about 1.2–2× the
+  autopilot) stays within about 3½ minutes. Each mission's other order of its stops is slower than its
+  gold time (par × 1.1), so planning pays. Any finish opens the next mission. Changed after the go
+  (owner, 2026-11-10: "go", in reply to the recommendation "Lower the bands for 4–6 … 4 = 65–120 s,
+  5 = 75–130 s, 6 = 80–140 s" and "Tighten the planning check: the other order must be slower than
+  the gold medal time (par × 1.1)"): with the spec's speeds on the 60 × 60 map, the gold routes take
+  75, 83 and 91 s; the old bands (80–140, 100–170, 130–220 s) could be reached only by padding (an
+  adversarial review measured far starts, nine stops and forced relay chains), and would have put a
+  player's run on mission 6 past 3½ minutes.
 - Pickups: you can carry any number; each rides above the person's head (and in the boat or car) until
   delivered, and can't be lost. Walking onto an ordered stop before its pickup doesn't tick it: its
   beam pulses and the pickup's icon flashes on the HUD.
@@ -192,7 +200,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   persist over a reload and the ghost moves on the next run; saved runs from another map version are
   thrown away — `tests/island-hop.test.mjs`.
 - **AC-11** For each of the six missions the autopilot following its gold route finishes it in a time
-  inside the mission's band, and at least one other ordering of its stops is slower —
+  inside the mission's band, and at least one other ordering of its stops is slower than its gold time
+  (par × 1.1) —
   `tests/island-hop.test.mjs`.
 - **AC-12** Off-screen stops show an edge arrow with their icon; holding the map button shows the
   whole archipelago and the open stops, and the clock keeps running; the camera shows 14, 11 and 7
