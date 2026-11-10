@@ -50,9 +50,9 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('reef AC-11: landing page lists seven games, Reef first and playable, with no errors', async () => {
+test('reef AC-11: landing page lists eight games, Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   const reef = page.locator('.tiles > li').first().locator('.tile');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
@@ -73,6 +73,57 @@ test('shooting-gallery AC-20: the Shooting Gallery tile is playable and opens th
   await page.waitForURL(/shooting-gallery\/$/);
   await page.waitForFunction(() => window.__gallery);
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const names = await page.locator('.tile h2').allTextContents();
+  assert.equal(names.indexOf('Walk on Red'), names.indexOf('Googly Faces') + 1);
+  const tile = page.locator('.tile', { hasText: 'Walk on Red' });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
+  assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  const img = tile.locator('img');
+  await page.waitForLoadState('networkidle');
+  assert.ok(await img.evaluate((el) => el.complete && el.naturalWidth === 640));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('runes AC-17: the Runes tile is a playable link, and the page lists eight tiles (Walk on Red adds one)', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const runes = page.locator('.tile', { has: page.locator('h2', { hasText: 'Runes' }) });
+  assert.equal(await runes.evaluate((el) => el.tagName), 'A');
+  assert.equal(await runes.getAttribute('href'), 'runes/');
+  assert.equal(await runes.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.equal(await runes.locator('.badge').count(), 0, 'no coming-soon badge');
+  assert.doesNotMatch((await runes.getAttribute('aria-label')) || '', /coming soon/i);
+  await context.close();
+});
+
+test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight tiles (Walk on Red adds one)', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const orbit = page.locator('.tile', { has: page.locator('h2', { hasText: /^Orbit$/ }) });
+  assert.equal(await orbit.evaluate((el) => el.tagName), 'A');
+  assert.equal(await orbit.getAttribute('href'), 'orbit/');
+  assert.equal(await orbit.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.equal(await orbit.locator('.badge').count(), 0);
+  await context.close();
+});
+
+test('pixel-leap AC-20: the Pixel Leap tile is playable and opens pixel-leap/', async () => {
+  const { context, page } = await open();
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Pixel Leap' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+  assert.equal(await tile.getAttribute('href'), 'pixel-leap/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  await tile.click();
+  await page.waitForURL(/pixel-leap\/(#.*)?$/);
+  await page.waitForFunction(() => window.__leap);
   await context.close();
 });
 
@@ -127,7 +178,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 7);
+  assert.equal(await page.locator('.tiles > li').count(), 8);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
@@ -141,15 +192,46 @@ test("the game shell's back button returns to the landing page", async () => {
   assert.ok(box.width >= 44 && box.height >= 44, 'back button is at least 44 px');
   assert.equal(await back.getAttribute('href'), BASE);
   await back.click();
+  // It asks first: leaving loses the game's progress.
+  const ask = page.locator('dialog.shell-leave');
+  await ask.waitFor({ state: 'visible' });
+  assert.match(await ask.textContent(), /Leave this level\?/);
+  assert.match(await ask.textContent(), /Your progress on this level will be lost\./);
+  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('Escape in a game goes back to the landing page', async () => {
+test('runes AC-24: before leaving any game, the shell always asks "Leave this level?"; Stay keeps you there, Leave goes back', async () => {
+  const { context, page } = await open('tests/fixtures/game/');
+  const ask = page.locator('dialog.shell-leave');
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-stay]').click();
+  await ask.waitFor({ state: 'hidden' });
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/', 'Stay keeps you in the game');
+  // Escape asks too, and a second Escape stays.
+  await page.keyboard.press('Escape');
+  await ask.waitFor({ state: 'visible' });
+  await page.keyboard.press('Escape');
+  await ask.waitFor({ state: 'hidden' });
+  await page.waitForTimeout(200);
+  assert.equal(page.url(), BASE + 'tests/fixtures/game/');
+  // It asks every time, even straight after opening the game.
+  await page.reload();
+  await page.locator('.shell-back').click();
+  await ask.waitFor({ state: 'visible' });
+  await page.locator('[data-shell-leave]').click();
+  await page.waitForURL(BASE);
+  await context.close();
+});
+
+test('Escape in a game goes back to the landing page, after asking', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   await page.locator('.shell-back').waitFor();
   await page.keyboard.press('Escape');
+  await page.locator('[data-shell-leave]').click();
   await page.waitForURL(BASE);
   await context.close();
 });
