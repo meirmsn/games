@@ -10,9 +10,17 @@ export const ROWS = 15; // the usual grid's height in tiles; falling below it co
 const DEPTH = 4; // the usual ground top is this many rows above the grid's bottom (row 11 of 15)
 
 // HAY: a haybale, solid, that bounces you. BELTL / BELTR: a conveyor belt's top, solid, that carries
-// you left or right.
-export const T = { AIR: 0, GROUND: 1, BLOCK: 2, ONEWAY: 3, SPIKES: 4, HAY: 5, BELTL: 6, BELTR: 7 };
-export const SOLID = new Set([T.GROUND, T.BLOCK, T.HAY, T.BELTL, T.BELTR]);
+// you left or right. ICE: solid ground you slide on. GATE: a portcullis, solid until a key opens it.
+// SLOPEU / SLOPED: a 45° slope rising or falling to the right; not solid from the side, its surface
+// is ground (see slopeY), and the ground under it fills on.
+export const T = { AIR: 0, GROUND: 1, BLOCK: 2, ONEWAY: 3, SPIKES: 4, HAY: 5, BELTL: 6, BELTR: 7, ICE: 8, GATE: 9, SLOPEU: 10, SLOPED: 11 };
+export const SOLID = new Set([T.GROUND, T.BLOCK, T.HAY, T.BELTL, T.BELTR, T.ICE, T.GATE]);
+export const SLOPES = new Set([T.SLOPEU, T.SLOPED]);
+// The surface's height in a slope tile at x (tiles): rising to the right, or falling.
+export function slopeY(t, tx, ty, x) {
+  const f = Math.max(0, Math.min(1, x - tx));
+  return t === T.SLOPEU ? ty + 1 - f : ty + f;
+}
 
 // PICO-8's 16 colours: Pico draws nothing else.
 export const PICO8 = [
@@ -20,7 +28,7 @@ export const PICO8 = [
   '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa',
 ];
 
-export const WORLDS = [
+const ALL = [
   {
     id: 'meadow',
     bed: true, // the owner's music: a long bed, with short accents over it at random
@@ -84,34 +92,6 @@ export const WORLDS = [
         ['pit', 6, [[2, -4, 2, '-']]], ['flat', 4], ['heart', 1, 1], ['flat', 3], ['walker', 3], ['flat', 7],
         ['pit', 9, [[4, -1, 2, '-'], [1, -4, 1, '-'], [7, -5, 1, '-']]], ['flat', 3], ['spikes', 2], ['flat', 4],
         ['walker', 2], ['flat', 6],
-        ['next'], ['flat', 4], ['portal'], ['flat', 6],
-      ],
-    ],
-  },
-  {
-    id: 'frost',
-    bed: true, // the owner's music: a long bed, with short accents over it at random
-    name: 'Frost',
-    res: 18, // the same pack's snow
-    pack: 'pp',
-    smooth: false,
-    outline: '#262338',
-    sky: ['#c9e3f2', '#eef6fb'],
-    sound: 'm',
-    ice: true, // ice: you slide further before you stop
-    rule: 'ice, and spiky walkers you cannot stomp',
-    stages: [
-      [
-        ['flat', 8], ['coins', 3, 1, 2], ['flat', 4], ['spiky', 5], ['flat', 11], ['arc', 3], ['pit', 2], ['flat', 4],
-        ['walker', 3], ['flat', 8], ['heart', 2, 1], ['flat', 5],
-        // The ears, high above the spikes, reached by the spring and two ledges.
-        ['flat', 2], ['spring', 1], ['plat', 3, 5, 3, '-'], ['plat', 8, 7, 3, '-'], ['ears', 9, 9], ['flat', 4],
-        ['spikes', 2], ['flat', 3], ['spikes', 2], ['flat', 4],
-        // A float shortcut: a coin line over a wide pit, with a stepping stone for those without ears.
-        ['coins', 7, 4, 3], ['pit', 9, [[4, 0, 2, '=']]], ['flat', 4], ['spiky', 3], ['flat', 7], ['spikes', 1],
-        ['flat', 3], ['walker', 2], ['flat', 5], ['step', -2], ['flat', 4], ['arc', 4], ['pit', 4], ['flat', 4],
-        ['step', 2], ['flat', 3], ['spiky', 2], ['flat', 3], ['spiky', 6], ['flat', 9], ['heart', 2, 1], ['flat', 4],
-        ['arc', 3], ['pit', 3], ['flat', 3], ['spikes', 2], ['flat', 4],
         ['next'], ['flat', 4], ['portal'], ['flat', 6],
       ],
     ],
@@ -239,23 +219,136 @@ export const WORLDS = [
     smooth: false,
     outline: '#1d1b22',
     oneBit: { ink: '#f2efe6', dark: '#1d1b22' },
-    sky: ['#1d1b22', '#26232c'],
+    sky: ['#1d1b22', '#1d1b22'], // flat: Ink draws only its two colours
     sound: 'm',
     music: 'i-music',
-    rule: 'ghosts, and drips that fall as you pass',
+    dark: true, // only a circle of light around the monster, and lamps
+    rule: 'darkness: only a circle of light around you; ghosts, and drips that fall as you pass',
     stages: [
       [
-        ['flat', 8], ['coins', 3, 1, 2], ['flat', 4], ['ghost', 5], ['flat', 10], ['drip', 3, 4], ['flat', 8],
-        ['spikes', 2], ['flat', 5], ['arc', 3], ['pit', 3], ['flat', 4], ['heart', 2, 1], ['flat', 4],
+        // The opening: lamps close together, coins, nothing that can hurt you.
+        ['lamp', 2], ['flat', 8], ['coins', 3, 1, 2], ['lamp', 2], ['flat', 6], ['lamp', 3], ['flat', 6],
+        ['ghost', 5], ['flat', 10], ['lamp', 1], ['drip', 3, 4], ['flat', 8],
+        ['spikes', 2], ['flat', 5], ['lamp', 2], ['arc', 3], ['pit', 3], ['flat', 4], ['heart', 2, 1], ['flat', 4],
         ['flat', 2], ['spring', 1], ['plat', 3, 5, 4, '='], ['coins', 4, 6, 3], ['flat', 9], ['drip', 2, 4],
+        // Then the dark, with fewer lamps.
         ['drip', 5, 4], ['flat', 8], ['ghost', 3], ['ghost', 7], ['flat', 10], ['spikes', 3], ['flat', 3], ['step', -1],
-        ['flat', 4], ['arc', 3], ['pit', 3], ['flat', 4], ['drip', 3, 4], ['flat', 6], ['spikes', 1], ['flat', 2],
+        ['flat', 4], ['arc', 3], ['pit', 3], ['flat', 4], ['lamp', 1], ['drip', 3, 4], ['flat', 6], ['spikes', 1], ['flat', 2],
         ['ghost', 3], ['flat', 6], ['step', 1], ['flat', 3], ['heart', 1, 1], ['flat', 3], ['arc', 4], ['pit', 3],
-        ['flat', 4], ['portal'], ['flat', 6],
+        ['flat', 4], ['ghost', 2], ['flat', 6], ['pit', 4, [[1, -1, 2, '=']]], ['flat', 4], ['spikes', 2], ['flat', 5],
+        // A glimpse of Castle, lit, and the door.
+        ['next'], ['flat', 4], ['portal'], ['flat', 6],
+      ],
+    ],
+  },
+  {
+    id: 'ice',
+    bed: true, // the owner's music (made for the old Frost world, now Ice's)
+    name: 'Ice',
+    res: 70, // the Platformer Assets Ice pack, vector
+    pack: 'ice',
+    smooth: true,
+    outline: null,
+    sky: ['#9fd3ef', '#e9f6fd'],
+    sound: 'c',
+    rule: 'slippery ice, small ledges, snowballs rolling down slopes',
+    stages: [
+      [
+        // The opening: snow that grips, a first slope up and down, coins; nothing that hurts.
+        ['flat', 8], ['coins', 3, 1, 1], ['flat', 4], ['slope', 3, 1], ['flat', 4], ['coins', 3, 1], ['slope', 3, -1],
+        ['flat', 6],
+        // A snail, then the first ice: a flat patch to feel it slide, and a ditch with ice stones.
+        ['walker', 4], ['flat', 7], ['ice', 7], ['coins', 4, 1, -6], ['flat', 3],
+        ['pit', 5, [[2, 0, 2, 'i']]], ['flat', 4], ['heart', 2, 1], ['flat', 3],
+        // The first snow pile: snowballs roll down the slope at you and drop into the ditch at its foot.
+        // Each pile sits a tile back from the slope's top: wait at the ditch for a snowball to drop in,
+        // run up, and jump the next one on the flat top.
+        ['pit', 2], ['flat', 1], ['slope', 3, 1], ['flat', 1], ['pile', 0, -1], ['flat', 5], ['coins', 2, 1, -2], ['slope', 3, -1], ['flat', 5],
+        // Small ledges over a wide pit, most of them ice.
+        ['pit', 12, [[1, 0, 2, 'i'], [5, -1, 2, 'i'], [9, 0, 2, '-']]], ['coins', 3, 2, -7], ['flat', 4],
+        ['flat', 6],
+        // The ears, up on ice ledges above spikes: a route you choose to risk.
+        ['plat', 1, 3, 2, '-'], ['plat', 4, 5, 2, '-'], ['plat', 7, 7, 2, 'i'], ['ears', 8, 8], ['flat', 3],
+        ['spikes', 3], ['flat', 6],
+        // A long climb: a ditch halfway up, a pile at the top, ice up there, and down again.
+        ['pit', 2], ['flat', 1], ['slope', 3, 1], ['flat', 2], ['pit', 2], ['flat', 1], ['slope', 3, 1], ['flat', 1], ['pile', 0, -1], ['flat', 2],
+        ['ice', 5], ['coins', 4, 1, -5], ['flat', 2], ['slope', 6, -1], ['flat', 2], ['walker', 4], ['flat', 6], ['heart', 1, 1], ['flat', 3],
+        // Then the real thing: a run of small ledges, ice, a pile at the far side.
+        ['pit', 12, [[1, -1, 2, 'i'], [5, -2, 3, 'i'], [10, -1, 1, '-']]], ['flat', 3], ['spikes', 2], ['flat', 3],
+        ['pit', 11, [[1, 0, 2, 'i'], [5, -1, 2, 'i'], [9, 0, 1, '-']]], ['flat', 3], ['walker', 2], ['flat', 5],
+        ['pit', 2], ['flat', 1], ['slope', 3, 1], ['flat', 1], ['pile', 0, -1], ['flat', 4], ['slope', 3, -1], ['flat', 4],
+        ['next'], ['flat', 4], ['portal'], ['flat', 6],
+      ],
+    ],
+  },
+  {
+    id: 'sea',
+    name: 'Sea',
+    res: 70, // the Platformer Pack Nautical, vector
+    pack: 'sea',
+    smooth: true,
+    outline: null,
+    sky: ['#7fd0f0', '#d8f3fb'],
+    sound: 'c',
+    rows: 24,
+    swim: true, // in the water you float, and each tap is a stroke
+    rule: 'swimming: each tap a stroke; currents',
+    stages: [
+      [
+        // The opening: a beach, coins, then the first dip into calm water.
+        ['step', -9], ['flat', 9], ['coins', 4, 1, 1], ['flat', 4], ['water', 1], ['step', 6], ['flat', 12],
+        ['coins', 4, 3, -9], ['coins', 4, 5, -4], ['step', -6], ['dry'], ['flat', 6], ['heart', 2, 1], ['flat', 2],
+        // A deeper bay: a fish, urchins on the floor, a current that carries you on.
+        ['water', 1], ['step', 7], ['flat', 3], ['fish', 2, 3, 4], ['flat', 4], ['spikes', 3], ['flat', 3],
+        ['current', -3, 5, 8, 3, 1, 0], ['flat', 6], ['coins', 4, 4, -5], ['fish', 0, 2, 5], ['flat', 4],
+        // A reef wall: an up-current lifts you over it.
+        ['current', -2, 5, 3, 5, 0, -1], ['wall', 2, 5], ['flat', 4], ['spikes', 2], ['flat', 4], ['step', -7], ['dry'],
+        ['flat', 5], ['walker', 3], ['flat', 6],
+        // The last bay: a down-current over urchins, a current against you, fish.
+        ['water', 1], ['step', 7], ['flat', 3], ['current', 0, 6, 4, 4, 0, 1], ['spikes', 4], ['flat', 3],
+        ['fish', 1, 2, 5], ['flat', 4], ['current', -2, 4, 6, 3, -1, 0], ['coins', 4, 3, -5], ['flat', 5],
+        ['heart', 1, 3], ['fish', 2, 4, 4], ['flat', 6], ['spikes', 2], ['flat', 3], ['step', -7], ['dry'], ['flat', 5],
+        ['next'], ['flat', 4], ['portal'], ['flat', 6],
+      ],
+    ],
+  },
+  {
+    id: 'castle',
+    name: 'Castle',
+    res: 70, // the Platformer Pack Medieval, vector
+    pack: 'castle',
+    smooth: true,
+    outline: null,
+    sky: ['#8fc6e8', '#e3f1f7'],
+    sound: 'c',
+    rule: 'keys open gates; crushers drop on a rhythm',
+    stages: [
+      [
+        // The opening: the courtyard, coins, a key on a ledge you can see, its gate ahead.
+        ['flat', 8], ['coins', 3, 1, 1], ['flat', 4], ['plat', 1, 2, 3, '-'], ['key', 2, 2], ['flat', 6], ['gate'],
+        ['flat', 6],
+        // One crusher, alone, then a mouse.
+        ['crusher', 1, 4, 0], ['flat', 6], ['walker', 3], ['flat', 7], ['heart', 2, 1], ['flat', 3],
+        // A key back behind you, over a pair of crushers: the gate comes after them.
+        ['plat', 0, 2, 3, '-'], ['key', 1, 2], ['flat', 5], ['crusher', 0, 4, 0], ['crusher', 4, 4, 0.33], ['flat', 8],
+        ['gate'], ['flat', 5], ['spikes', 2], ['flat', 4],
+        // A key up a climb of ledges; three crushers in a row to the gate.
+        ['plat', 1, 2, 3, '-'], ['plat', 1, 4, 3, '-'], ['plat', 1, 6, 3, '-'], ['key', 2, 6], ['flat', 7],
+        ['walker', 2], ['flat', 3], ['crusher', 0, 4, 0], ['crusher', 4, 4, 0.25], ['crusher', 8, 4, 0.5], ['flat', 12],
+        ['gate'], ['flat', 4],
+        // Then the keep: crushers over a pit's edge, mice, and a last key.
+        ['heart', 1, 1], ['flat', 3], ['arc', 3], ['pit', 3], ['flat', 3], ['crusher', 1, 4, 0.6], ['flat', 5],
+        ['walker', 2], ['walker', 5], ['flat', 8], ['plat', 0, 2, 2, '-'], ['plat', 3, 4, 2, '-'], ['key', 4, 4],
+        ['flat', 8], ['crusher', 0, 4, 0], ['crusher', 4, 4, 0.3], ['flat', 8], ['gate'], ['flat', 4],
+        ['portal'], ['flat', 6],
       ],
     ],
   },
 ];
+
+// The journey's order (owner, 2026-11-10: "Perfect alternation"): pixel and smooth at every door.
+const ORDER = ['meadow', 'ice', 'farm', 'candy', 'industrial', 'mushroom', 'pico', 'sea', 'ink', 'castle'];
+export const WORLDS = ORDER.map((id) => ALL.find((w) => w.id === id));
 
 // Builds a level from its segments. Returns { cols, rows, base, grid, ground, things, start, coins,
 // next }. Heights are in tiles above the ground at that point; x offsets are from the segment's start.
@@ -266,6 +359,8 @@ export function buildStage(segments, rows = ROWS) {
   const cols = segments.reduce((n, s) => n + advance(s), 0);
   const grid = new Uint8Array(cols * rows);
   const ground = new Int16Array(cols).fill(BASE); // top row of the ground in each column (rows = none)
+  const water = new Float32Array(cols).fill(Infinity); // the water's surface in each column (none: Infinity)
+  let wet = Infinity;
   const things = [];
   let x = 0;
   let g = BASE;
@@ -276,6 +371,7 @@ export function buildStage(segments, rows = ROWS) {
   };
   const fill = (cx, top, t = T.GROUND) => {
     ground[cx] = top;
+    water[cx] = wet;
     for (let y = top; y < rows; y++) put(cx, y, T.GROUND);
     put(cx, top, t);
   };
@@ -311,8 +407,62 @@ export function buildStage(segments, rows = ROWS) {
         for (let i = 0; i < a; i++) fill(x + i, g, b > 0 ? T.BELTR : T.BELTL);
         x += a;
         break;
+      case 'ice': // ground a tiles long topped with ice
+        for (let i = 0; i < a; i++) fill(x + i, g, T.ICE);
+        x += a;
+        break;
+      case 'slope': // a 45° slope a tiles long, rising (b = 1) or falling (b = -1) to the right
+        for (let i = 0; i < a; i++) {
+          if (b > 0) {
+            fill(x + i, g);
+            put(x + i, g - 1, T.SLOPEU);
+            ground[x + i] = g - 1;
+            g -= 1;
+          } else {
+            fill(x + i, g + 1);
+            put(x + i, g, T.SLOPED);
+            ground[x + i] = g;
+            g += 1;
+          }
+        }
+        x += a;
+        break;
+      case 'pile': // a snow pile on the ground at an offset, sending snowballs rolling toward b (-1 left)
+        thing('pile', x + a + 0.5, g, { dir: b || -1 });
+        break;
+      case 'gate': // a portcullis 3 tall, with wall above it to the level's top: only a key opens it
+        fill(x, g);
+        for (let y = 0; y < g - 3; y++) put(x, y, T.BLOCK);
+        for (let y = g - 3; y < g; y++) put(x, y, T.GATE);
+        thing('gate', x + 0.5, g);
+        x += 1;
+        break;
+      case 'key': // a key: offset, height of the surface it rests on
+        thing('key', x + a + 0.5, g - b - 0.5);
+        break;
+      case 'crusher': // a crusher 2 wide: offset, its bottom's height above the floor while up, phase (0..1)
+        thing('crusher', x + a, g - b, { w: 2, floor: g, h: b, phase: c || 0 });
+        break;
+      case 'water': // water from here on, its surface a tiles below the ground line here
+        wet = g + a;
+        break;
+      case 'dry':
+        wet = Infinity;
+        break;
+      case 'current': // a band of current: offset, top (tiles above the ground), width, height, dx, dy
+        thing('current', x + a, g - b, { w: c, h: d, cx: e, cy: seg[6] || 0 });
+        break;
+      case 'fish': // a fish: offset, height above the floor, how far it swims to the right and back
+        thing('fish', x + a + 0.5, g - b, { range: c, kind: 'fish' });
+        break;
+      case 'lamp': // a lamp on the ground at an offset: a pool of light in the dark
+        thing('lamp', x + a + 0.5, g);
+        break;
       case 'pit': {
-        for (let i = 0; i < a; i++) ground[x + i] = rows;
+        for (let i = 0; i < a; i++) {
+          ground[x + i] = rows;
+          water[x + i] = wet;
+        }
         // Stepping stones in the pit: [dx, dy (from the ground line), length, kind]
         for (const [dx, dy, len, k] of b || []) platform(x + dx, g + dy, len, k);
         x += a;
@@ -387,15 +537,16 @@ export function buildStage(segments, rows = ROWS) {
   function platform(px, py, len, k) {
     for (let i = 0; i < len; i++) {
       if (k === 'c') thing('cookie', px + i + 0.5, py);
-      else put(px + i, py, k === '-' ? T.ONEWAY : T.BLOCK);
+      else put(px + i, py, k === '-' ? T.ONEWAY : k === 'i' ? T.ICE : T.BLOCK);
     }
   }
 
   const coins = things.filter((t) => t.type === 'coin').length;
-  return { cols, rows, base: BASE, grid, ground, things, start, coins, next };
+  return { cols, rows, base: BASE, grid, ground, water, things, start, coins, next };
 }
 
 function advance(seg) {
   const [kind, a] = seg;
-  return ['flat', 'spikes', 'wall', 'low', 'pit', 'belt'].includes(kind) ? a : 0;
+  if (kind === 'gate') return 1;
+  return ['flat', 'spikes', 'wall', 'low', 'pit', 'belt', 'ice', 'slope'].includes(kind) ? a : 0;
 }

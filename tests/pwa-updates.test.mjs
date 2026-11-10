@@ -368,6 +368,8 @@ test("pwa-updates AC-6 / pwa-updates AC-8: a version bump that changes one game 
   await landing.waitForFunction(() => document.readyState === 'complete' && navigator.serviceWorker.controller);
   await until(landing, () => caches.keys().then((k) => k.includes('games-shell-test-2')), null, 'updated');
   await landing.waitForLoadState('networkidle');
+  const tiles = await landing.locator('.tiles > li').count();
+  assert.ok(tiles > 0);
   // Beta is played online on the new version; alpha isn't opened online again.
   await landing.goto(s.base + 'beta/');
   await played(landing);
@@ -379,7 +381,7 @@ test("pwa-updates AC-6 / pwa-updates AC-8: a version bump that changes one game 
   await played(landing);
   assert.deepEqual(await marks(landing), { page: '2', script: '2' }, 'beta, offline, the new version');
   await landing.goto(s.base);
-  assert.equal(await landing.locator('.tiles > li').count(), 8, 'the landing page, offline');
+  assert.equal(await landing.locator('.tiles > li').count(), tiles, 'the landing page, offline, every tile');
   assert.deepEqual(await marks(landing), { page: '2', script: '2' });
   const keys = await landing.evaluate(() => caches.keys());
   assert.ok(keys.includes('games-game-alpha') && keys.includes('games-game-beta'), `per-game caches (${keys})`);

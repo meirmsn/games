@@ -17,11 +17,11 @@
 // time they're opened. Bump VERSION when SHELL changes (a file added, removed or renamed), so the new
 // list is precached; only the shell cache is replaced, never a game's.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const PREFIX = 'games-';
 const SHELL_CACHE = `${PREFIX}shell-${VERSION}`;
 const SITE_CACHE = `${PREFIX}site`;
-const LEGACY = /^games-v\d+$/; // the single cache of the workers before v6
+const LEGACY = /^games-v\d+$/; // the single cache of the workers before the split (v5, v6)
 const SHELL = [
   './',
   'index.html',
@@ -42,6 +42,7 @@ const SHELL = [
   'assets/tiles/reef.png',
   'assets/tiles/googly-faces.png',
   'assets/tiles/walk-on-red.png',
+  'assets/tiles/crumble.png',
   'assets/tiles/pixel-leap.png',
   'assets/tiles/splat-gallery.png',
   'assets/tiles/high-seas.png',
@@ -81,7 +82,7 @@ self.addEventListener('install', (event) => {
     (async () => {
       const cache = await caches.open(SHELL_CACHE);
       await cache.addAll(SHELL.map((p) => new Request(p, { cache: 'no-cache' })));
-      // The first upgrade from a worker before v6 is silent, as those workers' updates were: their
+      // The first upgrade from a worker before the split is silent, as those workers' updates were: their
       // landing page has no Update button to wait for. Every later update waits for it.
       if ((await caches.keys()).some((k) => LEGACY.test(k))) await self.skipWaiting();
     })()
@@ -100,7 +101,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Copy a pre-v6 cache's played games into their own caches. True once every copy succeeded; until
+// Copy a pre-split cache's played games into their own caches. True once every copy succeeded; until
 // then the old cache stays, and the next activation tries again.
 async function moveLegacy(name) {
   try {
