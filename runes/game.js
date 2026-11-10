@@ -2,6 +2,7 @@
 // The rules live in rules.js; this file draws the pool, reads touch, mouse and keys, and keeps the
 // level list. Tests drive it through window.__runes (see the end of this file).
 import { mountShell } from '../shared/game-shell.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import * as R from './rules.js';
 import { LEVELS, CHAPTERS } from './levels.js';
 
@@ -617,6 +618,9 @@ ui.canvas.addEventListener('pointerdown', (e) => {
   drag.t = performance.now();
   drag.ax = drag.ay = 0;
   drag.moved = false;
+  // A touch that lands in the phone's edge strips can tap a stone but never drags: that swipe is
+  // the phone's (shared/safe-zone.js).
+  drag.edge = isEdgeStart(e);
   game.lastInput = performance.now();
   try {
     ui.canvas.setPointerCapture(e.pointerId);
@@ -632,10 +636,10 @@ ui.canvas.addEventListener('pointermove', (e) => {
   drag.x = e.clientX;
   drag.y = e.clientY;
   if (!drag.moved && Math.hypot(drag.x - drag.sx, drag.y - drag.sy) >= KNOBS.tapPx) {
-    // No longer a tap: the whole movement so far counts toward the drag.
+    // No longer a tap: the whole movement so far counts toward the drag (none from an edge start).
     drag.moved = true;
-    if (!ended()) feed(drag.x - drag.sx, drag.y - drag.sy);
-  } else if (drag.moved && !ended()) feed(dx, dy);
+    if (!ended() && !drag.edge) feed(drag.x - drag.sx, drag.y - drag.sy);
+  } else if (drag.moved && !ended() && !drag.edge) feed(dx, dy);
   ui.canvas.style.cursor = drag.moved ? 'grabbing' : 'pointer';
 });
 function endDrag(e, cancelled) {

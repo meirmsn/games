@@ -7,7 +7,7 @@
 // load after (they refresh in the background). Bump VERSION when SHELL itself changes (a file added,
 // removed or renamed) so the new list is cached and the old cache is cleared.
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = `games-${VERSION}`;
 const SHELL = [
   './',
@@ -20,6 +20,7 @@ const SHELL = [
   'shared/sound.js',
   'shared/game-shell.js',
   'shared/game-shell.css',
+  'shared/safe-zone.js',
   'assets/sounds/back.mp3',
   'assets/sounds/tap.mp3',
   'assets/sounds/soon.mp3',

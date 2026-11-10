@@ -6,6 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
 // Its own port range: the test files run in parallel.
@@ -1010,6 +1011,35 @@ test('orbit AC-28: Back asks before leaving; Space while it asks fires nothing; 
   await page.locator('[data-shell-stay]').click();
   await ask.waitFor({ state: 'hidden' });
   assert.match(page.url(), /\/orbit\//);
+  await context.close();
+});
+
+test('edge-gestures AC-4: with iPhone insets, the booster bar sits above the bottom strip, and a drag that starts in the strip does not set the power', async () => {
+  const { context, page } = await open();
+  const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__orbit && 'ready' in document.body.dataset);
+  const r = await page.evaluate(() => {
+    const box = (sel) => {
+      const b = document.querySelector(sel);
+      const was = b.hidden;
+      b.hidden = false; // the hint shows on the first level only; measure it anyway
+      const r = b.getBoundingClientRect();
+      b.hidden = was;
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    };
+    return { bar: box('[data-boost]'), probes: box('.probes'), hint: box('[data-hint]'), fieldBottom: window.__orbit.view.y + 1800 * window.__orbit.view.s };
+  });
+  const strip = 844 - PORTRAIT_INSETS.bottom - 40;
+  assert.ok(r.bar.bottom <= strip + 0.5, `the bar's foot is above the strip (${r.bar.bottom} <= ${strip})`);
+  assert.ok(r.probes.bottom <= r.bar.top + 0.5 && r.probes.top >= r.fieldBottom - 1, `the probes sit between the field and the bar: ${JSON.stringify(r)}`);
+  assert.ok(r.hint.bottom <= r.probes.top + 0.5, `the hint sits above the probes: ${JSON.stringify(r)}`);
+  const power = () => page.evaluate(() => window.__orbit.input.power);
+  const before = await power();
+  const x = r.bar.left + (r.bar.right - r.bar.left) * 0.8;
+  await touchDrag(cdp, x, strip + 10, 0, r.bar.top + 20 - (strip + 10));
+  await touchDrag(cdp, x, strip + 10, -60, 0);
+  assert.equal(await power(), before, 'a drag from the strip sets nothing');
+  await touchDrag(cdp, r.bar.left + (r.bar.right - r.bar.left) * 0.5, (r.bar.top + r.bar.bottom) / 2, 40, 0);
+  assert.notEqual(await power(), before, 'a drag on the bar still sets the power');
   await context.close();
 });
 

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { statSync } from 'node:fs';
 import { chromium } from 'playwright';
+import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
 // Its own port range: the test files run in parallel, and a shared range can collide.
@@ -95,6 +96,39 @@ async function touch(page) {
 }
 
 const shots = (page) => page.evaluate(() => window.__crumble.game.shots);
+
+test('edge-gestures AC-9: with iPhone insets in landscape, a pull that starts in an edge strip neither aims nor fires; one in the safe area does', async () => {
+  const { context, page } = await open({ hasTouch: true });
+  const cdp = await simulateInsets(context, page, LANDSCAPE_INSETS, () => window.__crumble);
+  await battle(page);
+  const send = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+  const pull = async (x, y, dx, dy) => {
+    await send('touchStart', [{ x, y, id: 1 }]);
+    for (let i = 1; i <= 8; i++) await send('touchMove', [{ x: x + (dx * i) / 8, y: y + (dy * i) / 8, id: 1 }]);
+    await page.waitForTimeout(60);
+    const held = await page.evaluate(() => window.__crumble.aim.active ?? null);
+    await send('touchEnd', []);
+    await page.waitForTimeout(30);
+    return held;
+  };
+  const bottom = 390 - LANDSCAPE_INSETS.bottom - 20;
+  const left = LANDSCAPE_INSETS.left + 10;
+  const top = 12;
+  for (const [x, y, dx, dy, where] of [
+    [420, bottom, -120, -60, 'the bottom strip'],
+    [left, 200, 120, 40, 'the left strip'],
+    [420, top, -120, 60, 'the top strip'],
+  ]) {
+    const before = await page.evaluate(() => ({ aim: window.__crumble.tanks[0].aim, power: window.__crumble.tanks[0].power }));
+    await pull(x, y, dx, dy);
+    const after = await page.evaluate(() => ({ aim: window.__crumble.tanks[0].aim, power: window.__crumble.tanks[0].power }));
+    assert.deepEqual(after, before, `a pull from ${where} doesn't aim`);
+    assert.equal(await shots(page), 0, `a pull from ${where} doesn't fire`);
+  }
+  await pull(420, 200, -120, 60);
+  assert.equal(await shots(page), 1, 'a pull from the safe area fires');
+  await context.close();
+});
 
 test('crumble AC-1: the shore moves behind the start card; Start begins on the player turn with the ghost hand', async () => {
   const { context, page, errors } = await open();

@@ -5,6 +5,7 @@
 // with holes, plus a mask for physics). Shells fly on fixed 1/120 s steps, so the CPU's planning and
 // the real flight follow exactly the same path. window.__crumble exposes the state for the tests.
 import { mountShell } from '../shared/game-shell.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import { createExplosions, loadExplosionArt } from '../shared/explosion.js';
 import { createTerrain, makeHeights, rng, STEEL } from './terrain.js';
 
@@ -1736,6 +1737,7 @@ ui.canvas.addEventListener('pointerdown', (e) => {
   if (paused) return resume();
   if (!canAim()) return;
   if (aim.pointer !== null) return; // the first finger owns the aim
+  if (isEdgeStart(e)) return; // the phone's edge strips: that swipe is the phone's (shared/safe-zone.js)
   aim.pointer = e.pointerId;
   aim.sx = e.clientX;
   aim.sy = e.clientY;

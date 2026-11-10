@@ -8,6 +8,7 @@
 // Castle) is drawn smooth at 70 px per tile, and the HUD turns smooth with it. The leap between
 // levels steps through the resolutions on screen.
 import { mountShell } from '../shared/game-shell.js';
+import { ignoreEdgeStarts } from '../shared/safe-zone.js';
 import { WORLDS, buildStage, T, ROWS, SOLID, SLOPES, slopeY } from './worlds.js';
 import { CANDY } from './candy-atlas.js';
 import { MUSHROOM } from './mushroom-atlas.js';
@@ -3173,7 +3174,11 @@ window.addEventListener('keyup', (e) => {
   sync();
 });
 
-// The deck: a touch belongs to the half it began in until it lifts; one touch per half counts.
+// The deck: a touch belongs to the half it began in until it lifts; one touch per half counts. The
+// keys stand clear of the phone's bottom gesture strip; a press that still starts in an edge strip
+// (the pad's sliver by a landscape notch) is the phone's, so it moves nothing (shared/safe-zone.js).
+ignoreEdgeStarts(pad);
+ignoreEdgeStarts(jumpKey);
 function padDirFor(e) {
   const r = pad.getBoundingClientRect();
   const dx = e.clientX - (r.left + r.width / 2);

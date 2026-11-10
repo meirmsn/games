@@ -2,6 +2,7 @@
 // planet's orbit ring. One canvas; the physics lives in physics.js and the systems in levels.js.
 // The spec is specs/orbit.md. Tests reach the game through window.__orbit.
 import { mountShell } from '../shared/game-shell.js';
+import { MARGIN, ignoreEdgeStarts } from '../shared/safe-zone.js';
 import {
   FIELD,
   DT,
@@ -119,6 +120,8 @@ const view = { x: 0, y: 0, s: 1 }; // field → CSS px: px = view.x + wx * view.
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const EDGE = 24; // touches starting this close to the bottom (plus the safe area) are the phone's
 const BAR_SPACE = 82; // room under the field for the booster bar and the probes left above it
+// The bar sits on the phone's bottom gesture strip (shared/safe-zone.js), never in it: style.css
+// puts its foot MARGIN.bottom (40 px) above the safe area.
 
 function readInsets() {
   const probe = document.createElement('div');
@@ -142,7 +145,7 @@ function resize() {
   canvas.height = Math.round(H * dpr);
   // The field sits below the buttons (12 + 44 + 10 px) and above the bottom edge strip.
   const top = insets.top + 66;
-  const bottom = insets.bottom + EDGE + BAR_SPACE; // the booster bar sits below the field
+  const bottom = insets.bottom + MARGIN.bottom + BAR_SPACE; // the booster bar sits below the field
   const side = 8;
   const aw = W - insets.left - insets.right - 2 * side;
   const ah = H - top - bottom;
@@ -1061,7 +1064,9 @@ function onDown(e) {
 canvas.addEventListener('pointerdown', onDown);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// The booster bar: tap a point on it to set the power there, or drag along it.
+// The booster bar: tap a point on it to set the power there, or drag along it. A drag never starts
+// in the phone's edge strips (the bar is clear of the bottom one; this keeps the sides too).
+ignoreEdgeStarts(ui.boost);
 let barDrag = null;
 function powerAt(clientX) {
   const r = ui.boostTrack.getBoundingClientRect();

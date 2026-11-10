@@ -9,6 +9,7 @@
 // moves the landing point the other way along the lanes, pulling down sends it farther, and the
 // paintball takes a moment to fly, so a moving target has to be led. Every miss leaves its paint.
 import { mountShell } from '../shared/game-shell.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import { FRAMES, ATLAS_SCALE } from './atlas.js';
 
 const { sound } = mountShell({
@@ -2217,7 +2218,9 @@ const toUnits = (cx, cy) => ({ x: (cx - ox) / k, y: (cy - oy) / k });
 const onPad = (cx, cy) => toUnits(cx, cy).y >= L.C - 8;
 
 // The slingshot is pulled from wherever the finger first touches the counter (or the mouse
-// presses anywhere): the pull is how far it has moved since, and letting go fires.
+// presses anywhere): the pull is how far it has moved since, and letting go fires. A finger that
+// lands in the phone's edge strips (the bottom one runs across the counter's foot) pulls nothing:
+// the phone takes that swipe for itself (shared/safe-zone.js).
 let grip = null; // { id, x, y }: the pointer holding the pouch, and where it first touched
 // The slingshot answers only while the round's clock runs: not before it, not once time is up, and
 // not while paused, turned or counting back in.
@@ -2232,7 +2235,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!slingLive() || grip) return;
   const isMouse = e.pointerType === 'mouse';
   if (isMouse && e.button !== 0) return;
-  if (!isMouse && !onPad(e.clientX, e.clientY)) return;
+  if (!isMouse && (!onPad(e.clientX, e.clientY) || isEdgeStart(e))) return;
   try {
     canvas.setPointerCapture(e.pointerId);
   } catch (err) {

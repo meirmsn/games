@@ -6,6 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { simulateInsets, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import * as R from '../runes/rules.js';
 import { LEVELS, CHAPTERS } from '../runes/levels.js';
@@ -97,6 +98,34 @@ test('runes AC-1: the pool is already moving before any input, with its buttons,
   }
   assert.equal(await page.evaluate(() => window.__runes.game.index), 0);
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('edge-gestures AC-7: with iPhone insets, a drag that starts in an edge strip moves no line; a tap there still acts', async () => {
+  const { context, page } = await open();
+  const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__runes);
+  const c = await cellSize(page);
+  const box = await page.evaluate(() => ({ ...window.__runes.box, h: window.__runes.game.level.h }));
+  // From the bottom strip and the left strip, a drag right of most of a cell steps nothing.
+  await drag(page, box.ox + c, 844 - PORTRAIT_INSETS.bottom - 20, 0.62 * c, 0);
+  assert.deepEqual(await path(page), [0], 'a drag from the bottom strip moves no line');
+  await drag(page, 8, box.oy + (box.h + 0.6) * c, 0.95 * c, 0);
+  assert.deepEqual(await path(page), [0], 'a drag from the left strip moves no line');
+  // The same drag from the safe area steps the line.
+  await drag(page, box.ox + c, box.oy + (box.h + 0.6) * c, 0.62 * c, 0);
+  assert.deepEqual(await path(page), [0, 1], 'a drag from the safe area steps');
+  await page.evaluate(() => window.__runes.restart());
+  // Widen the left inset until the next stone sits in the left strip: a tap on it still steps there,
+  // and a drag that starts on it does nothing.
+  const p = await center(page, 1);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { ...PORTRAIT_INSETS, left: Math.max(0, Math.floor(p.x - 10)) } });
+  const q = await center(page, 1);
+  const strip = await page.evaluate(async () => (await import('/shared/safe-zone.js')).safeRect().left);
+  assert.ok(q.x < strip, `the stone is in the left strip (${q.x} < ${strip})`);
+  await drag(page, q.x, q.y, 0, 0.95 * c);
+  assert.deepEqual(await path(page), [0], 'a drag from the strip moves nothing');
+  await tapCell(page, 1);
+  assert.deepEqual(await path(page), [0, 1], 'a tap in the strip still acts');
   await context.close();
 });
 
