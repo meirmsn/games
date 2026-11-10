@@ -346,13 +346,15 @@ item.
   accents (4–8 s, free-time, no drums, so they sit on any bar) that play over the bed at random
   every 15–40 s, never twice in a row. The prompts are given in the chat; the files are the owner's
   to generate. Until a world's arrive, it keeps its Kenney loop.
-- **The owner's music is in for four worlds** (owner, 2026-11-10, sending the Meadow's bed and
+- **The owner's music is in for six worlds** (owner, 2026-11-10, sending the Meadow's bed and
   accents: "maybe you can use them", then the Farm's, Frost's and Candy's). Each bed is levelled and
   kept at 64 kbps (about 1 MB); each accents file is cut into its three phrases. A bed is streamed
   by an audio element from a copy fetched as the page loads, so it is cached for offline play like
   everything else but never decoded whole: eight two-minute tracks decoded would take hundreds of
   megabytes on a phone. The accents count only while playing; pausing stops the bed, and the
-  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive.
+  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive. Sea's
+  and Castle's arrived on 2026-11-10 (owner, after batch 3 merged, sending the files made from the
+  prompts in the chat), and play their own bed and accents.
 - **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
@@ -374,8 +376,9 @@ item.
   of their own, so their bad guys come from the New Platformer Pack (as Candy's and Mushroom's
   slimes do): Castle's mice, Ice's snails, Sea's fish; Castle's key and Sea's urchins (its spikes) come
   from it too, as the world's own pack has none. Added beyond the request, for the go: lamps in
-  Ink, the mice, snails, fish and urchins, a key count in the HUD, and two kinds of ground in Ice. All three use Candy's soft sound set and loop
-  until the owner's music (Ice: the Frost bed and accents). Best times move to version 4. The hidden
+  Ink, the mice, snails, fish and urchins, a key count in the HUD, and two kinds of ground in Ice. All three use Candy's soft sound set
+  (jump, coin, stomp…) and the owner's music: Ice the Frost bed and accents, Sea and Castle their
+  own (sent 2026-11-10, after batch 3 merged). Best times move to version 4. The hidden
   assist never changes crushers, snowballs, currents, fish or the swim. Bad guys stay 1.5 tiles,
   including fish; a snowball is 1.2 tiles across (a rolling hazard, not a bad guy).
 - **Castle: keys, gates and crushers, in puzzle-like situations.** A gate is the pack's portcullis,
@@ -602,8 +605,8 @@ item.
   fish's or the swim's speed — `tests/pixel-leap.test.mjs`.
 - **AC-39** Each batch-3 world draws from its own pack and plays its music: Castle's ground and
   gates are the Medieval pack's tiles, Ice's its snow and ice, Sea's its sand, water and wood; Ice
-  plays the owner's Frost bed, Castle and Sea Candy's soft loop until their own arrive; the world
-  map shows all ten — `tests/pixel-leap.test.mjs`.
+  plays the owner's Frost bed, and Sea and Castle the owner's own beds (changed after the go: the
+  owner sent them, 2026-11-10); the world map shows all ten — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
