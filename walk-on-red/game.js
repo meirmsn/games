@@ -1,4 +1,4 @@
-// Walk on Red: he really needs the loo, the porta-potty is across the street, and the walk light
+// Gotta Go! (walk-on-red/): he really needs the loo, the porta-potty is across the street, and the walk light
 // is red. So he goes now. Make it across before the light turns green, and the sooner the better;
 // from level 8, people waiting stick to him and follow in his footsteps.
 //
@@ -1270,7 +1270,7 @@ let LH = 300;
 let originX = 0; // where world x = 0 lands on the low canvas
 let originY = 0;
 let offX = 0;
-const TILE = new URLSearchParams(location.search).has('tile'); // device px from the screen's left edge to the street's
+const TILE = new URLSearchParams(location.search).has('tile'); // the landing page's tile picture: no cards or buttons
 let insetTop = 0;
 let insetBottom = 0;
 const view = { scale: 1, person: 0, top: 0, bottom: 0 }; // for tests
@@ -1385,20 +1385,12 @@ function resize() {
   canvas.height = Math.round(vh * dpr);
   readInsets();
   const fitH = (vh - hudRoom() - 16 - insetBottom) / streetNeed();
-  if (TILE) {
-    // The landing page's tile picture (?tile) shows the street wide, filling the picture.
-    scale = Math.max(1, Math.min(vw / PLAY_W, fitH));
-    LW = Math.ceil(vw / scale);
-    originX = Math.floor((LW - PLAY_W) / 2);
-    offX = 0;
-  } else {
-    // One scale for every street and every state, so the width never jumps; the view is the
-    // crossing, edge to edge.
-    scale = Math.max(1, Math.min(vw / CROSS_W, fitH));
-    LW = CROSS_W;
-    originX = -CROSS_C0 * CW;
-    offX = Math.max(0, Math.round(((vw - LW * scale) / 2) * dpr));
-  }
+  // One scale for every street and every state, so the width never jumps; the view is the
+  // crossing, edge to edge (the landing page's tile picture, ?tile, is cut from this same view).
+  scale = Math.max(1, Math.min(vw / CROSS_W, fitH));
+  LW = CROSS_W;
+  originX = -CROSS_C0 * CW;
+  offX = Math.max(0, Math.round(((vw - LW * scale) / 2) * dpr));
   LH = Math.ceil(vh / scale);
   low.width = LW;
   low.height = LH;
