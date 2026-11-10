@@ -788,16 +788,33 @@ function drawBody(i, wx, wy) {
   ctx.fill();
 }
 
+// How a mote is drawn: null when it isn't (caught, or a past jump's), else its alpha and its size
+// factor. The current jump's are full; the next jump's a little brighter than the rest, so its line
+// can inform this jump's aim; every later jump's dim. The leg only moves on when a capture
+// finishes, so during a capture or rewind the current jump is still the one being flown.
+const MOTE_NOW = { alpha: 0.95, scale: 1 };
+const MOTE_NEXT = { alpha: 0.5, scale: 0.85 };
+const MOTE_LATER = { alpha: 0.3, scale: 0.75 };
+function moteLook(i) {
+  const m = game.level.motes[i];
+  if (game.taken.has(i)) return null; // caught
+  if (game.mode === 'done') return MOTE_LATER; // the end card: every uncaught mote dim
+  if (m.leg < game.leg) return null; // out of reach
+  if (m.leg === game.leg) return MOTE_NOW;
+  if (m.leg === game.leg + 1) return MOTE_NEXT;
+  return MOTE_LATER;
+}
+
 function drawMotes() {
   const motes = game.level.motes;
   for (let i = 0; i < motes.length; i++) {
+    const look = moteLook(i);
+    if (!look) continue;
     const m = motes[i];
-    if (game.taken.has(i) || (m.leg < game.leg && game.mode !== 'done')) continue; // caught, or out of reach
-    const current = m.leg === game.leg && game.mode !== 'done';
     const x = sx(m.x);
     const y = sy(m.y + Math.sin(time * 1.6 + i) * 3);
-    const s = Math.max(1.8, 4.5 * view.s) * (current ? 1 : 0.75);
-    ctx.globalAlpha = current ? 0.95 : 0.3;
+    const s = Math.max(1.8, 4.5 * view.s) * look.scale;
+    ctx.globalAlpha = look.alpha;
     ctx.fillStyle = 'rgba(255, 214, 140, 0.18)';
     ctx.beginPath();
     ctx.arc(x, y, s * 2.4, 0, Math.PI * 2);
@@ -1313,6 +1330,7 @@ window.__orbit = {
   probeWorld,
   launchPoint,
   timeoutDim,
+  moteLook,
   resize,
   tap: (y = 100) => onDown({ isPrimary: true, clientY: y }),
   setPower,
