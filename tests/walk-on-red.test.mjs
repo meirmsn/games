@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 
 // Its own port range: the test files run in parallel, and a shared range can collide.
 const PORT = 9300 + Math.floor(Math.random() * 100);
@@ -118,6 +119,39 @@ test('walk-on-red AC-1: traffic drives behind the start card; Start begins level
   });
   assert.deepEqual(after, { mode: 'play', level: 0, name: 'Quiet Street', red: 30, copiers: 0, row: after.bottom, bottom: after.bottom });
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('edge-gestures AC-8: with iPhone insets, a swipe that starts in an edge strip hops nowhere; a tap there still hops up', async () => {
+  const { context, page } = await open();
+  const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__walkOnRed);
+  await startEmpty(page, 1);
+  await page.evaluate(() => (window.__walkOnRed.manual = false));
+  const at = () => page.evaluate(() => [window.__walkOnRed.player.col, window.__walkOnRed.player.row]);
+  const settle = () => page.waitForTimeout(200);
+  // One step up first, so a swipe down has somewhere to go.
+  await touchDrag(cdp, 195, 400, 0, 0, { n: 1 });
+  await settle();
+  const start = await at();
+  const strip = 844 - PORTRAIT_INSETS.bottom - 20;
+  for (const [x, y, dx, dy, what] of [
+    [195, strip, 90, 0, 'right, from the bottom strip'],
+    [195, strip, 0, -90, 'up, from the bottom strip'],
+    [195, strip, 0, 30, 'down, from the bottom strip'],
+    [8, 400, 90, 0, 'right, from the left strip'],
+    [195, PORTRAIT_INSETS.top + 10, 0, 90, 'down, from the top strip'],
+  ]) {
+    await touchDrag(cdp, x, y, dx, dy, { n: 4 });
+    await settle();
+    assert.deepEqual(await at(), start, `a swipe ${what} hops nowhere`);
+  }
+  await touchDrag(cdp, 195, strip, 0, 0, { n: 1 });
+  await settle();
+  assert.deepEqual(await at(), [start[0], start[1] - 1], 'a tap in the bottom strip still hops up');
+  // The same swipe from the safe area hops.
+  await touchDrag(cdp, 195, 400, 90, 0, { n: 4 });
+  await settle();
+  assert.deepEqual(await at(), [start[0] + 1, start[1] - 1], 'a swipe from the safe area hops right');
   await context.close();
 });
 

@@ -70,9 +70,73 @@ window.addEventListener('appinstalled', () => {
   installBtn.hidden = true;
 });
 
-// ---- Offline ----
+// ---- Offline, and updates (specs/pwa-updates.md) ----
+// "New version available" shows when this page is out of date: its own files on the server differ
+// from the ones it's showing, or a new service worker is waiting. Checked when the page comes back on
+// screen (and at load, for a waiting worker), so an installed app that resumes finds updates too.
+// Update reloads only this page, so a game in another tab is never cut short.
+const notice = document.querySelector('[data-update]');
+const updateBtn = notice.querySelector('button');
+const OWN_FILES = ['./', 'assets/site.js', 'assets/site.css', 'assets/base.css'];
+let reg = null;
+let stale = false;
+let updating = false;
+
+const workerWaiting = () => !!reg?.waiting && !!navigator.serviceWorker.controller;
+function showUpdate() {
+  const show = stale || workerWaiting();
+  notice.hidden = !show;
+  document.body.classList.toggle('has-update', show);
+}
+
+// The page's own files as the server has them now (fetched fresh; the cache when offline).
+function ownFiles() {
+  return Promise.all(
+    OWN_FILES.map((f) =>
+      fetch(f, { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(new Error(f))))
+    )
+  ).then((texts) => texts.join('\u0000'));
+}
+// What this page loaded with: fetched right after load, when the page and the server agree.
+const loadedWith = ownFiles().catch(() => null);
+
+async function check() {
+  reg?.update().catch(() => {});
+  const [then, now] = await Promise.all([loadedWith, ownFiles().catch(() => null)]);
+  if (then && now && then !== now) stale = true;
+  showUpdate();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') check();
+});
+
+updateBtn.addEventListener('click', () => {
+  sound.play('tap');
+  if (!reg?.waiting) return window.location.reload();
+  updating = true;
+  updateBtn.disabled = true;
+  reg.waiting.postMessage({ type: 'update' });
+});
+
 if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (updating) {
+      updating = false;
+      window.location.reload();
+    } else {
+      showUpdate(); // another tab applied it
+    }
+  });
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('sw.js')
+      .then((r) => {
+        reg = r;
+        showUpdate();
+        // A first visit has no worker in charge yet: what installs then is no update.
+        r.addEventListener('updatefound', () => r.installing?.addEventListener('statechange', showUpdate));
+      })
+      .catch(() => {});
   });
 }

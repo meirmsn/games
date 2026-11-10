@@ -216,6 +216,76 @@ test('splat-gallery AC-3: on touch, a pull from the counter stretches the slings
   await context.close();
 });
 
+// An iPhone's safe-area insets, simulated over the DevTools protocol before the page lays out.
+async function openInset(viewport, insets) {
+  const context = await browser.newContext({ viewport, hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: 0, right: 0, ...insets } });
+  await page.goto(BASE + 'splat-gallery/');
+  await page.waitForFunction(() => window.__gallery);
+  return { context, page, cdp };
+}
+
+test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch starting in the bottom or left strip starts no pull; a pull from the safe counter still reaches the full far pull', async () => {
+  for (const [viewport, insets] of [
+    [{ width: 390, height: 844 }, { top: 47, bottom: 34 }],
+    [{ width: 430, height: 932 }, { top: 59, bottom: 34 }],
+    [{ width: 844, height: 390 }, { top: 0, bottom: 21, left: 47, right: 47 }],
+  ]) {
+    const { context, page, cdp } = await openInset(viewport, insets);
+    await ready(page);
+    const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+    const at = () => page.evaluate(() => ({ active: window.__gallery.aim.active, py: window.__gallery.aim.py, balls: window.__gallery.balls().length }));
+    const b = await page.evaluate(() => ({ ...window.__gallery.hudBounds(), k: window.__gallery.stage().k, range: window.__gallery.pullRange() }));
+    const stripTop = viewport.height - insets.bottom - 40;
+    const label = `${viewport.width}x${viewport.height}`;
+    // On the home screen (a bottom inset) the counter grows by the 40 px strip: its top and the pouch
+    // sit as far above the strip as they sit above the screen's bottom in Safari.
+    const base = (viewport.width > viewport.height ? 104 : 168) * b.k;
+    assert.ok(near(viewport.height - insets.bottom - b.counterTop, base + 40, 1), `${label}: the counter is taller by the strip (${viewport.height - insets.bottom - b.counterTop} vs ${base + 40})`);
+    assert.ok(stripTop - b.counterTop >= base - 1, `${label}: the counter's whole face shows above the strip`);
+    // A touch on the counter's foot, in the bottom strip, pulls nothing and fires nothing.
+    for (const [x, y] of [[viewport.width / 2, stripTop + 12], [viewport.width / 2, viewport.height - insets.bottom - 4], [(insets.left || 0) + 10, (b.counterTop + stripTop) / 2]]) {
+      await touch('touchStart', [{ x, y, id: 1 }]);
+      for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x, y: Math.min(viewport.height - 1, y + i * 3), id: 1 }]);
+      await touch('touchMove', [{ x: x + 40, y: y - 80, id: 1 }]);
+      await page.waitForTimeout(30);
+      const held = await at();
+      await touch('touchEnd', []);
+      assert.equal(held.active, false, `${label}: a touch starting at (${x}, ${y}) starts no pull`);
+      assert.equal((await at()).balls, 0, `${label}: and fires nothing`);
+    }
+    // The pouch rests above the strip. From the top of the counter, in the safe area, a pull
+    // straight down reaches the full far pull while the finger is still on screen (it may cross into
+    // the strip: only starts there are the phone's), and letting go fires.
+    assert.ok(b.sling.y < stripTop, `${label}: the pouch rests above the strip (${b.sling.y} < ${stripTop})`);
+    const reach = b.range.y * b.k;
+    const y0 = b.counterTop + 6;
+    assert.ok(y0 + reach <= viewport.height - 1, `${label}: the full pull fits below the counter's top`);
+    await touch('touchStart', [{ x: b.sling.x, y: y0, id: 2 }]);
+    for (let i = 1; i <= 10; i++) await touch('touchMove', [{ x: b.sling.x, y: y0 + (reach * i) / 10, id: 2 }]);
+    await page.waitForTimeout(50);
+    const full = await at();
+    assert.ok(full.active && near(full.py, b.range.y, 0.05), `${label}: the pull is the full far pull (${JSON.stringify(full)})`);
+    await touch('touchEnd', []);
+    assert.equal((await at()).balls, 1, `${label}: letting go fires`);
+    await context.close();
+  }
+});
+
+test('edge-gestures AC-3: in Safari (no bottom inset) the counter keeps its height', async () => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    const { context, page } = await open({ viewport, hasTouch: true });
+    const b = await page.evaluate(() => ({ ...window.__gallery.hudBounds(), k: window.__gallery.stage().k, lift: window.__gallery.L.lift }));
+    const base = (viewport.width > viewport.height ? 104 : 168) * b.k;
+    assert.equal(b.lift, 0);
+    assert.ok(near(viewport.height - b.counterTop, base, 1), `${viewport.width}: the counter is ${viewport.height - b.counterTop} px, as before`);
+    await context.close();
+  }
+});
+
 test('splat-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go', async () => {
   const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
   await ready(page);

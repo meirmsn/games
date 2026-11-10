@@ -20,6 +20,7 @@
 // Drawing: the street is drawn at its art resolution (1 art px = 1 canvas px) on a small offscreen
 // canvas, then scaled up with smoothing off; text goes on the full-resolution canvas on top.
 import { mountShell } from '../shared/game-shell.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import { FRAMES } from './atlas.js';
 import { GLYPHS, STAR } from './pixel-font.js';
 
@@ -1050,7 +1051,7 @@ function doHop(dir) {
 
 // ---------- Input ----------
 
-const input = { id: null, x: 0, y: 0, queued: null, swallow: false };
+const input = { id: null, x: 0, y: 0, queued: null, swallow: false, edge: false };
 const canvas = document.getElementById('street');
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -1062,6 +1063,9 @@ canvas.addEventListener('pointerdown', (e) => {
   input.id = e.pointerId;
   input.x = e.clientX;
   input.y = e.clientY;
+  // A touch that lands in the phone's edge strips can tap (hop up) but never swipes: that swipe is
+  // the phone's (shared/safe-zone.js).
+  input.edge = isEdgeStart(e);
   try {
     canvas.setPointerCapture(e.pointerId);
   } catch (err) {
@@ -1079,8 +1083,10 @@ function endPointer(e, cancelled) {
   if (cancelled || game.mode !== 'play') return;
   const dx = e.clientX - input.x;
   const dy = e.clientY - input.y;
-  if (Math.hypot(dx, dy) >= 18) doHop(Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? 'down' : 'up') : dx > 0 ? 'right' : 'left');
-  else doHop('up');
+  if (Math.hypot(dx, dy) >= 18) {
+    if (input.edge) return;
+    doHop(Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? 'down' : 'up') : dx > 0 ? 'right' : 'left');
+  } else doHop('up');
 }
 canvas.addEventListener('pointerup', (e) => endPointer(e, false));
 canvas.addEventListener('pointercancel', (e) => endPointer(e, true));

@@ -22,21 +22,20 @@ const HOME = new URL('../', import.meta.url).href;
 const SERVICE_WORKER = new URL('../sw.js', import.meta.url).href;
 
 // A game opened straight from a link, without the landing page, has no service worker yet. It
-// registers it, then caches the files this page has already loaded, so the game works offline
-// after this one visit. (Opened from the landing page, the service worker caches them as they load.)
+// registers it, then asks it to cache the files this page has already loaded, each in this game's
+// own cache, so the game works offline after this one visit. (Opened from the landing page, the
+// service worker caches them as they load.) A game page never listens for a new version and never
+// reloads for one: updates are the landing page's (specs/pwa-updates.md).
 function keepForOffline() {
-  if (!('serviceWorker' in navigator) || !window.caches || navigator.serviceWorker.controller) return;
+  if (!('serviceWorker' in navigator) || navigator.serviceWorker.controller) return;
   navigator.serviceWorker
     .register(SERVICE_WORKER)
     .then(() => navigator.serviceWorker.ready)
-    .then(async () => {
-      const name = (await caches.keys()).find((k) => k.startsWith('games-'));
-      if (!name) return;
-      const cache = await caches.open(name);
+    .then((reg) => {
       const urls = [location.href.split('#')[0]];
       for (const entry of performance.getEntriesByType('resource')) urls.push(entry.name);
-      const mine = new Set(urls.filter((u) => new URL(u).origin === location.origin));
-      await Promise.all([...mine].map((u) => cache.add(u).catch(() => {})));
+      const mine = [...new Set(urls.filter((u) => new URL(u).origin === location.origin))];
+      reg.active?.postMessage({ type: 'keep', urls: mine });
     })
     .catch(() => {});
 }
