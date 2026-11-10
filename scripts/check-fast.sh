@@ -51,6 +51,8 @@ fi
 # This repo's own checks, from before the devshop: relative links in the docs, the service worker's
 # precache list and each page's local references, and the theme tokens the stylesheets use.
 part python3 scripts/check-links.py
+# Every playable game and the landing page share with their own 1200×630 picture (no browser).
+part node --test tests/social-previews.test.mjs
 # Stricter than the secret scan's registry check: this repo's lockfile resolves only from npmjs.
 lockfile_npmjs_only() {
   if grep -o '"resolved": "[^"]*"' package-lock.json | grep -v '"https://registry.npmjs.org/'; then
