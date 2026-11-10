@@ -9,7 +9,7 @@
 // moves the landing point the other way along the lanes, pulling down sends it farther, and the
 // paintball takes a moment to fly, so a moving target has to be led. Every miss leaves its paint.
 import { mountShell } from '../shared/game-shell.js';
-import { isEdgeStart } from '../shared/safe-zone.js';
+import { MARGIN, isEdgeStart } from '../shared/safe-zone.js';
 import { FRAMES, ATLAS_SCALE } from './atlas.js';
 
 const { sound } = mountShell({
@@ -180,7 +180,12 @@ function layoutStage(o) {
   L.top = top;
   L.bottom = bottom;
   L.T = top + (land ? 58 : 72); // the lanes start below the valance
-  L.counterH = land ? 104 : 168;
+  // A page that reaches the screen's bottom edge (a home-screen app: the bottom inset is set) puts
+  // the phone's gesture strip on the counter's foot, where Safari's own bars would have pushed the
+  // booth up. There the counter grows by the strip, so its top, the pouch and the thumb's pull all
+  // sit above it, as in Safari (the owner, 2026-11-10; shared/safe-zone.js).
+  L.lift = bottom > 0 ? MARGIN.bottom / k0 : 0;
+  L.counterH = (land ? 104 : 168) + L.lift;
   L.C = SH - bottom - L.counterH; // the counter's top edge: the thumb's pad, never a target
   const n = land ? 3 : 5;
   const band = (L.C - L.T) / n;

@@ -241,7 +241,11 @@ test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch st
     const b = await page.evaluate(() => ({ ...window.__gallery.hudBounds(), k: window.__gallery.stage().k, range: window.__gallery.pullRange() }));
     const stripTop = viewport.height - insets.bottom - 40;
     const label = `${viewport.width}x${viewport.height}`;
-    assert.equal(b.counterTop < stripTop - 40, true, `${label}: the counter shows above the strip`);
+    // On the home screen (a bottom inset) the counter grows by the 40 px strip: its top and the pouch
+    // sit as far above the strip as they sit above the screen's bottom in Safari.
+    const base = (viewport.width > viewport.height ? 104 : 168) * b.k;
+    assert.ok(near(viewport.height - insets.bottom - b.counterTop, base + 40, 1), `${label}: the counter is taller by the strip (${viewport.height - insets.bottom - b.counterTop} vs ${base + 40})`);
+    assert.ok(stripTop - b.counterTop >= base - 1, `${label}: the counter's whole face shows above the strip`);
     // A touch on the counter's foot, in the bottom strip, pulls nothing and fires nothing.
     for (const [x, y] of [[viewport.width / 2, stripTop + 12], [viewport.width / 2, viewport.height - insets.bottom - 4], [(insets.left || 0) + 10, (b.counterTop + stripTop) / 2]]) {
       await touch('touchStart', [{ x, y, id: 1 }]);
@@ -267,6 +271,17 @@ test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch st
     assert.ok(full.active && near(full.py, b.range.y, 0.05), `${label}: the pull is the full far pull (${JSON.stringify(full)})`);
     await touch('touchEnd', []);
     assert.equal((await at()).balls, 1, `${label}: letting go fires`);
+    await context.close();
+  }
+});
+
+test('edge-gestures AC-3: in Safari (no bottom inset) the counter keeps its height', async () => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    const { context, page } = await open({ viewport, hasTouch: true });
+    const b = await page.evaluate(() => ({ ...window.__gallery.hudBounds(), k: window.__gallery.stage().k, lift: window.__gallery.L.lift }));
+    const base = (viewport.width > viewport.height ? 104 : 168) * b.k;
+    assert.equal(b.lift, 0);
+    assert.ok(near(viewport.height - b.counterTop, base, 1), `${viewport.width}: the counter is ${viewport.height - b.counterTop} px, as before`);
     await context.close();
   }
 });
