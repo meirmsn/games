@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds Shooting Gallery's three end-of-round alarms into shooting-gallery/sounds/.
+"""Builds Splat Gallery's three end-of-round alarms into splat-gallery/sounds/.
 
   alert10.mp3  at 10 s: a hand bell rung hard and fast for a second and a half, like a barker's
   alert5.mp3   at 5 s: the bell struck in urgent pairs, climbing, ding-ding, ding-ding, ding-ding
@@ -10,7 +10,7 @@ hand, only re-pitched (by playing it faster or slower) and layered. The klaxon i
 buzzy, detuned sawtooth leaping a fourth, roughened so it sounds like a horn on a pole.
 Each is mastered a few decibels above the half-time chime: clear, but not as loud as the first
 alarms the owner found too loud.
-Run: python3 scripts/shooting-gallery/make-alarms.py <Kenney "Impact Sounds/Audio" folder>
+Run: python3 scripts/splat-gallery/make-alarms.py <Kenney "Impact Sounds/Audio" folder>
      (needs numpy and ffmpeg)
 """
 import os
@@ -22,7 +22,7 @@ import wave
 import numpy as np
 
 SR = 44100
-OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'shooting-gallery', 'sounds')
+OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'splat-gallery', 'sounds')
 rng = np.random.default_rng(11)
 
 

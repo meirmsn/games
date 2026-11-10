@@ -1,6 +1,6 @@
-# Shooting Gallery: a fairground paintball booth
+# Splat Gallery: a fairground paintball booth
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for the rename, the owner chose "Splat gallery" and confirmed "Yes. Fix url as well. No need to preserve old name link" 2026-11-10
 
 ## Intent
 
@@ -13,11 +13,31 @@ short-form, whose "Coming soon" tile is already on the landing page. Precision i
 the finger must not hide the target at the moment of the shot; the choices are which target, now or
 later (`discussion/game-guidelines.md`, on branch `claude/tender-knuth-m0cjxj` until its PR merges). It must differ in kind from Reef and Googly Faces.
 
-The surface is a new game page, `shooting-gallery/`, and its landing tile, which becomes playable.
+The surface is a new game page, `splat-gallery/`, and its landing tile, which becomes playable.
 The game has its own palette (the pack's wood, orange curtains and blue water); the landing page
 keeps the site's tokens.
 
 ## Decisions
+
+### Renamed Splat Gallery, at `splat-gallery/` (owner, 2026-11-10)
+
+Where they differ from the decisions below, these win.
+
+- **The name.** The owner asked: "change the name of the shooting gallery to something that
+  doesn't involve the name shooting? … I wonder if there's something about the connotation of paint
+  or the, you know, water balloons, or more like, you know, color balloons. I like the gallery, but
+  not married to it … show me a list of 10 names to pick from." From the ten offered they picked
+  "Splat gallery", and confirmed it with "Yes". The game is Splat Gallery everywhere a player sees
+  its name: the landing tile, the page title, the share tags, the README. Kenney's pack keeps its own
+  name, Shooting Gallery, where the credits and build scripts name it.
+- **The address moves too.** "Fix url as well. No need to preserve old name link." The game, its
+  build scripts, tests, tile and share picture move from `shooting-gallery` to `splat-gallery`; the
+  old address gets no redirect.
+- **Best scores carry over** (Claude, 2026-11-10): the browser key the bests are saved under stays
+  `shooting-gallery`, which no player sees, so a best saved before the rename still shows.
+- **The offline cache's version goes up, v4 to v5** (Claude, 2026-11-10): the tile's file is renamed
+  in the precached list, which `sw.js` says needs a bump. It empties each visitor's offline copy of
+  every game once (F-10); the old address's copy would otherwise stay cached for good.
 
 ### The owner's fourteenth playtest (owner, 2026-11-10)
 
@@ -67,7 +87,7 @@ Where they differ from the playtests below, these win.
   closing in and swelling into a cymbal crash and a bass drum), alone; the galop comes in on the
   crash, now over a marching kit: the bass drum on every beat, the snare on the off-beats, a tick on
   every eighth and a snare fill closing every fourth bar. Both are synthesised in
-  `scripts/shooting-gallery/make-music.py`; the waltz is unchanged.
+  `scripts/splat-gallery/make-music.py`; the waltz is unchanged.
 - **Targets rush at the end.** "the translation speed of the targets. At 10 seconds, they should
   start moving faster. At 5 seconds, much faster, and in the last 3 seconds, much faster as well."
   Crossing targets move 1.3× as fast from 10 s left, 1.7× from 5 s and 2.2× in the last 3 (not in
@@ -374,7 +394,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   assist (Claude's rules, from the review: a frenzy late in a round must not lose the run).
 - **Carnival music.** "the music should sound more like carnival." An original calliope waltz
   (oom-pah-pah, steam-whistle pipes with a flutter) plays under the booth, and an original fast
-  galop under a frenzy, both synthesised by `scripts/shooting-gallery/make-music.py` into MP3.
+  galop under a frenzy, both synthesised by `scripts/splat-gallery/make-music.py` into MP3.
 
 ### The game as it now stands (Claude, 2026-11-09, unless marked)
 
@@ -413,7 +433,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   0.36 → 0.6 of the pack's size from the far lane to the near one in portrait (the far ones about 51
   units), 0.38 → 0.52 in landscape. The stage keeps its size for the whole run and is letterboxed
   when the screen changes. The pixel ratio is capped at 2. The pack's sprites are rasterised at 2×
-  by `scripts/shooting-gallery/build-atlas.mjs`; the splats by `scripts/shooting-gallery/build-splats.py`.
+  by `scripts/splat-gallery/build-atlas.mjs`; the splats by `scripts/splat-gallery/build-splats.py`.
 - **Hidden assist** (0 to 1): grows the body hit area of every target by up to 15% (never the
   bullseye). It rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or 2, falls
   0.05 with each hit, ignores frenzy shots, starts at 0.3 for a new player, is kept in localStorage,
@@ -445,7 +465,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   directions, as a pull does: a beginner's run ends in rounds 2–3, mostly 2, after about 1.3–1.8
   minutes (one run in six ended in round 1); an average player reaches rounds 4–5; an expert reaches
   closing time, in portrait and landscape alike. The quotas stay as they are.
-- **The landing tile** links to `shooting-gallery/`, its line "Pull the slingshot, lead the shot and paint
+- **The landing tile** links to `splat-gallery/`, its line "Pull the slingshot, lead the shot and paint
   the booth", its picture drawn from the game. The game exposes `window.__gallery` for the tests.
 - The owner's whole round of changes goes in this PR, as asked; the adversarial review suggested
   three PRs (Claude, 2026-11-09).
@@ -464,120 +484,124 @@ moment 8–18 s into rounds 2 to 6.
 
 - **AC-1** The booth is alive behind the start card (targets change position over 1 s); Start
   begins round 1 with a 30 s timer, a quota of 7 and a full hopper of 6, the slingshot on the
-  counter; there is no crosshair and no gun; no errors — `tests/shooting-gallery.test.mjs`.
+  counter; there is no crosshair and no gun; no errors — `tests/splat-gallery.test.mjs`.
 - **AC-2** A pull lands the ball at x = the centre − (pull x / 80) × 0.47 × the stage width and
   y = the counter's top − (pull y / 140) × the booth's height (90 and 80 in landscape), at any
-  height, the pull clamped to those ranges; the pouch follows the pull — `tests/shooting-gallery.test.mjs`.
+  height, the pull clamped to those ranges; the pouch follows the pull — `tests/splat-gallery.test.mjs`.
 - **AC-3** On a touch screen, touching the counter and pulling stretches the slingshot and letting
   go fires; a pull under 10 units fires nothing; touches on the lanes neither aim nor fire —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-4** The mouse pulls and releases the slingshot the same way; the arrow keys set the pull,
-  which stays between shots, and Space lets go — `tests/shooting-gallery.test.mjs`.
+  which stays between shots, and Space lets go — `tests/splat-gallery.test.mjs`.
 - **AC-5** A paintball takes 0.18 s to land just above the counter and longer the farther it goes,
   up to 0.45 s at the top of the booth; it is judged where it lands when it lands, so a target that
-  moved away in the meantime is missed — `tests/shooting-gallery.test.mjs`.
+  moved away in the meantime is missed — `tests/splat-gallery.test.mjs`.
 - **AC-6** A hit scores 10 points a pip with pips 1 near to 3 far; a bullseye scores double and
   puts a ball back in the hopper; the gold duck scores 100 and 2 pips and refills the hopper; a miss
-  scores nothing — `tests/shooting-gallery.test.mjs`.
+  scores nothing — `tests/splat-gallery.test.mjs`.
 - **AC-7** Each shot is the next colour of the palette; it leaves a splat where it lands, on the
   target (going down with it) or on the scenery; scenery splats keep their colour, settle to 80% after 1 s, and at
-  most 70 stay — `tests/shooting-gallery.test.mjs`.
+  most 70 stay — `tests/splat-gallery.test.mjs`.
 - **AC-8** The frontmost thing takes the shot: a lane's strip in front of a target behind it, a
   pop-up not yet risen above its strip can't be hit, and a target's back blocks what's behind it —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-9** The hopper holds 6, spends one a shot, refills one every 0.6 s, and an empty hopper fires
-  nothing — `tests/shooting-gallery.test.mjs`.
+  nothing — `tests/splat-gallery.test.mjs`.
 - **AC-10** When a round's time runs out, a met quota leads to the next round and an unmet one ends
   the run with the over card (score, round reached, best), whose Play again starts a new run —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-11** Meeting the quota starts the bonus: ×1 near, ×2 middle, ×3 far and on the gold duck;
-  closing time doubles everything; no hit scores more than ×8 — `tests/shooting-gallery.test.mjs`.
+  closing time doubles everything; no hit scores more than ×8 — `tests/splat-gallery.test.mjs`.
 - **AC-12** Hitting the frenzy target starts a frenzy for 7 s: the galop plays, targets spring up
   across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it and the
   bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz returns; no
-  frenzy comes without the target — `tests/shooting-gallery.test.mjs`.
+  frenzy comes without the target — `tests/splat-gallery.test.mjs`.
 - **AC-13** Rounds bring in their elements as in the table: movers in every lane in round 1,
   pop-ups from 2, drop-downs from 3 (only into the front three lanes in portrait), turnabouts from
-  4, gold ducks in 5, everything in 6 with points doubled — `tests/shooting-gallery.test.mjs`.
+  4, gold ducks in 5, everything in 6 with points doubled — `tests/splat-gallery.test.mjs`.
 - **AC-14** A screen wider than tall starts a 3-lane landscape booth, a taller one a 5-lane portrait
   booth; turning the screen mid-run freezes play under a grey veil offering a restart in the new
   orientation, turning back resumes after a 1 s count-in, and Restart starts a new run in the new
   layout without moving the assist; on the start card the booth just lays itself out again; each
-  layout keeps its own best — `tests/shooting-gallery.test.mjs`.
+  layout keeps its own best — `tests/splat-gallery.test.mjs`.
 - **AC-15** Hiding the page during a round pauses it under the pause card; the tap that resumes it
   doesn't fire and play stays frozen for the 1 s count-in; on the start card no pause card shows —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-16** The assist grows a target's body hit area but never its bullseye; a new player starts at
   0.3; it rises 0.2 after two misses in a row and 0.3 after a run lost in round 1 or 2, falls 0.05
-  with a hit, and is off in round 6 — `tests/shooting-gallery.test.mjs`.
-- **AC-17** The best score is kept across reloads — `tests/shooting-gallery.test.mjs`.
+  with a hit, and is off in round 6 — `tests/splat-gallery.test.mjs`.
+- **AC-17** The best score is kept across reloads — `tests/splat-gallery.test.mjs`.
 - **AC-18** Each state shows only its own card, banner and HUD, as in the state table —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-19** A shot (the band's twang), a splat, a hit, a bullseye, an empty hopper, a round's start,
   the quota, the frenzy target and the time running out each play their sound —
-  `tests/shooting-gallery.test.mjs`.
-- **AC-20** The landing page's Shooting Gallery tile is a link to `shooting-gallery/` with no
+  `tests/splat-gallery.test.mjs`.
+- **AC-20** The landing page's Splat Gallery tile is a link to `splat-gallery/` with no
   coming-soon badge, and it opens the game — `tests/site.test.mjs`.
-- **AC-21** The game plays offline once it has been played — `tests/shooting-gallery.test.mjs`.
+- **AC-21** The game plays offline once it has been played — `tests/splat-gallery.test.mjs`.
 - **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the slingshot, the
   hopper, the pips and the timer fit without scrolling, the timer's digits are larger than the
   score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
-  target — `tests/shooting-gallery.test.mjs`.
+  target — `tests/splat-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
   half time it chimes and swells; at 10 s a hand bell rings and its bulbs turn yellow; at 5 s a bell
   strikes in climbing pairs and they turn orange; at 3 s they turn red and a klaxon blares at 3, 2
   and 1, each a different sound from the half-time chime; in a frenzy it stops and its bulbs flash
-  yellow and dark, never pink — `tests/shooting-gallery.test.mjs`.
+  yellow and dark, never pink — `tests/splat-gallery.test.mjs`.
 - **AC-24** A frenzy target comes 4–10 s into every round and again at 16–22 s if no frenzy has
   come: in round 1 a big one rising in one of the two nearest lanes for 3.5 s, in round 2 one
   crossing a middle lane, from round 3 one crossing one of the two farthest lanes at 1.8× its speed, a crossing one running its lane's way —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 
 - **AC-25** Every target stands on a stick down behind its strip (a drop-down hangs on its rope)
   and rocks a few degrees about the stick's foot, each at its own pace; a shot is judged in the
-  rocked frame, so it hits where the target is drawn — `tests/shooting-gallery.test.mjs`.
+  rocked frame, so it hits where the target is drawn — `tests/splat-gallery.test.mjs`.
 - **AC-26** There is no ruler beside the slingshot: nothing on the counter beside it changes as it
   is pulled. While it is pulled a dotted arc covers the first fifth of the ball's flight, never
-  reaching where it lands — `tests/shooting-gallery.test.mjs`.
+  reaching where it lands — `tests/splat-gallery.test.mjs`.
 - **AC-27** In every lane a length of stick, at least a fifth of the target's size, shows between
-  a target's bottom and its strip's crest — `tests/shooting-gallery.test.mjs`.
+  a target's bottom and its strip's crest — `tests/splat-gallery.test.mjs`.
 - **AC-28** During a frenzy big bulbs, at least three times the timer's, line the top and both
   sides, their lit pattern chasing along; there are none outside a frenzy —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-29** The start, over, pause and turn cards are wooden signs from the pack's wood, and the
-  10 s chime is louder than the others — `tests/shooting-gallery.test.mjs`.
+  10 s chime is louder than the others — `tests/splat-gallery.test.mjs`.
 - **AC-30** A hit target is pulled straight down with its stick, which stays drawn, starting at
   once and gathering speed, out of sight behind its strip (a drop-down pulled up) within 0.45 s,
-  still partly in view at 0.2 s — `tests/shooting-gallery.test.mjs`.
+  still partly in view at 0.2 s — `tests/splat-gallery.test.mjs`.
 - **AC-31** Paint on a lane's water or grass shows only below the strip's crest, never above its
-  edge — `tests/shooting-gallery.test.mjs`.
+  edge — `tests/splat-gallery.test.mjs`.
 - **AC-32** A target's stick is drawn in soft tones: across its width they span less than 70 levels
-  of luminance and less than 0.4 of what the target's face spans — `tests/shooting-gallery.test.mjs`.
+  of luminance and less than 0.4 of what the target's face spans — `tests/splat-gallery.test.mjs`.
 - **AC-33** The score, the painted signs and the cards are lettered in Rye, a fairground woodtype
-  served from the game's folder, its paint chipped in specks — `tests/shooting-gallery.test.mjs`.
+  served from the game's folder, its paint chipped in specks — `tests/splat-gallery.test.mjs`.
 - **AC-34** No pink shows in a frenzy's marquee, edges or banner, nor on the frenzy target, which
   wears a chasing ring of at least 12 marquee bulbs set into its white border, smaller than
   the frenzy marquee's; the 10 s, 5 s and last-seconds alarms are louder than the half-time chime but under
   2.5× its level, played at no more than 1.2× gain; the quota's brass is a textured bar —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-35** The slingshot can be pulled and fired only while the round's clock runs: once time is
   up, between rounds, on the over card and in the intro a pull does nothing, and a pull held as time
-  runs out is dropped and fires nothing — `tests/shooting-gallery.test.mjs`.
+  runs out is dropped and fires nothing — `tests/splat-gallery.test.mjs`.
 - **AC-36** The waltz plays faster from 10 s left, faster again from 5 s and fastest from 3 s, at its
   usual tempo otherwise; the frenzy's galop plays at least twice as loud as the waltz —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-37** Crossing targets move faster from 10 s left, faster again from 5 s and fastest in the
   last 3; a frenzy opens with a snare roll, alone, before the galop, which carries drums —
-  `tests/shooting-gallery.test.mjs`.
+  `tests/splat-gallery.test.mjs`.
 - **AC-38** Each round draws which way every lane runs, so across games the lanes' ways differ and
   change between rounds; the frenzy target's time spreads over more than 4 s, it comes from both
-  sides and in more than one lane — `tests/shooting-gallery.test.mjs`.
+  sides and in more than one lane — `tests/splat-gallery.test.mjs`.
 - **AC-39** Every paintball is one flat colour; the slingshot's two bands are flat strips of red
-  rubber — `tests/shooting-gallery.test.mjs`.
+  rubber — `tests/splat-gallery.test.mjs`.
+- **AC-40** The game is named Splat Gallery: the landing tile, the game page's title, `og:title`
+  and `twitter:title` say "Splat Gallery", the share tags point at `splat-gallery/` and its picture,
+  neither page shows the word "shooting", and a best saved before the rename still shows —
+  `tests/splat-gallery.test.mjs`.
 
 ## Core flow
 
-1. Tap the Shooting Gallery tile: the booth is alive behind a small start card.
+1. Tap the Splat Gallery tile: the booth is alive behind a small start card.
 2. Tap Start: round 1's targets cross every lane.
 3. On the counter, pull the slingshot back and let go; lead the moving targets, hit the frenzy
    target when it shows, and meet the quota before the timer runs out.

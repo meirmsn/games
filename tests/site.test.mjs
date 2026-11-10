@@ -63,14 +63,14 @@ test('reef AC-11: landing page lists eight games, Reef first and playable, with 
   await context.close();
 });
 
-test('shooting-gallery AC-20: the Shooting Gallery tile is playable and opens the game', async () => {
+test('splat-gallery AC-20: the Splat Gallery tile is playable and opens the game', async () => {
   const { context, page, errors } = await open();
-  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Shooting Gallery' }) });
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Splat Gallery' }) });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'the tile is a link');
-  assert.equal(await tile.getAttribute('href'), 'shooting-gallery/');
+  assert.equal(await tile.getAttribute('href'), 'splat-gallery/');
   assert.equal(await tile.locator('.badge').count(), 0, 'no coming-soon badge');
   await tile.click();
-  await page.waitForURL(/shooting-gallery\/$/);
+  await page.waitForURL(/splat-gallery\/$/);
   await page.waitForFunction(() => window.__gallery);
   assert.deepEqual(errors, []);
   await context.close();
@@ -253,7 +253,7 @@ test("the very first tap's sound plays, and mute silences it", async () => {
   assert.equal(played[0].state, 'running', 'audio was unlocked by that tap');
 
   await page.locator('[data-sound-toggle]').click(); // mute (its own sound is muted too)
-  // The same tile again: since Shooting Gallery went live, High Seas is the only coming-soon tile.
+  // The same tile again: since Splat Gallery went live, High Seas is the only coming-soon tile.
   await page.locator('.tile.is-soon').first().click();
   played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'nothing plays while muted');
