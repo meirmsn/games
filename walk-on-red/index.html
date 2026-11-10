@@ -40,7 +40,10 @@
     <div class="hud" data-hud hidden>
       <div class="hud-mid">
         <div class="street-name" data-street-name></div>
-        <div class="quota"><span class="quota-fill" data-quota-fill></span></div>
+        <div class="hud-row">
+          <div class="quota"><span class="quota-fill" data-quota-fill></span></div>
+          <div class="lives" data-lives role="img" aria-label="3 lives left"><svg viewBox="0 0 7 6" aria-hidden="true"><path class="h-fill" d="M1 0h2v1h1V0h2v1h1v2H6v1H5v1H4v1H3V5H2V4H1V3H0V1h1z" /></svg><svg viewBox="0 0 7 6" aria-hidden="true"><path class="h-fill" d="M1 0h2v1h1V0h2v1h1v2H6v1H5v1H4v1H3V5H2V4H1V3H0V1h1z" /></svg><svg viewBox="0 0 7 6" aria-hidden="true"><path class="h-fill" d="M1 0h2v1h1V0h2v1h1v2H6v1H5v1H4v1H3V5H2V4H1V3H0V1h1z" /></svg></div>
+        </div>
       </div>
       <div class="score" data-score>0</div>
     </div>
@@ -63,7 +66,7 @@
     </section>
 
     <section class="card" data-screen="over" hidden>
-      <h2>Across!</h2>
+      <h2 data-over-title>Across!</h2>
       <p class="score-line"><span data-final-score>0</span> points</p>
       <p class="detail" data-final-detail></p>
       <button class="play" type="button" data-again>Play again</button>
