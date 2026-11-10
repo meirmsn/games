@@ -1,6 +1,6 @@
 # Gotta Go! (walk-on-red): a lane-crossing game on the Pixel Vehicle Pack
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09; for the close-up tile and a new name, the owner's request "can you make a zoom … towards the top where the WCs and … a little bit of walkway" 2026-11-09, and the name: the owner chose "Gotta Go!" 2026-11-10; for lives, pending
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09; for the close-up tile and a new name, the owner's request "can you make a zoom … towards the top where the WCs and … a little bit of walkway" 2026-11-09, and the name: the owner chose "Gotta Go!" 2026-11-10; for lives, the owner chose "Go, as planned (Recommended)" 2026-11-10
 
 ## Intent
 
