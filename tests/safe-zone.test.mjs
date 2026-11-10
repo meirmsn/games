@@ -108,10 +108,10 @@ test('edge-gestures AC-2: the helper reads simulated iPhone insets, and ignoreEd
   await context.close();
 });
 
-test('edge-gestures AC-10: the service worker precaches the helper, with VERSION bumped past v6', () => {
+test('edge-gestures AC-10: the service worker precaches the helper, with VERSION bumped past main's v7', () => {
   const sw = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
   const shell = sw.slice(sw.indexOf('const SHELL = ['), sw.indexOf('];', sw.indexOf('const SHELL = [')));
   assert.match(shell, /'shared\/safe-zone\.js'/, 'in SHELL');
   const v = Number(/const VERSION = 'v(\d+)'/.exec(sw)[1]);
-  assert.ok(v >= 7, `VERSION is v${v}`);
+  assert.ok(v >= 8, `VERSION is v${v}`);
 });

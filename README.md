@@ -14,7 +14,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 |---|---|
 | `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
 | `assets/previews/` | The pictures a shared link shows (Open Graph and Twitter cards, 1200×630): each game's tile on its card's tone, and `site.jpg`, the landing page's collage of six tiles. `scripts/make-previews.mjs` draws them all from the tiles (`specs/social-previews.md`) |
-| `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, and offline play once a page has loaded |
+| `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, offline play once a page has loaded, and the Update button (below) |
 | `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) and `explosion.js` (one explosion effect for every game, with its art in `explosion/`) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 | `reef/` | **Reef**, the fish game. Its sprite atlas is built from the Fish Pack SVGs by `scripts/reef/build-atlas.mjs` |
@@ -34,8 +34,17 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
 2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge. Draw its tile picture from the game itself where you can, so they look alike: `node scripts/make-tile.mjs` does this for Googly Faces.
 3. Give it a share picture: run `node scripts/make-previews.mjs`, which draws `assets/previews/<slug>.png` from its tile, and copy the `og:` and `twitter:` tags from another game's `<head>`, with its own title, description, URL and image alt. The fast tier fails without them.
-4. Nothing to do in `sw.js`: a game's files are cached the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list.
+4. Nothing to do in `sw.js`: a game's files are cached in its own cache the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list, such as the new tile picture.
 5. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
+
+## Updates
+
+How a new version reaches players (`specs/pwa-updates.md`):
+
+- **The landing page shows "New version available" with an Update button** when it's out of date: its own files on the server changed (a new game's tile, say) or a new `sw.js` is waiting. It checks each time it comes back on screen, so an installed app that resumes finds updates too. Tapping Update switches to the new version and reloads the landing page. Nothing to bump for it.
+- **A game is never reloaded or interrupted.** Game pages never show the notice; a game picks up the new version the next time it's opened.
+- **Pages, scripts and styles are fetched fresh when online** (the cache is the offline fallback), so a page and its scripts always match. Pictures, sounds and fonts come from the cache and refresh in the background, so a changed picture shows one load later.
+- **Each game has its own offline cache** (`games-game-<folder>`), refreshed in place; a `VERSION` bump replaces only the landing page's (`games-shell-<VERSION>`), so updating never empties another game's offline copy.
 
 ## Checks
 

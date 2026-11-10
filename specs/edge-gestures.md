@@ -32,11 +32,11 @@ design; this change moves two control bars up and adds no colours, type or compo
   ever drags, and **tap only** (remember `isEdgeStart(e)` at the start; a tap acts, a drag or swipe
   does nothing) where the same touch can be a tap. Rejected: per-game constants. (Claude,
   2026-11-10, from the owner's plan)
-- **The helper is precached and `VERSION` goes to v7.** Files are served cache-first, so a
-  returning visitor can hold a new `game.js` whose import of `shared/safe-zone.js` was never fetched;
-  offline, that game wouldn't start. Precaching the helper with the shell closes that, at F-10's
-  known cost (the bump empties each visitor's offline copy of played games until played online
-  again). Rejected: leaving it out of `SHELL`. (Claude, 2026-11-10, from the spec review)
+- **The helper is precached and `VERSION` goes to v8.** A returning visitor's next offline load must
+  find `shared/safe-zone.js` with the new game scripts that import it. Precaching it with the shell
+  makes that certain. Since #25 (`specs/pwa-updates.md`) a bump replaces only the shell's cache,
+  never a played game's, so it costs nothing offline; #25 itself took v7. Rejected: leaving it out
+  of `SHELL`. (Claude, 2026-11-10, from the spec review; v8 when bringing in #25)
 - **The margins and where they come from.** Apple publishes the safe-area insets but no width for
   any system gesture zone (HIG, *Layout* and *Touchscreen gestures*: keep controls out of the safe
   area's edges and "avoid interfering with system screen-edge gestures"), so the margins are the
@@ -133,7 +133,7 @@ design; this change moves two control bars up and adds no colours, type or compo
 - **AC-9** In Crumble at 844×390 with iPhone insets simulated (left and right 47, bottom 21), a pull
   that starts in an edge strip doesn't aim or fire; one that starts in the safe area does —
   `tests/crumble.test.mjs`.
-- **AC-10** `sw.js` precaches `shared/safe-zone.js`, with `VERSION` bumped —
+- **AC-10** `sw.js` precaches `shared/safe-zone.js`, with `VERSION` bumped past main's v7 —
   `tests/safe-zone.test.mjs`.
 - **AC-11** `discussion/game-guidelines.md`'s "Phone hygiene" says no drag or swipe may start in
   the bottom, left-edge or top strip and that games use `shared/safe-zone.js`, and its concept
@@ -144,4 +144,4 @@ design; this change moves two control bars up and adds no colours, type or compo
 - Blocking the system gestures themselves (the web can't).
 - Any other gameplay change: no new controls, tuning or art; taps near the edges keep working.
 - Googly Faces, which has only taps.
-- Fixing F-10 (the bump's cost to offline copies).
+- The service worker's caching strategy (#25's).
