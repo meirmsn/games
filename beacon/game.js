@@ -613,7 +613,7 @@ function drawLanterns(s) {
     glow(p.x, p.y - up * (k / 4), 10 + 6 * a, LANTERN[b.kind], a);
   }
   for (const q of s.pending) {
-    const p = P(q.x, 0);
+    const p = P(q.x, Math.max(0, q.y));
     const pulse = 0.6 + 0.4 * Math.sin(clock * 8);
     glow(p.x, p.y + 4, 14, LANTERN[q.kind], pulse);
   }

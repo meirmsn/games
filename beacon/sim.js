@@ -23,7 +23,7 @@ export const TUNE = {
   swingMax: 120 * D, // a second
   dragPerPx: 0.4 * D,
   keySwing: 90 * D,
-  sweep: 45 * D, // a second: the lamp turns on its own while nobody holds it
+  sweep: 55 * D, // a second: the lamp turns on its own while nobody holds it
   sweepResume: 0.6, // after letting go, the lamp waits this long before it turns on its own
   reach: 360,
   fogReach: 0.5, // of the reach, in fog
@@ -32,7 +32,6 @@ export const TUNE = {
   hardEnd: 240,
   warn: 2, // an arrival's lantern shows this long before it comes in
   fairAhead: 4, // no ship comes in on a heading that, left alone, reaches a hazard this soon
-  fairAheadFog: 8,
   calmUntil: 25, // left alone, no ship wrecks before this
   maxOnSea: 4,
   maxInWave: 5,
@@ -107,7 +106,7 @@ export const COASTS = [
   {
     name: 'Gale Point',
     mouth: 7.5,
-    current: { dir: 0, speed: 1.5, bend: 5 * D },
+    current: { dir: 0, speed: 1.6, bend: 5.25 * D },
     left: [[0, 2], [80, 10], [150, 4], [230, 12], [300, 8]],
     right: [[0, 98], [70, 90], [160, 96], [240, 88], [300, 92]],
     rocks: [{ x: 28, y: 92, r: 5 }, { x: 76, y: 132, r: 5 }, { x: 24, y: 214, r: 4 }, { x: 78, y: 224, r: 4 }, { x: 26.4, y: 252.1, r: 2 }, { x: 37.6, y: 247.9, r: 2 }],
@@ -116,14 +115,14 @@ export const COASTS = [
 ];
 
 // The night's arrivals before the seed jitters them: [time, kind]. Quieter spells come before each
-// set piece (the first cutter at 45 s, fog at 90 s, the gale at 150 s, the last wave at 180 s).
+// set piece (the first cutter by 45 s, fog at 90 s, the gale at 150 s, the last wave at 180 s).
 const SCHEDULE = [
   [0, 'freighter'],
   [10, 'freighter'],
   [16, 'freighter'],
   [24, 'freighter'],
   [31, 'freighter'],
-  [41, 'cutter'],
+  [35, 'cutter'],
   [52, 'freighter'],
   [58, 'freighter'],
   [64, 'cutter'],
@@ -274,8 +273,9 @@ export function driftHits(s, kind, x, y, h, secs) {
   return driftClear(s, kind, x, y, h, secs) < secs;
 }
 
-// How long a ship left alone stays clear of trouble, up to `secs`.
-export function driftClear(s, kind, x, y, h, secs) {
+// How long a ship left alone stays clear of trouble, up to `secs`; with `reachY`, it counts as
+// clear once it's come down that far (into the beam's reach) without trouble.
+export function driftClear(s, kind, x, y, h, secs, reachY = Infinity) {
   const sp = TUNE.ships[kind];
   const dt = 1 / 20;
   for (let t = 0; t < secs; t += dt) {
@@ -285,8 +285,15 @@ export function driftClear(s, kind, x, y, h, secs) {
     const hz = hazardAt(s, x, y, sp.r);
     if (hz?.kind === 'home') return secs;
     if (hz) return t;
+    if (y >= reachY) return secs;
   }
   return secs;
+}
+
+// Fog cuts the beam's reach: a ship coming in then looms out of the fog bank just inside the beam's
+// reach, not at the top of the bay, so the player can always light her.
+export function fogReachY() {
+  return TUNE.lamp.y - TUNE.reach * TUNE.fogReach + 12;
 }
 
 export function turnTowards(h, target, max) {
@@ -294,8 +301,9 @@ export function turnTowards(h, target, max) {
   return Math.abs(d) <= max ? target : h + Math.sign(d) * max;
 }
 
-// Ships on the sea, counting lanterns about to come in.
-export const onSea = (s) => s.ships.length + s.pending.length;
+// Ships on the sea, counting lanterns about to come in; not lifeboats, which are what's left of a
+// ship already counted.
+export const onSea = (s) => s.ships.filter((b) => b.kind !== 'lifeboat').length + s.pending.length;
 
 export function step(s, dt, input = {}) {
   if (s.over) return;
@@ -400,7 +408,7 @@ function tick(s, dt) {
       }
     }
   // Dawn: at the night's length once the sea is empty, or at the hard end whatever is left.
-  if ((s.t >= TUNE.night && onSea(s) === 0 && !s.queue.length) || s.t >= TUNE.hardEnd) {
+  if ((s.t >= TUNE.night && s.ships.length + s.pending.length === 0 && !s.queue.length) || s.t >= TUNE.hardEnd) {
     s.over = true;
     s.stars = starsOf(s);
     s.events.push({ type: 'dawn', stars: s.stars });
@@ -420,7 +428,7 @@ function arrivals(s) {
   const next = s.queue[0];
   if (next && s.t < TUNE.lastArrival) {
     // An empty sea brings the next lantern now (it counts as on the sea from the moment it shows).
-    if (onSea(s) === 0 && next.t - TUNE.warn > s.t) next.t = s.t + TUNE.warn;
+    if (onSea(s) === 0 && next.t - TUNE.warn > s.t) next.t = s.t + TUNE.warn - 1e-9; // (- a hair: rounding)
     const cap = next.t >= TUNE.wave[0] ? TUNE.maxInWave : TUNE.maxOnSea;
     if (onSea(s) >= cap && next.t - TUNE.warn <= s.t) next.t = s.t + TUNE.warn + 0.1;
   }
@@ -432,34 +440,37 @@ function arrivals(s) {
       return;
     }
     s.queue.shift();
-    const { x, h } = entry;
-    s.pending.push({ ...next, t: Math.max(next.t, s.t + TUNE.warn), x, h });
+    const { x, y, h } = entry;
+    s.pending.push({ ...next, t: Math.max(next.t, s.t + TUNE.warn), x, y, h });
     s.events.push({ type: 'horn', x, kind: next.kind });
   }
   for (const p of [...s.pending])
     if (s.t >= p.t) {
       s.pending.splice(s.pending.indexOf(p), 1);
-      addShip(s, p.kind, p.x, -TUNE.ships[p.kind].r, p.h, p.crew);
+      addShip(s, p.kind, p.x, p.y, p.h, p.crew);
     }
 }
 
 function fairEntry(s, kind) {
   const enter = s.t + TUNE.warn;
   // Left alone, nothing wrecks before calmUntil; in fog the beam can't reach the top, so longer.
-  let ahead = Math.max(TUNE.fairAhead, TUNE.calmUntil - enter);
-  if (enter + ahead > TUNE.fog.at && enter < TUNE.fog.at + TUNE.fog.dur) ahead = Math.max(ahead, TUNE.fairAheadFog);
-  const y = -TUNE.ships[kind].r;
+  const ahead = Math.max(TUNE.fairAhead, TUNE.calmUntil - enter) + 0.25; // a margin over the promise
+  const foggy = enter >= TUNE.fog.at && enter < TUNE.fog.at + TUNE.fog.dur;
+  const y = foggy ? fogReachY() : -TUNE.ships[kind].r;
   let best = null;
-  for (let k = 0; k < 120; k++) {
-    const x = 18 + s.rand() * 64;
+  for (let k = 0; k < 300; k++) {
+    const x = 12 + s.rand() * 76;
     // Heading in, sometimes a little against the current, sometimes for the lamp.
-    const h =
-      k % 3 === 2
+    // Out of the fog, she's heading across the bay with the current, never straight for home.
+    const h = foggy
+      ? Math.PI / 2 - Math.cos(s.current.dir) * (k < 150 ? 0.7 + s.rand() * 0.4 : s.rand() * 0.7)
+      : k % 3 === 2
         ? Math.atan2(TUNE.lamp.y - y, TUNE.lamp.x - x) + (s.rand() - 0.5) * 0.2
         : Math.PI / 2 - Math.cos(s.current.dir) * (s.rand() * 0.5) + (s.rand() - 0.5) * 0.3;
-    const clear = driftClear(s, kind, x, y, h, ahead);
-    if (clear >= ahead) return { x, h, fair: true };
-    if (!best || clear > best.clear) best = { x, h, clear };
+    // Not on top of a rock, or of the cliffs, as she comes out of the fog.
+    const clear = hazardAt(s, x, y, TUNE.ships[kind].r) ? 0 : driftClear(s, kind, x, y, h, ahead);
+    if (clear >= ahead) return { x, y, h, fair: true };
+    if (!best || clear > best.clear) best = { x, y, h, clear };
   }
   return best;
 }

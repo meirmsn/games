@@ -67,6 +67,14 @@ try {
           `${r.coast.padEnd(13)} night ${r.night} ${r.pilot ? 'autopilot' : 'no input '}  home ${String(r.home).padStart(2)}/${r.total} (${Math.round((100 * r.home) / r.total)}%)  ★${r.stars}  wrecks ${r.wrecked}  lost ${r.lost}  first home ${r.firstHome}s  player's first ${r.playerHome}s  first cutter ${r.cutter}s  first wreck ${r.wreck}s  dawn ${r.end}s`
         );
       }
+  // The targets (specs/beacon.md): any miss is printed, and the script exits 1.
+  const misses = [];
+  for (const r of rows) {
+    const at = `${r.coast} night ${r.night} ${r.pilot ? 'autopilot' : 'no input'}`;
+    if (!(r.firstHome <= 8)) misses.push(`${at}: first ship home at ${r.firstHome}s, not by 8 s`);
+    if (!(r.cutter <= 45)) misses.push(`${at}: first cutter at ${r.cutter}s, not by 45 s`);
+    if (r.pilot && !(r.playerHome <= 40)) misses.push(`${at}: the player's first ship home at ${r.playerHome}s, not by about 35 s`);
+  }
   console.log('\nAverages per coast (autopilot / no input):');
   for (const name of new Set(rows.map((r) => r.coast))) {
     const pct = (pilot) => {
@@ -74,7 +82,11 @@ try {
       return Math.round((100 * rs.reduce((n, r) => n + r.home, 0)) / rs.reduce((n, r) => n + r.total, 0));
     };
     console.log(`  ${name.padEnd(13)} ${pct(true)}% / ${pct(false)}%`);
+    if (pct(true) < 80) misses.push(`${name}: the autopilot brought home ${pct(true)}%, under 80%`);
+    if (pct(false) >= 45) misses.push(`${name}: no input brought home ${pct(false)}%, 45% or more`);
   }
+  console.log(misses.length ? `\nMISSED:\n  ${misses.join('\n  ')}` : '\nAll targets met.');
+  process.exitCode = misses.length ? 1 : 0;
 } finally {
   await browser.close();
   server.kill();

@@ -120,7 +120,7 @@ test('beacon AC-4: left alone, no ship on any coast wrecks before 25 s, and the 
     }
 });
 
-test('beacon AC-5: let go, the beam sweeps at 45° a second; held, it swings no faster than 120° a second and only as low as the mouth allows; keys swing it', () => {
+test('beacon AC-5: let go, the beam sweeps at 55° a second; held, it swings no faster than 120° a second and only as low as the mouth allows; keys swing it', () => {
   const s = quiet(0);
   const [lo, hi] = beamLimits(s);
   // Clears the breakwater: from the lowest beam angle, a line to the lamp passes inside the mouth.
@@ -134,7 +134,7 @@ test('beacon AC-5: let go, the beam sweeps at 45° a second; held, it swings no 
   s.beam.free = 1;
   const a0 = s.beam.a;
   run(s, 0.5);
-  near(s.beam.a - a0, 22.5 * D, 0.5 * D, 'swept 22.5° in half a second');
+  near(s.beam.a - a0, 27.5 * D, 0.5 * D, 'swept 27.5° in half a second');
   // Held towards a far target: capped at 120° a second.
   s.beam.a = lo;
   run(s, 0.25, () => ({ hold: true, target: hi }));
@@ -188,7 +188,8 @@ test('beacon AC-6: a lit ship turns for the lamp at its rate; unlit, the current
           const x = TUNE.lamp.x + Math.cos(a) * d;
           const y = TUNE.lamp.y - Math.sin(a) * d;
           // Clear water, a clear line to the mouth, and room on either side for a turn.
-          const clear = (px, py) => !s.coast.rocks.some((r) => Math.hypot(px - r.x, py - r.y) < r.r + 10) && px > leftAt(s.coast, py) + 10 && px < rightAt(s.coast, py) - 10;
+          // (a rock "on its line" includes one within a freighter's turn of it)
+          const clear = (px, py) => !s.coast.rocks.some((r) => Math.hypot(px - r.x, py - r.y) < r.r + 14) && px > leftAt(s.coast, py) + 10 && px < rightAt(s.coast, py) - 10;
           let ok = true;
           for (let f = 0; f <= 1 && ok; f += 0.02) ok = clear(x + (TUNE.lamp.x - x) * f, y + (TUNE.lamp.y - y) * f) || y + (TUNE.lamp.y - y) * f > TUNE.seaH - 8;
           if (!ok || y < 10) continue;
@@ -198,7 +199,7 @@ test('beacon AC-6: a lit ship turns for the lamp at its rate; unlit, the current
           run(s, 40, () => hold(b));
           assert.ok(s.home === b.crew && s.wrecked === 0, `${COASTS[c].name}: a freighter at ${x.toFixed(0)},${y.toFixed(0)} heading ${off}° off: home ${s.home}, wrecked ${s.wrecked}`);
         }
-    assert.ok(tried > 20, `${COASTS[c].name}: ${tried} cases`);
+    assert.ok(tried >= 12, `${COASTS[c].name}: ${tried} cases`);
   }
   // Two ships that touch are eased apart; neither wrecks.
   {
@@ -296,7 +297,7 @@ test('beacon AC-8: a ship or lifeboat crossing the mouth is home and counts as m
   void f;
 });
 
-test('beacon AC-9: each lantern shows 2 s ahead; no ship comes in on a heading that hits within 4 s (8 s in fog); one to four ships on the sea until 190 s, five in the last wave', () => {
+test('beacon AC-9: each lantern shows 2 s ahead; no ship comes in on a heading that hits within 4 s, and in fog they come out of it within the beam\'s reach; one to four ships on the sea until 190 s, five in the last wave', () => {
   for (let c = 0; c < COASTS.length; c++) {
     const s = createNight(c, 2);
     const shown = new Map();
@@ -306,7 +307,7 @@ test('beacon AC-9: each lantern shows 2 s ahead; no ship comes in on a heading t
       step(s, 1 / 60, {});
       for (const e of s.events.splice(0)) if (e.type === 'horn') shown.set(e.x, s.t);
       for (const b of s.ships)
-        if (!before.has(b.id) && b.kind !== 'lifeboat' && b.y < 0) {
+        if (!before.has(b.id) && b.kind !== 'lifeboat') {
           // A new arrival: its lantern showed 2 s before, and its heading is fair.
           // (matched by position: two ships that touch are eased apart, so she may have moved a hair)
           const key = [...shown.keys()].sort((p, q) => Math.abs(p - b.x) - Math.abs(q - b.x))[0];
@@ -314,8 +315,10 @@ test('beacon AC-9: each lantern shows 2 s ahead; no ship comes in on a heading t
           shown.delete(key);
           assert.ok(at !== undefined, 'its lantern showed');
           near(s.t - at, TUNE.warn, 0.05, 'shown 2 s ahead');
-          const ahead = fogOn(s) || (s.t < TUNE.fog.at && s.t + TUNE.fairAheadFog > TUNE.fog.at) ? TUNE.fairAheadFog : TUNE.fairAhead;
-          assert.ok(!driftHits(s, b.kind, b.x, b.y, b.h, ahead), `${COASTS[c].name}: a fair heading at ${s.t.toFixed(1)}`);
+          assert.ok(!driftHits(s, b.kind, b.x, b.y, b.h, TUNE.fairAhead), `${COASTS[c].name}: a fair heading at ${s.t.toFixed(1)}`);
+          // In fog she comes out of the fog bank, inside the beam's shortened reach; else at the top.
+          if (fogOn(s)) assert.ok(Math.hypot(b.x - TUNE.lamp.x, b.y - TUNE.lamp.y) <= reachOf(s), `${COASTS[c].name}: in reach in fog at ${s.t.toFixed(1)}`);
+          else assert.ok(b.y < 0, 'at the top');
         }
       if (s.t < TUNE.lastArrival) {
         const n = onSea(s);
@@ -341,7 +344,7 @@ test('beacon AC-10: a cutter by 45 s, fog that halves the reach for 30 s, a gale
       if (e.type === 'gale') gale = s.t;
     }
     for (const b of s.ships)
-      if (b.y < 0 && !arrivals.some((a) => a.id === b.id) && b.kind !== 'lifeboat') {
+      if (!arrivals.some((a) => a.id === b.id) && b.kind !== 'lifeboat' && s.t - b.born < 0.02 && b.id !== 1) {
         arrivals.push({ id: b.id, t: s.t, kind: b.kind });
         if (b.kind === 'cutter' && cutter === null) cutter = s.t;
       }
@@ -349,7 +352,18 @@ test('beacon AC-10: a cutter by 45 s, fog that halves the reach for 30 s, a gale
     if (s.t > TUNE.fog.at + TUNE.fog.dur + 1 && s.t < TUNE.fog.at + TUNE.fog.dur + 2) near(reachOf(s), TUNE.reach, 1e-9, 'clear');
   }
   assert.ok(cutter !== null && cutter <= 45, `first cutter at ${cutter}`);
-  assert.ok(arrivals.filter((a) => a.t < 38).every((a) => a.kind === 'freighter'), 'only freighters before the first cutter');
+  assert.ok(arrivals.filter((a) => a.t < 30).every((a) => a.kind === 'freighter'), 'only freighters before the first cutter');
+  // On every coast, even with no input, when the sea fills up and the cap holds arrivals back.
+  for (let c = 0; c < COASTS.length; c++)
+    for (const n of [1, 2, 3]) {
+      const q = createNight(c, n);
+      let first = null;
+      while (first === null && q.t < 60) {
+        step(q, 1 / 60, {});
+        if (q.ships.some((b) => b.kind === 'cutter')) first = q.t;
+      }
+      assert.ok(first !== null && first <= 45, `${COASTS[c].name} night ${n}: first cutter at ${first}`);
+    }
   near(gale - warn, 2, 0.02, 'whitecaps 2 s ahead');
   assert.ok(arrivals.every((a) => a.t <= TUNE.lastArrival + 0.01), 'none after 190 s');
   assert.ok(arrivals.filter((a) => a.t >= TUNE.wave[0] - 0.01).length >= 5, 'the last wave');

@@ -104,10 +104,11 @@ the light turns for home; let go too soon and the current takes it onto the rock
   across the bay, never out through the top. Without it, one touch would bring every ship home
   (second review, 2026-11-10).
 - The lamp turns on its own: while nobody holds it, the beam sweeps back and forth across the bay at
-  45° a second, starting 0.6 s after it's let go; a ship it passes turns only a little, so a beam
+  55° a second, starting 0.6 s after it's let go; a ship it passes turns only a little, so a beam
   left alone saves few ships. Found by playing the greybox: a beam that stayed where it was left
   brought 70–85% of the sailors home on the first two coasts with no input at all, because the cone
-  is wide at the top of the bay. With the sweep, no input brings home 20–40% (Claude, 2026-11-10).
+  is wide at the top of the bay. With the sweep, no input brings home under 45% on average on every
+  coast (23–42% per coast in the timed playtest, three nights each) (Claude, 2026-11-10).
   At the start of a night it holds on the first freighter until that one is home.
 - The beam is narrow (an 8° half-angle) and swings no faster than 120° a second; a sideways drag of
   1 CSS px (finger or mouse) turns the beam's target by 0.4°, and the beam follows the target at
@@ -139,16 +140,21 @@ the light turns for home; let go too soon and the current takes it onto the rock
   them), and the top edge holds a lifeboat back.
 - Fairness: everything happens on one fixed screen, with no scrolling, so nothing wrecks out of
   sight. Each arrival shows its lantern at the top edge, with a horn, 2 s before it comes in. No ship
-  comes in on a heading that, left alone, reaches a rock or the cliffs within 4 s (8 s in fog, when the
-  beam can't reach the top of the bay). Left alone from the start, no ship wrecks before 25 s. Rocks always show
+  comes in on a heading that, left alone, reaches a rock or the cliffs within 4 s. In fog, ships loom
+  out of the fog bank just inside the beam's shortened reach instead of at the top of the bay, so
+  the player can always light them, heading across the bay with the current, never straight for
+  home. Rejected: ships entering at the top in fog with 8 s of clear
+  water, which some coasts couldn't always offer (Claude, 2026-11-10). Left alone from the start, no ship wrecks before 25 s. Rocks always show
   their white surf, with or without the beam. Shake and the gale's flash last no more than 150 ms
   and never dim the ships.
 - A night: 210 s to dawn, the sky at the top brightening as it goes, and 25 ships coming in (68
   sailors). The sea is never empty: the
   first freighter starts in the beam close to the mouth (about 64 sea units out, so home in about
-  6 s), and there are always one to four ships on the sea, counting lifeboats and lanterns about to
-  come in (five during the last wave).
-  Set pieces come on a rhythm, each after a quieter spell: the first cutter at about 45 s; fog at
+  6 s), and there are always one to four ships on the sea, counting lanterns about to come in (five
+  during the last wave); lifeboats come on top, as what's left of a ship already counted, so a
+  wreck never holds the next arrival back (spec review, 2026-11-10).
+  Set pieces come on a rhythm, each after a quieter spell: the first cutter by 45 s (due at 35 s, so it's on time even when the four-ship cap holds it
+  back); fog at
   about 90 s, which shortens the beam's reach to half the field for 30 s (lanterns stay visible);
   the gale at about 150 s, telegraphed by a line of whitecaps sweeping in from one side for 2 s, then
   a sideways shove for 6 s on every ship, lit or not; a crowded last wave at 172–188 s, five ships
@@ -203,7 +209,7 @@ the light turns for home; let go too soon and the current takes it onto the rock
   about 6 s and a ship the player brought home by about 35 s (a freighter takes about 25 s to cross
   the bay; the timed playtest measured 33 s); no wreck possible before 25 s; the first
   cutter by 45 s; a beginner's first night on the first coast around 60% (one star) and an
-  autopilot's 80% or more on average on every coast (it played 82–96% while tuning), while no input
+  autopilot's 80% or more on average on every coast (93–99% in the timed playtest), while no input
   brings home under 45%. Measured by `scripts/beacon/playtest.mjs`, an autopilot playing whole
   nights at 390×844 on every coast.
 - Interruptible: hiding the page pauses the night, the current included; it resumes only on a tap,
@@ -234,7 +240,7 @@ the light turns for home; let go too soon and the current takes it onto the rock
   on a freighter, which comes home within 8 s with no input and lights its crew's windows; left
   alone, no ship on any coast wrecks before 25 s —
   `tests/beacon.test.mjs`.
-- **AC-5** While nobody holds it, the beam sweeps the bay on its own at 45° a second. A sideways
+- **AC-5** While nobody holds it, the beam sweeps the bay on its own at 55° a second. A sideways
   drag, by finger or mouse, swings the beam by 0.4° a CSS px, no faster than
   120° a second, and only as low as the mouth lets a ship through; the arrow keys swing it; a second
   finger is ignored —
@@ -251,10 +257,11 @@ the light turns for home; let go too soon and the current takes it onto the rock
   the town shows one window for every sailor of the night from the start —
   `tests/beacon.test.mjs`.
 - **AC-9** Each arrival's lantern shows at the top edge 2 s before it comes in; no ship comes in on
-  a heading that, left alone, reaches a rock or the cliffs within 4 s (8 s in fog); until 190 s the
-  sea holds one to four ships, counting lifeboats and lanterns about to come in (five in the last
-  wave) — `tests/beacon.test.mjs`.
-- **AC-10** The set pieces come in order: a cutter by 45 s (later only while the sea is full), fog that halves the beam's reach for
+  a heading that, left alone, reaches a rock or the cliffs within 4 s; in fog, ships come out of the
+  fog within the beam's reach; until 190 s the
+  sea holds one to four ships, counting lanterns about to come in but not lifeboats (five in the
+  last wave) — `tests/beacon.test.mjs`.
+- **AC-10** The set pieces come in order: a cutter by 45 s, fog that halves the beam's reach for
   30 s, a gale whose whitecaps show 2 s before its 6 s shove of every ship, and a last wave of five ships
   between 172 and 190 s; no ship comes in after 190 s —
   `tests/beacon.test.mjs`.
