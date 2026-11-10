@@ -343,10 +343,10 @@ test('Escape in a text field does not leave the game', async () => {
   await context.close();
 });
 
-test('high-seas AC-18: the High Seas tile is playable and the page keeps its eight tiles', async () => {
+test('beacon AC-20: the Beacon tile is playable and the page keeps its eight tiles', async () => {
   const { context, page } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
-  const tile = page.locator('a.tile[href="high-seas/"]');
+  const tile = page.locator('a.tile[href="beacon/"]');
   assert.equal(await tile.count(), 1);
   assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
   assert.equal(await tile.locator('.badge').count(), 0, 'no "Coming soon" badge');
