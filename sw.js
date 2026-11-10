@@ -17,7 +17,7 @@
 // time they're opened. Bump VERSION when SHELL changes (a file added, removed or renamed), so the new
 // list is precached; only the shell cache is replaced, never a game's.
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const PREFIX = 'games-';
 const SHELL_CACHE = `${PREFIX}shell-${VERSION}`;
 const SITE_CACHE = `${PREFIX}site`;
@@ -33,6 +33,7 @@ const SHELL = [
   'shared/sound.js',
   'shared/game-shell.js',
   'shared/game-shell.css',
+  'shared/safe-zone.js',
   'assets/sounds/back.mp3',
   'assets/sounds/tap.mp3',
   'assets/sounds/soon.mp3',

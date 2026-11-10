@@ -185,7 +185,7 @@ body {
   position: fixed;
   z-index: 5;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 74px);
+  bottom: calc(env(safe-area-inset-bottom) + 88px);
   transform: translateX(-50%);
   width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   margin: 0;
@@ -451,7 +451,7 @@ body {
   position: fixed;
   z-index: 5;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 26px);
+  bottom: calc(env(safe-area-inset-bottom) + 40px); /* above the phone's gesture strip: shared/safe-zone.js */
   transform: translateX(-50%);
   width: min(420px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   height: 44px;
@@ -551,7 +551,7 @@ body {
   position: fixed;
   z-index: 5;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 100px);
+  bottom: calc(env(safe-area-inset-bottom) + 114px);
   transform: translateX(-50%);
   margin: 0;
   padding: 8px 14px;

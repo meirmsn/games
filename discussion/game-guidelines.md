@@ -51,7 +51,12 @@ What every game concept and build is held to, under the owner's [direction](dire
   them costs nothing you'd miss. To resume, use something the player carries: a code, a seed, the
   URL.
 - **Phone hygiene.** Lay out for 360 × 640 CSS px up to tall phones, with `dvh` and safe-area
-  insets. Keep play clear of the edges, where the phone swipes back. Allow no scrolling, zooming,
+  insets. No drag or swipe may start in the phone's edge strips, where it takes the gesture for
+  itself and a page can't stop it (Reachability, home and app switching at the bottom, back on the
+  left, Notification and Control Center at the top): the bottom strip (40 px above the safe area),
+  the left-edge strip (20 px) and the top strip (24 px below the safe area). Games use
+  `shared/safe-zone.js` to ignore such starts and to lay out dragged controls above the bottom
+  strip; plain taps near the edges are fine. Allow no scrolling, zooming,
   pull-to-refresh, long-press menus or text selection. Handle a second finger. Run physics on delta
   time so it's right at 60 and 120 Hz, and cap the pixel ratio at 2. Hold 60 fps on a mid-range
   phone, keep the download small, and play offline.
@@ -70,7 +75,8 @@ challenge is mostly speed and spawn count, so later levels get harder rather tha
 
 Answer each in a line: hook; verb; a typical 5-second choice; how it teaches; the three clocks; what
 an expert does differently; why the tenth play differs from the first; short- or long-form;
-orientation; what a failure costs; what stands in for save games; the riskiest technical part and
+orientation; where each gesture starts, and that no drag or swipe starts in an edge strip; what a
+failure costs; what stands in for save games; the riskiest technical part and
 how to prove it first. An answer that could describe any game fails. Then attack it: the strongest
 case that it's dull after five minutes, unfair, unreadable on a phone, too big for one change, or
 too close to an existing game (a genre is fine, another game's names, characters, levels or look are

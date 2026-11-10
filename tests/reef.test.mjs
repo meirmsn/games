@@ -5,6 +5,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { simulateInsets, touchDrag, PORTRAIT_INSETS, STRIP } from './insets.mjs';
 
 // Its own port range: the test files run in parallel, and a shared range can collide.
 const PORT = 9100 + Math.floor(Math.random() * 100);
@@ -392,6 +393,32 @@ test('reef AC-9: dragging on a touch screen steers the fish', async () => {
   await steps(page, 60);
   const end = await page.evaluate(() => window.__reef.player.x);
   assert.ok(end > start + 60, `moved right from ${start} to ${end}`);
+  await context.close();
+});
+
+test('edge-gestures AC-6: with iPhone insets, a touch drag that starts in an edge strip does not steer the fish; one in the safe area does', async () => {
+  const { context, page } = await open({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__reef);
+  await startEmpty(page);
+  const fish = () => page.evaluate(() => ({ x: window.__reef.player.x, y: window.__reef.player.y }));
+  const bottom = 844 - PORTRAIT_INSETS.bottom - STRIP.bottom;
+  const top = PORTRAIT_INSETS.top + STRIP.top;
+  for (const [x, y, dx, dy, where] of [
+    [150, bottom + 10, 120, -120, 'the bottom strip'],
+    [8, 400, 120, 0, 'the left strip'],
+    [150, top - 6, 120, 120, 'the top strip'],
+  ]) {
+    const before = await fish();
+    await touchDrag(cdp, x, y, dx, dy);
+    await steps(page, 60);
+    const after = await fish();
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) < 2, `a drag from ${where} doesn't steer: ${JSON.stringify([before, after])}`);
+  }
+  const before = await fish();
+  await touchDrag(cdp, 100, bottom - 10, 120, 0);
+  await steps(page, 60);
+  const after = await fish();
+  assert.ok(after.x > before.x + 60, `a drag from just above the strip steers: ${before.x} to ${after.x}`);
   await context.close();
 });
 

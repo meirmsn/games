@@ -9,6 +9,7 @@
 // moves the landing point the other way along the lanes, pulling down sends it farther, and the
 // paintball takes a moment to fly, so a moving target has to be led. Every miss leaves its paint.
 import { mountShell } from '../shared/game-shell.js';
+import { MARGIN, isEdgeStart } from '../shared/safe-zone.js';
 import { FRAMES, ATLAS_SCALE } from './atlas.js';
 
 const { sound } = mountShell({
@@ -179,7 +180,12 @@ function layoutStage(o) {
   L.top = top;
   L.bottom = bottom;
   L.T = top + (land ? 58 : 72); // the lanes start below the valance
-  L.counterH = land ? 104 : 168;
+  // A page that reaches the screen's bottom edge (a home-screen app: the bottom inset is set) puts
+  // the phone's gesture strip on the counter's foot, where Safari's own bars would have pushed the
+  // booth up. There the counter grows by the strip, so its top, the pouch and the thumb's pull all
+  // sit above it, as in Safari (the owner, 2026-11-10; shared/safe-zone.js).
+  L.lift = bottom > 0 ? MARGIN.bottom / k0 : 0;
+  L.counterH = (land ? 104 : 168) + L.lift;
   L.C = SH - bottom - L.counterH; // the counter's top edge: the thumb's pad, never a target
   const n = land ? 3 : 5;
   const band = (L.C - L.T) / n;
@@ -2217,7 +2223,9 @@ const toUnits = (cx, cy) => ({ x: (cx - ox) / k, y: (cy - oy) / k });
 const onPad = (cx, cy) => toUnits(cx, cy).y >= L.C - 8;
 
 // The slingshot is pulled from wherever the finger first touches the counter (or the mouse
-// presses anywhere): the pull is how far it has moved since, and letting go fires.
+// presses anywhere): the pull is how far it has moved since, and letting go fires. A finger that
+// lands in the phone's edge strips (the bottom one runs across the counter's foot) pulls nothing:
+// the phone takes that swipe for itself (shared/safe-zone.js).
 let grip = null; // { id, x, y }: the pointer holding the pouch, and where it first touched
 // The slingshot answers only while the round's clock runs: not before it, not once time is up, and
 // not while paused, turned or counting back in.
@@ -2232,7 +2240,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!slingLive() || grip) return;
   const isMouse = e.pointerType === 'mouse';
   if (isMouse && e.button !== 0) return;
-  if (!isMouse && !onPad(e.clientX, e.clientY)) return;
+  if (!isMouse && (!onPad(e.clientX, e.clientY) || isEdgeStart(e))) return;
   try {
     canvas.setPointerCapture(e.pointerId);
   } catch (err) {
