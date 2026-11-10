@@ -12,9 +12,10 @@ const DEPTH = 4; // the usual ground top is this many rows above the grid's bott
 // HAY: a haybale, solid, that bounces you. BELTL / BELTR: a conveyor belt's top, solid, that carries
 // you left or right. ICE: solid ground you slide on. GATE: a portcullis, solid until a key opens it.
 // SLOPEU / SLOPED: a 45° slope rising or falling to the right; not solid from the side, its surface
-// is ground (see slopeY), and the ground under it fills on.
-export const T = { AIR: 0, GROUND: 1, BLOCK: 2, ONEWAY: 3, SPIKES: 4, HAY: 5, BELTL: 6, BELTR: 7, ICE: 8, GATE: 9, SLOPEU: 10, SLOPED: 11 };
-export const SOLID = new Set([T.GROUND, T.BLOCK, T.HAY, T.BELTL, T.BELTR, T.ICE, T.GATE]);
+// is ground (see slopeY), and the ground under it fills on. SKETCH: Scribble's ground that draws
+// itself in as you near: the grid holds AIR there until it is drawn (stage.sketches), then SKETCH.
+export const T = { AIR: 0, GROUND: 1, BLOCK: 2, ONEWAY: 3, SPIKES: 4, HAY: 5, BELTL: 6, BELTR: 7, ICE: 8, GATE: 9, SLOPEU: 10, SLOPED: 11, SKETCH: 12 };
+export const SOLID = new Set([T.GROUND, T.BLOCK, T.HAY, T.BELTL, T.BELTR, T.ICE, T.GATE, T.SKETCH]);
 export const SLOPES = new Set([T.SLOPEU, T.SLOPED]);
 // The surface's height in a slope tile at x (tiles): rising to the right, or falling.
 export function slopeY(t, tx, ty, x) {
@@ -27,6 +28,39 @@ export const PICO8 = [
   '#000000', '#1d2b53', '#7e2553', '#008751', '#ab5236', '#5f574f', '#c2c3c7', '#fff1e8',
   '#ff004d', '#ffa300', '#ffec27', '#00e436', '#29adff', '#83769c', '#ff77a8', '#ffccaa',
 ];
+
+// Sky's climb (see buildClimb): an opening of wide grass ledges, then sliding and cracked ledges and a
+// spring, then flyers and spikies, wings, and the plateau at the top. Every ledge has one at most 2
+// tiles below it and at most 3 across, edge to edge: a plain bounce reaches every step.
+const SKY = {
+  height: 96,
+  ledges: [
+    // The opening: wide grass, two tiles apart, nothing that hurts.
+    { h: 2, x: 2, len: 4 }, { h: 4, x: 7, len: 4 }, { h: 6, x: 2, len: 4 }, { h: 8, x: 7, len: 4 },
+    { h: 10, x: 3, len: 4 }, { h: 12, x: 7, len: 4 }, { h: 14, x: 3, len: 4 },
+    // Sliding and cracked ledges; a spring.
+    { h: 16, x: 6, len: 3, kind: 's', range: 4 }, { h: 18, x: 3, len: 3 }, { h: 20, x: 5, len: 2 }, { h: 20, x: 8, len: 3, kind: 'c' },
+    { h: 22, x: 9, len: 3 }, { h: 24, x: 1, len: 3, kind: 's', range: 5, phase: 0.5 }, { h: 26, x: 5, len: 3 },
+    { h: 28, x: 9, len: 2 }, { h: 28, x: 1, len: 3, kind: 'c' }, { h: 30, x: 5, len: 3 }, { h: 32, x: 9, len: 3 },
+    { h: 34, x: 2, len: 3, kind: 's', range: 4 }, { h: 36, x: 7, len: 4 }, { h: 38, x: 2, len: 3 },
+    { h: 40, x: 7, len: 3 }, { h: 42, x: 3, len: 3 }, { h: 44, x: 8, len: 2 }, { h: 44, x: 1, len: 2, kind: 'c' }, { h: 46, x: 4, len: 3 },
+    // Flyers, spikies on wide ledges with a way round them, wings.
+    { h: 48, x: 8, len: 3 }, { h: 50, x: 3, len: 3 }, { h: 50, x: 8, len: 4 }, { h: 52, x: 9, len: 3 },
+    { h: 54, x: 9, len: 3 }, { h: 56, x: 4, len: 3, kind: 's', range: 4, phase: 0.3 }, { h: 58, x: 9, len: 3 },
+    { h: 60, x: 9, len: 3 }, { h: 62, x: 5, len: 3 }, { h: 64, x: 9, len: 2 }, { h: 64, x: 2, len: 2, kind: 'c' }, { h: 66, x: 5, len: 3 },
+    { h: 68, x: 1, len: 3 }, { h: 70, x: 5, len: 3 }, { h: 72, x: 1, len: 4 }, { h: 72, x: 8, len: 3 },
+    { h: 74, x: 4, len: 3 }, { h: 76, x: 7, len: 3, kind: 's', range: 3 }, { h: 78, x: 4, len: 3 },
+    { h: 80, x: 7, len: 2 }, { h: 80, x: 1, len: 2, kind: 'c' }, { h: 82, x: 3, len: 3 }, { h: 84, x: 7, len: 3 }, { h: 86, x: 2, len: 3 },
+    { h: 88, x: 6, len: 3 }, { h: 90, x: 10, len: 2 }, { h: 92, x: 6, len: 3 }, { h: 94, x: 2, len: 3 },
+  ],
+  things: [
+    ['coins', 3, 3, 2], ['coins', 8, 5, 2], ['coins', 3, 7, 2], ['coins', 8, 9, 2], ['heart', 5, 13], ['spring', 8, 12],
+    ['coins', 9, 21, 3], ['spring', 6, 30], ['coins', 6, 35, 1], ['coins', 6, 37, 1], ['coins', 6, 39, 1],
+    ['heart', 8, 41], ['flyer', 2, 51, 4], ['spiky', 9, 50], ['coins', 9, 53, 2], ['flyer', 2, 57, 3],
+    ['wings', 10, 60], ['coins', 10, 65, 1], ['coins', 10, 68, 1], ['coins', 10, 71, 1], ['spiky', 2, 72],
+    ['heart', 5, 75], ['flyer', 8, 85, 3], ['flyer', 2, 91, 2], ['coins', 7, 89, 2],
+  ],
+};
 
 const ALL = [
   {
@@ -56,7 +90,7 @@ const ALL = [
         ['flat', 4], ['step', -1], ['flat', 3], ['spikes', 3], ['flat', 4], ['heart', 2, 1], ['flat', 3],
         ['walker', 3], ['flat', 7], ['arc', 4], ['pit', 4], ['flat', 3], ['step', 1], ['flat', 2], ['spikes', 1],
         ['flat', 3], ['walker', 1], ['flat', 5],
-        // A glimpse of Frost, and the door.
+        // A glimpse of Ice, and the door.
         ['next'], ['flat', 4], ['portal'], ['flat', 6],
       ],
     ],
@@ -341,15 +375,67 @@ const ALL = [
         // Then the keep: crushers over a pit's edge, mice, and a last key.
         ['heart', 1, 1], ['flat', 3], ['arc', 3], ['pit', 3], ['flat', 3], ['crusher', 1, 4, 0.6], ['flat', 5],
         ['walker', 2], ['walker', 5], ['flat', 8], ['plat', 0, 2, 2, '-'], ['plat', 3, 4, 2, '-'], ['key', 4, 4],
-        ['flat', 8], ['crusher', 0, 4, 0], ['crusher', 4, 4, 0.3], ['flat', 8], ['gate'], ['flat', 4],
-        ['portal'], ['flat', 6],
+        ['flat', 8], ['crusher', 0, 4, 0], ['crusher', 4, 4, 0.3], ['flat', 8], ['gate'], ['flat', 3],
+        // A glimpse of Scribble, in line art, and the door.
+        ['next'], ['flat', 4], ['portal'], ['flat', 6],
       ],
     ],
+  },
+  {
+    id: 'scribble',
+    bed: true, // the owner's music
+    name: 'Scribble',
+    res: 70, // the Scribble Platformer pack, vector: drawn as line art
+    pack: 'scribble',
+    smooth: true,
+    lineArt: true, // the world's rule: everything, the monster too, is pen line on white paper
+    outline: null,
+    sky: ['#fbf8ef', '#f6f1e2'],
+    sound: 'c',
+    rule: 'trust: ground that draws itself as you near; jump before it is there',
+    stages: [
+      [
+        // The opening: paper, coins, and the first sketch tiles with a dotted guide: a bridge over a
+        // ditch, then a step up; nothing that hurts.
+        ['flat', 10], ['coins', 4, 1, 1], ['flat', 7], ['low', 3], ['sketch', -3, 0, 3, true], ['flat', 6],
+        ['sketch', 1, 2, 3, true], ['coins', 3, 3, 1], ['flat', 7],
+        // A slime on solid paper; the first sketch bridge over a real pit, guided.
+        ['walker', 4], ['flat', 9], ['pit', 4, [[0, 0, 4, 'S']]], ['flat', 5], ['heart', 2, 1], ['flat', 4],
+        // Trust: a pit too wide to jump, with ledges that draw in only once you're in the air.
+        ['pit', 11, [[4, 0, 3, 's']]], ['coins', 3, 2, -7], ['flat', 5], ['spikes', 2], ['flat', 4],
+        // Sketch stairs up to coins, and down the far side.
+        ['sketch', 1, 2, 2], ['sketch', 4, 4, 2], ['sketch', 7, 6, 3], ['coins', 3, 7, 7], ['flat', 12],
+        ['walker', 3], ['walker', 7], ['flat', 10],
+        // A sketch bridge, a slime beyond it, then a wider pit with two ledges.
+        ['pit', 6, [[0, 0, 6, 's']]], ['flat', 3], ['walker', 3], ['flat', 6], ['heart', 1, 1], ['flat', 3],
+        ['pit', 12, [[3, 0, 2, 's'], [8, -1, 2, 's']]], ['coins', 2, 3, -5], ['flat', 4], ['spikes', 3], ['flat', 4],
+        // The real thing: the widest pit, three ledges, a bridge over spikes, slimes.
+        ['walker', 2], ['flat', 6], ['pit', 13, [[3, 0, 2, 's'], [7, -1, 2, 's'], [11, 0, 1, 's']]], ['flat', 4],
+        ['spikes', 4], ['sketch', -4, 2, 4], ['flat', 3], ['walker', 3], ['walker', 6], ['flat', 9],
+        ['pit', 5, [[0, 0, 5, 's']]], ['flat', 3], ['spikes', 1], ['flat', 3],
+        ['next'], ['flat', 4], ['portal'], ['flat', 6],
+      ],
+    ],
+  },
+  {
+    id: 'sky',
+    bed: true, // the owner's music
+    name: 'Sky',
+    res: 70, // the Jumper Pack, vector
+    pack: 'sky',
+    smooth: true,
+    outline: null,
+    sky: ['#7cc8f2', '#e9f7ff'],
+    sound: 'c',
+    bounce: true, // the finale: you bounce on every ledge you land on, and steer
+    rule: 'the finale: an automatic bouncing climb to the top',
+    stages: [{ climb: SKY }],
   },
 ];
 
 // The journey's order (owner, 2026-11-10: "Perfect alternation"): pixel and smooth at every door.
-const ORDER = ['meadow', 'ice', 'farm', 'candy', 'industrial', 'mushroom', 'pico', 'sea', 'ink', 'castle'];
+// Batch 4 (owner, 2026-11-10): Scribble's line art between the smooth Castle and Sky, the finale.
+const ORDER = ['meadow', 'ice', 'farm', 'candy', 'industrial', 'mushroom', 'pico', 'sea', 'ink', 'castle', 'scribble', 'sky'];
 export const WORLDS = ORDER.map((id) => ALL.find((w) => w.id === id));
 
 // Builds a level from its segments. Returns { cols, rows, base, grid, ground, things, start, coins,
@@ -357,6 +443,7 @@ export const WORLDS = ORDER.map((id) => ALL.find((w) => w.id === id));
 // rows: the level's height in tiles (a tall level, like Mushroom's climb, has more); its usual
 // ground line is DEPTH rows above its bottom.
 export function buildStage(segments, rows = ROWS) {
+  if (segments.climb) return buildClimb(segments.climb);
   const BASE = rows - DEPTH;
   const cols = segments.reduce((n, s) => n + advance(s), 0);
   const grid = new Uint8Array(cols * rows);
@@ -368,6 +455,7 @@ export function buildStage(segments, rows = ROWS) {
   let g = BASE;
   let next = cols; // the column from which the next world shows
   let pockets = 0;
+  const sketches = []; // Scribble's sketch tiles: { x, y, guide }, drawn in as you near
   const put = (cx, cy, t) => {
     if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) grid[cy * cols + cx] = t;
   };
@@ -525,6 +613,9 @@ export function buildStage(segments, rows = ROWS) {
         put(x + a, g - b, T.BLOCK);
         thing('drip', x + a + 0.5, g - b + 1);
         break;
+      case 'sketch': // a run of sketch tiles: offset, height above the ground, length, dotted guide
+        platform(x + a, g - b, c, d ? 'S' : 's');
+        break;
       case 'next':
         next = x;
         break;
@@ -538,13 +629,58 @@ export function buildStage(segments, rows = ROWS) {
 
   function platform(px, py, len, k) {
     for (let i = 0; i < len; i++) {
-      if (k === 'c') thing('cookie', px + i + 0.5, py);
+      if (k === 's' || k === 'S') sketches.push({ x: px + i, y: py, guide: k === 'S', run: `${px},${py}` });
+      else if (k === 'c') thing('cookie', px + i + 0.5, py);
       else put(px + i, py, k === '-' ? T.ONEWAY : k === 'i' ? T.ICE : T.BLOCK);
     }
   }
 
   const coins = things.filter((t) => t.type === 'coin').length;
-  return { cols, rows, base: BASE, grid, ground, water, things, start, coins, next };
+  return { cols, rows, base: BASE, grid, ground, water, things, start, coins, next, sketches };
+}
+
+// Sky: a column between two cloud walls, climbed by bouncing. Its ledges are listed by height (tiles
+// above the start's ground), left column (1 to 12) and length; kind 'g' grass, 's' sliding (along
+// `range` tiles to the right and back), 'c' cracked (one bounce, then it breaks). The top is a
+// plateau with the door, which doesn't bounce, nor does the start's ground.
+export const SKY_W = 12; // the column's width between its walls
+function buildClimb(def) {
+  const cols = SKY_W + 2;
+  const rows = def.height + 8;
+  const gy = rows - 3; // the start's ground
+  const grid = new Uint8Array(cols * rows);
+  const ground = new Int16Array(cols).fill(gy);
+  const water = new Float32Array(cols).fill(Infinity);
+  const put = (cx, cy, t) => {
+    if (cx >= 0 && cx < cols && cy >= 0 && cy < rows) grid[cy * cols + cx] = t;
+  };
+  for (let y = 0; y < rows; y++) {
+    put(0, y, T.BLOCK);
+    put(cols - 1, y, T.BLOCK);
+  }
+  for (let x = 1; x < cols - 1; x++) for (let y = gy; y < rows; y++) put(x, y, T.GROUND);
+  const things = [];
+  const thing = (type, tx, ty, extra = {}) => things.push({ type, x: tx, y: ty, ...extra });
+  const top = gy - def.height;
+  for (let x = 1; x < cols - 1; x++) put(x, top, T.ONEWAY);
+  for (const l of def.ledges) {
+    const y = gy - l.h;
+    if (l.kind === 's') thing('mover', l.x, y, { w: l.len, range: l.range, axis: 'x', phase: l.phase || 0, ledge: true });
+    else if (l.kind === 'c') thing('cracked', l.x, y, { w: l.len });
+    else for (let i = 0; i < l.len; i++) put(l.x + i, y, T.ONEWAY);
+  }
+  for (const [kind, x, h, extra] of def.things) {
+    const y = gy - h;
+    if (kind === 'coins') for (let i = 0; i < extra; i++) thing('coin', x + i + 0.5, y - 0.5);
+    else if (kind === 'heart') thing('heart', x + 0.5, y - 0.5);
+    else if (kind === 'spring') thing('spring', x + 0.5, y, { power: 'sky' });
+    else if (kind === 'wings') thing('wings', x + 0.5, y);
+    else if (kind === 'flyer') thing('flyer', x + 0.5, y, { kind: 'patrol', range: extra });
+    else if (kind === 'spiky') thing('walker', x + 0.5, y, { kind: 'spiky' });
+  }
+  thing('portal', cols / 2, top);
+  const coins = things.filter((t) => t.type === 'coin').length;
+  return { cols, rows, base: gy, grid, ground, water, things, start: { x: cols / 2, y: gy }, coins, next: cols, sketches: [], climb: true, top, height: def.height };
 }
 
 function advance(seg) {
