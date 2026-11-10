@@ -436,7 +436,8 @@ test('reef AC-12: The Deep is dark, with a glow around the player', async () => 
     const r = window.__reef;
     r.game.depth = 6;
     r.dive();
-    while (r.game.mode === 'dive') r.step(1 / 60); // through the dive into The Deep
+    // Through the dive into The Deep (2.3 s); bounded, so a dive that never ends fails the depth check.
+    for (let i = 0; i < 600 && r.game.mode === 'dive'; i++) r.step(1 / 60);
     r.npcs().length = 0;
     r.eels().length = 0;
     r.game.spawnIn = 999;
