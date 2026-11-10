@@ -40,10 +40,8 @@ body {
 .deck {
   display: none;
   flex: 0 0 auto;
-  /* The keys stand 40 px above the safe area, clear of the phone's bottom gesture strip
-     (shared/safe-zone.js); the deck grows by the 26 px that takes, so the keys keep their size. */
-  height: calc(var(--deck-h) + 26px + var(--safe-b));
-  padding: 14px max(24px, env(safe-area-inset-right)) calc(40px + var(--safe-b)) max(24px, calc(env(safe-area-inset-left) + 20px));
+  height: calc(var(--deck-h) + var(--safe-b));
+  padding: 14px max(24px, env(safe-area-inset-right)) calc(14px + var(--safe-b)) max(24px, env(safe-area-inset-left));
   box-sizing: border-box;
   gap: 16px;
   background: var(--deck);
@@ -140,7 +138,7 @@ body.building .deck {
     left: 0;
     right: 0;
     bottom: 0;
-    height: calc(min(150px, 38dvh) + 26px + var(--safe-b)); /* the keys above the gesture strip, full size */
+    height: calc(min(150px, 38dvh) + var(--safe-b));
     background: none;
     pointer-events: none;
     justify-content: space-between;

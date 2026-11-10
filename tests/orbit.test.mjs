@@ -1014,7 +1014,7 @@ test('orbit AC-28: Back asks before leaving; Space while it asks fires nothing; 
   await context.close();
 });
 
-test('edge-gestures AC-4: with iPhone insets, the booster bar sits above the bottom strip, and a drag that starts in the strip does not set the power', async () => {
+test('edge-gestures AC-4: with iPhone insets, the booster bar sits half as high as #27 put it, its probes and hint above it, and a slide on it sets the power', async () => {
   const { context, page } = await open();
   const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__orbit && 'ready' in document.body.dataset);
   const r = await page.evaluate(() => {
@@ -1028,18 +1028,18 @@ test('edge-gestures AC-4: with iPhone insets, the booster bar sits above the bot
     };
     return { bar: box('[data-boost]'), probes: box('.probes'), hint: box('[data-hint]'), fieldBottom: window.__orbit.view.y + 1800 * window.__orbit.view.s };
   });
-  const strip = 844 - PORTRAIT_INSETS.bottom - 40;
-  assert.ok(r.bar.bottom <= strip + 0.5, `the bar's foot is above the strip (${r.bar.bottom} <= ${strip})`);
+  // #27 put the bar's foot 40 px above the safe area, 74 px above the screen's edge; now half that.
+  const foot = (PORTRAIT_INSETS.bottom + 40) / 2;
+  assert.ok(Math.abs(844 - r.bar.bottom - foot) < 0.5, `the bar's foot is ${844 - r.bar.bottom} px above the edge, want ${foot}`);
   assert.ok(r.probes.bottom <= r.bar.top + 0.5 && r.probes.top >= r.fieldBottom - 1, `the probes sit between the field and the bar: ${JSON.stringify(r)}`);
   assert.ok(r.hint.bottom <= r.probes.top + 0.5, `the hint sits above the probes: ${JSON.stringify(r)}`);
+  // The field takes the room: it reaches 37 px lower than with the bar 40 px above the safe area.
+  assert.ok(r.fieldBottom >= r.probes.top - 30, `the field runs down to the probes: ${JSON.stringify(r)}`);
+  // A slow slide that starts low on the bar, inside the bottom strip, still sets the power.
   const power = () => page.evaluate(() => window.__orbit.input.power);
   const before = await power();
-  const x = r.bar.left + (r.bar.right - r.bar.left) * 0.8;
-  await touchDrag(cdp, x, strip + 10, 0, r.bar.top + 20 - (strip + 10));
-  await touchDrag(cdp, x, strip + 10, -60, 0);
-  assert.equal(await power(), before, 'a drag from the strip sets nothing');
-  await touchDrag(cdp, r.bar.left + (r.bar.right - r.bar.left) * 0.5, (r.bar.top + r.bar.bottom) / 2, 40, 0);
-  assert.notEqual(await power(), before, 'a drag on the bar still sets the power');
+  await touchDrag(cdp, r.bar.left + (r.bar.right - r.bar.left) * 0.5, r.bar.bottom - 6, 40, 0);
+  assert.notEqual(await power(), before, 'a slide from the bar\'s low edge sets the power');
   await context.close();
 });
 
@@ -1085,7 +1085,9 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
     assert.ok(r.left >= 0 && r.right <= r.w && r.bottom <= r.h, `${viewport.width}: on screen`);
     assert.ok(r.buttons.every((x) => x >= 44));
     assert.ok(r.bar.top >= r.bottom, `${viewport.width}: the booster bar sits below the field`);
-    assert.ok(r.bar.bottom <= r.h - 24 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, above the edge strip`);
+    // edge-gestures (the owner, 2026-11-10) replaces "above the bottom edge strip": the bar's foot sits at
+    // half the gesture strip's height above the edge, (inset + 40) / 2, here 20 px.
+    assert.ok(Math.abs(r.h - r.bar.bottom - 20) < 0.5 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, its foot 20 px above the edge (${r.h - r.bar.bottom})`);
     assert.ok(r.bar.height >= 44, 'the bar is easy to hit');
     assert.ok(r.probes.top >= r.bottom - 1 && r.probes.left >= 0 && r.probes.right <= r.w, `${viewport.width}: the probes left sit between the field and the bar`);
     assert.ok(r.hud.left >= 0 && r.hud.right <= r.w && r.hud.rowFits && !r.hud.overlap, `${viewport.width}: the top bar fits, slingshots and all (${JSON.stringify(r.hud)})`);
