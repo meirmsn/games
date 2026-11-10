@@ -131,9 +131,8 @@ minute.
   and from then on it follows the galleon home, keeping the next stretch of the route on a broad
   reach and turning no faster than 15° a second; no other shift comes, so the finale is a release
   after the build-up rather than a beat upwind. Changed after the go, found by the timed playtest
-  and approved by the owner in the chat ("And yes, I approve whatever is a font version", then
-  "Fun.", i.e. the fun version, asked whether to keep the following wind for the last passage,
-  2026-11-10).
+  and approved by the owner in the chat on 2026-11-10, after asking what the following wind is and
+  why: "I approve the following win for the high seas finale."
 - Rocks show a white surf ring at their footprint, which is what the boat hits, not the tall sprite.
 - The wind shifts by about 90°, announced at least 30 s ahead by a ghost arrow on the wind vane and
   clouds turning: 45 s after the fourth delivery, again 45 s after buying the galleon, then every
@@ -141,7 +140,8 @@ minute.
 - A hidden assist: when the boat has been slow (under 30% of its top speed) for 4 s, a gust forms
   upwind of it within the next few seconds. Never shown, and nothing else eases in secret; the last
   passage's following wind is the one other easing, and it's in plain sight (the vane shows it
-  turning) and the same for everyone (owner, 2026-11-10, approving the following wind).
+  turning) and the same for everyone (owner, 2026-11-10: "I approve the following win for the high
+  seas finale.").
 - The Grand Charter: once you own the galleon, the lighthouse keeper (a white coat, a gold flag with
   a star) waits at the shipyard and boards first when there's a seat; taking them to the lighthouse
   island, in deep water, ends the voyage. They ride free. The voyage clock runs while sailing and docked, and stops while paused or on the
