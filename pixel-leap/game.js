@@ -694,8 +694,7 @@ function touchThings(hb) {
         break;
       }
       case 'portal':
-        // Anywhere in the doorway, two tiles tall: a jump through it counts too.
-        if (Math.abs(t.x - p.x) < 0.7 && p.y > t.y - 2.4 && p.y < t.y + 0.5) {
+        if (Math.abs(t.x - p.x) < 0.7 && Math.abs(t.y - p.y) < 1.5) {
           enterPortal();
           return;
         }

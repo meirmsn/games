@@ -1082,6 +1082,9 @@ const BOT = `(opts) => {
         run = Math.abs(dx) < 0.3 ? 0 : Math.sign(dx);
       }
     } else if (!p.onCap) lastCap = null;
+    // Past the door (a jump carried it over): walk back to it.
+    const door = st.things.find((d) => d.type === 'portal');
+    if (door && p.x > door.x + 0.5 && Math.abs(p.y - door.y) < 4) run = -1;
     // A flyer diving nearby: back off and let it pass, unless a walker is right there.
     const diving = st.things.some((f) => f.type === 'flyer' && f.alive && f.state === 'swoop' && f.x - p.x > -1.5 && f.x - p.x < 4.5);
     if (diving && p.ground) {
@@ -1357,9 +1360,7 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
         for (let x = 1; x < U; x++) {
           const i = (y * U + x) * 4;
           const diff = Math.abs(d[i] - d[i - 4]) + Math.abs(d[i + 1] - d[i - 3]) + Math.abs(d[i + 2] - d[i - 2]);
-          // A soft step between neighbours is smooth drawing; a step of up to two levels a channel is only the
-          // browser dithering a gradient sky.
-          if (diff > 6 && diff < 30) soft++;
+          if (diff > 0 && diff < 30) soft++; // a soft step between neighbours: smooth drawing
         }
       }
       return { sounds: L.heard.slice(heard), steps: [...new Set(res.filter(Boolean))], soft };
