@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Walk on Red</title>
+    <meta name="description" content="Walk on Red: he really needs the loo, and it's across the street. Cross before the light turns green; later, people follow in your footsteps." />
+    <meta name="theme-color" content="#2b2f3a" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="street" aria-label="A busy street at a red light, with people waiting to cross"></canvas>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 11 11" aria-hidden="true"><rect x="1" y="4" width="2" height="3" /><rect x="3" y="3" width="1" height="5" /><rect x="4" y="2" width="1" height="7" /><rect x="5" y="1" width="1" height="9" /><rect x="7" y="4" width="1" height="3" /><rect x="9" y="2" width="1" height="7" /></svg>
+      <svg class="i-off" viewBox="0 0 11 11" aria-hidden="true"><rect x="1" y="4" width="2" height="3" /><rect x="3" y="3" width="1" height="5" /><rect x="4" y="2" width="1" height="7" /><rect x="5" y="1" width="1" height="9" /><rect x="7" y="3" width="1" height="1" /><rect x="9" y="3" width="1" height="1" /><rect x="8" y="4" width="1" height="2" /><rect x="7" y="6" width="1" height="1" /><rect x="9" y="6" width="1" height="1" /></svg>
+    </button>
+
+    <div class="hud" data-hud hidden>
+      <div class="hud-mid">
+        <div class="street-name" data-street-name></div>
+        <div class="quota"><span class="quota-fill" data-quota-fill></span></div>
+      </div>
+      <div class="score" data-score>0</div>
+    </div>
+
+    <div class="banner" data-banner hidden>
+      <p class="banner-num" data-banner-num></p>
+      <table class="tally" data-tally hidden></table>
+      <p class="banner-name" data-banner-name></p>
+    </div>
+
+    <section class="card start" data-screen="start" hidden>
+      <h1>Walk on Red</h1>
+      <p class="lead">He really needs the loo, and it's across the street.</p>
+      <button class="play" type="button" data-play>Start</button>
+      <p class="best" data-best hidden></p>
+    </section>
+
+    <section class="card" data-screen="paused" hidden>
+      <button class="play" type="button" data-resume>Tap to go on</button>
+    </section>
+
+    <section class="card" data-screen="over" hidden>
+      <h2>Across!</h2>
+      <p class="score-line"><span data-final-score>0</span> points</p>
+      <p class="detail" data-final-detail></p>
+      <button class="play" type="button" data-again>Play again</button>
+    </section>
+  </body>
+</html>

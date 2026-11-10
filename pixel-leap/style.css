@@ -1,0 +1,722 @@
+/* Pixel Leap: the view on top, the control deck below (a handheld's layout), cards over the view.
+   The game keeps its own palette per world; the cards are a soft ink on white, the same in light
+   and dark, because the worlds are their own background. */
+
+:root {
+  --ink: #2a2440;
+  --paper: #fffdf7;
+  --accent: #ff7a59;
+  --accent-ink: #ffffff;
+  --deck: #2a2440;
+  --deck-key: #3d3560;
+  --deck-key-on: #ff7a59;
+  --deck-h: min(180px, 26dvh);
+  --safe-b: env(safe-area-inset-bottom);
+}
+
+body {
+  background: var(--deck);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#view {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: block;
+  touch-action: none;
+  background: #cdeff0;
+}
+
+/* The deck shows on touch screens. */
+.deck {
+  display: none;
+  flex: 0 0 auto;
+  height: calc(var(--deck-h) + var(--safe-b));
+  padding: 14px max(24px, env(safe-area-inset-right)) calc(14px + var(--safe-b)) max(24px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  gap: 16px;
+  background: var(--deck);
+  touch-action: none;
+}
+
+body.touch .deck {
+  display: flex;
+}
+
+body.building .deck {
+  visibility: hidden;
+}
+
+.pad,
+.jump {
+  position: relative;
+  flex: 1 1 0;
+  border-radius: 28px;
+  background: var(--deck-key);
+  box-shadow: inset 0 -5px 0 rgb(0 0 0 / 25%);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.pad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+
+.pad .arrow,
+.jump svg {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  color: #fff;
+  opacity: 0.75;
+  transition: transform 80ms ease, opacity 80ms ease, background 80ms ease;
+}
+
+.pad .arrow svg,
+.jump svg {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.jump {
+  display: grid;
+  place-items: center;
+}
+
+.jump svg {
+  width: 56px;
+  height: 56px;
+}
+
+.pad .notch {
+  width: 6px;
+  height: 34%;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 18%);
+}
+
+.pad[data-dir='-1'] .left,
+.pad[data-dir='1'] .right {
+  opacity: 1;
+  background: var(--deck-key-on);
+  transform: scale(1.12);
+}
+
+.jump.on {
+  background: var(--deck-key-on);
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 25%);
+}
+
+.jump.on svg {
+  opacity: 1;
+  transform: translateY(-3px);
+}
+
+/* Landscape on touch: the two halves sit in the bottom corners, over the view. */
+@media (orientation: landscape) {
+  body.touch .deck {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(min(150px, 38dvh) + var(--safe-b));
+    background: none;
+    pointer-events: none;
+    justify-content: space-between;
+  }
+
+  body.touch .pad,
+  body.touch .jump {
+    flex: 0 0 auto;
+    width: min(240px, 34vw);
+    pointer-events: auto;
+    background: rgb(42 36 64 / 45%);
+  }
+
+  body.touch .jump {
+    width: min(150px, 24vw);
+  }
+}
+
+.hud {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: calc(env(safe-area-inset-left) + 68px);
+  right: calc(env(safe-area-inset-right) + 68px);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+  font-weight: 800;
+  font-size: 17px;
+}
+
+.hud > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.hud[hidden] {
+  display: none;
+}
+
+.coin-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff3a6 0 22%, #ffc83d 24% 62%, #c98a12 64%);
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+/* Cards */
+.card {
+  position: fixed;
+  z-index: 8;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 16px;
+  border-radius: 24px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 10px 30px rgb(20 16 40 / 30%);
+  text-align: center;
+}
+
+.card[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 4px 0 8px;
+  font-size: 24px;
+}
+
+.builder {
+  display: grid;
+  gap: 10px;
+}
+
+.preview {
+  justify-self: center;
+  height: min(168px, 24dvh);
+  width: auto;
+  margin-top: max(-120px, -16dvh);
+  filter: drop-shadow(0 6px 6px rgb(20 16 40 / 25%));
+}
+
+.parts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.parts button,
+.starts-row button,
+.actions button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.parts button {
+  background: #efeaf8;
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 rgb(42 36 64 / 15%);
+}
+
+.parts button:active,
+.actions button:active,
+.starts-row button:active {
+  transform: translateY(2px);
+}
+
+.starts[hidden] {
+  display: none;
+}
+
+.starts {
+  display: grid;
+  gap: 6px;
+}
+
+.starts-label {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.starts-row {
+  display: flex;
+  gap: 8px;
+}
+
+.starts-row button {
+  flex: 1;
+  background: #efeaf8;
+  color: var(--ink);
+}
+
+.starts-row button[aria-pressed='true'] {
+  background: var(--ink);
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.actions button {
+  flex: 1;
+  min-height: 54px;
+  font-size: 18px;
+}
+
+.actions .shuffle {
+  background: #efeaf8;
+  color: var(--ink);
+}
+
+.actions .go {
+  flex: 1.6;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: inset 0 -4px 0 rgb(0 0 0 / 18%);
+}
+
+.paused {
+  bottom: auto;
+  top: 30%;
+  cursor: pointer;
+}
+
+.paused p {
+  margin: 0 0 4px;
+  opacity: 0.7;
+}
+
+.tally-rows {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  margin: 0 0 10px;
+}
+
+.tally-rows div {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #f4f0fb;
+}
+
+.tally-rows dt {
+  opacity: 0.7;
+}
+
+.tally-rows dd {
+  margin: 0;
+  font-weight: 800;
+}
+
+.tally-note {
+  margin: 0 0 10px;
+  font-weight: 700;
+  color: #b4472a;
+  min-height: 1em;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------------------------------------
+   The UI follows the world's rule. In a pixel world (the default, and the builder) the cards,
+   buttons and HUD are pixel-drawn: the Kenney Pixel font, square corners, hard borders and
+   stepped shadows. In a smooth world (body.smooth) they are the soft versions above; in the Ink
+   world (body.ink) they are ink on dark, like the world. */
+
+@font-face {
+  font-family: 'Kenney Pixel';
+  src: url('fonts/kenney-pixel.ttf') format('truetype');
+  font-display: block;
+}
+
+body:not(.smooth) {
+  --px-ink: #2a2440;
+  --px-paper: #fffdf2;
+  --px-key: #efe6d2;
+  --px-key-shade: #cfc2a6;
+  --px-accent: #ff7a59;
+  --px-accent-shade: #c4492f;
+}
+
+body.ink {
+  --px-ink: #f2efe6;
+  --px-paper: #1d1b22;
+  --px-key: #2b2832;
+  --px-key-shade: #141218;
+  --px-accent: #f2efe6;
+  --px-accent-shade: #9a978f;
+}
+
+body:not(.smooth) .card,
+body:not(.smooth) .hud > span,
+body:not(.smooth) .parts button,
+body:not(.smooth) .actions button {
+  font-family: 'Kenney Pixel', ui-monospace, monospace;
+  border-radius: 0;
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+}
+
+body:not(.smooth) .card {
+  background: var(--px-paper);
+  color: var(--px-ink);
+  border: 4px solid var(--px-ink);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 35%);
+  padding: 14px;
+}
+
+body:not(.smooth) .card h2 {
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+body:not(.smooth) .parts button,
+body:not(.smooth) .actions .shuffle {
+  background: var(--px-key);
+  color: var(--px-ink);
+  border: 3px solid var(--px-ink);
+  box-shadow: inset -4px -4px 0 var(--px-key-shade);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+body:not(.smooth) .actions .go {
+  background: var(--px-accent);
+  color: var(--px-paper);
+  border: 3px solid var(--px-ink);
+  box-shadow: inset -4px -4px 0 var(--px-accent-shade);
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+body.ink .actions .go {
+  color: #1d1b22;
+}
+
+body:not(.smooth) .parts button:active,
+body:not(.smooth) .actions button:active {
+  box-shadow: inset 4px 4px 0 var(--px-key-shade);
+  transform: translate(2px, 2px);
+}
+
+body:not(.smooth) .tally-rows div {
+  border-radius: 0;
+  background: var(--px-key);
+  border: 2px solid var(--px-ink);
+  font-size: 24px;
+}
+
+body:not(.smooth) .tally-rows dd {
+  font-weight: 400;
+}
+
+body:not(.smooth) .tally-note,
+body:not(.smooth) .paused p {
+  font-size: 22px;
+  font-weight: 400;
+}
+
+body:not(.smooth) .preview {
+  image-rendering: pixelated;
+  filter: none;
+}
+
+body:not(.smooth) .hud > span {
+  height: 34px;
+  color: var(--px-ink);
+  background: var(--px-paper);
+  border: 3px solid var(--px-ink);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 30%);
+  font-size: 24px;
+  font-weight: 400;
+}
+
+body:not(.smooth) .coin-icon {
+  border-radius: 0;
+  width: 14px;
+  height: 14px;
+  background: #ffc83d;
+  box-shadow: inset -3px -3px 0 #c98a12, 0 0 0 2px var(--px-ink);
+}
+
+.hud {
+  gap: 6px;
+}
+
+.hud > span {
+  padding: 0 10px;
+}
+
+.hud-lives,
+.hud-hearts {
+  gap: 2px;
+}
+
+.hud-icon {
+  height: 20px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+.hud-icon.off {
+  opacity: 0.25;
+  filter: grayscale(1);
+}
+
+.hud-lives.pop .hud-icon,
+.hud-hearts.pop .hud-icon {
+  animation: hud-pop 0.4s steps(4) 2;
+}
+
+@keyframes hud-pop {
+  50% {
+    transform: translateY(-4px) scale(1.25);
+  }
+}
+
+@media (max-width: 400px) {
+  .hud {
+    left: calc(env(safe-area-inset-left) + 62px);
+    right: calc(env(safe-area-inset-right) + 62px);
+    flex-wrap: wrap;
+    height: auto;
+    row-gap: 4px;
+  }
+
+  .hud > span {
+    padding: 0 7px;
+  }
+
+  .hud-stage {
+    display: none !important;
+  }
+}
+
+/* The HUD, bigger and chunkier: lives (your monster), hearts, coins and the level. On a phone it
+   shrinks to fit between the back and mute buttons, and the level's name moves to the banner. */
+.hud {
+  top: calc(env(safe-area-inset-top) + 10px);
+  height: 52px;
+  gap: 8px;
+}
+
+.hud > span {
+  height: 48px;
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 34px;
+}
+
+body:not(.smooth) .hud > span {
+  height: 46px;
+  border-width: 4px;
+  box-shadow: 4px 4px 0 rgb(0 0 0 / 35%);
+  font-size: 36px;
+}
+
+.hud-icon {
+  height: 30px;
+}
+
+.hud-lives .hud-icon {
+  height: 34px;
+}
+
+.hud-coin-icon {
+  display: inline-flex;
+}
+
+.hud-coin-icon .hud-icon {
+  height: 26px;
+}
+
+body.smooth .hud-icon {
+  image-rendering: auto;
+}
+
+@media (max-width: 480px) {
+  .hud {
+    left: calc(env(safe-area-inset-left) + 60px);
+    right: calc(env(safe-area-inset-right) + 60px);
+    height: 44px;
+    gap: 5px;
+  }
+
+  .hud > span,
+  body:not(.smooth) .hud > span {
+    height: 40px;
+    padding: 0 7px;
+    gap: 3px;
+    font-size: 28px;
+    border-width: 3px;
+  }
+
+  .hud-icon {
+    height: 22px;
+  }
+
+  .hud-lives .hud-icon {
+    height: 26px;
+  }
+
+  .hud-coin-icon .hud-icon {
+    height: 20px;
+  }
+
+  .hud-stage {
+    display: none !important;
+  }
+}
+
+/* The level's name as it opens. */
+.banner {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  top: 28%;
+  margin: 0;
+  padding: 10px 22px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: 'Kenney Pixel', ui-monospace, monospace;
+  font-size: clamp(40px, 12vw, 72px);
+  line-height: 1;
+  color: var(--px-ink, #2a2440);
+  background: var(--px-paper, #fffdf2);
+  border: 5px solid var(--px-ink, #2a2440);
+  box-shadow: 6px 6px 0 rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+body.smooth .banner {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 800;
+  border: 0;
+  border-radius: 24px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  box-shadow: 0 10px 30px rgb(20 16 40 / 30%);
+}
+
+.banner[hidden] {
+  display: none;
+}
+
+.banner.go {
+  animation: banner 1.8s steps(6) both;
+}
+
+body.smooth .banner.go {
+  animation-timing-function: ease;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -20px) scale(0.8);
+  }
+  15%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
