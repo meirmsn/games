@@ -224,7 +224,7 @@ const game = {
 };
 // The booster power on the bar, kept between visits (a convenience; losing it costs nothing).
 const input = { power: Math.min(1, Math.max(0, Number(store.get('orbit.power', 0.25)) || 0)), lastTick: -1 };
-let manual = false; // tests own the clock
+let manual = Boolean(window.__orbitManual); // tests own the clock (a test can set the flag before the first frame)
 
 function assistNow() {
   return Math.min(1, Math.max(0, (game.legFails - 2) / 3));

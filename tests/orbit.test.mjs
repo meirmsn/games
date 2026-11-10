@@ -840,8 +840,10 @@ test('orbit AC-20: the probe dims over the last 2 s before its time runs out', a
   await context.close();
 });
 
-test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
-  const { context, page } = await open();
+test('orbit AC-22, ci-flakes AC-3: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
+  // The test owns the clock from the first frame: real frames never add to the 4 s of idling, however
+  // slowly the page loads (the init script runs again on the reload below).
+  const { context, page } = await open({ init: [() => (window.__orbitManual = true)] });
   await manual(page);
   const hint = () => page.evaluate(() => !document.querySelector('[data-hint]').hidden);
   await frames(page, 60 * 3);
