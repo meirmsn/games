@@ -4,7 +4,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { statSync } from 'node:fs';
+import { statSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -729,48 +731,93 @@ test('crumble AC-21: ten levels, each harder than the one before, each a new ter
   await context.close();
 });
 
-test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with blasts every few frames', async () => {
-  const { context, page } = await open({ deviceScaleFactor: 2 });
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+// The frame budget in CPU time, not wall time (specs/crumble.md, AC-12). A busy machine pauses the
+// browser now and then; wall-clock timings count those pauses, the main thread's CPU time doesn't.
+// The run is traced (Chromium's devtools.timeline): each animation-frame callback has its wall `dur`
+// and its CPU `tdur`. Blasts land inside the game's own frame (shoot() puts a Shell just above the
+// ground; update() detonates it), and each carve is marked with console.timeStamp so the game's frames
+// can be split into those that carved and those that didn't. No CPU throttle: a quarter of a 60 fps
+// frame (4.2 ms) stands in for a phone 4× slower. Run once; nothing is retried.
+test('crumble AC-12: the frame holds in CPU time, a blast adds little, and nothing reads the whole canvas back', async () => {
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2 });
+  await context.addInitScript(() => {
+    window.__pixelTrips = 0; // whole-canvas reads and writes: getImageData / putImageData
+    const P = CanvasRenderingContext2D.prototype;
+    for (const k of ['getImageData', 'putImageData']) {
+      const f = P[k];
+      P[k] = function (...a) {
+        window.__pixelTrips++;
+        return f.apply(this, a);
+      };
+    }
+  });
+  const page = await context.newPage();
+  await page.goto(BASE + 'crumble/');
+  await page.waitForFunction(() => window.__crumble);
   await page.evaluate(() => {
     const c = window.__crumble;
     c.store.taught = true;
     c.startBattle(0);
-    c.frameTimes.length = 0;
-    c.carveTimes.length = 0;
-    window.__fxMax = 0;
-    let n = 0;
-    const blast = () => {
-      if (n++ > 200) return;
-      if (n % 3 === 0) {
-        const x = 300 + Math.random() * 800;
-        c.detonate(x, c.terrain.top(x) + 6);
-      }
-      window.__fxMax = Math.max(window.__fxMax, c.fx.count);
-      requestAnimationFrame(blast);
+    c.game.damage = false; // random blasts must not hurt the tanks or end the battle mid-run
+    const carve = c.terrain.carve; // startBattle builds a new terrain, so wrap it after
+    c.terrain.carve = function (...a) {
+      console.timeStamp('crumble-carve');
+      return carve.apply(this, a);
     };
-    requestAnimationFrame(blast);
+    window.__pixelTrips = 0;
   });
-  await page.waitForTimeout(5000);
-  const r = await page.evaluate(() => {
+  const path = join(tmpdir(), `crumble-ac12-${process.pid}-${Date.now()}.json`);
+  await browser.startTracing(page, { path, categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline'] });
+  const run = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        const c = window.__crumble;
+        let n = 0;
+        let fxMax = 0;
+        const drive = () => {
+          fxMax = Math.max(fxMax, c.fx.count);
+          if (n++ > 300) return done({ fxMax, mode: c.game.mode, pixelTrips: window.__pixelTrips });
+          if (n % 3 === 0 && !c.game.projectile) {
+            const x = 300 + Math.random() * 800;
+            c.shoot(x, c.terrain.top(x) - 3, 0, 120);
+          }
+          requestAnimationFrame(drive);
+        };
+        requestAnimationFrame(drive);
+      })
+  );
+  await browser.stopTracing();
+  const events = JSON.parse(readFileSync(path, 'utf8')).traceEvents;
+  rmSync(path, { force: true });
+  const within = (e, f) => e.tid === f.tid && e.ts >= f.ts && e.ts <= f.ts + f.dur;
+  const calls = events.filter((e) => e.name === 'FunctionCall' && e.ph === 'X' && e.args?.data?.functionName === 'frame');
+  const marks = events.filter((e) => e.name === 'TimeStamp' && e.args?.data?.message === 'crumble-carve');
+  // The game's frames: animation-frame callbacks that ran its frame(), not the test's driver.
+  const frames = events.filter((e) => e.name === 'FireAnimationFrame' && e.ph === 'X' && e.tdur != null && calls.some((f) => within(f, e)));
+  const blast = frames.filter((f) => marks.some((m) => within(m, f)));
+  const calm = frames.filter((f) => !marks.some((m) => within(m, f)));
+  const ms = (list, k) => list.map((e) => e[k] / 1000).sort((a, b) => a - b);
+  const at = (sorted, q) => sorted[Math.floor(sorted.length * q)];
+  const cpu = ms(frames, 'tdur');
+  const p95 = at(cpu, 0.95);
+  const extra = at(ms(blast, 'tdur'), 0.5) - at(ms(calm, 'tdur'), 0.5);
+  // The crater check reads one pixel back; it comes after the counted run.
+  const alpha = await page.evaluate(() => {
     const c = window.__crumble;
-    const f = [...c.frameTimes].sort((a, b) => a - b);
-    const k = [...c.carveTimes].sort((a, b) => a - b);
     const x = 700;
     const y = c.terrain.top(x) + 8;
     c.detonate(x, y);
     const s = c.terrain.scale;
-    const alpha = c.terrain.ctx.getImageData(Math.round(x * s), Math.round(y * s), 1, 1).data[3];
-    return { frames: f.length, p95: f[Math.floor(f.length * 0.95)], carve: k[Math.floor(k.length * 0.95)], carves: k.length, fxMax: window.__fxMax, alpha };
+    return c.terrain.ctx.getImageData(Math.round(x * s), Math.round(y * s), 1, 1).data[3];
   });
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-  console.log(`crumble AC-12: ${JSON.stringify(r)}`);
-  assert.ok(r.frames > 30 && r.carves > 12, `it ran (${r.frames} frames, ${r.carves} blasts)`);
-  assert.ok(r.fxMax >= 200, `the explosion pool was at least half full (${r.fxMax})`);
-  assert.ok(r.p95 < 16.7, `p95 frame ${r.p95.toFixed(2)} ms`);
-  assert.ok(r.carve < 4, `p95 carve + settle ${r.carve.toFixed(2)} ms`);
-  assert.equal(r.alpha, 0, 'the crater is transparent in the drawn ground');
+  console.log(`crumble AC-12: ${JSON.stringify({ frames: frames.length, blasts: blast.length, p95, extra, wallP95: at(ms(frames, 'dur'), 0.95), ...run })}`);
+  assert.ok(frames.length >= 200 && blast.length >= 40, `it ran (${frames.length} game frames, ${blast.length} with a blast)`);
+  assert.equal(run.mode, 'battle', 'the battle went on through the run');
+  assert.ok(run.fxMax >= 200, `the explosion pool was at least half full (${run.fxMax})`);
+  assert.ok(p95 < 4.2, `p95 frame CPU ${p95.toFixed(3)} ms`);
+  assert.ok(extra < 0.6, `a blast adds ${extra.toFixed(3)} ms of CPU to its frame (median)`);
+  assert.equal(run.pixelTrips, 0, 'no whole-canvas pixel reads or writes during the run');
+  assert.equal(alpha, 0, 'the crater is transparent in the drawn ground');
   await context.close();
 });
 
