@@ -1,6 +1,6 @@
 # Landing page: a home button, and a corner ribbon inviting people to add the site
 
-**Go:** pending
+**Go:** "Go" 2026-11-10 (to build after the PWA-updates PR merges), with "Quiet card colours" and "After a week" 2026-11-10
 
 ## Intent
 
@@ -54,7 +54,9 @@ the design. No game page changes.
   - Another touch device: "Open your browser's menu, then Add to Home screen or Install".
   - Desktop Safari: "Choose File, then Add to Dock".
   - Any other desktop: "Press ⌘D to bookmark this site" on a Mac, "Press Ctrl+D" elsewhere.
-  The dialog has "Not now" (closes; the ribbon comes back on a later visit) and "Don't show again".
+  The dialog has "Not now" (closes; the ribbon stays away for 7 days) and "Don't show again".
+- The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
+  "Quiet card colours", "After a week"); rejected: the bold accent band, and returning on the next visit.
 - **How the device cases are tested:** in Playwright's Chromium, by the signals the function reads:
   a synthetic `beforeinstallprompt` with a stub `prompt()`; an iPhone or iPad user agent with
   `maxTouchPoints`; `pointer: coarse` through touch emulation; `display-mode: standalone` emulated;
@@ -79,7 +81,7 @@ the design. No game page changes.
   opens the browser's install prompt where it offered one; the Share, then Add to Home Screen steps
   on iPhone and iPad (an iPad reporting as a Mac included); the browser-menu steps on other touch
   devices; File, then Add to Dock in desktop Safari; ⌘D on a Mac and Ctrl+D elsewhere.
-- **AC-6** "Not now" closes the dialog and the ribbon returns on a later visit; "Don't show again"
+- **AC-6** "Not now" closes the dialog and the ribbon stays hidden for 7 days, then returns; "Don't show again"
   removes it for good; installing from the dialog or the header removes the ribbon and both Install
   buttons.
 - **AC-7** The dialog closes on Escape and returns focus to the ribbon.
