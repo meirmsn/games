@@ -252,6 +252,31 @@ test('pwa-updates AC-3: a game open in another tab never reloads or shows the no
   await s.close();
 });
 
+test('pwa-updates AC-2: with two landing tabs, only the one that taps Update reloads; the other hides its notice', async () => {
+  const s = await site();
+  const one = await s.page();
+  await controlled(one);
+  const two = await s.page();
+  await controlled(two);
+  deploy(s, '2');
+  await one.reload();
+  await notice(one).waitFor({ state: 'visible', timeout: 10000 });
+  await two.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await notice(two).waitFor({ state: 'visible', timeout: 10000 });
+  let navigations = 0;
+  two.on('framenavigated', (f) => f === two.mainFrame() && navigations++);
+  await notice(one).getByRole('button', { name: 'Update' }).click();
+  await one.waitForFunction(() => document.readyState === 'complete' && navigator.serviceWorker.controller);
+  await notice(two).waitFor({ state: 'hidden', timeout: 10000 });
+  await two.waitForTimeout(1000);
+  assert.equal(navigations, 0, 'the other tab did not reload');
+  assert.equal(await notice(one).isVisible(), false);
+  await s.close();
+});
+
 test('pwa-updates AC-5: online, pages, scripts and styles come from the network; pictures and sounds from the cache, refreshed for next time', async () => {
   const s = await site();
   const landing = await s.page();
