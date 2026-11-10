@@ -551,7 +551,8 @@ function updatePlayer(dt) {
   if (player.down > 0) {
     player.down -= dt;
     if (player.down <= 0 && (game.mode === 'out' || game.lost)) {
-      // The last life: he stays down where he was hit, and the run ends.
+      // The last life ('out'): he stays down where he was hit, and the run ends. Once it has ended
+      // ('over', game.lost) this keeps him lying there behind the Game over card, never sent back.
       player.down = 1e-3;
       if (game.mode === 'out') endRun();
       return;
