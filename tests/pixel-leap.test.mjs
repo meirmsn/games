@@ -1531,19 +1531,26 @@ test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only wi
     const draws = [];
     for (const list of Object.values(pockets)) {
       const coin = list[1] || list[0];
-      L.game.t = 1; // between glints
+      const first = list[0];
+      L.game.t = 1 - first.pocket * 0.7 + 2 * 10; // between glints
       Object.assign(L.player, { x: coin.x + 6, y: st.base, vx: 0, vy: 0 });
       const far = look(coin);
-      const farAgain = look(coin);
+      // Hidden: with the monster far, the picture is the same as with the coin gone.
+      coin.alive = false;
+      const gone = look(coin);
+      coin.alive = true;
+      // The glint: over any 2 s, the first coin's spot is drawn differently at least once.
+      const base = look(first);
+      let glints = 0;
+      const t0 = L.game.t;
+      for (let t = 0; t < 2; t += 0.05) {
+        L.game.t = t0 + t;
+        if (look(first) !== base) glints++;
+      }
+      L.game.t = t0;
       Object.assign(L.player, { x: coin.x + 1, y: coin.y + 1.2 });
       const near = look(coin);
-      // The glint: within any 2 s, the first coin's spot is marked at least once.
-      let glints = 0;
-      for (let t = 0; t < 2; t += 0.05) {
-        L.game.t = 10 + t;
-        if ((L.game.t + list[0].pocket * 0.7) % 2 < 0.35) glints++;
-      }
-      draws.push({ n: list.length, hiddenFar: far === farAgain, shownNear: near !== far, glints });
+      draws.push({ n: list.length, hiddenFar: far === gone, shownNear: near !== far, glints });
     }
     // Off the route: the scripted run passes without taking any of them.
     L.startWorld(1);
@@ -1554,6 +1561,7 @@ test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only wi
   assert.ok(r.draws.length >= 3, `${r.draws.length} pockets`);
   for (const d of r.draws) {
     assert.ok(d.n >= 3, `a pocket of ${d.n} coins`);
+    assert.equal(d.hiddenFar, true, 'its coins are not drawn while the monster is far');
     assert.equal(d.shownNear, true, 'its coins show once the monster comes within 3 tiles');
     assert.ok(d.glints >= 1, 'a glint every 2 s');
   }
@@ -1693,7 +1701,7 @@ test('pixel-leap AC-28: Mushroom is a tall climb; caps launch 4, 6, 8 tiles in a
       // An 8-tile launch in a real run: from the third cap to the fourth (6 higher), the fourth
       // cap stays in view the whole way.
       const run2 = caps.filter((c) => c.x > 80).sort((a, b) => a.x - b.x);
-      let inView = true;
+      let inView = run2.length >= 4;
       if (run2.length >= 4) {
         const [c3, c4] = [run2[2], run2[3]];
         L.game.capChain = 2;
@@ -1720,7 +1728,7 @@ test('pixel-leap AC-28: Mushroom is a tall climb; caps launch 4, 6, 8 tiles in a
     assert.ok(r.rows > 15, 'a tall level');
     for (const [got, want] of r.run.map((h, i) => [h, [4, 6, 8, 8][i]])) assert.ok(Math.abs(got - want) <= 0.5, `cap launch ${got.toFixed(2)} for ${want}`);
     assert.ok(Math.abs(r.after - 4) <= 0.5, `back to 4 after the ground (${r.after.toFixed(2)})`);
-    assert.equal(r.inView, true, `the landing cap stays in view (${JSON.stringify(opts.viewport || 'desktop')})`);
+    assert.equal(r.inView, true, `four caps in the second run, and the landing cap stays in view (${JSON.stringify(opts.viewport || 'desktop')})`);
     assert.equal(r.lost, 1, 'falling off the bottom costs a life');
     await context.close();
   }
