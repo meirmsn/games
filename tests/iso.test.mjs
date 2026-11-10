@@ -6,7 +6,7 @@ import { createIso, createCamera, sortByDepth, attachGestures } from '../shared/
 
 const near = (a, b, eps = 1e-9) => assert.ok(Math.abs(a - b) < eps, `${a} ≈ ${b}`);
 
-test('beacon AC-1: tiles project to a 2:1 diamond and pick back to the same tile', () => {
+test('island-hop AC-1: tiles project to a 2:1 diamond and pick back to the same tile', () => {
   const iso = createIso({ tileW: 64, tileH: 32 });
   assert.deepEqual(iso.toScreen(0, 0), { x: 0, y: 0 });
   assert.deepEqual(iso.toScreen(1, 0), { x: 32, y: 16 }); // x runs down-right
@@ -40,7 +40,7 @@ test('beacon AC-1: tiles project to a 2:1 diamond and pick back to the same tile
   assert.equal(iso.facing(1, 0), 1); // down-right
 });
 
-test('beacon AC-2: depth sorting draws back to front, and a boat passes behind an island tile in front of it', () => {
+test('island-hop AC-2: depth sorting draws back to front, and a boat passes behind an island tile in front of it', () => {
   const iso = createIso();
   const island = { name: 'island', depth: iso.depth(10, 10) };
   const boatBehind = { name: 'boat', depth: iso.depth(9.2, 9.6, 1) };
@@ -71,7 +71,7 @@ function fakeElement() {
   };
 }
 
-test('beacon AC-3: the camera maps view to world, zooms about a point, pans by drag, clamps, and lists the tiles in view', () => {
+test('island-hop AC-3: the camera maps view to world, zooms about a point, pans by drag, clamps, and lists the tiles in view', () => {
   const cam = createCamera({ zoom: 1, minZoom: 0.5, maxZoom: 3 });
   cam.resize(400, 800);
   cam.lookAt({ x: 100, y: 50 });
@@ -118,7 +118,7 @@ test('beacon AC-3: the camera maps view to world, zooms about a point, pans by d
     }
 });
 
-test('beacon AC-3: gestures: one finger is the game\'s, a tap is a tap, two fingers pinch-zoom and cancel the first, the wheel zooms', () => {
+test('island-hop AC-3: gestures: one finger is the game\'s, a tap is a tap, two fingers pinch-zoom and cancel the first, the wheel zooms', () => {
   const cam = createCamera({ zoom: 1, minZoom: 0.5, maxZoom: 4 });
   cam.resize(400, 800);
   const el = fakeElement();
@@ -168,7 +168,7 @@ test('beacon AC-3: gestures: one finger is the game\'s, a tap is a tap, two fing
   assert.deepEqual([cam2.x, cam2.y], [-40, -30]);
 });
 
-test('beacon AC-3: a two-finger drag keeps the world under the fingers; a third finger lifting carries on smoothly; a leftover finger pans', () => {
+test('island-hop AC-3: a two-finger drag keeps the world under the fingers; a third finger lifting carries on smoothly; a leftover finger pans', () => {
   const cam = createCamera({ zoom: 1, minZoom: 0.25, maxZoom: 8 });
   cam.resize(400, 800);
   const el = fakeElement();
@@ -198,7 +198,7 @@ test('beacon AC-3: a two-finger drag keeps the world under the fingers; a third 
   near(v.y, 300, 1e-6);
 });
 
-test('beacon AC-3: a slow press is not a tap, a still hold is a long press, the right mouse button is ignored, and a one-finger pan waits for the slop', async () => {
+test('island-hop AC-3: a slow press is not a tap, a still hold is a long press, the right mouse button is ignored, and a one-finger pan waits for the slop', async () => {
   const cam = createCamera();
   cam.resize(400, 800);
   const el = fakeElement();
@@ -225,7 +225,7 @@ test('beacon AC-3: a slow press is not a tap, a still hold is a long press, the 
   el2.fire('pointerup', 1, 108, 106);
 });
 
-test('beacon AC-1: picking with heights finds a raised tile in front before the ground behind it', () => {
+test('island-hop AC-1: picking with heights finds a raised tile in front before the ground behind it', () => {
   const iso = createIso({ tileW: 64, tileH: 32 });
   // Tile (5,5) is a block 32 px tall; the rest is flat ground.
   const heightAt = (i, j) => (i === 5 && j === 5 ? 32 : 0);
@@ -240,7 +240,7 @@ test('beacon AC-1: picking with heights finds a raised tile in front before the 
   assert.equal(iso.pickTileAt(g.x, g.y, () => null), null);
 });
 
-test('beacon AC-2: a footprint sorts by its centre, and the camera can keep its edges inside the bounds and fit them', () => {
+test('island-hop AC-2: a footprint sorts by its centre, and the camera can keep its edges inside the bounds and fit them', () => {
   const iso = createIso();
   const house = { depth: iso.depthOf({ x: 4, y: 4, w: 2, h: 2 }, 1) }; // centre (5,5)
   const behind = { depth: iso.depthOf({ x: 4, y: 5 }, 1) }; // centre (4.5,5.5): same row, tie → order
