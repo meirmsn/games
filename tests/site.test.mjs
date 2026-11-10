@@ -76,12 +76,12 @@ test('shooting-gallery AC-20: the Shooting Gallery tile is playable and opens th
   await context.close();
 });
 
-test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
+test('walk-on-red AC-21: the landing page shows eight tiles, Gotta Go! playable after Googly Faces', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names.indexOf('Walk on Red'), names.indexOf('Googly Faces') + 1);
-  const tile = page.locator('.tile', { hasText: 'Walk on Red' });
+  assert.equal(names.indexOf('Gotta Go!'), names.indexOf('Googly Faces') + 1);
+  const tile = page.locator('.tile', { hasText: 'Gotta Go!' });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
   assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
   assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
@@ -92,7 +92,7 @@ test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playabl
   await context.close();
 });
 
-test('runes AC-17: the Runes tile is a playable link, and the page lists eight tiles (Walk on Red adds one)', async () => {
+test('runes AC-17: the Runes tile is a playable link, and the page lists eight tiles (Gotta Go! adds one)', async () => {
   const { context, page } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const runes = page.locator('.tile', { has: page.locator('h2', { hasText: 'Runes' }) });
@@ -104,7 +104,7 @@ test('runes AC-17: the Runes tile is a playable link, and the page lists eight t
   await context.close();
 });
 
-test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight tiles (Walk on Red adds one)', async () => {
+test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight tiles (Gotta Go! adds one)', async () => {
   const { context, page } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 8);
   const orbit = page.locator('.tile', { has: page.locator('h2', { hasText: /^Orbit$/ }) });
