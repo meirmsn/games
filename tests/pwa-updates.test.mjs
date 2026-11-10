@@ -252,13 +252,13 @@ test('pwa-updates AC-3: a game open in another tab never reloads or shows the no
   await s.close();
 });
 
-test('pwa-updates AC-2: with two landing tabs, only the one that taps Update reloads; the other hides its notice', async () => {
+test('pwa-updates AC-2: with two landing tabs and a new worker, only the one that taps Update reloads; the other hides its notice', async () => {
   const s = await site();
   const one = await s.page();
   await controlled(one);
   const two = await s.page();
   await controlled(two);
-  deploy(s, '2');
+  setVersion(s.dir, 'test-2'); // only the worker changes: the page's own files are as they were
   await one.reload();
   await notice(one).waitFor({ state: 'visible', timeout: 10000 });
   await two.evaluate(() => {
@@ -274,6 +274,31 @@ test('pwa-updates AC-2: with two landing tabs, only the one that taps Update rel
   await two.waitForTimeout(1000);
   assert.equal(navigations, 0, 'the other tab did not reload');
   assert.equal(await notice(one).isVisible(), false);
+  await s.close();
+});
+
+test("pwa-updates AC-11: with sw.js unchanged, a change to the landing page's own files shows the notice once it's back on screen; Update reloads into it", async () => {
+  const s = await site();
+  const page = await s.page();
+  await controlled(page);
+  await page.waitForLoadState('networkidle');
+  markLanding(s.dir, '2'); // index.html and site.js change; sw.js doesn't
+  await page.waitForTimeout(300);
+  assert.equal(await notice(page).isVisible(), false, 'nothing until the page is shown again');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await notice(page).waitFor({ state: 'visible', timeout: 10000 });
+  assert.equal(await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => !!r.waiting)), false, 'no new worker');
+  let navigations = 0;
+  page.on('framenavigated', (f) => f === page.mainFrame() && navigations++);
+  await notice(page).getByRole('button', { name: 'Update' }).click();
+  await page.waitForFunction(() => document.readyState === 'complete' && document.documentElement.dataset.scriptMark === '2');
+  await page.waitForTimeout(1000);
+  assert.equal(navigations, 1, 'reloaded exactly once');
+  assert.deepEqual(await marks(page), { page: '2', script: '2' });
+  assert.equal(await notice(page).isVisible(), false, 'notice gone');
   await s.close();
 });
 

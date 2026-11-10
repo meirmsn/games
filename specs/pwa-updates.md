@@ -1,6 +1,6 @@
 # PWA updates: an Update button on the landing page, never in the middle of a game
 
-**Go:** "Go!" 2026-11-10 (to the queue manager's plan); and "CI requires a bump" 2026-11-10 (the version rule, asked during the spec review)
+**Go:** "Go!" 2026-11-10 (to the queue manager's plan); and "CI requires a bump" 2026-11-10 (the version rule, asked during the spec review), changed to "Page notices changes" 2026-11-10
 
 ## Intent
 
@@ -27,20 +27,23 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
   change of service worker, and never reloads for an update; it picks up the new version the next
   time it's opened. Rejected: a notice inside games (it would invite a reload mid-run) (owner,
   2026-11-10, "Need to be careful if game is midway").
-- A new version is a new `sw.js`: browsers find an update only when its bytes change, and deploys
-  copy the repo as it is (the deploy check compares the live site byte for byte, so nothing can stamp
-  it on the way). So the fast check fails when a change touches any file the site serves (anything
-  `.assetsignore` doesn't exclude) without changing `VERSION` in `sw.js`
-  (`scripts/version-check.py`). Every site change then shows the Update button; the cost is a
-  one-line rebase conflict on `VERSION` when changes queue. Rejected: bumping by hand only when it
-  matters (owner, 2026-11-10, chose "CI requires a bump").
+- A new version is noticed by the landing page itself: when it comes back on screen it re-fetches
+  its own files (`index.html`, `assets/site.js`, `assets/site.css`, `assets/base.css`) and compares
+  them with the copies it fetched right after it loaded; if they differ, or a new service worker is
+  waiting, it shows the notice. No hand edit per change, so parallel branches don't conflict on
+  `sw.js`. A change to a game only gets no notice; it reaches players the next time they open that
+  game, since pages and scripts are network-first. `VERSION` is bumped only when `SHELL` changes, as
+  before. Rejected: a fast check making every site change bump `VERSION` (every PR would edit the
+  same line; the owner first chose it, then changed it, 2026-11-10, "Page notices changes"), and
+  bumping by hand.
 - A new service worker waits instead of taking over on its own (no `skipWaiting()` at install). The
   landing page's Update button posts it a message to take over; the tab that tapped reloads once,
-  on `controllerchange`, guarded by a flag. Other landing tabs hide the notice and don't reload. A
+  on `controllerchange`, guarded by a flag. Other landing tabs don't reload; they hide the notice
+  unless their own files are out of date. When only the page's files changed, Update just reloads. A
   waiting worker also takes over by itself when every page of the site is closed, as browsers do.
   Rejected: keep silent take-over (no notice, and the installed app lags).
-- Detection, on the landing page only, and only when the page already has a controlling worker
-  (never on a first visit): `registration.waiting` at load; `updatefound`, then the new worker
+- Detection of a waiting worker, on the landing page only, and only when the page already has a
+  controlling worker (never on a first visit): `registration.waiting` at load; `updatefound`, then the new worker
   reaching `installed`; and `registration.update()` each time the page becomes visible again
   (`visibilitychange`), its failure offline ignored, so an installed PWA that resumes finds updates.
 - No mixed versions (F-2): everything except big media (scripts, styles, JSON, the manifest, pages)
@@ -74,6 +77,10 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
   politely to screen readers (`role="status"`). It appears without animation. While it shows, the
   page gets bottom padding so the last tiles can scroll clear of it. No dismiss button: it's small,
   out of the way, and goes when the update is applied.
+- The version rule changed after the go (owner, 2026-11-10, "Page notices changes"), after the merge
+  queue pointed out that a per-PR `VERSION` bump makes every PR conflict on `sw.js`: the landing page
+  notices its own files changed instead; `scripts/version-check.py` and the old AC-11 are gone,
+  AC-11 and AC-12 rewritten, and an Update with no waiting worker reloads by design.
 - AC-5 reworded after the go: cached images and sounds are served from the cache and refreshed in
   the background, not never requested (owner, 2026-11-10, "Yes, reword it").
 - Accepted platform limits: iOS may clear a site's caches after weeks unused, and installed iOS
@@ -105,11 +112,11 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
 - **AC-9** The notice's styles use only the site's theme tokens, so it follows light and dark.
 - **AC-10** A game page opened straight from a link is cached for offline into its own
   `games-game-<folder>` cache.
-- **AC-11** The fast check fails when a change touches a file the site serves without changing
-  `VERSION` in `sw.js`, and passes when `VERSION` changed or only unserved files (tests, specs,
-  scripts, docs) changed.
-- **AC-12** The README's "Adding a game" steps stay as many or fewer, step 4 says to bump `VERSION`,
-  and an "Updates" section says how updates reach players — verified by review: read the README's
+- **AC-11** With the landing page open and only its own files changed on the server (`sw.js` as it
+  was), the notice shows when the page becomes visible again; Update reloads it once into the new
+  files, and the notice is gone.
+- **AC-12** The README's "Adding a game" steps stay as many or fewer, step 4 says when to bump `VERSION`
+  (only when `SHELL` changes), and an "Updates" section says how updates reach players — verified by review: read the README's
   "Adding a game" and "Updates" sections.
 
 ## Core flow
@@ -125,8 +132,9 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
 | ------------------------------------- | ----------------- |
 | Landing page, no newer version        | hidden            |
 | Landing page, newer version waiting   | shown             |
+| Landing page, its own files changed   | shown, once back on screen |
 | Landing page, after tapping Update    | hidden (reloaded) |
-| Landing page, another tab tapped it   | hidden            |
+| Landing page, another tab tapped it   | hidden, unless its own files are out of date |
 | Landing page, first visit (no worker) | hidden            |
 | Any game page                         | never shown       |
 

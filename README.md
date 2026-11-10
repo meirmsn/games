@@ -33,15 +33,14 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
 2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge. Draw its tile picture from the game itself where you can, so they look alike: `node scripts/make-tile.mjs` does this for Googly Faces.
 3. Give it a share picture: run `node scripts/make-previews.mjs`, which draws `assets/previews/<slug>.png` from its tile, and copy the `og:` and `twitter:` tags from another game's `<head>`, with its own title, description, URL and image alt. The fast tier fails without them.
-4. Bump `VERSION` in `sw.js` (as with every change to a file the site serves; the fast tier checks it). A game's files are cached the first time it's played, in its own cache, so there's no list to edit: add a file to `SHELL` only when the landing page itself needs it offline, like its tile picture.
+4. Nothing to do in `sw.js`: a game's files are cached in its own cache the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list, such as the new tile picture.
 5. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
 
 ## Updates
 
 How a new version reaches players (`specs/pwa-updates.md`):
 
-- **Every change to the site bumps `VERSION` in `sw.js`.** The browser only notices a new version when `sw.js` changes, so `scripts/version-check.py` (in the fast tier) fails a change to any file the site serves (anything `.assetsignore` doesn't exclude) that leaves `VERSION` as it was.
-- **The landing page shows "New version available" with an Update button.** It checks when it opens and each time it comes back on screen, so an installed app that resumes finds updates too. Tapping Update switches to the new version and reloads the landing page.
+- **The landing page shows "New version available" with an Update button** when it's out of date: its own files on the server changed (a new game's tile, say) or a new `sw.js` is waiting. It checks each time it comes back on screen, so an installed app that resumes finds updates too. Tapping Update switches to the new version and reloads the landing page. Nothing to bump for it.
 - **A game is never reloaded or interrupted.** Game pages never show the notice; a game picks up the new version the next time it's opened.
 - **Pages, scripts and styles are fetched fresh when online** (the cache is the offline fallback), so a page and its scripts always match. Pictures, sounds and fonts come from the cache and refresh in the background, so a changed picture shows one load later.
 - **Each game has its own offline cache** (`games-game-<folder>`), refreshed in place; a `VERSION` bump replaces only the landing page's (`games-shell-<VERSION>`), so updating never empties another game's offline copy.
@@ -50,7 +49,7 @@ How a new version reaches players (`specs/pwa-updates.md`):
 
 CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 
-- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the share tags and pictures (`tests/social-previews.test.mjs`), the lockfile (npmjs only), the offline file list and page references, the `VERSION` bump (`scripts/version-check.py`), the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
+- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the share tags and pictures (`tests/social-previews.test.mjs`), the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
 Art and sound by [Kenney](https://www.kenney.nl) (CC0). Splat Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](splat-gallery/fonts/OFL.txt). Code is under the [MIT License](LICENSE).

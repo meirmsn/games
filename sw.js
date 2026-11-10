@@ -11,10 +11,11 @@
 // and the scripts it loads always come from the same version. Images, sounds and fonts are
 // cache-first and refresh in the background, so games stay light and play offline.
 //
-// A new version is a new sw.js: bump VERSION with every change to a file the site serves (the fast
-// check, scripts/version-check.py, fails otherwise). The new worker then waits, the landing page shows
-// "New version available", and its Update button tells the worker to take over. Game pages never
-// reload for it; they get the new version the next time they're opened.
+// Updates (specs/pwa-updates.md): a new worker waits; the landing page shows "New version available"
+// when its own files changed on the server or a new worker waits, and its Update button tells the
+// worker to take over and reloads. Game pages never reload for it; they get the new version the next
+// time they're opened. Bump VERSION when SHELL changes (a file added, removed or renamed), so the new
+// list is precached; only the shell cache is replaced, never a game's.
 
 const VERSION = 'v6';
 const PREFIX = 'games-';
