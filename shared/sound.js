@@ -10,6 +10,7 @@
 //   sound.muted = true;              // also saved for the next visit
 //   sound.onchange = (muted) => {};  // called when mute changes
 //   const stop = sound.loop('music', { gain: 0.4 });  // loops until stop(); mute silences it
+//   stop.setRate(1.2);               // the loop plays faster (and higher) from now on
 
 const KEY = 'sound';
 
@@ -101,9 +102,14 @@ export function createSound(files, { volume = 0.6 } = {}) {
     // Loop a named sound (music, ambience) from when it has loaded until the returned stop() is
     // called. It keeps running while muted, silently, so unmuting picks it up where it is.
     loop(name, { gain: level = 1 } = {}) {
-      if (!ctx) return () => {};
+      if (!ctx) {
+        const none = () => {};
+        none.setRate = () => {};
+        return none;
+      }
       let src = null;
       let stopped = false;
+      let rate = 1;
       const start = () => {
         if (stopped) return;
         const buf = buffers.get(name);
@@ -114,16 +120,23 @@ export function createSound(files, { volume = 0.6 } = {}) {
         src = ctx.createBufferSource();
         src.buffer = buf;
         src.loop = true;
+        src.playbackRate.value = rate;
         const g = ctx.createGain();
         g.gain.value = level;
         src.connect(g).connect(loopGain);
         src.start();
       };
       start();
-      return () => {
+      const stop = () => {
         stopped = true;
         if (src) src.stop();
       };
+      // Speed the loop up or down while it plays: 1 is as recorded.
+      stop.setRate = (r) => {
+        rate = r;
+        if (src) src.playbackRate.value = r;
+      };
+      return stop;
     },
     // Pause all sound while the page is hidden; the next tap or unlock() resumes it.
     suspend() {
