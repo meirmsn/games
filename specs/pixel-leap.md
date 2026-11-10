@@ -312,8 +312,10 @@ item.
   is mapped to their nearest, with the outline the palette's darkest). A Pico pixel is 2.25 or 4.5
   screen pixels at most tile sizes, so its blocks are not all equal, as with Ink's 16. It has more
   bad guys than any other level, at least one for every 8 tiles after its opening: the pack's
-  walkers, and flyers that hover about 4 tiles up and, when the monster comes within 5 tiles ahead,
-  swoop down at 6 tiles/s toward where it was, then climb back. A flyer can be stomped. Stomp chains
+  walkers, and flyers that hover about 4 tiles up and, when the monster comes within 5 tiles ahead
+  while on the ground, swoop down at 6 tiles/s toward where it stood, then climb back (changed
+  after the go, by the owner, 2026-11-10, on a flyer diving into the monster mid-jump: "Keep it",
+  so a flyer dives only at a monster on the ground; keep moving and it misses). A flyer can be stomped. Stomp chains
   pay extra: in Pico, each stomp after the first before you land again pays coins (the second +1,
   the third +2, up to +4 each), shown by a "+n" over the stomp; they count in the run's coins. A
   chain ends when you land on anything (ground, ledge, platform) or take a hit.
@@ -447,7 +449,8 @@ item.
   particles and the glimpse aside) is one of PICO-8's 16 colours; its monster's frames use only
   those colours — `tests/pixel-leap.test.mjs`.
 - **AC-30** Pico has more bad guys than any other level, at least one per 8 tiles after its first 15;
-  a flyer swoops down toward the monster when it comes within 5 tiles ahead and climbs back, hurts
+  a flyer swoops down toward the monster when it comes within 5 tiles ahead on the ground and climbs
+  back, hurts
   from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
   third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
   pays nothing extra — `tests/pixel-leap.test.mjs`.
