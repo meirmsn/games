@@ -808,7 +808,7 @@ function drawFloor() {
 // Input: a tap flips the nearest plank (within 40 px). Keys 1–3 flip the planks too; R retries.
 
 function plankAt(pt) {
-  const tol = Math.max(0.6, 40 / k);
+  const tol = 40 / k; // 40 px, in board units
   let best = -1;
   let bd = Infinity;
   G.room.planks.forEach((p, i) => {

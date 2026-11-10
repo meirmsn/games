@@ -299,12 +299,16 @@ test('trundle states: each state shows only its own cards, as in the state table
   only(await look(), { mode: 'run', done: false, failed: false, floor: false, rooms: false });
   await page.click('[data-rooms]');
   only(await look(), { done: false, failed: false, floor: false, rooms: true, dim: true, floorRun: false });
+  assert.equal(await page.locator('.room-grid button:disabled svg.lock').count(), 7, 'a padlock on each room not reached');
   assert.equal(await page.evaluate(() => window.__trundle.G.paused), true, 'the attempt waits');
   await page.click('[data-close-rooms]');
   await page.click('[data-paused]');
   only(await look(), { mode: 'run', rooms: false });
   await runOut(page);
   only(await look(), { mode: 'failed', done: false, failed: true, floor: false });
+  // the board keeps the balls' trails: one recorded for every ball dropped
+  const lens = await page.evaluate(() => window.__trundle.G.att.balls.map((b) => b.trail.length));
+  assert.ok(lens.length > 0 && lens.every((n) => n > 10), 'every ball has a trail');
   await solve(page, 0);
   await page.waitForSelector('[data-card="done"]:not([hidden])');
   only(await look(), { mode: 'done', done: true, failed: false, floor: false, rooms: false });
