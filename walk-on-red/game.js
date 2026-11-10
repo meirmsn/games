@@ -13,8 +13,9 @@
 //    so a gap only you fit through gets them hit.
 //  - Reaching the far kerb before the light turns green scores the seconds left × (1 + followers
 //    across). If the light turns green first, the level scores 0 and you try it again.
-//  - A car hitting you sends you back to the start, your followers with you; a follower hit is
-//    gone, and their share of the points with them. There are no lives; a run is 21 levels.
+//  - A run has 3 lives. A car hitting you costs one and sends you back to the start, your followers
+//    with you; the hit that takes the last one ends the run (Game over). A follower hit is gone,
+//    and their share of the points with them, but costs no life. A run is 21 levels.
 //  - A hidden assist eases the traffic after hits.
 //
 // Drawing: the street is drawn at its art resolution (1 art px = 1 canvas px) on a small offscreen
@@ -78,6 +79,7 @@ const FF = 20; // once he's in the loo, the game runs this many times faster, th
 const DOOR_T = 1.8; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
 const DOWN_T = 1.2; // a hit player lies flat this long
+const LIVES = 3; // a run's lives: a hit costs one, and the last one lost ends the run
 const GREEN_T = 3.6; // the green light's crossing, at normal speed, under the level's score table
 const TALLY_T = 1.4; // the table stays this much longer after the crossing
 const RELIEF_T = 2.4; // a copier who needed the loo too: he steps out, they go in, a flush, a bonus
@@ -188,7 +190,9 @@ if (!Array.isArray(saved.stars)) saved.stars = [];
 // ---------- State ----------
 
 const game = {
-  mode: 'title', // title | play | finish | wait | green | tally | over
+  mode: 'title', // title | play | out (down on the last life) | finish | wait | green | tally | over
+  lives: LIVES,
+  lost: false, // the run ended for want of lives
   paused: false,
   level: 0,
   red: 30, // seconds of red left on the walk light
@@ -546,6 +550,12 @@ function updatePlayer(dt) {
   if (player.nudge > 0) player.nudge -= dt;
   if (player.down > 0) {
     player.down -= dt;
+    if (player.down <= 0 && (game.mode === 'out' || game.lost)) {
+      // The last life: he stays down where he was hit, and the run ends.
+      player.down = 1e-3;
+      if (game.mode === 'out') endRun();
+      return;
+    }
     if (player.down <= 0) {
       // Back to the start, on the near kerb; his followers go back there too, and stick to him
       // again as he sets off.
@@ -628,6 +638,10 @@ function honk() {
 
 function hitPlayer() {
   player.down = DOWN_T;
+  game.lives = Math.max(0, game.lives - 1);
+  // The last life: the level stops here (the walk light can't run out under him), and once he has
+  // lain down the run ends.
+  if (game.lives === 0) game.mode = 'out';
   game.assist = Math.min(1, game.assist + 0.25);
   game.shake = 0.25;
   sfx('hit', { gain: 0.8 });
@@ -908,6 +922,8 @@ function startLevel(idx) {
 function startGame(idx = 0) {
   game.paused = false;
   game.score = 0;
+  game.lives = LIVES;
+  game.lost = false;
   game.results = [];
   game.grace = 0;
   game.assist = saved.assist == null ? 0.4 : Math.min(0.7, 0.6 * saved.assist);
@@ -929,12 +945,15 @@ function endAmbience() {
 }
 
 function endRun() {
+  game.lost = game.mode === 'out';
   game.mode = 'over';
   saved.best = Math.max(saved.best || 0, game.score);
   saved.assist = game.assist;
   save();
   endAmbience();
-  sfx('over', { gain: 0.7 });
+  // Out of lives, the closing jingle plays lower and slower.
+  sfx('over', game.lost ? { gain: 0.7, rate: 0.75 } : { gain: 0.7 });
+  ui.overTitle.textContent = game.lost ? 'Game over' : 'Across!';
   const stars = game.results.reduce((s, r) => s + (r ? r.stars : 0), 0);
   ui.finalScore.textContent = String(game.score);
   ui.finalDetail.textContent = `${stars} of ${LEVELS_N * 3} stars · Best: ${saved.best}`;
@@ -1000,9 +1019,10 @@ function tick(dt) {
     return;
   }
   if (game.mode === 'finish') return updateFinish(dt);
-  if (game.mode !== 'play') return;
+  if (game.mode !== 'play') return; // 'out' too: he lies there, the traffic drives on, nothing else
   updateCopiers(dt);
   checkHits();
+  if (game.mode !== 'play') return; // the last life just went: the walk light stops here
   game.red -= dt;
   const whole = Math.ceil(game.red);
   if (game.red <= 5 && game.red > 0 && whole !== game.lastTick) {
@@ -1956,6 +1976,8 @@ const ui = {
   best: $('[data-best]'),
   finalScore: $('[data-final-score]'),
   finalDetail: $('[data-final-detail]'),
+  overTitle: $('[data-over-title]'),
+  lives: $('[data-lives]'),
   mute: $('[data-mute]'),
 };
 const drawn = { payout: null };
@@ -1963,12 +1985,14 @@ const drawn = { payout: null };
 let hudCache = '';
 function syncHud() {
   const shown = game.score + (['finish', 'wait'].includes(game.mode) ? game.levelScore : 0);
-  const key = `${shown}|${game.level}|${game.mode}`;
+  const key = `${shown}|${game.level}|${game.mode}|${game.lives}`;
   if (key === hudCache) return;
   hudCache = key;
   const green = game.mode === 'green' || game.mode === 'tally';
   ui.score.textContent = String(shown);
   ui.streetName.textContent = `${game.level + 1} · ${street().name}`;
+  ui.lives.querySelectorAll('svg').forEach((h, i) => h.classList.toggle('lost', i >= game.lives));
+  ui.lives.setAttribute('aria-label', `${game.lives} ${game.lives === 1 ? 'life' : 'lives'} left`);
   ui.quotaFill.style.width = `${((game.level + (green ? 1 : 0)) / LEVELS_N) * 100}%`;
 }
 
@@ -2051,6 +2075,7 @@ sheet.decode().then(
       startGame,
       startLevel,
       showStart,
+      LIVES,
       step: update,
       move: doHop,
       pause,
