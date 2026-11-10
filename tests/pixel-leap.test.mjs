@@ -34,7 +34,7 @@ after(async () => {
 
 const PHONE = { ...devices['iPhone 13'], deviceScaleFactor: 2 };
 // The worlds, in their order.
-const W = { meadow: 0, farm: 1, frost: 2, candy: 3, industrial: 4, mushroom: 5, pico: 6, ink: 7 };
+const W = { meadow: 0, ice: 1, farm: 2, candy: 3, industrial: 4, mushroom: 5, pico: 6, sea: 7, ink: 8, castle: 9 };
 
 async function open(opts = {}, hash = '', init = null) {
   const context = await browser.newContext({ viewport: { width: 1024, height: 700 }, ...opts });
@@ -95,6 +95,37 @@ const place = (page, x, y = 11) =>
       Object.assign(p, { x, y, vx: 0, vy: 0, ground: true, poof: 0, invul: 0, land: 0 });
     },
     [x, y]
+  );
+
+// Letting go at top speed on a ground kind ('grass': the level's first stretch; 'ice' or 'snow': the
+// first long enough run of it in Ice), returns how far the monster slides before it stops.
+const slide = (page, w, kind) =>
+  play(page, w, 0).then(() =>
+    page.evaluate((kind) => {
+      const L = window.__leap;
+      const st = L.stage();
+      let x = 3;
+      if (kind !== 'grass') {
+        const want = kind === 'ice' ? L.T.ICE : L.T.GROUND;
+        for (let c = 2; c < st.cols - 6; c++) {
+          let ok = true;
+          for (let k = 0; k < 5; k++) if (L.tileAt(c + k, st.ground[c]) !== want || st.ground[c + k] !== st.ground[c]) ok = false;
+          if (ok) {
+            x = c + 0.5;
+            break;
+          }
+        }
+      }
+      const p = L.player;
+      Object.assign(p, { x, y: st.ground[Math.floor(x)], vx: L.MOVE.top, vy: 0, ground: true, poof: 0, invul: 9 });
+      L.input.keys.clear();
+      L.sync();
+      L.step(); // one step to stand on it (so the ground's grip is the one under the feet)
+      p.vx = L.MOVE.top;
+      const x0 = p.x;
+      for (let i = 0; i < 480 && Math.abs(p.vx) > 0.01; i++) L.step();
+      return p.x - x0;
+    }, kind)
   );
 
 test('pixel-leap AC-1: opens on the builder with a whole pixel monster; Go starts level 1, the Meadow; no errors', async () => {
@@ -312,7 +343,7 @@ test('pixel-leap AC-5: the Meadow monster is baked with binary alpha, a dark out
     const L = window.__leap;
     L.manual = true;
     L.go();
-    L.startWorld(7);
+    L.startWorld(8);
     const b = L.baked();
     const cols = new Set();
     for (const f of Object.values(b.frames)) {
@@ -462,7 +493,7 @@ test('pixel-leap AC-8: landing on a walker defeats it and bounces, higher with j
   assert.equal(soft.poof, false);
   assert.ok(soft.vy < -5, `bounces up (${soft.vy})`);
   assert.ok(hard.vy < soft.vy - 2, `higher with jump held (${hard.vy} vs ${soft.vy})`);
-  await play(page, W.frost, 0);
+  await play(page, W.candy, 0);
   const spiky = await page.evaluate(() => {
     const L = window.__leap;
     const p = L.player;
@@ -530,9 +561,9 @@ test('pixel-leap AC-9: a heart adds a heart (at most two) and a coin; with two h
   await context.close();
 });
 
-test('pixel-leap AC-10: Frost’s ears join the monster and let it float', async () => {
+test('pixel-leap AC-10: Ice’s ears join the monster and let it float', async () => {
   const { context, page } = await open();
-  await play(page, W.frost, 0);
+  await play(page, W.ice, 0);
   const r = await page.evaluate(() => {
     const L = window.__leap;
     const p = L.player;
@@ -607,22 +638,9 @@ test('pixel-leap AC-11: jelly bounces, cookies crumble and come back, springs la
     return -p.vy;
   });
   assert.ok(spring > r.jump, `spring ${spring}`);
-  // Ice: running at top speed then letting go slides further in Frost than in the Meadow.
-  const slide = async (w) => {
-    await play(page, w, 0);
-    await place(page, 3);
-    await keys(page, 'right');
-    await steps(page, 120);
-    await keys(page);
-    return page.evaluate(() => {
-      const L = window.__leap;
-      const x0 = L.player.x;
-      for (let i = 0; i < 240 && Math.abs(L.player.vx) > 0.01; i++) L.step();
-      return L.player.x - x0;
-    });
-  };
-  const grass = await slide(0);
-  const ice = await slide(W.frost);
+  // Ice: letting go at top speed slides further on Ice's ice than on the Meadow's grass.
+  const grass = await slide(page, W.meadow, 'grass');
+  const ice = await slide(page, W.ice, 'ice');
   assert.ok(ice > grass * 2, `ice slides ${ice.toFixed(2)} tiles, grass ${grass.toFixed(2)}`);
   // An Ink drip lets go as the monster comes near, and hurts if it lands on it.
   await play(page, W.ink, 0);
@@ -637,7 +655,7 @@ test('pixel-leap AC-11: jelly bounces, cookies crumble and come back, springs la
     L.step();
     const falls = Boolean(d.falling);
     // Stand under it: it hits.
-    L.loadStage(7, 0);
+    L.loadStage(L.WORLDS.findIndex((w) => w.id === 'ink'), 0);
     const d2 = L.stage().things.find((t) => t.type === 'drip');
     L.game.shields = 1;
     Object.assign(p, { x: d2.x, y: 11, vx: 0, vy: 0, invul: 0, ground: true });
@@ -648,9 +666,9 @@ test('pixel-leap AC-11: jelly bounces, cookies crumble and come back, springs la
   await context.close();
 });
 
-test('pixel-leap AC-12: the door leads to the map with no numbers; the way on paints in, and the leap from Frost steps 18, 35, smooth into Candy', async () => {
+test('pixel-leap AC-12: the door leads to the map with no numbers; the way on paints in, and the leap from the Meadow steps 18, 35, smooth into Ice', async () => {
   const { context, page } = await open(PHONE);
-  await play(page, W.frost, 0);
+  await play(page, W.meadow, 0);
   await page.evaluate(() => {
     const L = window.__leap;
     L.game.ears = true;
@@ -665,7 +683,7 @@ test('pixel-leap AC-12: the door leads to the map with no numbers; the way on pa
   });
   const map = await page.evaluate(() => ({ mode: window.__leap.game.mode, map: window.__leap.game.map }));
   assert.equal(map.mode, 'map');
-  assert.deepEqual([map.map.from, map.map.to], [W.frost, W.candy]);
+  assert.deepEqual([map.map.from, map.map.to], [W.meadow, W.ice]);
   assert.equal(await page.locator('[data-screen="tally"]').isVisible(), false, 'no numbers between levels');
   const k = await page.evaluate(() => window.__leap.view.k);
   const at = async (secs) => {
@@ -693,7 +711,7 @@ test('pixel-leap AC-12: the door leads to the map with no numbers; the way on pa
     for (let i = 0; i < 240 && L.game.mode !== 'play'; i++) L.step();
   });
   const s = await page.evaluate(() => ({ mode: window.__leap.game.mode, world: window.__leap.game.world, ears: window.__leap.game.ears, t: window.__leap.game.time }));
-  assert.deepEqual(s, { mode: 'play', world: W.candy, ears: true, t: 0 });
+  assert.deepEqual(s, { mode: 'play', world: W.ice, ears: true, t: 0 });
   await context.close();
 });
 
@@ -886,11 +904,11 @@ test('pixel-leap AC-16: after two lives lost the hidden assist widens coyote and
   await context.close();
 });
 
-test('pixel-leap AC-17: eight levels, eight worlds, in order; each ends with a glimpse of the next; the UI follows the world; best times are kept under version 3', async () => {
+test('pixel-leap AC-17: ten levels, ten worlds, in order; each ends with a glimpse of the next; the UI follows the world; best times are kept under version 4', async () => {
   const { context, page } = await open(PHONE);
   await play(page, 0, 0);
   const worlds = await page.evaluate(() => window.__leap.WORLDS.map((w) => w.id));
-  assert.deepEqual(worlds, ['meadow', 'farm', 'frost', 'candy', 'industrial', 'mushroom', 'pico', 'ink']);
+  assert.deepEqual(worlds, ['meadow', 'ice', 'farm', 'candy', 'industrial', 'mushroom', 'pico', 'sea', 'ink', 'castle']);
   // The last stretch of each level is drawn in the next world's style: its sky is the next world's.
   for (let w = 0; w < worlds.length - 1; w++) {
     const sky = await page.evaluate((w) => {
@@ -922,7 +940,7 @@ test('pixel-leap AC-17: eight levels, eight worlds, in order; each ends with a g
       L.game.mode = 'play';
       return { smooth: document.body.classList.contains('smooth'), font: getComputedStyle(document.querySelector('.hud > span')).fontFamily };
     };
-    return [at(0), at(3), at(7), at(5), at(6)];
+    return [at(0), at(3), at(8), at(5), at(6), at(1), at(7), at(9)];
   });
   assert.equal(ui[0].smooth, false);
   assert.match(ui[0].font, /Kenney Pixel/);
@@ -931,6 +949,7 @@ test('pixel-leap AC-17: eight levels, eight worlds, in order; each ends with a g
   assert.equal(ui[2].smooth, false);
   assert.equal(ui[3].smooth, true, 'Mushroom is smooth');
   assert.equal(ui[4].smooth, false, 'Pico is pixels');
+  assert.deepEqual([ui[5].smooth, ui[6].smooth, ui[7].smooth], [true, true, true], 'Ice, Sea and Castle are smooth');
   // A cleared level keeps its best time.
   await page.evaluate(() => {
     const L = window.__leap;
@@ -942,7 +961,7 @@ test('pixel-leap AC-17: eight levels, eight worlds, in order; each ends with a g
     L.step();
   });
   const best = await page.evaluate(() => window.__leap.store().best);
-  assert.ok(Object.entries(best).some(([k, v]) => k === '3:meadow' && v === 61), 'kept under version 3');
+  assert.ok(Object.entries(best).some(([k, v]) => k === '4:meadow' && v === 61), 'kept under version 4');
   await context.close();
 });
 
@@ -971,8 +990,8 @@ test("pixel-leap AC-18: each world plays its own jump sound and starts its own m
       for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
       return L.heard.slice();
     }, w);
-  assert.ok((await leapFrom(W.frost)).includes('loop:candy-bed'), 'Candy starts its own music');
-  assert.ok((await leapFrom(W.pico)).includes('loop:i-music'), 'Ink starts its own music');
+  assert.ok((await leapFrom(W.farm)).includes('loop:candy-bed'), 'Candy starts its own music');
+  assert.ok((await leapFrom(W.sea)).includes('loop:i-music'), 'Ink starts its own music');
   const c = await jumpIn(W.candy);
   assert.equal(c.filter((x) => x.endsWith('-jump')).pop(), 'c-jump');
   await context.close();
@@ -1001,7 +1020,7 @@ test('pixel-leap AC-19: plays offline once played, every world included', async 
     }
     return out;
   });
-  assert.deepEqual(ok, { meadow: 18, farm: 18, frost: 18, candy: 70, industrial: 18, mushroom: 70, pico: 8, ink: 16 });
+  assert.deepEqual(ok, { meadow: 18, ice: 70, farm: 18, candy: 70, industrial: 18, mushroom: 70, pico: 8, sea: 70, ink: 16, castle: 70 });
   await context.close();
 });
 
@@ -1012,8 +1031,8 @@ const BOT = `(opts) => {
   const L = window.__leap;
   const p = L.player;
   const T = L.T;
-  const solidT = (k) => k === T.GROUND || k === T.BLOCK || k === T.HAY || k === T.BELTL || k === T.BELTR;
-  const footing = (k) => solidT(k) || k === T.ONEWAY;
+  const solidT = (k) => k === T.GROUND || k === T.BLOCK || k === T.HAY || k === T.BELTL || k === T.BELTR || k === T.ICE || k === T.GATE;
+  const footing = (k) => solidT(k) || k === T.ONEWAY || k === T.SLOPEU || k === T.SLOPED;
   let t = 0;
   let hold = 0;
   let firstCoin = null;
@@ -1021,13 +1040,44 @@ const BOT = `(opts) => {
   let lives = 0;
   let lastCap = null;
   const deaths = [];
+  let keyFor = null; // Castle: the gate it's fetching a key for
+  let landX = null; // where it means to land after a short hop
   while (t < opts.limit) {
     const st = L.stage();
-    const ahead = (dx, dy) => L.tileAt(Math.floor(p.x + dx), Math.floor(p.y + dy));
+    // Castle: stopped at a shut gate with no key, it goes back for the nearest key not yet taken,
+    // then on to the gate. dir is the way it means to go.
+    let dir = 1;
+    let target = null;
+    const gateAhead = st.things.find((g) => g.type === 'gate' && !g.open && g.x > p.x && g.x - p.x < 1.6);
+    if (gateAhead && !L.game.keys && opts.keys !== false) keyFor = gateAhead;
+    if (keyFor && (keyFor.open || L.game.keys)) keyFor = null;
+    if (keyFor) {
+      const keys = st.things.filter((k) => k.type === 'key' && k.alive && k.x < keyFor.x);
+      target = keys.sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0] || null;
+      if (target) dir = target.x < p.x - 0.3 ? -1 : target.x > p.x + 0.3 ? 1 : 0;
+    }
+    const ahead = (dx, dy) => L.tileAt(Math.floor(p.x + (dir || 1) * dx), Math.floor(p.y + dy));
     const movers = st.things.filter((m) => m.type === 'mover');
     let jump = false;
-    let run = 1;
-    if (p.onMover && p.ground && opts.ride) {
+    let short = false;
+    let run = dir;
+    const wet = L.inWater();
+    if (wet) {
+      // Swimming: keep the head a little under the surface, stroking as it sinks; a wall ahead and
+      // a stroke near the surface leaps out over it or onto the land; a fish ahead: wait for it.
+      const surf = st.water[Math.floor(p.x)];
+      const head = p.y - 1.3;
+      let wall = false;
+      for (let d = 0.4; d <= 1.4; d += 0.2) for (const dy of [-0.2, -0.9]) if (solidT(ahead(d, dy))) wall = true;
+      const want = wall ? 0.2 : 0.75;
+      if (head - surf > want && p.vy > -1) jump = true;
+      // A fish in its lane: back off from one coming at it, follow one swimming away.
+      for (const f of st.things) {
+        if (f.type !== 'fish' || !f.alive || Math.abs(f.y - 0.5 - (p.y - 0.65)) >= 1.5) continue;
+        const dx = f.x - p.x;
+        if (dx > -1.2 && dx < 2.6) run = f.dir < 0 || dx < 1.6 ? (dx > 0 ? -1 : 0) : 1;
+      }
+    } else if (p.onMover && p.ground && opts.ride) {
       // Riding: step off once the ground on the far side is at the feet, near enough.
       const m = p.onMover;
       const edge = m.x + m.w;
@@ -1041,12 +1091,25 @@ const BOT = `(opts) => {
       if (run === 0.5) run = 1;
       if (!land && !other && p.x > m.x + 1.8) run = 0;
     } else if (p.ground && p.poof <= 0) {
-      for (let d = 0.4; d <= 1.6; d += 0.2) if (solidT(ahead(d, -0.5))) jump = true;
+      // A wall ahead (not the ground under a slope, which the slope covers): jump.
+      const slopeT = (k) => k === T.SLOPEU || k === T.SLOPED;
+      // On a slope it runs on: the flat at the slope's top is where its feet will be (no slope here ends at a wall).
+      if (!p.onSlope) for (let d = 0.4; d <= 1.6; d += 0.2) if (solidT(ahead(d, -0.5)) && !slopeT(ahead(d, -1.5))) jump = true;
       let ground = false;
       for (let d = 0.5; d <= 1; d += 0.25) if (footing(ahead(d, 0.5))) ground = true;
       const cookie = st.things.some((c) => c.type === 'cookie' && c.state !== 'gone' && Math.abs(c.x - (p.x + 0.8)) < 0.6 && Math.abs(c.y - p.y) < 0.5);
       const onIt = movers.some((m) => p.x + 0.9 > m.x && p.x + 0.9 < m.x + m.w && Math.abs(m.y - p.y) < 0.3);
-      if (!ground && !cookie && !onIt) jump = true;
+      if (!ground && !cookie && !onIt) {
+        jump = true;
+        // A small gap to a near ledge: a short hop, not a full jump that flies over it.
+        let land = 0;
+        for (let d = 1; d <= 6 && !land; d++) {
+          for (const dy of [0.5, -0.5]) if (footing(ahead(d, dy)) && !solidT(ahead(d, dy - 1))) land = d;
+        }
+        if (land && land <= 3) short = true;
+        // Where it means to land: the middle of the near ledge, steered for in the air.
+        landX = land && land <= 4 ? Math.floor(p.x + (dir || 1) * land) + 0.5 + (dir || 1) * 0.5 : null;
+      }
       for (let d = 0.6; d <= 1.6; d += 0.2) if (ahead(d, -0.5) === T.SPIKES) jump = true;
       // A bad guy ahead: jump it, unless a gap is coming (then the jump waits for the edge).
       let gapSoon = false;
@@ -1054,6 +1117,37 @@ const BOT = `(opts) => {
       for (const e of st.things) if ((e.type === 'walker' || e.type === 'worm' || e.type === 'flyer') && e.alive && e.x > p.x && e.x - p.x < 2.4 && Math.abs(e.y - p.y) < 1.4 && (!gapSoon || e.x - p.x < 1.2)) jump = true;
       // A cap ahead, a little above: jump onto it.
       for (const c of st.things) if (c.type === 'cap' && c.x - p.x > -0.5 && c.x - p.x < 2.2 && p.y - c.y > 0.5 && p.y - c.y < 3) jump = true;
+      // A snowball rolling at it: jump it.
+      for (const b of st.balls || []) if ((b.x - p.x) * (dir || 1) > 0 && Math.abs(b.x - p.x) < 2.6 && Math.abs(b.y - p.y) < 1.5 && Math.sign(b.vx) !== (dir || 1)) jump = true;
+      // A snow pile up a slope ahead: wait at the foot until no snowball is between it and the pile
+      // and the pile isn't about to send one, then climb; on the flat top, snowballs are jumped.
+      for (const pl of st.things) {
+        if (p.onSlope || pl.type !== 'pile' || pl.x - p.x < 0 || pl.x - p.x > 8.5 || pl.y > p.y - 1.5) continue;
+        const rolling = (st.balls || []).some((b) => b.x > p.x - 0.5 && b.x < p.x + 12);
+        if (rolling || pl.next < 0.3) {
+          run = 0;
+          jump = false;
+        }
+      }
+      // A crusher ahead: wait until it has just gone up, so it stays up while the monster runs under.
+      // Under a crusher it never stops: it runs on to the gap after it.
+      const under = st.things.some((c) => c.type === 'crusher' && p.x + 0.4 > c.x && p.x - 0.4 < c.x + c.w);
+      for (const c of st.things) {
+        if (c.type !== 'crusher' || under) continue;
+        const near = dir >= 0 ? c.x - p.x : p.x - (c.x + c.w);
+        if (near > -0.2 && near < 1.3 && Math.abs(c.floor - p.y) < 0.5) {
+          const ph = L.crusherPhase(c);
+          // Time to clear it from a standstill, with a margin.
+          const need = (c.w + 1.4 + Math.max(0, near)) / 5 + 0.15;
+          if (!(ph.state === 'up' && ph.left > need)) {
+            run = 0;
+            jump = false;
+          }
+        }
+      }
+      // Under the key it's fetching, up a ledge or two: jump.
+      if (target && Math.abs(target.x - p.x) < 0.7 && target.y < p.y - 1.2) jump = true;
+      if (target && dir === 0) run = 0;
       if (opts.ride) {
         // A mover in the gap or lift ahead at our feet: wait for it, then step on.
         const m = movers.find((m) => m.x + m.w > p.x + 0.4 && m.sx - p.x < 3.5 && m.sx + m.w > p.x && Math.abs(m.sy - p.y) < 0.5);
@@ -1082,6 +1176,11 @@ const BOT = `(opts) => {
         run = Math.abs(dx) < 0.3 ? 0 : Math.sign(dx);
       }
     } else if (!p.onCap) lastCap = null;
+    // Coming down toward the ledge it chose: steer to it, braking in the air.
+    if (p.ground && !jump) landX = null;
+    else if (landX !== null && p.vy > 0 && !target) run = Math.abs(landX - p.x) < 0.3 ? 0 : Math.sign(landX - p.x);
+    // In the air with a key above: steer under it.
+    if (!p.ground && target) run = Math.abs(target.x - p.x) < 0.25 ? 0 : Math.sign(target.x - p.x);
     // Past the door (a jump carried it over): walk back to it.
     const door = st.things.find((d) => d.type === 'portal');
     if (door && p.x > door.x + 0.5 && Math.abs(p.y - door.y) < 4) run = -1;
@@ -1093,7 +1192,7 @@ const BOT = `(opts) => {
     }
     const bouncer = st.things.some((c) => (c.type === 'spring' || c.type === 'jelly') && c.x > p.x - 0.2 && c.x - p.x < 2.2 && Math.abs(c.y - p.y) < 0.5);
     if (bouncer && p.ground) jump = false;
-    if (jump || (bouncer && !p.ground)) hold = 0.4;
+    if (jump || (bouncer && !p.ground)) hold = short && !bouncer ? 0.12 : 0.4;
     L.input.keys.clear();
     if (run > 0) L.input.keys.add('right');
     if (run < 0) L.input.keys.add('left');
@@ -1101,7 +1200,7 @@ const BOT = `(opts) => {
     L.sync();
     hold -= 1 / 120;
     if (opts.snap && Math.round(t * 120) % Math.round(opts.snap * 120) === 0) opts.onSnap(t);
-    if (opts.trace && p.x > opts.trace[0] && p.x < opts.trace[1] && Math.round(t * 120) % 6 === 0) opts.tr.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.vy.toFixed(1), p.ground ? 'g' : '', run, hold > 0 ? 'J' : '']);
+    if (opts.trace && p.x > opts.trace[0] && p.x < opts.trace[1] && Math.round(t * 120) % 6 === 0) opts.tr.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.vy.toFixed(1), p.ground ? 'g' : '', run, hold > 0 ? 'J' : '', ...(st.balls || []).map((b) => +b.x.toFixed(1))]);
     const coins = L.game.coins;
     const before = L.game.lives;
     L.step();
@@ -1124,7 +1223,7 @@ const BOT = `(opts) => {
 }`;
 const BOT_SRC = BOT;
 
-test('pixel-leap AC-21: every level can be finished; first coin within 5 s; hazards clear of the start; open air above bouncers; mover tracks clear', async () => {
+test('pixel-leap AC-21 and pixel-leap AC-38: every level can be finished; first coin within 5 s; hazards clear of the start; open air above bouncers; mover and crusher tracks clear; snowballs, keys and gates laid out fairly', async () => {
   const { context, page, errors } = await open();
   await page.click('[data-go]');
   const runs = await page.evaluate((BOT) => {
@@ -1151,8 +1250,22 @@ test('pixel-leap AC-21: every level can be finished; first coin within 5 s; haza
         }
       }
       for (const e of st.things) {
-        if (e.type === 'walker' || e.type === 'worm' || e.type === 'drip') hazards.push(e.sx);
+        if (e.type === 'walker' || e.type === 'worm' || e.type === 'drip' || e.type === 'fish') hazards.push(e.sx);
         if (e.type === 'flyer') hazards.push(e.sx - 5 - 1); // it swoops from 5 tiles out
+        if (e.type === 'crusher' || e.type === 'current') hazards.push(e.sx);
+      }
+      // A snow pile counts at the foot of its slope; and its snowballs' path, from the pile to where
+      // they shatter (a wall or a pit's edge), must not reach the start.
+      const balls = [];
+      for (const e of st.things.filter((t) => t.type === 'pile')) {
+        let c = Math.floor(e.sx);
+        let y = st.ground[c];
+        while (c > 0 && st.ground[c - 1] < st.rows && st.ground[c - 1] >= y - 0.5 && !solid(L.tileAt(c - 1, st.ground[c] - 1))) {
+          c--;
+          y = st.ground[c];
+        }
+        hazards.push(c + 0.5);
+        if (c <= st.start.x + 1) balls.push(['a snowball reaches the start', e.sx]);
       }
       const nearStart = hazards.filter((x) => x - st.start.x < 7);
       const blocked = [];
@@ -1177,12 +1290,27 @@ test('pixel-leap AC-21: every level can be finished; first coin within 5 s; haza
         if (m.sy > st.base + 3) tracks.push(['below the ground line', x0, m.sy]);
         if (x1 >= st.next) tracks.push(['into the glimpse', x1]);
       }
+      // A crusher's drop, from its top to the floor, is clear of solid tiles.
+      for (const c of st.things.filter((t) => t.type === 'crusher')) {
+        for (let x = Math.floor(c.sx); x < c.sx + c.w; x++) for (let y = Math.floor(c.floor - c.h - 1.5); y < c.floor; y++) if (solid(L.tileAt(x, y))) tracks.push(['crusher', x, y]);
+        if (c.h > 4) tracks.push(['crusher too high', c.sx]);
+      }
+      // Castle: every gate has a key before it and after the gate before it; the door is past the last gate.
+      const gates = st.things.filter((t) => t.type === 'gate').map((g) => g.sx).sort((a, b) => a - b);
+      const keys = st.things.filter((t) => t.type === 'key').map((k) => k.sx);
+      const locks = [];
+      gates.forEach((g, i) => {
+        if (!keys.some((k) => k < g && k > (i ? gates[i - 1] : -1))) locks.push(['no key before the gate', g]);
+      });
+      const door = st.things.find((t) => t.type === 'portal');
+      if (gates.length && door.sx < gates[gates.length - 1]) locks.push(['the door is before the last gate']);
       // The assist never changes a mechanic's speed.
-      const before = JSON.stringify([L.MOVE.mover, L.MOVE.belt, L.MOVE.caps, L.MOVE.hay, L.MOVE.hayHigh, L.MOVE.swoop]);
+      const speeds = () => JSON.stringify([L.MOVE.mover, L.MOVE.belt, L.MOVE.caps, L.MOVE.hay, L.MOVE.hayHigh, L.MOVE.swoop, L.MOVE.crusher, L.MOVE.rollSlope, L.MOVE.rollFlat, L.MOVE.pileEvery, L.MOVE.current, L.MOVE.fish, L.MOVE.stroke, L.MOVE.sink, L.MOVE.swimTop, L.MOVE.swimGravity]);
+      const before = speeds();
       L.game.assist = 1;
-      const after = JSON.stringify([L.MOVE.mover, L.MOVE.belt, L.MOVE.caps, L.MOVE.hay, L.MOVE.hayHigh, L.MOVE.swoop]);
+      const after = speeds();
       L.game.assist = 0;
-      out.push({ w, id: L.WORLDS[w].id, ...r, nearStart: nearStart.length, blocked, tracks, assist: before === after });
+      out.push({ w, id: L.WORLDS[w].id, ...r, nearStart: nearStart.length, blocked, tracks, balls, locks, assist: before === after });
     }
     return out;
   }, BOT);
@@ -1190,7 +1318,9 @@ test('pixel-leap AC-21: every level can be finished; first coin within 5 s; haza
     assert.equal(r.end, r.w === runs.length - 1 ? 'tally' : 'map', `level ${r.w + 1} (${r.id}) finished (after ${r.t.toFixed(1)} s, lives lost at ${r.deaths})`);
     assert.equal(r.nearStart, 0, `level ${r.w + 1}: no hazard near the start`);
     assert.deepEqual(r.blocked, [], `level ${r.w + 1}: open air above every spring, jelly, haybale and cap`);
-    assert.deepEqual(r.tracks, [], `level ${r.w + 1}: every mover's track is clear`);
+    assert.deepEqual(r.tracks, [], `level ${r.w + 1}: every mover's and crusher's track is clear`);
+    assert.deepEqual(r.balls, [], `level ${r.w + 1}: no snowball's path reaches the start`);
+    assert.deepEqual(r.locks, [], `level ${r.w + 1}: each gate has its key, the door is past the last gate`);
     assert.equal(r.assist, true);
   }
   assert.ok(runs[0].firstCoin !== null && runs[0].firstCoin <= 5, `first coin at ${runs[0].firstCoin} s`);
@@ -1290,7 +1420,7 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
   await page.evaluate(() => {
     const L = window.__leap;
     while (L.game.mode !== 'play') L.step();
-    L.startWorld(7);
+    L.startWorld(9);
     const po = L.stage().things.find((t) => t.type === 'portal');
     Object.assign(L.player, { x: po.x, y: po.y });
     L.step();
@@ -1331,6 +1461,9 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
       L.game.mode = 'play';
       const st = L.stage();
       Object.assign(L.player, { x: st.next - 1.5, y: st.ground[st.next - 2], vx: 0, vy: 0, invul: 0 });
+      // The camera on the monster, so the glimpse's line is on screen.
+      L.cam.x = L.player.x - L.view.tilesW / 2;
+      L.cam.y = L.player.y - L.view.tilesH * 0.62;
       L.game.lives = 9;
       L.game.shields = 2; // a bad guy near the door doesn't restart the level mid-check
       L.steps(5);
@@ -1365,21 +1498,22 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
       }
       return { sounds: L.heard.slice(heard), steps: [...new Set(res.filter(Boolean))], soft };
     }, w);
-  const meadow = await cross(W.meadow);
-  assert.deepEqual(meadow.sounds.filter((x) => x.startsWith('morph')), [], 'Meadow to Farm changes no style');
-  assert.deepEqual(meadow.steps, []);
-  const frost = await cross(W.frost);
-  assert.ok(frost.sounds.includes('morph-up'), 'a rising sound into smooth Candy');
-  assert.deepEqual(frost.steps, [18, 35], 'the monster steps through 18 and 35 px per tile');
-  assert.ok(frost.soft > 20, `Candy's glimpse is smooth (${frost.soft} soft steps)`);
+  const farm = await cross(W.farm);
+  assert.ok(farm.sounds.includes('morph-up'), 'a rising sound into smooth Candy');
+  assert.deepEqual(farm.steps, [18, 35], 'the monster steps through 18 and 35 px per tile');
+  assert.ok(farm.soft > 20, `Candy's glimpse is smooth (${farm.soft} soft steps)`);
   const candy = await cross(W.candy);
   assert.ok(candy.sounds.includes('morph-down'), 'a falling sound out of smooth Candy');
   assert.deepEqual(candy.steps, [35, 18]);
   assert.ok(candy.soft < 5, `Industrial's glimpse is hard-edged pixels (${candy.soft} soft steps)`);
-  const pico = await cross(W.pico);
-  assert.deepEqual(pico.sounds.filter((x) => x.startsWith('morph')), [], 'Pico to Ink: pixels to pixels, no crossing sound');
-  assert.deepEqual(pico.steps, []);
-  assert.ok(pico.soft < 5, `Ink's glimpse is hard-edged pixels (${pico.soft} soft steps)`);
+  const sea = await cross(W.sea);
+  assert.ok(sea.sounds.includes('morph-down'), 'a falling sound out of smooth Sea');
+  assert.ok(sea.soft < 5, `Ink's glimpse is hard-edged pixels (${sea.soft} soft steps)`);
+  // Perfect alternation: every door changes the style, with its sound.
+  for (const w of [W.meadow, W.ice, W.industrial, W.mushroom, W.pico, W.ink]) {
+    const r = await cross(w);
+    assert.equal(r.sounds.filter((x) => x.startsWith('morph')).length, 1, `level ${w + 1}'s glimpse changes the style`);
+  }
   await context.close();
 });
 
@@ -1407,13 +1541,13 @@ test('pixel-leap AC-24: the map shows the start, the cells reached and the next 
   const start = await look(0.2);
   assert.equal(start.mode, 'map');
   assert.deepEqual([start.map.from, start.map.to], [-1, 0]);
-  assert.deepEqual(start.lit, [true, false, false, false, false, false, false, false], 'only the first world is lit; the rest are carved dark');
+  assert.deepEqual(start.lit, [true, false, false, false, false, false, false, false, false, false], 'only the first world is lit; the rest are carved dark');
   const after = await look(2.0);
   assert.equal(after.mode, 'map');
   // Skip ahead with a tap: the monster steps in and the world opens.
   await page.evaluate(() => window.__leap.skipMap());
   assert.equal(await untilPlay(page, true), 'play');
-  // Through the Meadow's door: the map again, from Meadow to Farm, with Farm now lit too.
+  // Through the Meadow's door: the map again, from the Meadow to Ice, with Ice now lit too.
   await page.evaluate(() => {
     const L = window.__leap;
     const po = L.stage().things.find((t) => t.type === 'portal');
@@ -1422,7 +1556,7 @@ test('pixel-leap AC-24: the map shows the start, the cells reached and the next 
   });
   const second = await look(2.0);
   assert.deepEqual([second.map.from, second.map.to], [0, 1]);
-  assert.deepEqual(second.lit, [true, true, false, false, false, false, false, false]);
+  assert.deepEqual(second.lit, [true, true, false, false, false, false, false, false, false, false]);
   await context.close();
   // Every cell and the start on screen, none overlapping, each name at least 12 CSS px tall.
   for (const opts of [{ viewport: { width: 360, height: 640 }, deviceScaleFactor: 2 }, PHONE, { viewport: { width: 1024, height: 700 } }]) {
@@ -1514,7 +1648,7 @@ test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only wi
     L.manual = true;
     L.game.mode = 'play';
     L.game.lives = 99;
-    L.startWorld(1);
+    L.startWorld(2);
     const st = L.stage();
     const pockets = {};
     for (const t of st.things) if (t.hidden) (pockets[t.pocket] = pockets[t.pocket] || []).push(t);
@@ -1553,7 +1687,7 @@ test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only wi
       draws.push({ n: list.length, hiddenFar: far === gone, shownNear: near !== far, glints });
     }
     // Off the route: the scripted run passes without taking any of them.
-    L.startWorld(1);
+    L.startWorld(2);
     const run = eval(BOT)({ limit: 150, ride: true });
     const taken = L.stage().things.filter((t) => t.hidden && t.got).length;
     return { draws, end: run.end, taken };
@@ -1570,7 +1704,7 @@ test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only wi
   // Drawn only near: a pocket's coins aren't drawn while far (the game keeps them unfound).
   const far = await page.evaluate(() => {
     const L = window.__leap;
-    L.startWorld(1);
+    L.startWorld(2);
     L.game.mode = 'play';
     const coin = L.stage().things.find((t) => t.hidden);
     Object.assign(L.player, { x: coin.x + 6, y: L.stage().base });
@@ -1957,7 +2091,7 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
     const gaps = times.map((x, i) => x - (i ? times[i - 1] : 0));
     // Each other world with the owner's music plays its own accents.
     const own = {};
-    for (const id of ['farm', 'frost', 'candy']) {
+    for (const id of ['farm', 'ice', 'candy']) {
       L.startWorld(L.WORLDS.findIndex((w) => w.id === id));
       L.game.mode = 'play';
       L.game.accentIn = 0.005;
@@ -1979,7 +2113,7 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
   assert.ok(r.gaps.length >= 15, `${r.gaps.length} accents in ten minutes`);
   for (const g of r.gaps) assert.ok(g >= 15 - 0.01 && g <= 40 + 0.01, `an accent after ${g.toFixed(1)} s`);
   assert.equal(r.distinct, 3, 'all three accents come');
-  for (const id of ['farm', 'frost', 'candy']) assert.match(String(r.own[id]), new RegExp(`^${id}-a[123]$`), `${id} plays its own accent (${r.own[id]})`);
+  for (const id of ['farm', 'ice', 'candy']) assert.match(String(r.own[id]), new RegExp(`^${id}-a[123]$`), `${id} plays its own accent (${r.own[id]})`);
   for (let i = 1; i < r.names.length; i++) assert.notEqual(r.names[i], r.names[i - 1], 'never the same twice running');
   assert.equal(r.mode, 'paused');
   assert.equal(r.pausedBed, true, 'paused, the bed stops');
@@ -1988,5 +2122,591 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
   await page.click('[data-mute]');
   assert.equal((await page.evaluate(() => window.__leap.bed())).muted, true);
   await page.click('[data-mute]');
+  await context.close();
+});
+
+test('pixel-leap AC-33: Castle: a gate stops you until you touch it holding a key; keys show in the HUD and reset with the level; a run that takes no key stops at the first gate', async () => {
+  const { context, page } = await open(PHONE);
+  await play(page, W.castle, 0);
+  const r = await page.evaluate((BOT) => {
+    const L = window.__leap;
+    const p = L.player;
+    const st = L.stage();
+    const gate = st.things.find((t) => t.type === 'gate');
+    const runAt = (x) => {
+      Object.assign(p, { x, y: gate.y, vx: 0, vy: 0, ground: true, invul: 9, poof: 0 });
+      L.input.keys.clear();
+      L.input.keys.add('right');
+      L.sync();
+      for (let i = 0; i < 120; i++) L.step();
+      L.input.keys.clear();
+      L.sync();
+      return p.x;
+    };
+    const stopped = runAt(gate.x - 4);
+    // Pick up the first key (the HUD shows it on the next frames).
+    const key = st.things.find((t) => t.type === 'key');
+    Object.assign(p, { x: key.x, y: key.y + 0.6, vx: 0, vy: 0, ground: false });
+    L.step();
+    const held = L.game.keys;
+    window.__leap.render();
+    // The HUD updates on the next frame.
+    // The HUD updates on the frames that follow.
+    return new Promise((res) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const hud0 = document.querySelector('[data-hud-keys]').hidden;
+        const hudN = document.querySelector('[data-hud-keys-n]').textContent;
+        const through = runAt(gate.x - 4);
+        const after = { keys: L.game.keys, open: gate.open, tile: L.tileAt(Math.floor(gate.x), gate.y - 1) };
+        // A life lost brings the keys back and shuts the gate.
+        L.game.lives = 3;
+        L.loseLife();
+        for (let i = 0; i < 120; i++) L.step();
+        const st2 = L.stage();
+        const reset = { keys: L.game.keys, shut: L.tileAt(Math.floor(gate.x), gate.y - 1) === L.T.GATE, key: st2.things.find((t) => t.type === 'key').alive };
+        // A scripted run that only runs right and jumps gaps, walls and hazards: it takes no key.
+        L.startWorld(L.game.world);
+        L.game.lives = 99;
+        const bot = eval(BOT);
+        const run = bot({ limit: 20, ride: true, keys: false });
+        const firstGate = L.stage().things.find((t) => t.type === 'gate');
+        res({ stopped, gateX: gate.x, hud0, held, hudN, through, after, reset, runX: run.x, runKeys: L.game.keys, taken: L.stage().things.filter((t) => t.type === 'key' && !t.alive).length, firstGate: firstGate.x, gates: L.stage().things.filter((t) => t.type === 'gate').length });
+      }))
+    );
+  }, BOT);
+  assert.ok(r.stopped < r.gateX - 0.5, `the shut gate stops the monster (${r.stopped} at a gate at ${r.gateX})`);
+  assert.equal(r.hud0, false, 'Castle shows its keys in the HUD');
+  assert.equal(r.held, 1);
+  assert.equal(r.hudN, '1');
+  assert.ok(r.through > r.gateX + 1, 'with a key, through the gate');
+  assert.deepEqual(r.after, { keys: 0, open: true, tile: 0 });
+  assert.deepEqual(r.reset, { keys: 0, shut: true, key: true });
+  assert.ok(r.gates >= 3, `${r.gates} gates`);
+  assert.equal(r.taken, 0, 'a run straight on touches no key');
+  assert.ok(r.runX < r.firstGate, `and stops at the first gate (${r.runX})`);
+  // Keys held at the door don't carry on.
+  const carried = await page.evaluate(() => {
+    const L = window.__leap;
+    L.startWorld(L.WORLDS.findIndex((w) => w.id === 'ink'));
+    L.game.mode = 'play';
+    L.game.keys = 2;
+    const po = L.stage().things.find((t) => t.type === 'portal');
+    Object.assign(L.player, { x: po.x, y: po.y });
+    L.step();
+    for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
+    return L.game.keys;
+  });
+  assert.equal(carried, 0);
+  await context.close();
+});
+
+test('pixel-leap AC-34: a Castle crusher waits, shakes, drops, stays and rises on a 3.2 s rhythm; it hurts only when down or coming down', async () => {
+  const { context, page } = await open();
+  await play(page, W.castle, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const cs = st.things.filter((t) => t.type === 'crusher');
+    const c = cs[0];
+    const p = L.player;
+    // Its rhythm, sampled every step for two periods.
+    const seen = [];
+    let prev = null;
+    let shakeFrom = null;
+    for (let i = 0; i < 2 * 3.2 * 120; i++) {
+      L.step();
+      Object.assign(p, { x: c.x - 6, y: c.floor, vx: 0, vy: 0, ground: true, invul: 9 });
+      if (c.state !== prev) {
+        seen.push([c.state, +st.clock.toFixed(3)]);
+        prev = c.state;
+      }
+      if (c.shake && shakeFrom === null) shakeFrom = st.clock;
+    }
+    // Under it while it waits up: nothing; while it is down: a heart.
+    const under = (state) => {
+      while (c.state !== state) L.step();
+      L.game.shields = 1;
+      Object.assign(p, { x: c.x + 1, y: c.floor, vx: 0, vy: 0, ground: true, invul: 0, poof: 0 });
+      L.step();
+      return L.game.shields;
+    };
+    const upShield = under('up');
+    const downShield = under('down');
+    // Rising: harmless once its bottom is 1.4 tiles up.
+    while (c.state !== 'rising') L.step();
+    let safeAt = null;
+    while (c.state === 'rising') {
+      if (safeAt === null && c.floor - c.y >= 1.4) safeAt = c.floor - c.y;
+      L.step();
+    }
+    const phases = [...new Set(cs.slice(0, 3).map((t) => t.phase))];
+    return { seen, shakeFrom, upShield, downShield, h: cs.map((t) => t.h), n: cs.length, phases, safeAt };
+  });
+  // Durations between state changes, after the first full change.
+  const order = r.seen.map((s) => s[0]);
+  const at = (s, k = 0) => r.seen.filter((x) => x[0] === s)[k][1];
+  const i = order.indexOf('falling');
+  assert.ok(i >= 0);
+  const fall = at('down') - at('falling');
+  const down = at('rising') - at('down');
+  const rise = at('up', 1) - at('rising');
+  const period = at('falling', 1) - at('falling');
+  assert.ok(Math.abs(fall - 0.2) < 0.05, `drops in ${fall}`);
+  assert.ok(Math.abs(down - 0.6) < 0.05, `stays ${down}`);
+  assert.ok(Math.abs(rise - 1.0) < 0.05, `rises in ${rise}`);
+  assert.ok(Math.abs(period - 3.2) < 0.05, `again every ${period}`);
+  assert.ok(r.shakeFrom !== null, 'it shakes before it drops');
+  assert.equal(r.upShield, 1, 'standing under it while it waits up costs nothing');
+  assert.equal(r.downShield, 0, 'under it when it is down costs the heart');
+  assert.ok(r.h.every((h) => h <= 4), 'its bottom at most 4 tiles up');
+  assert.ok(r.n >= 5, `${r.n} crushers`);
+  assert.ok(r.phases.length >= 2, 'crushers side by side start at different points of the rhythm');
+  await context.close();
+});
+
+test('pixel-leap AC-35: Ice: ice slides, snow grips, slopes run both ways, snow piles roll snowballs that hurt and shatter; small ledges over pits', async () => {
+  const { context, page } = await open();
+  const ice = await slide(page, W.ice, 'ice');
+  const snow = await slide(page, W.ice, 'snow');
+  assert.ok(ice >= 2, `ice slides ${ice.toFixed(2)} tiles`);
+  assert.ok(snow < 1, `snow grips: ${snow.toFixed(2)} tiles`);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const p = L.player;
+    // The first slope up: run from its foot to past its top without jumping.
+    let foot = 0;
+    for (let c = 0; c < st.cols; c++) if (L.tileAt(c, st.ground[c]) === L.T.SLOPEU) {
+      foot = c;
+      break;
+    }
+    Object.assign(p, { x: foot - 3, y: st.ground[foot - 3], vx: 0, vy: 0, ground: true, invul: 99 });
+    L.input.keys.clear();
+    L.input.keys.add('right');
+    L.sync();
+    let off = 0;
+    let air = 0;
+    const speeds = [];
+    for (let i = 0; i < 240 && p.x < foot + 12; i++) {
+      L.step();
+      const sl = L.SLOPES.has(L.tileAt(Math.floor(p.x), Math.floor(p.y - 0.01))) || L.SLOPES.has(L.tileAt(Math.floor(p.x), Math.floor(p.y)));
+      if (sl) {
+        const tx = Math.floor(p.x);
+        const ty = L.SLOPES.has(L.tileAt(tx, Math.floor(p.y - 0.01))) ? Math.floor(p.y - 0.01) : Math.floor(p.y);
+        off = Math.max(off, Math.abs(L.slopeY(L.tileAt(tx, ty), tx, ty, p.x) - p.y));
+        if (Math.abs(p.vx) > 6) speeds.push(p.vx);
+      }
+      if (!p.ground) air++;
+    }
+    const up = { off, air, speeds: speeds.length, top: p.x >= foot + 4 };
+    // And it can jump from a slope.
+    let mid = 0;
+    for (let c = 0; c < st.cols; c++) if (L.tileAt(c, st.ground[c]) === L.T.SLOPEU) {
+      mid = c;
+      break;
+    }
+    Object.assign(p, { x: mid + 0.5, y: st.ground[mid] + 0.5, vx: 0, vy: 0, ground: true, onSlope: true });
+    L.input.keys.clear();
+    L.input.keys.add('jump');
+    L.sync();
+    L.step();
+    L.step();
+    const jumped = p.vy < -10;
+    L.input.keys.clear();
+    L.sync();
+    // Down the slope that falls, the feet stay on it.
+    let down = 0;
+    for (let c = foot; c < st.cols; c++) if (L.tileAt(c, st.ground[c]) === L.T.SLOPED) {
+      down = c;
+      break;
+    }
+    Object.assign(p, { x: down - 1.5, y: st.ground[down - 1], vx: 0, vy: 0, ground: true, onSlope: false });
+    L.input.keys.add('right');
+    L.sync();
+    let offD = 0;
+    let airD = 0;
+    for (let i = 0; i < 120 && p.x < down + 3; i++) {
+      L.step();
+      const tx = Math.floor(p.x);
+      for (const ty of [Math.floor(p.y - 0.01), Math.floor(p.y)]) if (L.tileAt(tx, ty) === L.T.SLOPED) offD = Math.max(offD, Math.abs(L.slopeY(L.T.SLOPED, tx, ty, p.x) - p.y));
+      if (!p.ground) airD++;
+    }
+    L.input.keys.clear();
+    L.sync();
+    // Snow piles and snowballs: the rhythm, the speeds, where they end.
+    L.startWorld(L.game.world);
+    L.game.mode = 'play';
+    const st2 = L.stage();
+    const pile = st2.things.find((t) => t.type === 'pile');
+    const sent = [];
+    let maxSlope = 0;
+    let maxFlat = 0;
+    let shattered = 0;
+    let lastN = 0;
+    for (let i = 0; i < 120 * 12; i++) {
+      Object.assign(p, { x: 3, y: st2.ground[3], vx: 0, vy: 0, ground: true, invul: 99 });
+      const before = pile.sent || 0;
+      L.step();
+      if ((pile.sent || 0) > before) sent.push(st2.clock);
+      for (const b of st2.balls) {
+        const tx = Math.floor(b.x);
+        const onSlope = L.SLOPES.has(L.tileAt(tx, Math.floor(b.y - 0.01))) || L.SLOPES.has(L.tileAt(tx, Math.floor(b.y)));
+        if (onSlope) maxSlope = Math.max(maxSlope, Math.abs(b.vx));
+        else maxFlat = Math.max(maxFlat, Math.abs(b.vx));
+      }
+      if (st2.balls.length < lastN) shattered++;
+      lastN = st2.balls.length;
+    }
+    const gaps = sent.slice(1).map((t, i) => t - sent[i]);
+    // A snowball hurts (a heart), and can't be stomped.
+    const b = st2.balls[0];
+    L.game.shields = 1;
+    // Coming down onto its top, as a stomp would.
+    Object.assign(p, { x: b.x, y: b.y - 0.9, vx: 0, vy: 5, ground: false, invul: 0, poof: 0 });
+    L.step();
+    const hurt = L.game.shields === 0 && st2.balls.includes(b);
+    // Ledges over pits, 1 to 3 long; ice ones at least 2.
+    const ledges = [];
+    for (let y = 0; y < st2.rows; y++) {
+      let run = [];
+      for (let x = 0; x <= st2.cols; x++) {
+        const k = x < st2.cols ? L.tileAt(x, y) : 0;
+        if ((k === L.T.ONEWAY || k === L.T.ICE || k === L.T.BLOCK) && st2.ground[x] >= st2.rows) run.push(k);
+        else {
+          if (run.length) ledges.push({ len: run.length, ice: run.every((t) => t === L.T.ICE) });
+          run = [];
+        }
+      }
+    }
+    return {
+      up, jumped, offD, airD, gaps, maxSlope, maxFlat, shattered, hurt,
+      piles: st2.things.filter((t) => t.type === 'pile').length,
+      ledges: ledges.filter((l) => l.len >= 1 && l.len <= 3).length,
+      iceLedges: ledges.filter((l) => l.ice && l.len >= 2 && l.len <= 3).length,
+    };
+  });
+  assert.ok(r.up.top, 'runs up to the slope top');
+  assert.equal(r.up.air, 0, 'without leaving the ground');
+  assert.ok(r.up.off <= 0.1, `feet on the slope (off by ${r.up.off})`);
+  assert.ok(r.up.speeds > 0, 'at its flat speed on the slope');
+  assert.equal(r.jumped, true, 'it can jump from a slope');
+  assert.ok(r.offD <= 0.1, `down the slope, feet on it (off by ${r.offD})`);
+  assert.equal(r.airD, 0, 'down without leaving the ground');
+  assert.ok(r.gaps.length >= 3 && r.gaps.every((g) => Math.abs(g - 2.5) <= 0.1), `a snowball every 2.5 s: ${r.gaps}`);
+  assert.ok(r.maxSlope <= 4 + 1e-6 && r.maxSlope > 3, `down a slope at up to 4 tiles/s (${r.maxSlope})`);
+  assert.ok(r.maxFlat <= 3 + 1e-6, `on the flat at up to 3 (${r.maxFlat})`);
+  assert.ok(r.shattered >= 3, 'snowballs shatter');
+  assert.equal(r.hurt, true, 'a snowball hurts and is not stomped');
+  assert.ok(r.piles >= 3, `${r.piles} snow piles`);
+  assert.ok(r.ledges >= 10, `${r.ledges} small ledges over pits`);
+  assert.ok(r.iceLedges >= 5, `${r.iceLedges} ice ledges at least 2 long`);
+  await context.close();
+});
+
+test('pixel-leap AC-36: Sea: you float, each tap a stroke, a stroke near the surface leaps out onto a ledge; currents carry you; fish hurt', async () => {
+  const { context, page } = await open();
+  await play(page, W.sea, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const p = L.player;
+    // The deepest water column.
+    let c = 0;
+    for (let x = 0; x < st.cols; x++) if (Number.isFinite(st.water[x]) && st.ground[x] < st.rows && (!c || st.ground[x] - st.water[x] > st.ground[c] - st.water[c])) c = x;
+    // Find a stretch with no current and no fish nearby.
+    const clear = (x) => !st.things.some((t) => (t.type === 'current' && x > t.x - 1 && x < t.x + t.w + 1) || (t.type === 'fish' && Math.abs(t.sx - x) < 8));
+    for (let x = 0; x < st.cols; x++) if (Number.isFinite(st.water[x]) && st.ground[x] - st.water[x] >= 5 && clear(x)) {
+      c = x;
+      break;
+    }
+    const surf = st.water[c];
+    const floor = st.ground[c];
+    const put = (y) => Object.assign(p, { x: c + 0.5, y, vx: 0, vy: 0, ground: false, invul: 99, poof: 0 });
+    const keys = (...k) => {
+      L.input.keys.clear();
+      for (const x of k) L.input.keys.add(x);
+      L.sync();
+    };
+    // Sinking, pressing nothing.
+    put(floor - 1.5);
+    keys();
+    let sink = 0;
+    for (let i = 0; i < 120; i++) {
+      L.step();
+      sink = Math.max(sink, p.vy);
+    }
+    // One tap: its lift.
+    const lift = (hold) => {
+      put(floor - 0.2);
+      p.ground = true;
+      keys();
+      L.step();
+      const y0 = p.y;
+      keys('jump');
+      let top = y0;
+      for (let i = 0; i < 180; i++) {
+        if (!hold && i === 6) keys();
+        L.step();
+        top = Math.min(top, p.y);
+      }
+      keys();
+      return y0 - top;
+    };
+    const tap = lift(false);
+    const held = lift(true);
+    // Two taps closer than 0.25 s count once.
+    put(floor - 0.2);
+    p.ground = true;
+    keys();
+    L.step();
+    const y1 = p.y;
+    keys('jump');
+    L.step();
+    keys();
+    for (let i = 0; i < 6; i++) L.step();
+    keys('jump');
+    let top2 = y1;
+    for (let i = 0; i < 180; i++) {
+      if (i === 4) keys();
+      L.step();
+      top2 = Math.min(top2, p.y);
+    }
+    const twoQuick = y1 - top2;
+    // Sideways.
+    put(floor - 2);
+    keys('right');
+    let side = 0;
+    for (let i = 0; i < 120; i++) {
+      L.step();
+      side = Math.max(side, Math.abs(p.vx));
+    }
+    keys();
+    // A leap out: by a ledge 2 tiles above the water (the next dry land, its top within 2 of the surface).
+    let edge = -1;
+    for (let x = c; x < st.cols; x++) if (!Number.isFinite(st.water[x]) && st.ground[x] < st.rows) {
+      edge = x;
+      break;
+    }
+    const ledgeUp = surf - st.ground[edge];
+    Object.assign(p, { x: edge - 0.6, y: surf + 1.3 + 0.3, vx: 0, vy: 0, ground: false, invul: 99 });
+    p.lastStroke = -9;
+    keys('jump', 'right');
+    for (let i = 0; i < 4; i++) L.step();
+    keys('right');
+    for (let i = 0; i < 120 && !(p.ground && !L.inWater()); i++) L.step();
+    keys();
+    const leapt = { ground: p.ground, dry: !L.inWater(), y: p.y, ledge: st.ground[edge], ledgeUp };
+    // A current, pressing nothing: carried its way at 3 tiles/s.
+    const cur = st.things.find((t) => t.type === 'current' && t.cx);
+    Object.assign(p, { x: cur.x + 1, y: cur.y + cur.h / 2 + 0.65, vx: 0, vy: 0, ground: false, invul: 99 });
+    p.lastStroke = -9;
+    const x0 = p.x;
+    let n = 0;
+    for (let i = 0; i < 60; i++) {
+      p.vy = 0;
+      L.step();
+      n++;
+    }
+    const carried = (p.x - x0) / (n / 120);
+    // A fish hurts at a touch, from above too.
+    const fish = st.things.find((t) => t.type === 'fish');
+    L.game.shields = 1;
+    Object.assign(p, { x: fish.x, y: fish.y - 0.8, vx: 0, vy: 2, ground: false, invul: 0, poof: 0 });
+    L.step();
+    const fishHurt = L.game.shields === 0;
+    const start = st.water[Math.floor(st.start.x)];
+    return { sink, tap, held, twoQuick, side, leapt, carried, dir: cur.cx, currents: st.things.filter((t) => t.type === 'current').length, fishHurt, dryStart: !Number.isFinite(start) };
+  });
+  assert.ok(r.sink <= 1.5 + 1e-6, `sinks at most 1.5 tiles/s (${r.sink})`);
+  assert.ok(r.tap >= 1.5 && r.tap <= 2.5, `a tap lifts ${r.tap.toFixed(2)} tiles`);
+  assert.ok(r.held <= r.tap + 0.05, `holding lifts no further (${r.held.toFixed(2)})`);
+  assert.ok(r.twoQuick <= r.tap + 0.05, `two taps 0.06 s apart count once (${r.twoQuick.toFixed(2)})`);
+  assert.ok(r.side <= 4 + 1e-6 && r.side > 3, `swims sideways at up to 4 (${r.side})`);
+  assert.ok(r.leapt.ledgeUp >= 0.9 && r.leapt.ledgeUp <= 2, `the land is ${r.leapt.ledgeUp} tiles above the water`);
+  assert.deepEqual([r.leapt.ground, r.leapt.dry, r.leapt.y], [true, true, r.leapt.ledge], 'a stroke at the surface leaps out onto the land');
+  assert.ok(Math.abs(Math.abs(r.carried) - 3) <= 0.3 && Math.sign(r.carried) === r.dir, `a current carries ${r.carried.toFixed(2)} tiles/s its way`);
+  assert.ok(r.currents >= 3, `${r.currents} currents`);
+  assert.equal(r.fishHurt, true, 'a fish hurts, from above too');
+  assert.equal(r.dryStart, true, 'Sea starts on dry land');
+  // A leap out onto a ledge exactly 2 tiles above the water: a level built for the check.
+  const two = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const p = L.player;
+    // Raise the land past the first bay by one tile, so it stands 2 tiles above the surface.
+    let edge = -1;
+    let c = 0;
+    for (let x = 0; x < st.cols; x++) if (Number.isFinite(st.water[x])) {
+      c = x;
+      break;
+    }
+    for (let x = c; x < st.cols; x++) if (!Number.isFinite(st.water[x]) && st.ground[x] < st.rows) {
+      edge = x;
+      break;
+    }
+    const surf = st.water[c];
+    for (let x = edge; x < edge + 4; x++) {
+      const top = surf - 2;
+      st.grid[(top) * st.cols + x] = L.T.GROUND;
+      st.ground[x] = top;
+    }
+    Object.assign(p, { x: edge - 0.6, y: surf + 1.3 + 0.4, vx: 0, vy: 0, ground: false, invul: 99 });
+    p.lastStroke = -9;
+    L.input.keys.clear();
+    L.input.keys.add('jump');
+    L.input.keys.add('right');
+    L.sync();
+    for (let i = 0; i < 4; i++) L.step();
+    L.input.keys.delete('jump');
+    L.sync();
+    for (let i = 0; i < 120 && !(p.ground && !L.inWater()); i++) L.step();
+    L.input.keys.clear();
+    L.sync();
+    return { ground: p.ground, y: p.y, want: surf - 2 };
+  });
+  assert.deepEqual([two.ground, two.y], [true, two.want], 'onto a ledge 2 tiles above the water');
+  await context.close();
+});
+
+test('pixel-leap AC-37: Ink is dark outside a circle of light, in its two colours, with glimmers where hazards hide; the glimpse of Castle is lit', async () => {
+  const { context, page } = await open(PHONE);
+  await play(page, W.ink, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const w = L.WORLDS[L.game.world];
+    const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',');
+    const two = new Set([hex(w.oneBit.ink), hex(w.oneBit.dark)]);
+    // Somewhere in the middle, away from lamps.
+    const lamps = st.things.filter((t) => t.type === 'lamp');
+    let x = 60;
+    for (let c = 40; c < st.next - 20; c++) if (st.ground[c] < st.rows && lamps.every((l) => Math.abs(l.x - c) > 14)) {
+      x = c + 0.5;
+      break;
+    }
+    Object.assign(L.player, { x, y: st.ground[Math.floor(x)], vx: 0, vy: 0, ground: true, invul: 0 });
+    L.cam.x = x - L.view.tilesW / 2;
+    L.cam.y = L.player.y - L.view.tilesH * 0.62;
+    L.clearParticles();
+    L.render();
+    const c = document.getElementById('view');
+    const U = L.view.U;
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const px = (L.player.x - L.cam.x) * U;
+    const py = (L.player.y - 0.65 - L.cam.y) * U;
+    // The places a glimmer may be, in canvas pixels.
+    const marks = [];
+    for (const t of st.things) {
+      if (t.type === 'walker' || t.type === 'drip' || t.type === 'lamp' || t.type === 'portal') marks.push([t.x, t.y - 0.5]);
+    }
+    for (let cx = 0; cx < st.cols; cx++) {
+      const gy = st.ground[cx];
+      if (gy < st.rows && (st.ground[cx - 1] >= st.rows || st.ground[cx + 1] >= st.rows)) marks.push([cx + 0.5, gy]);
+      for (let y = 0; y < st.rows; y++) {
+        const k = L.tileAt(cx, y);
+        if (k === L.T.SPIKES || ((k === L.T.ONEWAY || k === L.T.BLOCK) && (L.tileAt(cx - 1, y) === 0 || L.tileAt(cx + 1, y) === 0))) marks.push([cx + 0.5, y + 0.5]);
+      }
+    }
+    const near = (gx, gy) => marks.some(([mx, my]) => Math.abs(mx - gx) < 1 && Math.abs(my - gy) < 1);
+    let off = 0;
+    let darkBad = 0;
+    let litLevel = 0;
+    let litPx = 0;
+    const where = [];
+    for (let y = 0; y < c.height; y += 3) {
+      for (let x2 = 0; x2 < c.width; x2 += 3) {
+        const i = (y * c.width + x2) * 4;
+        const k = `${d[i]},${d[i + 1]},${d[i + 2]}`;
+        if (!two.has(k)) off++;
+        const dist = Math.hypot(x2 - px, y - py) / U;
+        const gx = L.cam.x + x2 / U;
+        const gy = L.cam.y + y / U;
+        if (gx >= st.next) continue; // the glimpse, lit
+        const farFromLamps = lamps.every((l) => Math.hypot(l.x - gx, l.y - 2.2 - gy) > 3.2);
+        if (dist > 5.6 && farFromLamps && k !== hex(w.oneBit.dark) && !near(gx, gy)) {
+          darkBad++;
+          if (where.length < 5) where.push([+gx.toFixed(1), +gy.toFixed(1)]);
+        }
+        if (dist < 4.4) {
+          litPx++;
+          if (k === hex(w.oneBit.ink)) litLevel++;
+        }
+      }
+    }
+    // The glimpse of Castle at the end, and the door: drawn lit, smooth.
+    const po = st.things.find((t) => t.type === 'portal');
+    Object.assign(L.player, { x: st.next - 3, y: st.ground[st.next - 3] });
+    L.cam.x = st.next - 2;
+    L.render();
+    const d2 = c.getContext('2d').getImageData(Math.round((po.x - L.cam.x) * U) - U, Math.round((po.y - 2 - L.cam.y) * U), 2 * U, 2 * U).data;
+    let bright = 0;
+    for (let i = 0; i < d2.length; i += 4) if (d2[i] + d2[i + 1] + d2[i + 2] > 300) bright++;
+    // Each hazard draws a glimmer in the dark: count ink pixels around each ghost far from the light.
+    const ghost = st.things.find((t) => t.kind === 'ghost' && Math.abs(t.x - x) > 7 && Math.abs(t.x - x) < L.view.tilesW / 2 - 1);
+    let ghostGlint = null;
+    if (ghost) {
+      Object.assign(L.player, { x, y: st.ground[Math.floor(x)] });
+      L.cam.x = x - L.view.tilesW / 2;
+      L.render();
+      const gx0 = Math.round((ghost.x - 0.5 - L.cam.x) * U);
+      const gy0 = Math.round((ghost.y - 1.5 - L.cam.y) * U);
+      const d3 = c.getContext('2d').getImageData(gx0, gy0, U, U).data;
+      ghostGlint = 0;
+      for (let i = 0; i < d3.length; i += 4) if (`${d3[i]},${d3[i + 1]},${d3[i + 2]}` === hex(w.oneBit.ink)) ghostGlint++;
+    }
+    return { off, darkBad, where, litLevel, litPx, bright, ghostGlint };
+  });
+  assert.equal(r.off, 0, 'every pixel is one of Ink’s two colours');
+  assert.equal(r.darkBad, 0, `dark beyond 5.5 tiles, but for glimmers (${JSON.stringify(r.where)})`);
+  assert.ok(r.litLevel > 20, `the level shows inside the light (${r.litLevel} of ${r.litPx} ink pixels)`);
+  assert.ok(r.bright > 50, 'the glimpse of Castle and its door are lit');
+  if (r.ghostGlint !== null) assert.ok(r.ghostGlint > 0, 'a ghost in the dark shows its eyes');
+  await context.close();
+});
+
+test('pixel-leap AC-39: Ice, Sea and Castle draw from their own packs and play their music; the map shows all ten', async () => {
+  const { context, page } = await open();
+  await goPlay(page, true);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    L.manual = true;
+    const used = new Set();
+    const orig = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (img, ...rest) {
+      if (img && img.src) used.add(img.src.split('/').pop());
+      return orig.call(this, img, ...rest);
+    };
+    const out = {};
+    for (const id of ['ice', 'sea', 'castle']) {
+      const w = L.WORLDS.findIndex((x) => x.id === id);
+      L.startWorld(w - 1);
+      L.game.mode = 'play';
+      const po = L.stage().things.find((t) => t.type === 'portal');
+      Object.assign(L.player, { x: po.x, y: po.y, invul: 0 });
+      L.step();
+      const map = L.game.mode === 'map' ? L.mapLayout().nodes.length - 1 : null;
+      for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
+      const loops = L.heard.filter((x) => x.startsWith('loop:'));
+      used.clear();
+      const st = L.stage();
+      Object.assign(L.player, { x: 10, y: st.ground[10] });
+      L.cam.x = 4;
+      L.cam.y = st.ground[10] - L.view.tilesH * 0.62;
+      L.render();
+      out[id] = { world: L.game.world === w, loop: loops[loops.length - 1], images: [...used], map };
+    }
+    CanvasRenderingContext2D.prototype.drawImage = orig;
+    return out;
+  });
+  assert.equal(r.ice.loop, 'loop:ice-bed', 'Ice plays the owner’s Frost music');
+  assert.equal(r.sea.loop, 'loop:c-music');
+  assert.equal(r.castle.loop, 'loop:c-music');
+  assert.ok(r.ice.images.includes('ice.png'), `Ice draws its pack (${r.ice.images})`);
+  assert.ok(r.sea.images.includes('sea.png'), 'Sea draws its pack');
+  assert.ok(r.castle.images.includes('castle.png'), 'Castle draws its pack');
+  for (const id of Object.keys(r)) {
+    assert.equal(r[id].world, true);
+    assert.equal(r[id].map, 10, 'the map shows all ten');
+  }
   await context.close();
 });
