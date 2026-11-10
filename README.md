@@ -13,6 +13,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 | Path | What it is |
 |---|---|
 | `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
+| `assets/previews/` | The pictures a shared link shows (Open Graph and Twitter cards, 1200×630): each game's tile on its card's tone, and `site.jpg`, the landing page's collage of six tiles. `scripts/make-previews.mjs` draws them all from the tiles (`specs/social-previews.md`) |
 | `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, and offline play once a page has loaded |
 | `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
@@ -31,14 +32,15 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
 2. On the landing page, turn its tile from `<article class="tile is-soon">` into `<a class="tile" href="googly-faces/">` and remove its "Coming soon" badge. Draw its tile picture from the game itself where you can, so they look alike: `node scripts/make-tile.mjs` does this for Googly Faces.
-3. Nothing to do in `sw.js`: a game's files are cached the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list.
-4. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
+3. Give it a share picture: run `node scripts/make-previews.mjs`, which draws `assets/previews/<slug>.png` from its tile, and copy the `og:` and `twitter:` tags from another game's `<head>`, with its own title, description, URL and image alt. The fast tier fails without them.
+4. Nothing to do in `sw.js`: a game's files are cached the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list.
+5. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
 
 ## Checks
 
 CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 
-- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
+- `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the share tags and pictures (`tests/social-previews.test.mjs`), the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
 Art and sound by [Kenney](https://www.kenney.nl) (CC0). Shooting Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](shooting-gallery/fonts/OFL.txt). Code is under the [MIT License](LICENSE).
