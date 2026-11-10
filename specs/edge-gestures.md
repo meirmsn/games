@@ -98,7 +98,8 @@ design; this change moves two control bars up and adds no colours, type or compo
   swipe from the edge. Orbit's bar, a
   slow slide, sits at half the gap #27 gave it: its foot (inset + 40 px) / 2 above the screen's
   edge (37 px on a home-screen iPhone, 20 px with no inset; the owner chose "Half the whole gap"
-  over 20 px above the safe area or the pre-#27 26 px), with no guard; the probes row and the hint
+  over 20 px above the safe area or the pre-#27 26 px), guarded only against the left and top
+  strips (`SIDES_ONLY`), since those keep their rule; the probes row and the hint
   keep their distance above it and the field takes the room. This replaces the decision above for
   those two games, and in `specs/orbit.md` the field-and-bar fit item's "above the bottom edge
   strip". (Owner,
@@ -138,7 +139,8 @@ design; this change moves two control bars up and adds no colours, type or compo
   the full far pull straight down with the finger still on screen — `tests/splat-gallery.test.mjs`.
 - **AC-4** In Orbit at 390×844 with iPhone insets simulated (top 47, bottom 34), the booster bar's
   foot sits (34 + 40) / 2 = 37 px above the screen's edge (20 px with no inset), the probes and the
-  hint above it, and a slide that starts low on the bar, in the bottom strip, sets the power —
+  hint above it; a slide that starts low on the bar, in the bottom strip, sets the power, and one
+  that starts on the bar in the left-edge strip doesn't —
   `tests/orbit.test.mjs`.
 - **AC-5** In Pixel Leap with iPhone insets simulated, at 390×844 and 844×390, the pad and the jump
   key stand 14 px above the safe area as before #27, and a press that starts low on them, in the

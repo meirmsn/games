@@ -20,6 +20,7 @@
 //   canvas.addEventListener('pointerdown', (e) => { if (isEdgeStart(e)) return; ... });
 //   ignoreEdgeStarts(pad);           // pointerdown and touchstart from the edges never reach pad
 //   safeRect();                      // { left, top, right, bottom } in CSS px, for layout
+//   isEdgeStart(e, safeRect(window, SIDES_ONLY)); // left and top strips only, for a slow slide
 
 export const MARGIN = Object.freeze({ top: 24, right: 0, bottom: 40, left: 20 });
 
@@ -51,10 +52,12 @@ export function rectFor(width, height, insets = {}, margin = MARGIN) {
   };
 }
 
-// The gesture-safe rectangle of this window now.
-export function safeRect(win = globalThis.window) {
-  return rectFor(win.innerWidth, win.innerHeight, readInsets(win.document));
+// The gesture-safe rectangle of this window now. A control that only takes presses, holds or slow
+// slides may sit in the bottom strip (the owner's rule, specs/edge-gestures.md): pass SIDES_ONLY.
+export function safeRect(win = globalThis.window, margin = MARGIN) {
+  return rectFor(win.innerWidth, win.innerHeight, readInsets(win.document), margin);
 }
+export const SIDES_ONLY = Object.freeze({ ...MARGIN, bottom: -Infinity });
 
 export const inside = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 

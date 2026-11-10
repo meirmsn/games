@@ -1040,6 +1040,11 @@ test('edge-gestures AC-4: with iPhone insets, the booster bar sits half as high 
   const before = await power();
   await touchDrag(cdp, r.bar.left + (r.bar.right - r.bar.left) * 0.5, r.bar.bottom - 6, 40, 0);
   assert.notEqual(await power(), before, 'a slide from the bar\'s low edge sets the power');
+  // A slide that starts on the bar inside the left-edge strip is the phone's back swipe: it sets nothing.
+  const now = await power();
+  assert.ok(r.bar.left < 20, `the bar reaches into the left strip (${r.bar.left})`);
+  await touchDrag(cdp, (r.bar.left + 20) / 2, (r.bar.top + r.bar.bottom) / 2, 120, 0);
+  assert.equal(await power(), now, 'a slide from the left strip sets nothing');
   await context.close();
 });
 

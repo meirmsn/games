@@ -2,7 +2,7 @@
 // planet's orbit ring. One canvas; the physics lives in physics.js and the systems in levels.js.
 // The spec is specs/orbit.md. Tests reach the game through window.__orbit.
 import { mountShell } from '../shared/game-shell.js';
-import { MARGIN } from '../shared/safe-zone.js';
+import { MARGIN, SIDES_ONLY, isEdgeStart, safeRect } from '../shared/safe-zone.js';
 import {
   FIELD,
   DT,
@@ -1078,6 +1078,8 @@ ui.boost.addEventListener('pointerdown', (e) => {
     resumeGame();
     return;
   }
+  // A slow slide may start in the bottom strip, never in the left or top one (a back swipe).
+  if (isEdgeStart(e, safeRect(window, SIDES_ONLY))) return;
   if (barDrag !== null) return; // a second finger
   barDrag = e.pointerId;
   try {
