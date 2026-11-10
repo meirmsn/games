@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10
 
 ## Intent
 
@@ -24,6 +24,22 @@ Assets Candy, smooth) and Ink (the 1-Bit Platformer pack). The surface is a new 
 `pixel-leap/`, and its landing-page tile becomes playable. The game has its own look per world, like
 any game page; the landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline is
 the design.
+
+### Batch 2: Farm, Industrial, Mushroom and Pico
+
+The owner's words for this batch (2026-11-09): "Add **Farm** (Pixel Platformer Farm Expansion),
+**Industrial** (Pixel Platformer Industrial Expansion), **Mushroom** (Platformer Assets Mushroom) and
+**Pico** (Pico-8 Platformer). Place them between the existing worlds so pixel and smooth keep
+alternating: Meadow, Farm, Frost, Candy, Industrial, Mushroom, Pico, Ink, or better if play shows a
+better order. Each world needs its own mechanic and its own kind of challenge, not just a new skin
+… **Farm:** platform-heavy: many platforms, big and small, at very different heights; haybales that
+bounce; hidden pockets of coins. **Industrial:** moving platforms and lifts, and conveyor belts; a
+timing-and-riding challenge. **Mushroom:** mushroom caps that launch you higher with each bounce; a
+vertical, tall climb. **Pico** (8 px per tile, 16 colours; the monster baked to that palette):
+crowded with bad guys, including flying ones that swoop; stomp chains pay extra." Every rule above
+stays: an easy opening then the real threat, the same physics, bad guys 1.5 tiles, hearts and three
+lives, the glimpse before each door, the map showing every world, and the layout checks of AC-21,
+extended to each new mechanic. The journey grows from four levels to eight, about 12–16 minutes.
 
 ### Concept check (the guidelines' questions)
 
@@ -243,6 +259,86 @@ item.
   about every 1–2 minutes. The knobs are the movement constants above, the assist and the level
   layouts, all data. Performance: a frame's update and draw stay well inside a 60 Hz frame on a
   phone; physics runs on delta time in fixed steps, so it is the same at 60 and 120 Hz.
+- **Batch 2: eight levels, in this order** (owner, 2026-11-09, quoted in Intent): 1 Meadow (pixel,
+  18), 2 Farm (pixel, 18), 3 Frost (pixel, 18), 4 Candy (smooth, 70), 5 Industrial (pixel, 18), 6
+  Mushroom (smooth, 70), 7 Pico (pixel, 8 px per tile, 16 colours), 8 Ink (two colours, 16). From
+  Candy on, pixel and smooth alternate; Meadow, Farm and Frost are all pixel because the owner's
+  order puts them first. Each new world's level opens with an easy stretch (no hazard within 7
+  tiles of its start), brings its mechanic in where it can't hurt yet, then ramps up to its own kind
+  of challenge. Physics, bad guys' size, hearts, lives, the assist and the glimpse are as above.
+  Farm and Industrial use the Pixel Platformer's characters (they are its expansions, with tiles
+  only); Mushroom uses the New Platformer Pack's slimes, as Candy does (the Mushroom pack has no
+  characters); Pico uses its own pack's bad guys (walkers, and the winged ones as flyers). Farm,
+  Industrial and Pico use the retro sound set and its loop, Mushroom Candy's soft set and loop, until
+  the owner's own music (owner, 2026-11-10, at the go: kept Pico at 8 px, accepted the snaking map,
+  no crushers and slimes in Mushroom, and did not take new Kenney loops for the new worlds). The hidden assist never changes moving platforms,
+  belts, caps, haybales or flyers. Best times move to a new version of the levels (3), so an old
+  four-level run is no best to beat. A crossing between two pixel worlds of different resolutions
+  (Pico's 8 into Ink's 16) redraws the monster straight in the new style, with no sound, as between
+  any two pixel worlds.
+- **Farm: platforms, haybales, hidden pockets.** Most of the level is platforms (the pack's wooden
+  planks and crates): at least 14 separate platforms, from 1 to at least 6 tiles long, at at least 5
+  different heights from 1 to 8 tiles above the ground, over pits and over walkers, so the route
+  is chosen up and down. A haybale is a solid tile that bounces you when you land on it: about 2.5
+  tiles high on its own, about 5 with jump held. Hidden pockets: at least 3 nooks off the main
+  route (up high or under a platform), each with at least 3 coins that aren't drawn until the
+  monster is within 3 tiles; a faint glint every 2 s marks each pocket, so an attentive player can
+  find them. Rejected: a secret wall you walk through, which the pack has no art for.
+- **Industrial: riding and timing.** Moving platforms (3 tiles wide, sliding back and forth along a
+  track of 4–7 tiles at 2 tiles/s), lifts (3 wide, rising and sinking along up to 6 tiles at 2
+  tiles/s) and conveyor belts (ground that carries the monster standing on it at 2.5 tiles/s, left
+  or right; bad guys walk on belts unmoved). A platform or lift carries the monster standing on it
+  exactly with it, and a jump off it keeps its sideways motion; you land on it from above and jump
+  through it from below, like a one-way ledge, and it never crushes. Movers start over with the
+  level when a life is lost; no track reaches below the level's ground line or crosses into the
+  glimpse. At least two gaps are 10 tiles or wider, more than a running held jump can clear even
+  with the ears' float (about 9.4 tiles), so they are crossed only by riding; at least one ledge is
+  reached only by a lift; past the opening, belts carry you toward spikes or pits, so you run
+  against them or time a jump. Rejected: platforms that crush, which punish a ride you can't see
+  coming on a phone.
+- **Mushroom: a tall climb on bouncing caps.** The level is a climb: its door is at least 30 tiles
+  above its start, more than a phone's view is tall, so the climb scrolls. A mushroom cap (3 tiles
+  wide on a stem) launches you as you land on it, measured from the cap's top to the monster's
+  feet at the top of the arc: 4 tiles the first time, then 6, then 8 for every landing on a cap
+  after that (the same cap again counts) while you touch nothing else; landing on anything else
+  (ground, a ledge, a haybale or platform) sets it back to 4, and a stomp or a hit doesn't. No jump
+  is needed and holding jump changes nothing. Flat stem-top ledges, which don't bounce, rest you
+  between the bouncing runs. A level has its own height in rows (Mushroom's about 48, the others 15)
+  with its ground line near its bottom; the camera follows up and down, so after an 8-tile launch
+  the landing is in view; falling off its bottom still costs a life. The climb ends on a plateau at
+  the top, and the glimpse and the door are on that plateau.
+- **Pico: crowded, flyers, stomp chains.** Pico is drawn at 8 px per tile, every pixel of the world
+  one of PICO-8's 16 colours, and the monster is baked to those colours too (its own short palette
+  is mapped to their nearest, with the outline the palette's darkest). A Pico pixel is 2.25 or 4.5
+  screen pixels at most tile sizes, so its blocks are not all equal, as with Ink's 16. It has more
+  bad guys than any other level, at least one for every 8 tiles after its opening: the pack's
+  walkers, and flyers that hover about 4 tiles up and, when the monster comes within 5 tiles ahead
+  while on the ground, swoop down at 6 tiles/s toward where it stood, then climb back (changed
+  after the go, by the owner, 2026-11-10, on a flyer diving into the monster mid-jump: "Keep it",
+  so a flyer dives only at a monster on the ground; keep moving and it misses). A flyer can be stomped. Stomp chains
+  pay extra: in Pico, each stomp after the first before you land again pays coins (the second +1,
+  the third +2, up to +4 each), shown by a "+n" over the stomp; they count in the run's coins. A
+  chain ends when you land on anything (ground, ledge, platform) or take a hit.
+- **Music prompts for all eight worlds, and layered music** (owner, 2026-11-09: "give me the
+  prompts for the music for all the levels … 8 prompts. It's gonna go to 11 labs music generator.
+  Hopefully they're not like 15-second loop … maybe 1 minute long or 3 minutes long is actually not
+  that big of a deal … something like the parallax effect, but for sound, where you actually
+  generate … one track and another one that you can lay out on top at random intervals"). Each
+  world gets a prompt for a bed (about 2 minutes, instrumental, made to loop) and for three short
+  accents (4–8 s, free-time, no drums, so they sit on any bar) that play over the bed at random
+  every 15–40 s, never twice in a row. The prompts are given in the chat; the files are the owner's
+  to generate. Until a world's arrive, it keeps its Kenney loop.
+- **The owner's music is in for four worlds** (owner, 2026-11-10, sending the Meadow's bed and
+  accents: "maybe you can use them", then the Farm's, Frost's and Candy's). Each bed is levelled and
+  kept at 64 kbps (about 1 MB); each accents file is cut into its three phrases. A bed is streamed
+  by an audio element from a copy fetched as the page loads, so it is cached for offline play like
+  everything else but never decoded whole: eight two-minute tracks decoded would take hundreds of
+  megabytes on a phone. The accents count only while playing; pausing stops the bed, and the
+  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive.
+- **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
+  portrait, going up the screen; four across in landscape), so all eight and the start fit on any
+  screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
+  can't hold eight.
 
 ## Acceptance items
 
@@ -298,37 +394,82 @@ item.
 - **AC-16** After two lives lost the coyote time and buffer grow (to at most double), enemies keep
   their speed, the assist survives a game over, and clearing a level resets it —
   `tests/pixel-leap.test.mjs`.
-- **AC-17** Each level is its own world, in this order: Meadow, Frost, Candy, Ink; each level's last
+- **AC-17** Each level is its own world, in this order: Meadow, Farm, Frost, Candy, Industrial,
+  Mushroom, Pico, Ink; best times are kept under version 3 of the levels; each level's last
   stretch, from its `next` column, is drawn in the next world's style; the UI is pixel-styled in
-  pixel worlds and smooth in Candy; the best time per level is kept — `tests/pixel-leap.test.mjs`.
+  pixel worlds and smooth in Candy and Mushroom; the best time per level is kept — `tests/pixel-leap.test.mjs`.
 - **AC-18** Jumping in the Meadow plays the Meadow's jump sound and in Candy Candy's, and each world
   starts its own music — `tests/pixel-leap.test.mjs`.
-- **AC-19** Pixel Leap plays offline once it has been played, Candy and Ink included, though only
+- **AC-19** Pixel Leap plays offline once it has been played, every world included, though only
   the Meadow was played — `tests/pixel-leap.test.mjs`.
 - **AC-20** The landing page's Pixel Leap tile is playable and links to `pixel-leap/` —
   `tests/site.test.mjs`.
-- **AC-21** Every level can be finished: a scripted run through each level reaches its door, taking
-  the first coin within 5 s of Go; in the level data no hazard is within 7 tiles of a level's start,
-  and every spring and jelly has no solid tile within six tiles above it or its neighbours —
+- **AC-21** Every level can be finished: a scripted run through each level (it only runs, jumps and
+  steers left or right) reaches its door, taking the first coin within 5 s of Go; in the level data
+  no hazard (pit, spikes, bad guy, drip, belt) is within 7 tiles of a level's start, a flyer counted
+  from 5 tiles before it; above every spring, jelly and haybale no solid tile is within 6 tiles, and
+  above every mushroom cap none within 9, in its columns and its neighbours'; every moving
+  platform's and lift's whole track, and two tiles above it, is clear of solid tiles, above the
+  ground line and short of the glimpse; and no setting of the hidden assist changes a mover's,
+  belt's, cap's, haybale's or flyer's speed —
   `tests/pixel-leap.test.mjs`.
 - **AC-22** At 390×844, a 20 s run's update and draw take under 8 ms per frame on average in the test
   browser, and the simulation moves the same at 60 and 120 frames per second —
   `tests/pixel-leap.test.mjs`.
-- **AC-23** The glimpse before Frost's door is drawn smooth and the one before Candy's door in Ink's
-  pixels; stepping into a glimpse that changes the style plays the rising (into smooth) or falling
-  (out of smooth) sound and draws the monster at in-between resolutions, then in the new style, and
-  stepping from the Meadow into Frost's glimpse changes nothing — `tests/pixel-leap.test.mjs`.
+- **AC-23** The glimpse before Frost's door is drawn smooth, the one before Candy's door in
+  Industrial's 18-px pixels and the one before Pico's door in Ink's; stepping into a glimpse that
+  changes the style plays the rising (into smooth) or falling (out of smooth) sound and draws the
+  monster at in-between resolutions, then in the new style, and stepping from the Meadow into Farm's
+  glimpse changes nothing — `tests/pixel-leap.test.mjs`.
 - **AC-24** The map at the start lights only the first world's cell and carves the others dark, and
-  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Frost with
-  both lit; a tap skips ahead to the step into the world — `tests/pixel-leap.test.mjs`.
+  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Farm with
+  both lit; a tap skips ahead to the step into the world; at 360×640 and 390×844 in portrait and
+  1024×700 in landscape, all eight cells and the start are on screen, no two cells overlap and each
+  name is at least 12 CSS px tall — `tests/pixel-leap.test.mjs`.
+
+- **AC-25** Farm has at least 14 separate platforms (a platform: a run of ledge or block tiles side
+  by side in one row, not ground), from 1 to at least 6 tiles long, at at least 5 different heights
+  between 1 and 8 tiles above the ground under them; landing on a haybale bounces the monster's
+  feet 2–3 tiles above its top, and 4.5–5.5 with jump held — `tests/pixel-leap.test.mjs`.
+- **AC-26** Farm has at least 3 hidden pockets of at least 3 coins each, off the scripted run's
+  route; a pocket's coins aren't drawn while the monster is more than 3 tiles away and are once it
+  comes within 3; a glint shows at each hidden pocket at least once every 2 s — `tests/pixel-leap.test.mjs`.
+- **AC-27** In Industrial, a monster standing still on a moving platform or a lift for 1 s ends within
+  0.1 tile of where the platform carried that spot, and can jump up through one and land on it;
+  standing still on a belt for 1 s carries the monster 2.5 tiles (±0.3) its way; the level has at
+  least two gaps of 10 tiles or more with a moving platform in each, at least one lift, and a
+  scripted run with the ears that never rides falls into each of those gaps —
+  `tests/pixel-leap.test.mjs`.
+- **AC-28** In Mushroom, the door is at least 30 tiles above the start; landing on a cap launches the
+  monster's feet 4 tiles above the cap's top, the next cap landing without touching anything else
+  6, the one after 8 and the one after that 8 again, and after touching the ground the next cap 4
+  again (each within half a tile); after an 8-tile launch the landing spot is in view; falling below
+  the level's bottom costs a life — `tests/pixel-leap.test.mjs`.
+- **AC-29** Pico is drawn at 8 px per tile and every pixel of its world layer on screen (the HUD,
+  particles and the glimpse aside) is one of PICO-8's 16 colours; its monster's frames use only
+  those colours — `tests/pixel-leap.test.mjs`.
+- **AC-30** Pico has more bad guys than any other level, at least one per 8 tiles after its first 15;
+  a flyer swoops down toward the monster when it comes within 5 tiles ahead on the ground and climbs
+  back, hurts
+  from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
+  third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
+  pays nothing extra — `tests/pixel-leap.test.mjs`.
+- **AC-31** Each new world plays its music (the owner's bed where it has arrived, which among the
+  four new worlds is so far only Farm's, else its sound set's loop) and draws from its own pack: Farm's and
+  Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
+  pack's — `tests/pixel-leap.test.mjs`.
+- **AC-32** A world with the owner's music plays its bed and, over it, one of its three accents
+  after every 15–40 s of play, all three in turn but never the same twice running; paused, the bed
+  stops and no accent comes; muting mutes the bed — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
 2. Change parts or Shuffle, then Go.
-3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Frost.
-4. Back on the map, walk on to Frost, then Candy (redrawn smooth) and Ink (two colours), with three
-   lives and up to two hearts; the run's statistics show at its end.
+3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Farm.
+4. Back on the map, walk on through Farm, Frost, Candy (redrawn smooth), Industrial, Mushroom
+   (smooth), Pico (16 colours) and Ink (two colours), with three lives and up to two hearts; the
+   run's statistics show at its end.
 
 ## States
 
@@ -358,11 +499,11 @@ item.
   | # | World (Kenney pack) | Style | Its own mechanic | Its kind of challenge |
   | --- | --- | --- | --- | --- |
   | 1 | Meadow (Pixel Platformer) | pixel | stomping walkers, springs | a gentle mix, to learn (built) |
-  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights |
+  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights (built) |
   | 3 | Candy (Platformer Assets Candy) | smooth | jelly bounces, crumbling cookies, slimes | tricky timing (built) |
-  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding |
-  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb |
-  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded |
+  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding (built) |
+  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb (built) |
+  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded (built) |
   | 7 | Castle (Platformer Pack Medieval) | smooth | a key opens the gate; crushers drop on a rhythm | puzzle-like situations |
   | 8 | Ice (Platformer Assets Ice; may replace today's pixel Frost) | smooth | slippery ice, snowballs rolling down slopes | precision on small ledges |
   | 9 | Sea (Platformer Pack Nautical) | smooth | swimming: you float, each tap a stroke; currents | a different control |
@@ -370,8 +511,8 @@ item.
   | 11 | Scribble (Scribble Platformer) | line art | platforms that draw themselves as you near | trust: jump before the ground is there |
   | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top |
 
-  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (next):
-  Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
+  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (this
+  change): Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
   Ice, Sea, and Ink's darkness. **Batch 4:** Scribble and Sky, then the journey's end. After each
   batch ships, the next batch's session is suggested.
 - Music: the owner will generate music for each world (and the two crossing sounds) from prompts
