@@ -3,33 +3,25 @@
 // drawing), so these tests can set up a situation and check what the rules do with it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { statSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-// Its own port range: the test files run in parallel, and a shared range can collide.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
-const ROOT = new URL('..', import.meta.url).pathname;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], { cwd: ROOT, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ path = 'crumble/', audio = false, ...opts } = {}) {
@@ -725,48 +717,65 @@ test('crumble AC-21: ten levels, each harder than the one before, each a new ter
   await context.close();
 });
 
-test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with blasts every few frames', async () => {
+// Timing on a shared CI runner is noisy, so this takes up to three samples of the blast run and
+// passes when one of them meets item 12's numbers, unchanged (specs/ci-flakes.md, owner's option A).
+// Expensive carving still fails every sample.
+test('crumble AC-12, ci-flakes AC-3: the frame holds at 844×390, DPR 2, CPU 4× slower, with blasts every few frames', async () => {
   const { context, page } = await open({ deviceScaleFactor: 2 });
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-  await page.evaluate(() => {
-    const c = window.__crumble;
-    c.store.taught = true;
-    c.startBattle(0);
-    c.frameTimes.length = 0;
-    c.carveTimes.length = 0;
-    window.__fxMax = 0;
-    let n = 0;
-    const blast = () => {
-      if (n++ > 200) return;
-      if (n % 3 === 0) {
-        const x = 300 + Math.random() * 800;
-        c.detonate(x, c.terrain.top(x) + 6);
-      }
-      window.__fxMax = Math.max(window.__fxMax, c.fx.count);
+  const sample = async () => {
+    await page.evaluate(() => {
+      const c = window.__crumble;
+      c.store.taught = true;
+      c.startBattle(0);
+      c.frameTimes.length = 0;
+      c.carveTimes.length = 0;
+      window.__fxMax = 0;
+      let n = 0;
+      const blast = () => {
+        if (n++ > 200) return;
+        if (n % 3 === 0) {
+          const x = 300 + Math.random() * 800;
+          c.detonate(x, c.terrain.top(x) + 6);
+        }
+        window.__fxMax = Math.max(window.__fxMax, c.fx.count);
+        requestAnimationFrame(blast);
+      };
       requestAnimationFrame(blast);
-    };
-    requestAnimationFrame(blast);
-  });
-  await page.waitForTimeout(5000);
-  const r = await page.evaluate(() => {
-    const c = window.__crumble;
-    const f = [...c.frameTimes].sort((a, b) => a - b);
-    const k = [...c.carveTimes].sort((a, b) => a - b);
-    const x = 700;
-    const y = c.terrain.top(x) + 8;
-    c.detonate(x, y);
-    const s = c.terrain.scale;
-    const alpha = c.terrain.ctx.getImageData(Math.round(x * s), Math.round(y * s), 1, 1).data[3];
-    return { frames: f.length, p95: f[Math.floor(f.length * 0.95)], carve: k[Math.floor(k.length * 0.95)], carves: k.length, fxMax: window.__fxMax, alpha };
-  });
+    });
+    await page.waitForTimeout(5000);
+    return page.evaluate(() => {
+      const c = window.__crumble;
+      const f = [...c.frameTimes].sort((a, b) => a - b);
+      const k = [...c.carveTimes].sort((a, b) => a - b);
+      const x = 700;
+      const y = c.terrain.top(x) + 8;
+      c.detonate(x, y);
+      const s = c.terrain.scale;
+      const alpha = c.terrain.ctx.getImageData(Math.round(x * s), Math.round(y * s), 1, 1).data[3];
+      return { frames: f.length, p95: f[Math.floor(f.length * 0.95)], carve: k[Math.floor(k.length * 0.95)], carves: k.length, fxMax: window.__fxMax, alpha };
+    });
+  };
+  // What a sample misses of item 12, as messages; empty when it meets all of it.
+  const misses = (r) =>
+    [
+      !(r.frames > 30 && r.carves > 12) && `it ran (${r.frames} frames, ${r.carves} blasts)`,
+      !(r.fxMax >= 200) && `the explosion pool was at least half full (${r.fxMax})`,
+      !(r.p95 < 16.7) && `p95 frame ${r.p95?.toFixed(2)} ms`,
+      !(r.carve < 4) && `p95 carve + settle ${r.carve?.toFixed(2)} ms`,
+      r.alpha !== 0 && `the crater is transparent in the drawn ground (alpha ${r.alpha})`,
+    ].filter(Boolean);
+  const failed = [];
+  for (let i = 1; i <= 3; i++) {
+    const r = await sample();
+    const m = misses(r);
+    console.log(`crumble AC-12 sample ${i}: ${JSON.stringify(r)}${m.length ? ` misses: ${m.join('; ')}` : ''}`);
+    if (!m.length) break;
+    failed.push(`sample ${i}: ${m.join('; ')}`);
+    assert.ok(i < 3, `no sample of three met item 12:\n${failed.join('\n')}`);
+  }
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-  console.log(`crumble AC-12: ${JSON.stringify(r)}`);
-  assert.ok(r.frames > 30 && r.carves > 12, `it ran (${r.frames} frames, ${r.carves} blasts)`);
-  assert.ok(r.fxMax >= 200, `the explosion pool was at least half full (${r.fxMax})`);
-  assert.ok(r.p95 < 16.7, `p95 frame ${r.p95.toFixed(2)} ms`);
-  assert.ok(r.carve < 4, `p95 carve + settle ${r.carve.toFixed(2)} ms`);
-  assert.equal(r.alpha, 0, 'the crater is transparent in the drawn ground');
   await context.close();
 });
 
