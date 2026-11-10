@@ -41,6 +41,11 @@ export const TUNING = {
   assistDown: 0.2,
   digWeight: 0.6, // k: the CPU's value of a unit of drop against a point of damage
   sideMargin: 80,
+  crateEvery: 4, // shots between supply drops
+  crateRepair: 30, // armour a repair crate gives back
+  crateReach: 24, // a blast this much beyond its radius still claims a crate
+  heavyRadius: 54, // a heavy shell's crater
+  heavyDamage: 42,
   maxFlight: 8,
 };
 
@@ -75,10 +80,10 @@ const FIELDS = [
   level({ name: 'Red Cliffs', look: 'red', sky: ['#5a1f2e', '#b8494a', '#f2a46c'], far: '#7d3038', sun: { x: 0.85, y: 0.3, r: 34, color: '#ffd1a0' }, water: 'rgba(60,90,120,0.8)', waterDeep: '#253b52', foam: '#ffd8c4', enemy: 'grey', wind: 100, preview: 0.3, mirror: false, slope: -0.18, bumps: [{ x: 0.5, h: -0.2, w: 0.08 }], tideRises: 6, cpuArmour: 110 }),
   // The sea cuts the shore in two; a steel bridge spans the channel and catches low shots.
   level({ name: 'Fog Harbour', look: 'moss', sky: ['#6f8a86', '#a9bdb5', '#dfe7df'], far: '#8ea59d', sun: { x: 0.3, y: 0.25, r: 30, color: '#f4f6ee' }, water: 'rgba(50,96,96,0.82)', waterDeep: '#1f4344', foam: '#e6f0ea', enemy: 'navy', wind: 105, preview: 0.28, girders: 'bridge', bumps: [{ x: 0.5, h: -0.6, w: 0.05 }], tideRises: 5, cpuArmour: 120 }),
-  level({ name: 'Storm Coast', look: 'slate', sky: ['#1f2730', '#46525e', '#7c8794'], far: '#353f4a', sun: { x: 0.6, y: 0.2, r: 18, color: '#c9d2dc' }, water: 'rgba(36,60,78,0.85)', waterDeep: '#152635', foam: '#b9c8d4', enemy: 'grey', wind: 130, preview: 0.27, rough: 1.1, bumps: [{ x: 0.5, h: 0.32, w: 0.07 }], tideRises: 5, cpuArmour: 120 }),
+  level({ name: 'Storm Coast', look: 'slate', sky: ['#1f2730', '#46525e', '#7c8794'], far: '#353f4a', sun: { x: 0.6, y: 0.2, r: 18, color: '#c9d2dc' }, water: 'rgba(36,60,78,0.85)', waterDeep: '#152635', foam: '#b9c8d4', enemy: 'grey', wind: 130, preview: 0.27, rough: 1.1, bumps: [{ x: 0.5, h: 0.32, w: 0.07 }], tideRises: 5, cpuArmour: 130 }),
   // Steel towers crown the ridge.
-  level({ name: 'Black Sands', look: 'ash', sky: ['#5a1712', '#8a2e1c', '#e0723a'], far: '#4a1c18', sun: { x: 0.25, y: 0.3, r: 40, color: '#ffb066' }, water: 'rgba(40,52,66,0.85)', waterDeep: '#141c26', foam: '#e8b89a', enemy: 'navy', wind: 135, preview: 0.25, girders: 'towers', bumps: [{ x: 0.5, h: 0.22, w: 0.08 }], tideRises: 5, cpuArmour: 120 }),
-  level({ name: 'Ice Shelf', look: 'ice', sky: ['#8fb4d8', '#cfe2f2', '#f4f9fd'], far: '#b4cde2', sun: { x: 0.8, y: 0.18, r: 30, color: '#ffffff' }, water: 'rgba(40,110,150,0.8)', waterDeep: '#1d4f72', foam: '#ffffff', enemy: 'grey', wind: 140, preview: 0.24, mirror: false, slope: -0.14, bumps: [{ x: 0.47, h: 0.26, w: 0.06 }], tideRises: 5, cpuArmour: 130 }),
+  level({ name: 'Black Sands', look: 'ash', sky: ['#5a1712', '#8a2e1c', '#e0723a'], far: '#4a1c18', sun: { x: 0.25, y: 0.3, r: 40, color: '#ffb066' }, water: 'rgba(40,52,66,0.85)', waterDeep: '#141c26', foam: '#e8b89a', enemy: 'navy', wind: 135, preview: 0.25, girders: 'towers', bumps: [{ x: 0.5, h: 0.28, w: 0.08 }], tideRises: 5, cpuArmour: 140 }),
+  level({ name: 'Ice Shelf', look: 'ice', sky: ['#8fb4d8', '#cfe2f2', '#f4f9fd'], far: '#b4cde2', sun: { x: 0.8, y: 0.18, r: 30, color: '#ffffff' }, water: 'rgba(40,110,150,0.8)', waterDeep: '#1d4f72', foam: '#ffffff', enemy: 'grey', wind: 140, preview: 0.24, mirror: false, slope: -0.14, bumps: [{ x: 0.47, h: 0.26, w: 0.06 }], tideRises: 5, cpuArmour: 140 }),
   // The last: the highest ridge, towers on it and walls before each tank, the strongest wind.
   level({ name: 'Night Siege', look: 'night', sky: ['#05060f', '#151a35', '#3a3060'], far: '#1b1f38', sun: { x: 0.15, y: 0.15, r: 20, color: '#e8e6ff' }, water: 'rgba(20,30,60,0.88)', waterDeep: '#0a1024', foam: '#9aa6d8', enemy: 'grey', wind: 150, preview: 0.22, girders: 'walls+towers', bumps: [{ x: 0.5, h: 0.3, w: 0.07 }], tideRises: 5, cpuArmour: 140 }),
 ];
@@ -102,6 +107,7 @@ const ui = {
   tide: $('[data-tide]'),
   pips: [...document.querySelectorAll('[data-pips] i')],
   shellBtn: $('[data-weapon="shell"]'),
+  shellLabel: $('[data-weapon="shell"] span'),
   augerBtn: $('[data-weapon="auger"]'),
   charges: $('[data-charges]'),
   start: $('[data-screen="start"]'),
@@ -183,9 +189,10 @@ const IMG = {
   shell: img('img/shell.png'),
   auger: img('img/auger.png'),
   girder: img('img/girder.png'),
+  crate: { repair: img('img/crate-repair.png'), heavy: img('img/crate-ammo.png') },
 };
 const ready = (i) => i.complete && i.naturalWidth > 0;
-const allImages = [...Object.values(IMG.body), IMG.tracks, IMG.turret, IMG.shell, IMG.auger, IMG.girder];
+const allImages = [...Object.values(IMG.body), IMG.tracks, IMG.turret, IMG.shell, IMG.auger, IMG.girder, IMG.crate.repair, IMG.crate.heavy];
 const imagesLoaded = Promise.all(allImages.map((i) => (i.decode ? i.decode().catch(() => {}) : Promise.resolve())));
 
 const fx = createExplosions({ art: loadExplosionArt(), max: 400 });
@@ -220,6 +227,9 @@ const game = {
   outcome: null,
   time: 0,
   demoTimer: 1.2,
+  crate: null, // a supply drop: { x, y, vy, kind: 'repair' | 'heavy', landed }
+  puffs: [], // smoke behind a shell in flight
+  slow: 0, // seconds of slow motion left (a direct hit)
   damage: true,
 };
 let terrain = null;
@@ -232,7 +242,7 @@ const frameTimes = [];
 const carveTimes = [];
 
 function newTank(side, x, color) {
-  return { side, x, y: 0, tilt: 0, vy: 0, falling: false, fallFrom: 0, armour: 100, maxArmour: 100, aim: side === PLAYER ? 0.85 : Math.PI - 0.85, power: 0.6, augers: TUNING.augerCharges, sunk: 0, out: false, color, hitFlash: 0, swing: null };
+  return { side, x, y: 0, tilt: 0, vy: 0, falling: false, fallFrom: 0, armour: 100, maxArmour: 100, aim: side === PLAYER ? 0.85 : Math.PI - 0.85, power: 0.6, augers: TUNING.augerCharges, sunk: 0, out: false, color, hitFlash: 0, swing: null, recoil: 0, heavy: false };
 }
 
 const field = () => FIELDS[game.field];
@@ -346,7 +356,7 @@ function setupBattle(index, { seed, starter = PLAYER, demo = false } = {}) {
   if (girders.includes('towers')) {
     for (const gx of [W / 2 - 70, W / 2 + 70]) {
       const top = Math.min(heights[gx - 22], heights[gx + 22]);
-      terrain.addSteel({ x: gx - 20, y: top - 100, w: 40, h: 120 });
+      terrain.addSteel({ x: gx - 20, y: top - 125, w: 40, h: 145 });
     }
   }
   if (girders.includes('bridge')) {
@@ -375,6 +385,11 @@ function setupBattle(index, { seed, starter = PLAYER, demo = false } = {}) {
   game.shots = 0;
   game.wind = 0;
   game.projectile = null;
+  game.crate = null;
+  game.puffs = [];
+  game.slow = 0;
+  birds.length = 0;
+  for (let i = 0; i < 3; i++) birds.push({ x: Math.random() * W, y: 60 + Math.random() * 120, vx: (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 25), flap: Math.random() * 6, scared: 0 });
   game.texts = [];
   game.lastTrace = null;
   game.outcome = null;
@@ -465,6 +480,8 @@ function stepShell(p, wind, ownerSide) {
     const dy = p.y - c.y;
     if (dx * dx + dy * dy < TANK.radius * TANK.radius) return { kind: 'tank', x: p.x, y: p.y, tank: t };
   }
+  const cr = game.crate;
+  if (cr && Math.abs(p.x - cr.x) < 24 && p.y > cr.y - 46 && p.y < cr.y + 2) return { kind: 'crate', x: p.x, y: p.y };
   const m = terrain.at(p.x, p.y);
   if (m === STEEL) return { kind: 'steel', x: p.x, y: p.y };
   if (m) return { kind: 'ground', x: p.x, y: p.y };
@@ -485,8 +502,13 @@ function fire(side, weapon, angle, power) {
   const t = tanks[side];
   t.aim = angle;
   t.power = power;
-  const p = { ...launch(t, angle, power), age: 0, weapon, owner: side, trace: [], mode: 'fly', drillTo: 0, lastCarve: 0 };
+  const p = { ...launch(t, angle, power), age: 0, weapon, owner: side, trace: [], mode: 'fly', drillTo: 0, lastCarve: 0, heavy: false };
   if (weapon === 'auger') t.augers = Math.max(0, t.augers - 1);
+  if (weapon === 'shell' && t.heavy) {
+    p.heavy = true;
+    t.heavy = false;
+  }
+  t.recoil = 1;
   t.shotsFired = (t.shotsFired || 0) + 1;
   game.projectile = p;
   game.phase = 'flight';
@@ -497,7 +519,7 @@ function fire(side, weapon, angle, power) {
   updateHud();
 }
 
-function detonate(x, y, { direct = null, radius = TUNING.shellRadius, damage = TUNING.shellDamage, carve = true } = {}) {
+function detonate(x, y, { direct = null, radius = TUNING.shellRadius, damage = TUNING.shellDamage, carve = true, owner = null } = {}) {
   const t0 = performance.now();
   if (carve) terrain.carve(x, y, radius, { scorch: field().scorch });
   for (const t of tanks) settleTank(t, 0);
@@ -505,7 +527,13 @@ function detonate(x, y, { direct = null, radius = TUNING.shellRadius, damage = T
   if (carveTimes.length > 300) carveTimes.shift();
   fx.burst(x, y, { radius, wind: game.wind, debris: field().debris });
   sfx('boom', { rate: 1.15 - radius / 120 + Math.random() * 0.1, gain: Math.min(1, radius / 36) });
+  scareBirds(x, y);
+  if (owner !== null) claimCrate(x, y, radius, owner);
   if (!game.damage) return;
+  if (direct) {
+    game.slow = 0.45;
+    game.texts.push({ x: direct.x, y: direct.y - 110, text: 'Direct hit!', age: 0, color: '#ffd23f', big: true });
+  }
   let any = false;
   for (const t of tanks) {
     if (t.out) continue;
@@ -537,12 +565,16 @@ function updateProjectile() {
     }
     if (p.y >= p.drillTo || terrain.at(p.x, p.y + r) === STEEL) {
       fx.burst(p.x, p.y, { radius: 22, wind: game.wind, debris: field().debris, power: 0.3 });
+      claimCrate(p.x, p.y, r, p.owner);
       sfx('boom', { rate: 1.3, gain: 0.6 });
       endShot();
     }
     return;
   }
-  if (p.trace.length === 0 || p.age - p.trace[p.trace.length - 1][2] > 0.03) p.trace.push([p.x, p.y, p.age]);
+  if (p.trace.length === 0 || p.age - p.trace[p.trace.length - 1][2] > 0.03) {
+    p.trace.push([p.x, p.y, p.age]);
+    if (game.mode === 'battle' && game.puffs.length < 90) game.puffs.push({ x: p.x, y: p.y, age: 0 });
+  }
   const hit = stepShell(p, game.wind, p.owner);
   if (!hit) return;
   p.trace.push([hit.x, hit.y, p.age]);
@@ -554,7 +586,11 @@ function updateProjectile() {
   }
   if (hit.kind === 'steel') {
     sfx('clank');
-    detonate(hit.x, hit.y, { radius: p.weapon === 'auger' ? 18 : TUNING.shellRadius, damage: p.weapon === 'auger' ? 0 : TUNING.shellDamage });
+    detonate(hit.x, hit.y, { radius: p.weapon === 'auger' ? 18 : TUNING.shellRadius, damage: p.weapon === 'auger' ? 0 : TUNING.shellDamage, owner: p.owner });
+    return endShot();
+  }
+  if (hit.kind === 'crate') {
+    detonate(hit.x, hit.y, { radius: p.weapon === 'auger' ? 18 : p.heavy ? TUNING.heavyRadius : TUNING.shellRadius, damage: p.weapon === 'auger' ? 0 : p.heavy ? TUNING.heavyDamage : TUNING.shellDamage, owner: p.owner });
     return endShot();
   }
   if (p.weapon === 'auger') {
@@ -569,7 +605,7 @@ function updateProjectile() {
     sfx('drill', { gain: 0.8 });
     return;
   }
-  detonate(hit.x, hit.y, { direct: hit.kind === 'tank' ? hit.tank : null });
+  detonate(hit.x, hit.y, { direct: hit.kind === 'tank' ? hit.tank : null, owner: p.owner, radius: p.heavy ? TUNING.heavyRadius : TUNING.shellRadius, damage: p.heavy ? TUNING.heavyDamage : TUNING.shellDamage });
   endShot();
 }
 
@@ -579,6 +615,103 @@ function endShot() {
   game.projectile = null;
   game.phase = 'settle';
   game.timer = 0;
+}
+
+// --- Supply drops ---------------------------------------------------------------------------------
+
+// Every few shots a crate parachutes down between the tanks. A blast near it claims it for whoever
+// fired: a repair crate gives armour back, an ammo crate makes the next Shell a heavy one. Hit the
+// tank or grab the crate: a new choice every few turns, and the CPU goes for them too.
+function dropCrate() {
+  const tanksAt = tanks.map((t) => t.x);
+  const x = Math.round(W * 0.32 + cpuRandom() * W * 0.36);
+  const hurtMost = Math.min(...tanks.map((t) => t.armour / t.maxArmour));
+  const kind = hurtMost < 0.75 && cpuRandom() < 0.6 ? 'repair' : 'heavy';
+  game.crate = { x: Math.max(tanksAt[0] + 120, Math.min(tanksAt[1] - 120, x)), y: -30, vy: 0, kind, landed: false };
+  sfx('whoosh', { gain: 0.5, rate: 0.7 });
+}
+
+function updateCrate(dt) {
+  const c = game.crate;
+  if (!c) return;
+  // The sea takes a crate it reaches, falling or landed (the tide comes up over it).
+  if (c.y - 10 > game.waterY) {
+    fx.burst(c.x, game.waterY, { radius: 12, wind: game.wind, debris: field().foam, power: 0.02 });
+    game.crate = null;
+    return;
+  }
+  const below = terrain.solid(c.x, c.y + 1) || terrain.solid(c.x - 16, c.y + 1) || terrain.solid(c.x + 16, c.y + 1);
+  if (below) {
+    if (!c.landed) sfx('thud', { gain: 0.5 });
+    c.landed = true;
+    c.vy = 0;
+    // Settle onto the ground (it may have been dug out from under it).
+    while (terrain.solid(c.x, c.y) && c.y > 0) c.y -= 1;
+  } else if (!c.landed) {
+    c.vy = 70; // under its parachute
+    c.y += c.vy * dt;
+    c.x = Math.max(60, Math.min(W - 60, c.x + game.wind * 0.25 * dt));
+  } else {
+    c.vy += TUNING.gravity * dt;
+    c.y += c.vy * dt;
+  }
+}
+
+function claimCrate(x, y, radius, owner) {
+  const c = game.crate;
+  if (!c || owner === null || owner === undefined) return;
+  if (Math.hypot(c.x - x, c.y - 22 - y) > radius + TUNING.crateReach) return;
+  const t = tanks[owner];
+  game.crate = null;
+  sfx('clank', { gain: 0.9, rate: 1.3 });
+  if (c.kind === 'repair') {
+    const n = Math.min(TUNING.crateRepair, t.maxArmour - t.armour);
+    t.armour += n;
+    game.texts.push({ x: t.x, y: t.y - 72, text: `+${n}`, age: 0, color: '#7dffa8' });
+  } else {
+    t.heavy = true;
+    game.texts.push({ x: t.x, y: t.y - 72, text: 'Heavy shell', age: 0, color: '#ffd23f' });
+  }
+  updateHud();
+}
+
+// --- Life: seagulls, wind streaks, smoke ------------------------------------------------------------
+
+const birds = [];
+const streaks = [];
+for (let i = 0; i < 26; i++) streaks.push({ x: Math.random() * W, y: 30 + Math.random() * 300, l: 0.5 + Math.random() });
+
+function scareBirds(x, y) {
+  for (const b of birds) if (Math.hypot(b.x - x, b.y - y) < 420) b.scared = 1.6;
+}
+
+function updateLife(dt) {
+  for (const b of birds) {
+    const fast = b.scared > 0 ? 2.6 : 1;
+    b.scared = Math.max(0, b.scared - dt);
+    b.x += b.vx * fast * dt + game.wind * 0.2 * dt;
+    b.y += (b.scared > 0 ? -60 : Math.sin(game.time * 0.7 + b.flap) * 6) * dt;
+    b.flap += dt * (b.scared > 0 ? 18 : 7);
+    if (b.x < -60) b.x = W + 50;
+    if (b.x > W + 60) b.x = -50;
+    if (b.y < -40) {
+      b.y = 80 + Math.random() * 100;
+      b.x = b.vx > 0 ? -50 : W + 50;
+    }
+  }
+  for (const s of streaks) {
+    s.x += (game.wind * 2.2 + 8) * dt;
+    if (s.x > W + 80) s.x = -80;
+    if (s.x < -80) s.x = W + 80;
+  }
+  for (const p of game.puffs) {
+    p.age += dt;
+    p.x += game.wind * 0.4 * dt;
+    p.y -= 8 * dt;
+  }
+  game.puffs = game.puffs.filter((p) => p.age < 0.9);
+  for (const t of tanks) t.recoil = Math.max(0, t.recoil - dt * 5);
+  updateCrate(dt);
 }
 
 // --- The CPU ------------------------------------------------------------------------------------
@@ -593,7 +726,16 @@ function gauss(r) {
 
 // Plan a shot for `shooter` at `target`: score every candidate by expected damage plus k × the
 // drop it would cause, take the best, then miss by the battlefield's spread (wider with the assist).
-function plan(shooter, target, { assist = store.assist, random = cpuRandom, weapon: forced, spreadAngle, spreadPower } = {}) {
+// plan() runs it to the end at once (the tests, the demo); the CPU's turn runs it a few milliseconds a
+// frame (planSteps), so a phone's frame rate holds while it thinks.
+function plan(shooter, target, opts = {}) {
+  const it = planSteps(shooter, target, opts);
+  let r = it.next();
+  while (!r.done) r = it.next();
+  return r.value;
+}
+
+function* planSteps(shooter, target, { assist = store.assist, random = cpuRandom, weapon: forced, spreadAngle, spreadPower } = {}) {
   const f = field();
   const fi = game.field;
   const k = fi === 0 ? 0 : TUNING.digWeight;
@@ -601,31 +743,68 @@ function plan(shooter, target, { assist = store.assist, random = cpuRandom, weap
   if (!forced && f.auger && shooter.augers > 0 && game.mode === 'battle' && hullY(target) > game.waterY - game.notch) weapon = 'auger';
   const { depth } = augerShaft();
   const facing = target.x < shooter.x ? -1 : 1;
-  let best = null;
-  let bestLob = null;
-  for (let a = 0.12; a <= 1.5; a += 0.02) {
-    const angle = facing > 0 ? a : Math.PI - a;
-    for (let pw = 0.25; pw <= 1.0001; pw += 0.025) {
-      const hit = simulate(shooter, angle, pw);
-      const dist = Math.abs(hit.x - target.x);
-      if (!bestLob || dist < bestLob.dist) bestLob = { angle, power: pw, dist };
-      if (hit.kind === 'out' || hit.kind === 'water') continue;
-      let score = 0;
-      const c = centerOf(target);
-      if (weapon === 'shell') {
-        const d = Math.hypot(hit.x - c.x, hit.y - c.y);
-        score = TUNING.shellDamage * Math.max(0, 1 - d / (TUNING.shellRadius + TUNING.reach));
-        if (hit.kind === 'tank' && hit.tank === target) score += TUNING.directBonus;
-        if (hit.kind === 'ground' && Math.abs(hit.y - target.y) < 50) score += k * Math.max(0, TUNING.shellRadius - Math.max(0, dist - TANK.half));
-        const self = centerOf(shooter);
-        const ds = Math.hypot(hit.x - self.x, hit.y - self.y);
-        score -= 2 * TUNING.shellDamage * Math.max(0, 1 - ds / (TUNING.shellRadius + TUNING.reach));
-      } else {
-        if (hit.kind !== 'steel' && Math.abs(hit.y - target.y) < 60) score = dist < 28 ? depth : dist < 44 ? depth * 0.5 : 0;
-        if (Math.abs(hit.x - shooter.x) < 50) score = -1;
-      }
-      if (score > 0 && (!best || score > best.score)) best = { angle, power: pw, score };
+
+  // What a landing is worth with this weapon: expected damage plus k × the drop it causes, a crate
+  // it claims, and minus any harm to the shooter itself.
+  const scoreHit = (hit, weapon) => {
+    if (hit.kind === 'out' || hit.kind === 'water') return 0;
+    const dist = Math.abs(hit.x - target.x);
+    const c = centerOf(target);
+    let score = 0;
+    if (weapon === 'shell') {
+      const d = Math.hypot(hit.x - c.x, hit.y - c.y);
+      score = TUNING.shellDamage * Math.max(0, 1 - d / (TUNING.shellRadius + TUNING.reach));
+      if (hit.kind === 'tank' && hit.tank === target) score += TUNING.directBonus;
+      if (hit.kind === 'ground' && Math.abs(hit.y - target.y) < 50) score += k * Math.max(0, TUNING.shellRadius - Math.max(0, dist - TANK.half));
+      const self = centerOf(shooter);
+      const ds = Math.hypot(hit.x - self.x, hit.y - self.y);
+      score -= 2 * TUNING.shellDamage * Math.max(0, 1 - ds / (TUNING.shellRadius + TUNING.reach));
+    } else {
+      if (hit.kind !== 'steel' && Math.abs(hit.y - target.y) < 60) score = dist < 28 ? depth : dist < 44 ? depth * 0.5 : 0;
+      if (Math.abs(hit.x - shooter.x) < 50) score = -1;
     }
+    if (game.crate) {
+      const cr = game.crate;
+      const dc = Math.hypot(hit.x - cr.x, hit.y - (cr.y - 22));
+      if (dc < TUNING.shellRadius + TUNING.crateReach) score += cr.kind === 'repair' ? (shooter.maxArmour - shooter.armour >= 20 ? 18 : 3) : 12;
+    }
+    return score;
+  };
+
+  const search = function* (weapon) {
+    const found = [];
+    let bestLob = null;
+    for (let a = 0.12; a <= 1.5; a += 0.02) {
+      const angle = facing > 0 ? a : Math.PI - a;
+      for (let pw = 0.25; pw <= 1.0001; pw += 0.025) {
+        const hit = simulate(shooter, angle, pw);
+        const dist = Math.abs(hit.x - target.x);
+        if (!bestLob || dist < bestLob.dist) bestLob = { angle, power: pw, dist };
+        const score = scoreHit(hit, weapon);
+        if (score > 0) found.push({ angle, power: pw, score });
+      }
+      yield;
+    }
+    // Prefer shots with room for error: re-score the best few with small misses either way, so a
+    // shot that only just clears a girder (and mostly hits it) loses to one with margin.
+    found.sort((x, y) => y.score - x.score);
+    let best = null;
+    for (const cand of found.slice(0, 15)) {
+      let sum = 0;
+      for (const [da, dp] of [[0, 0], [0.03, 0], [-0.03, 0], [0, 0.04], [0, -0.04]]) {
+        sum += Math.max(-10, scoreHit(simulate(shooter, cand.angle + da, Math.min(1, cand.power * (1 + dp))), weapon));
+      }
+      cand.robust = sum / 5;
+      if (!best || cand.robust > best.robust) best = cand;
+    }
+    return { best, bestLob };
+  };
+
+  let { best, bestLob } = yield* search(weapon);
+  if (weapon === 'auger' && (!best || best.robust < depth * 0.3)) {
+    // No safe way to dig under the target (girders in the way): shoot instead.
+    weapon = 'shell';
+    ({ best, bestLob } = yield* search(weapon));
   }
   const pick = best || bestLob || { angle: facing > 0 ? 0.8 : Math.PI - 0.8, power: 0.7 };
   const warm = TUNING.cpuWarmup[Math.min(2, shooter.shotsFired || 0)];
@@ -648,13 +827,18 @@ function startTurn(side) {
   }
   if (side === PLAYER) {
     game.phase = 'aim';
+    // Every turn is aimed from scratch: the barrel goes back to rest and nothing fires until you aim.
+    const me = tanks[PLAYER];
+    me.aim = Math.PI / 4;
+    me.power = 0.5;
+    aim.shown = false;
     if (game.weapon === 'auger' && tanks[PLAYER].augers === 0) game.weapon = 'shell';
   } else {
     game.phase = 'cpu';
     game.timer = 0;
-    const me = tanks[CPU];
-    game.cpuPlan = plan(me, tanks[PLAYER]);
-    me.swing = { from: me.aim, to: game.cpuPlan.angle };
+    game.cpuPlan = null;
+    game.cpuThinking = planSteps(tanks[CPU], tanks[PLAYER]);
+    tanks[CPU].swing = null;
   }
   updateHud();
 }
@@ -663,6 +847,7 @@ function afterShot() {
   // Anyone out?
   const out = tanks.filter((t) => t.armour <= 0 && !t.out);
   if (out.length) return beginSinking(out);
+  if (game.mode === 'battle' && !game.crate && game.shots % TUNING.crateEvery === 0) dropCrate();
   // The tide?
   if (game.mode === 'battle' && game.shots % TUNING.tideEvery === 0 && game.waterY > game.waterMin + 0.5) {
     game.waterTarget = Math.max(game.waterMin, game.waterY - game.notch);
@@ -757,6 +942,7 @@ function startBattle(index, { newHill = false, seed } = {}) {
 function update(dt) {
   game.time += dt;
   fx.update(dt);
+  updateLife(dt);
   for (const t of game.texts) t.age += dt;
   game.texts = game.texts.filter((t) => t.age < 1.4);
   for (const t of tanks) t.hitFlash = Math.max(0, t.hitFlash - dt);
@@ -778,11 +964,22 @@ function update(dt) {
     case 'cpu': {
       game.timer += dt;
       const me = tanks[CPU];
+      if (!game.cpuPlan) {
+        // Think a few milliseconds a frame; in step()-driven tests (manual), think it all at once.
+        const until = performance.now() + (manual ? 1e9 : 4);
+        let r = game.cpuThinking.next();
+        while (!r.done && performance.now() < until) r = game.cpuThinking.next();
+        if (r.done) {
+          game.cpuPlan = r.value;
+          me.swing = { from: me.aim, to: game.cpuPlan.angle, at: game.timer };
+        }
+      }
       if (me.swing) {
-        const k = Math.min(1, game.timer / (TUNING.cpuDelay * 0.8));
+        const span = Math.max(0.15, TUNING.cpuDelay * 0.8 - me.swing.at);
+        const k = Math.min(1, (game.timer - me.swing.at) / span);
         me.aim = me.swing.from + (me.swing.to - me.swing.from) * (1 - (1 - k) * (1 - k));
       }
-      if (game.timer >= TUNING.cpuDelay) {
+      if (game.cpuPlan && game.timer >= TUNING.cpuDelay) {
         me.swing = null;
         fire(CPU, game.cpuPlan.weapon, game.cpuPlan.angle, game.cpuPlan.power);
       }
@@ -819,6 +1016,7 @@ function update(dt) {
 const sim = { acc: 0 };
 
 // Behind the start card: the two tanks trade harmless shots, so the shore is alive before a touch.
+const demoAim = [];
 function updateDemo(dt) {
   if (game.phase === 'flight') return;
   if (game.phase === 'settle') {
@@ -829,11 +1027,16 @@ function updateDemo(dt) {
   game.demoTimer -= dt;
   if (game.demoTimer > 0) return;
   game.demoTimer = 2.6;
-  if (terrain.carves > 26) setupBattle(0, { seed: 4, demo: true });
+  if (terrain.carves > 26) {
+    setupBattle(0, { seed: 4, demo: true });
+    demoAim.length = 0;
+  }
   const side = game.turn === PLAYER ? CPU : PLAYER;
   game.turn = side;
-  const s = plan(tanks[side], tanks[1 - side], { assist: 1, random: Math.random, weapon: 'shell' });
-  fire(side, 'shell', s.angle, s.power);
+  // Each side plans once (a planning is too long for one phone frame), then wobbles round it.
+  if (!demoAim[side]) demoAim[side] = plan(tanks[side], tanks[1 - side], { random: Math.random, weapon: 'shell', spreadAngle: 0, spreadPower: 0 });
+  const s = demoAim[side];
+  fire(side, 'shell', s.angle + (Math.random() - 0.5) * 0.12, Math.min(1, s.power * (0.92 + Math.random() * 0.16)));
   game.shots = 0;
 }
 
@@ -921,7 +1124,7 @@ function drawTank(t) {
   if (t.out && t.sunk >= 1) return;
   const flip = t.side === CPU ? -1 : 1;
   c.save();
-  c.translate(t.x, t.y + t.sunk * 50);
+  c.translate(t.x - Math.cos(t.aim) * 6 * t.recoil, t.y + t.sunk * 50);
   c.rotate(t.tilt);
   // The barrel, under the body, from the turret's pivot.
   c.save();
@@ -1019,20 +1222,6 @@ function drawWater(f) {
   for (let x = left; x <= right; x += 12) c.lineTo(x, y + Math.sin(x * 0.03 + t * 2) * 2.5 + Math.sin(x * 0.011 - t * 1.3) * 2);
   c.stroke();
   c.globalAlpha = 1;
-  // Where the next notch will reach.
-  if (game.mode === 'battle' && game.waterY > game.waterMin + 0.5) {
-    const ny = Math.max(game.waterMin, game.waterY - game.notch);
-    c.strokeStyle = f.foam;
-    c.globalAlpha = 0.45;
-    c.lineWidth = 1.5;
-    c.setLineDash([10, 8]);
-    c.beginPath();
-    c.moveTo(left, ny);
-    c.lineTo(right, ny);
-    c.stroke();
-    c.setLineDash([]);
-    c.globalAlpha = 1;
-  }
 }
 
 // A tank that the next notch would cover: a red ripple around its hull, and a bob.
@@ -1070,6 +1259,7 @@ function drawProjectile() {
   const im = p.weapon === 'auger' ? IMG.auger : IMG.shell;
   c.save();
   c.translate(p.x, p.y);
+  if (p.heavy) c.scale(1.7, 1.7);
   c.rotate(p.mode === 'drill' ? Math.PI / 2 : Math.atan2(p.vy, p.vx));
   if (ready(im)) c.drawImage(im, -im.naturalWidth / 4, -im.naturalHeight / 4, im.naturalWidth / 2, im.naturalHeight / 2);
   c.restore();
@@ -1276,6 +1466,7 @@ function drawTexts() {
     c.lineWidth = 5;
     c.strokeStyle = 'rgba(20,24,36,0.7)';
     const y = t.y - 40 * Math.min(1, k * 2);
+    c.font = t.big ? '900 44px system-ui, -apple-system, sans-serif' : '800 30px system-ui, -apple-system, sans-serif';
     c.strokeText(t.text, t.x, y);
     c.fillStyle = t.color;
     c.fillText(t.text, t.x, y);
@@ -1290,8 +1481,12 @@ function draw() {
   const sx = shake ? (Math.random() - 0.5) * 10 * shake : 0;
   const sy = shake ? (Math.random() - 0.5) * 10 * shake : 0;
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * (view.ox + sx), dpr * (view.oy + sy));
+  drawStreaks();
+  drawBirds(f);
   drawDeep(f);
   if (terrain) ctx.drawImage(terrain.canvas, 0, 0, W, H);
+  drawCrate();
+  drawPuffs();
   const ghost = ghostPose();
   if (tanks[PLAYER]) tanks[PLAYER].ghostAim = ghost && ghost.aiming ? ghost.angle : undefined;
   for (const t of tanks) drawTank(t);
@@ -1305,6 +1500,91 @@ function draw() {
   drawAim();
   drawGhost(ghost);
   drawTexts();
+}
+
+// The wind, seen in the sky: streaks that run with it, longer and brighter the stronger it blows.
+function drawStreaks() {
+  const w = game.wind;
+  if (!w) return;
+  const c = ctx;
+  const k = Math.min(1, Math.abs(w) / 150);
+  c.strokeStyle = '#ffffff';
+  c.lineWidth = 2;
+  c.lineCap = 'round';
+  for (const s of streaks) {
+    c.globalAlpha = (0.12 + 0.3 * k) * (0.5 + 0.5 * Math.sin(game.time * 2 + s.y));
+    c.beginPath();
+    c.moveTo(s.x, s.y);
+    c.lineTo(s.x - Math.sign(w) * (14 + 60 * k) * s.l, s.y);
+    c.stroke();
+  }
+  c.globalAlpha = 1;
+}
+
+function drawBirds(f) {
+  const c = ctx;
+  c.strokeStyle = f.look === 'night' || f.look === 'slate' ? 'rgba(220,225,240,0.7)' : 'rgba(40,40,50,0.75)';
+  c.lineWidth = 2.2;
+  c.lineCap = 'round';
+  for (const b of birds) {
+    const wing = Math.sin(b.flap) * 5;
+    c.beginPath();
+    c.moveTo(b.x - 11, b.y - wing);
+    c.quadraticCurveTo(b.x - 5, b.y - 5 - wing * 0.4, b.x, b.y);
+    c.quadraticCurveTo(b.x + 5, b.y - 5 - wing * 0.4, b.x + 11, b.y - wing);
+    c.stroke();
+  }
+}
+
+function drawCrate() {
+  const cr = game.crate;
+  if (!cr) return;
+  const c = ctx;
+  if (!cr.landed) {
+    // The parachute: a striped canopy with its lines.
+    const sway = Math.sin(game.time * 2.5) * 0.12;
+    c.save();
+    c.translate(cr.x, cr.y - 42);
+    c.rotate(sway);
+    c.strokeStyle = 'rgba(255,255,255,0.8)';
+    c.lineWidth = 1.2;
+    c.beginPath();
+    c.moveTo(-14, 0);
+    c.lineTo(-26, -34);
+    c.moveTo(14, 0);
+    c.lineTo(26, -34);
+    c.stroke();
+    for (let i = 0; i < 4; i++) {
+      c.fillStyle = i % 2 ? '#ffffff' : '#e5533d';
+      c.beginPath();
+      c.moveTo(0, -36);
+      c.arc(0, -36, 30, Math.PI + (i * Math.PI) / 4, Math.PI + ((i + 1) * Math.PI) / 4);
+      c.closePath();
+      c.fill();
+    }
+    c.restore();
+  }
+  const im = IMG.crate[cr.kind];
+  if (ready(im)) c.drawImage(im, cr.x - 22, cr.y - 44, 44, 44);
+  // A slow glow, so it reads as a prize.
+  c.globalAlpha = 0.25 + 0.2 * Math.sin(game.time * 4);
+  c.strokeStyle = cr.kind === 'repair' ? '#7dffa8' : '#ffd23f';
+  c.lineWidth = 3;
+  c.strokeRect(cr.x - 24, cr.y - 46, 48, 48);
+  c.globalAlpha = 1;
+}
+
+function drawPuffs() {
+  const c = ctx;
+  c.fillStyle = '#ffffff';
+  for (const p of game.puffs) {
+    const k = p.age / 0.9;
+    c.globalAlpha = 0.35 * (1 - k);
+    c.beginPath();
+    c.arc(p.x, p.y, 3 + 9 * k, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
 }
 
 // --- HUD and cards --------------------------------------------------------------------------------
@@ -1338,6 +1618,8 @@ function updateHud() {
   ui.shellBtn.disabled = !myTurn;
   ui.augerBtn.disabled = !myTurn;
   ui.shellBtn.setAttribute('aria-pressed', String(game.weapon === 'shell'));
+  ui.shellLabel.textContent = tanks[PLAYER].heavy ? 'Heavy' : 'Shell';
+  ui.shellBtn.classList.toggle('heavy', !!tanks[PLAYER].heavy);
   ui.augerBtn.setAttribute('aria-pressed', String(game.weapon === 'auger'));
 }
 
@@ -1347,6 +1629,7 @@ function setStars(list, n) {
 
 let pick = 0;
 function showStart() {
+  demoAim.length = 0;
   game.mode = 'demo';
   game.phase = 'idle';
   setupBattle(0, { seed: 4, demo: true });
@@ -1518,6 +1801,7 @@ window.addEventListener('keydown', (e) => {
       return;
     case ' ':
       e.preventDefault();
+      if (!aim.shown) return; // aim first: every turn starts from scratch
       if (!store.taught) {
         store.taught = true;
         saveStore();
@@ -1585,6 +1869,11 @@ function frame(now) {
   const t0 = performance.now();
   let dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
   last = now;
+  // A direct hit plays in slow motion for a moment.
+  if (game.slow > 0) {
+    game.slow = Math.max(0, game.slow - dt);
+    dt *= 0.3;
+  }
   // Portrait pauses a battle like a hidden page (the shore behind the start card keeps moving).
   const held = paused || (isPortrait() && game.mode === 'battle');
   if (!manual && !held) {
@@ -1657,6 +1946,8 @@ imagesLoaded.then(() => {
     showStart,
     isPortrait,
     aim,
+    dropCrate,
+    birds,
     // Start an Auger's drilling straight down at column x, as if it had just landed there.
     drillAt(x, owner = PLAYER) {
       const y = terrain.top(x);

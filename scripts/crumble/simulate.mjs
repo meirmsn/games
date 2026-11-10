@@ -7,9 +7,9 @@
 // that on its first two shots, and drills with the Auger when the enemy is within 2.5 notches of the
 // water. It prints each level's wins and average battle length (counting 4 s to aim each shot).
 //
-// Recorded on 2026-11-10, 5 runs per level:
-//   assist 0.25: L1 5/5 · L2 5/5 · L3 5/5 · L4 5/5 · L5 3/5 · L6 5/5 · L7 4/5 · L8 1/5 · L9 1/5 · L10 1/5
-//   assist 1:    L1 5/5 · L2 5/5 · L3 5/5 · L4 5/5 · L5 4/5 · L6 5/5 · L7 5/5 · L8 4/5 · L9 4/5 · L10 2/5
+// Recorded on 2026-11-10 (supply crates, the CPU aiming with margin), 10 runs per level:
+//   assist 0.25: L1 10 · L2 10 · L3 9 · L4 6 · L5 6 · L6 6 · L7 8 · L8 7 · L9 2 · L10 1 (of 10 won)
+//   assist 1:    L1 10 · L2 10 · L3 10 · L4 7 · L5 9 · L6 10 · L7 7 · L8 8 · L9 5 · L10 7
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 

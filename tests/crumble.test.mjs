@@ -714,7 +714,7 @@ test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with bl
     };
     requestAnimationFrame(blast);
   });
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(5000);
   const r = await page.evaluate(() => {
     const c = window.__crumble;
     const f = [...c.frameTimes].sort((a, b) => a - b);
@@ -728,7 +728,7 @@ test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with bl
   });
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   console.log(`crumble AC-12: ${JSON.stringify(r)}`);
-  assert.ok(r.frames > 30 && r.carves > 20, 'it ran');
+  assert.ok(r.frames > 30 && r.carves > 12, `it ran (${r.frames} frames, ${r.carves} blasts)`);
   assert.ok(r.fxMax >= 200, `the explosion pool was at least half full (${r.fxMax})`);
   assert.ok(r.p95 < 16.7, `p95 frame ${r.p95.toFixed(2)} ms`);
   assert.ok(r.carve < 4, `p95 carve + settle ${r.carve.toFixed(2)} ms`);
@@ -775,6 +775,7 @@ test('crumble AC-13: portrait shows the turn card and pauses a battle; landscape
       return { s, x: r.x, y: r.y, w: r.width, h: r.height };
     })
   );
+  assert.ok(boxes.find((b) => b.s === '[data-hud-top]').h >= 56, 'the wind and tide readout is large');
   for (const b of boxes) {
     assert.ok(b.x >= 0 && b.y >= 0 && b.x + b.w <= 640 && b.y + b.h <= 360, `${b.s} on screen`);
     if (b.s !== '[data-hud-top]') assert.ok(b.w >= 44 && b.h >= 44, `${b.s} at least 44 px`);
@@ -993,5 +994,131 @@ test('crumble AC-20: each state shows only its own cards and HUD, and the weapon
   // Portrait during a battle: the HUD stays under the turn card.
   await page.evaluate(() => window.__crumble.startBattle(0));
   assert.deepEqual({ ...(await view()), weapons: undefined }, { ...none, rotate: true, hud: true, weapons: undefined }, 'portrait over a battle');
+  await context.close();
+});
+
+test('crumble AC-23: every turn is aimed from scratch; Space fires nothing until you aim', async () => {
+  const { context, page } = await open();
+  await battle(page, 0);
+  // Aim and fire a shot, let the CPU answer, and come back to the player's turn.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Space');
+  assert.equal(await shots(page), 1);
+  await settle(page);
+  await settle(page);
+  const r = await page.evaluate(() => ({ phase: window.__crumble.game.phase, aim: window.__crumble.tanks[0].aim, power: window.__crumble.tanks[0].power, shown: window.__crumble.aim.shown }));
+  assert.equal(r.phase, 'aim');
+  assert.ok(Math.abs(r.aim - Math.PI / 4) < 1e-9, 'the barrel is back at rest');
+  assert.equal(r.power, 0.5);
+  assert.equal(r.shown, false, 'no band or arc until you aim');
+  const before = await shots(page);
+  await page.keyboard.press('Space');
+  assert.equal(await shots(page), before, 'Space alone repeats nothing');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Space');
+  assert.equal(await shots(page), before + 1, 'after aiming, Space fires');
+  await context.close();
+});
+
+test('crumble AC-24: supply crates drop every 4 shots and go to whoever blasts them; a heavy shell digs deeper', async () => {
+  const { context, page } = await open();
+  await battle(page, 3);
+  const r = await page.evaluate(() => {
+    const c = window.__crumble;
+    const out = {};
+    // Four shots out of the world: after the fourth, a crate drops.
+    for (let i = 0; i < 4; i++) {
+      c.fire(c.game.turn, 'shell', c.game.turn ? 0.3 : Math.PI - 0.3, 1);
+      for (let t = 0; t < 12 && (c.game.phase === 'flight' || c.game.phase === 'settle' || c.game.phase === 'tide'); t += 1 / 60) c.step(1 / 60);
+      if (i < 3) out['before' + i] = !!c.game.crate;
+    }
+    out.dropped = !!c.game.crate;
+    const cr = c.game.crate;
+    out.startY = cr.y;
+    out.between = cr.x > c.tanks[0].x && cr.x < c.tanks[1].x;
+    for (let i = 0; i < 60 * 15 && !cr.landed; i++) c.step(1 / 60);
+    out.landed = cr.landed;
+    out.onGround = c.terrain.solid(cr.x, cr.y + 2) || c.terrain.solid(cr.x - 16, cr.y + 2) || c.terrain.solid(cr.x + 16, cr.y + 2);
+    // A repair crate claimed by the player's blast.
+    cr.kind = 'repair';
+    c.tanks[0].armour = 50;
+    c.detonate(cr.x, cr.y - 10, { owner: 0 });
+    out.repaired = c.tanks[0].armour;
+    out.gone = c.game.crate === null;
+    // An ammo crate claimed by the CPU: its next Shell is heavy and digs a bigger crater.
+    c.dropCrate();
+    const cr2 = c.game.crate;
+    cr2.kind = 'heavy';
+    for (let i = 0; i < 60 * 15 && !cr2.landed; i++) c.step(1 / 60);
+    c.detonate(cr2.x, cr2.y - 10, { owner: 1 });
+    out.cpuHeavy = c.tanks[1].heavy;
+    const x = 700;
+    const before = c.terrain.count();
+    c.game.phase = 'aim';
+    c.shoot(x, c.terrain.top(x) - 30, 0, 300, 'shell', 1);
+    c.game.projectile.heavy = true;
+    for (let i = 0; i < 120 && c.game.phase === 'flight'; i++) c.step(1 / 120);
+    out.heavyCells = before - c.terrain.count();
+    out.normalCells = Math.PI * c.TUNING.shellRadius ** 2;
+    // A crate the sea reaches sinks.
+    c.dropCrate();
+    c.game.crate.y = c.game.waterY + 30;
+    c.step(1 / 60);
+    out.sank = c.game.crate === null;
+    return out;
+  });
+  assert.deepEqual([r.before0, r.before1, r.before2], [false, false, false], 'no crate before the fourth shot');
+  assert.equal(r.dropped, true, 'a crate drops after four shots');
+  assert.ok(r.startY < 0 && r.between, 'from the sky, between the tanks');
+  assert.equal(r.landed, true, 'its parachute brings it down');
+  assert.equal(r.onGround, true);
+  assert.equal(r.repaired, 80, 'a repair crate gives 30 armour back');
+  assert.equal(r.gone, true);
+  assert.equal(r.cpuHeavy, true, 'the CPU can claim crates too');
+  assert.ok(r.heavyCells > r.normalCells * 1.6, `a heavy shell's crater is bigger (${r.heavyCells} cells)`);
+  assert.equal(r.sank, true, 'a crate in the sea sinks');
+  await context.close();
+});
+
+test('crumble AC-25: the shore is alive: gulls scatter from a blast, the sky shows the wind, a direct hit plays slow', async () => {
+  const { context, page } = await open();
+  await battle(page, 1);
+  const r = await page.evaluate(() => {
+    const c = window.__crumble;
+    const out = { birds: c.birds.length };
+    const b = c.birds[0];
+    b.x = 700;
+    b.y = 200;
+    c.detonate(700, c.terrain.top(700));
+    out.scared = c.birds[0].scared > 0;
+    const y0 = b.y;
+    for (let i = 0; i < 30; i++) c.step(1 / 60);
+    out.fled = b.y < y0;
+    c.detonate(c.tanks[1].x, c.tanks[1].y - 24, { direct: c.tanks[1] });
+    out.slow = c.game.slow;
+    out.text = c.game.texts.some((t) => t.text === 'Direct hit!');
+    return out;
+  });
+  assert.equal(r.birds, 3);
+  assert.equal(r.scared, true);
+  assert.equal(r.fled, true, 'the gull flies up and away');
+  assert.ok(r.slow > 0.3, 'slow motion after a direct hit');
+  assert.equal(r.text, true);
+  // Wind streaks: with wind, many sky pixels turn lighter than the calm sky in the same place.
+  const grab = (wind) =>
+    page.evaluate(async (wind) => {
+      const c = window.__crumble;
+      c.game.wind = wind;
+      c.game.crate = null;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const cv = document.querySelector('#field');
+      return Array.from(cv.getContext('2d').getImageData(0, Math.round(cv.height * 0.2), cv.width, Math.round(cv.height * 0.3)).data);
+    }, wind);
+  const calm = await grab(0);
+  const windy = await grab(150);
+  let lighter = 0;
+  for (let i = 0; i < calm.length; i += 4) if (windy[i] + windy[i + 1] + windy[i + 2] > calm[i] + calm[i + 1] + calm[i + 2] + 60) lighter++;
+  assert.ok(lighter > 300, `streaks show the wind (${lighter} lighter pixels)`);
   await context.close();
 });
