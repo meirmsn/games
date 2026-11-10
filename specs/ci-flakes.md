@@ -53,9 +53,14 @@ that the owner said "yes to both" in chat on 2026-11-10.
   way, in this session's "yes to both" (2026-11-10, see above). Splitting it into its own PR was
   Claude's decision, not the owner's: the reviewer takes one spec per change, and that change edits
   `specs/crumble.md`. Here the test stays as it is on `main`.
-- Reef's darkness test (F-8) failed in this change's one local full run, from a cause not yet found. Finding
-  it is a separate change, which the owner asked for in this session (2026-11-10: "do one and start a
-  new session ... so that two starts happening in parallel"). It isn't retried here.
+- Reef's darkness test (item 12 of `specs/reef.md`, F-8) failed in this change's one local full run.
+  The owner asked for its cause to be found in a parallel session (2026-11-10: "do one and start a
+  new session ... so that two starts happening in parallel"). That session found it: the test read
+  one pixel, which the dive's still-rising bubbles (and, rarely, glowing snow or a fish's bubble)
+  could light. It now reads the median brightness of a 40 × 40 patch, waits on two frames instead of
+  300 ms, and clears eels too. In 3,000 seeded runs it failed 0 times. The owner merged that fix,
+  meirmsn/games#33, into this branch (2026-11-10), so it reaches `main` with this PR. It is
+  test-only; `reef/game.js` is untouched.
 - The PR's own `slow` run is checked once the PR is open. The PR is sent as ready to the merge queue
   only when it is green.
 
@@ -87,9 +92,12 @@ that the owner said "yes to both" in chat on 2026-11-10.
     hold removed from the game, it fails.
 - **AC-6** Outside `tests/`, the only files that change are `specs/ci-flakes.md`, `FINDINGS.md` and
   one line of `orbit/game.js` (it reads `window.__orbitManual`). — verified by review: the PR's diff.
+- **AC-7** Reef's darkness test compares the median brightness of 40 × 40 patches near the player and
+  far away, after two drawn frames, with eels cleared, so no single bubble or flake decides it.
+  — verified by review: meirmsn/games#33 and its 3,000 seeded runs.
 
 ## Out of scope
 
-- Crumble's frame-timing test, and the Reef darkness test (F-8): each is its own change (see
-  Decisions). So the slow tier can still fail from those two until they land.
+- Crumble's frame-timing test: its own change (see Decisions), so the slow tier can still fail from
+  it until that lands.
 - Other tests that wait on real time and haven't failed: logged in `FINDINGS.md`.
