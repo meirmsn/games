@@ -553,8 +553,9 @@ item.
 - **The map holds twelve cells and the summit.** Portrait keeps three across, now in four rows;
   landscape goes to six across in two rows (five across would need a third row, the reason it went
   to five for ten). A cell keeps at least 1.6 tiles across. The summit is a small pad past the
-  last cell, as the start is before the first: in portrait above Sky's cell at the top row's end,
-  in landscape past it at the right of the top row, below the HUD.
+  last cell, as the start is before the first: above Sky's cell, below the HUD (changed after the
+  go, by the owner, 2026-11-10: "Above Sky's cell", in both orientations: the path snakes, so in
+  landscape Sky's cell is at the top row's left end, not its right).
 - **Sound and music for batch 4:** Scribble and Sky use Candy's soft sound set; their music is the
   owner's (owner, 2026-11-10, sending Scribble's and Sky's beds and accents before the go), levelled
   and cut as batch 2's; the owner's beds and accents for Industrial, Mushroom, Pico, Sea, Ink and Castle
