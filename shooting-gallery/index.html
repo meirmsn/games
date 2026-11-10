@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Shooting Gallery</title>
+    <meta name="description" content="Shooting Gallery: a fairground paintball booth. Pull the slingshot, lead the shot, and paint the booth." />
+    <meta name="theme-color" content="#e86a17" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="booth" aria-label="A fairground paintball booth with ducks and targets moving in lanes"></canvas>
+
+    <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <section class="card" data-screen="start" hidden>
+      <button class="play" type="button" data-play>Start</button>
+      <p class="best" data-best hidden></p>
+    </section>
+
+    <section class="card" data-screen="over" hidden>
+      <h2 data-over-title>Out of time</h2>
+      <p class="score-line"><span data-final-score>0</span> points</p>
+      <p class="detail" data-final-detail></p>
+      <p class="best" data-final-best></p>
+      <button class="play" type="button" data-again>Play again</button>
+    </section>
+
+    <button class="pause" type="button" data-screen="pause" hidden>
+      <span class="card-like">Tap to go on</span>
+    </button>
+
+    <div class="veil" data-screen="turned" hidden>
+      <div class="card-like turned">
+        <p data-turned-text>Restart in landscape?</p>
+        <button class="play" type="button" data-restart>Restart</button>
+        <p class="hint">or turn back to keep playing</p>
+      </div>
+    </div>
+  </body>
+</html>
