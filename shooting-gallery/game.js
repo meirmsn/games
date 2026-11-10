@@ -1726,8 +1726,7 @@ function drawHud() {
 }
 
 // The slingshot: a carved wooden fork with a shadow on the counter, both bands in front of the wood,
-// and a leather pouch holding the next paintball. The pouch follows the pull. Beside it, a wooden
-// ruler with a notch for each lane shows how far the pull will send the ball, and a short dotted
+// and a leather pouch holding the next paintball. The pouch follows the pull, and a short dotted
 // arc from the pouch shows which way: enough to aim by, never the landing spot itself.
 function slingGeometry() {
   const land = orient === 'landscape';
@@ -1832,7 +1831,6 @@ function drawSlingshot() {
   ctx.beginPath();
   ctx.ellipse(x + 8, L.slingFoot - 2, g.spread * 0.9, 7, 0, 0, Math.PI * 2);
   ctx.fill();
-  if (inPlay) drawRuler();
   // The fork: a handle and two prongs curving out from the crotch, carved from one piece; the band's
   // dark wrapping at the prongs' tips.
   const rise = g.crotchY - g.forkY;
@@ -1884,56 +1882,6 @@ function drawSlingshot() {
     ctx.fill();
     ctx.restore();
   }
-}
-// The ruler's place on the counter, right of the slingshot.
-function rulerBox() {
-  const land = orient === 'landscape';
-  const top = L.C + (land ? 14 : 18);
-  const bottom = L.SHbottom - (land ? 10 : 20);
-  return { x: L.slingX + (land ? 58 : 70), top, bottom, w: land ? 10 : 12 };
-}
-// How far the current pull reaches, 0 (just above the counter) to 1 (the top of the booth).
-const reach = () => clamp(aim.py / pullY(), 0, 1);
-// Where the ruler's slider is drawn: at the pull's reach while pulled, at the bottom otherwise.
-function sliderY() {
-  const r = rulerBox();
-  return r.bottom - (aim.active || aim.kb ? reach() : 0) * (r.bottom - r.top);
-}
-// The notches' heights on the ruler, one for each lane.
-function notchYs() {
-  const r = rulerBox();
-  return L.lanes.map((lane) => r.bottom - ((L.C - lane.line) / (L.C - L.T)) * (r.bottom - r.top));
-}
-function drawRuler() {
-  const r = rulerBox();
-  drawWoodLimbs([{ x1: r.x, y1: r.bottom, cx: r.x, cy: (r.top + r.bottom) / 2, x2: r.x, y2: r.top, w1: r.w, w2: r.w }]);
-  // A notch at each lane's height.
-  ctx.strokeStyle = '#3b2412';
-  ctx.lineWidth = 2;
-  for (const y of notchYs()) {
-    ctx.beginPath();
-    ctx.moveTo(r.x - r.w / 2, y);
-    ctx.lineTo(r.x + r.w / 2 + 3, y);
-    ctx.stroke();
-  }
-  // The brass slider: where the pull will send the ball.
-  const live = aim.active || aim.kb;
-  const y = sliderY();
-  ctx.globalAlpha = live ? 1 : 0.45;
-  ctx.fillStyle = '#e6be5a';
-  ctx.strokeStyle = '#6b4a12';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(r.x - r.w / 2 - 8, y - 5);
-  ctx.lineTo(r.x - r.w / 2, y);
-  ctx.lineTo(r.x - r.w / 2 - 8, y + 5);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  roundRect(r.x - r.w / 2 - 1, y - 2.5, r.w + 2, 5, 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.globalAlpha = 1;
 }
 // The first fifth of the ball's flight, dotted: the way it will go, not where it will land.
 const ARC_SHARE = 0.2;
@@ -2065,8 +2013,8 @@ function roundRect(x, y, w, h, r) {
 
 // Where a mid-play banner's pill sits, in units: on the counter, right of the slingshot.
 function pillBox() {
-  // Right of the ruler, so it covers nothing.
-  const left = rulerBox().x + 22;
+  // Clear of the slingshot and its pull, so it covers nothing.
+  const left = L.slingX + (orient === 'landscape' ? 80 : 92);
   const w = Math.min(200, SW - left - 10);
   const cy = L.C + (orient === 'landscape' ? 44 : 50);
   return { x: left, y: cy - 18, w, h: 36 };
@@ -2494,7 +2442,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, rulerBox, reach, sliderY, notchYs, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,

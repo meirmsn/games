@@ -19,6 +19,15 @@ keeps the site's tokens.
 
 ## Decisions
 
+### The owner's thirteenth playtest (owner, 2026-11-10)
+
+Where they differ from the playtests below, these win.
+
+- **No ruler.** "I'm not sure the meter next to the slingshot is needed at all. It doesn't bring
+  anything, and plus it's fake. So just remove it." The wooden ruler and its brass slider beside the
+  slingshot are gone; the short dotted arc from the pouch stays. The banner pill keeps its place on
+  the counter.
+
 ### The owner's twelfth playtest (owner, 2026-11-09)
 
 Where they differ from the playtests below, these win.
@@ -228,7 +237,7 @@ chat on 2026-11-09, for these details. Where they differ from the decisions furt
 - **Easier to control, still no crosshair.** "it definitely feels it's really hard to use … there's
   no visual feedback of how much … it just feels really hard to control." Claude's answer:
   - a wooden ruler beside the slingshot with a notch at each lane's height and a brass slider
-    showing how far the pull will send the ball;
+    showing how far the pull will send the ball (removed by the thirteenth playtest);
   - a short dotted arc from the pouch along the first fifth of the flight, showing which way it
     will go but never where it lands;
   - a longer pull for the full reach (140 units down instead of 110; 80 in landscape instead of 64),
@@ -513,9 +522,9 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-25** Every target stands on a stick down behind its strip (a drop-down hangs on its rope)
   and rocks a few degrees about the stick's foot, each at its own pace; a shot is judged in the
   rocked frame, so it hits where the target is drawn — `tests/shooting-gallery.test.mjs`.
-- **AC-26** While the slingshot is pulled, the ruler's slider shows how far the ball will go (0 at
-  the counter, 1 at the top of the booth, the lanes' notches between) and a dotted arc covers the
-  first fifth of its flight, never reaching where it lands — `tests/shooting-gallery.test.mjs`.
+- **AC-26** There is no ruler beside the slingshot: nothing on the counter beside it changes as it
+  is pulled. While it is pulled a dotted arc covers the first fifth of the ball's flight, never
+  reaching where it lands — `tests/shooting-gallery.test.mjs`.
 - **AC-27** In every lane a length of stick, at least a fifth of the target's size, shows between
   a target's bottom and its strip's crest — `tests/shooting-gallery.test.mjs`.
 - **AC-28** During a frenzy big bulbs, at least three times the timer's, line the top and both

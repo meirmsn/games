@@ -1028,24 +1028,15 @@ test('shooting-gallery AC-25: every target stands on a stick and rocks about its
   await context.close();
 });
 
-test('shooting-gallery AC-26: the ruler shows how far a pull reaches and a dotted arc covers only the first fifth of the flight', async () => {
+test('shooting-gallery AC-26: there is no ruler beside the slingshot; a dotted arc covers only the first fifth of the flight', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
     const g = window.__gallery;
     const P = g.pullRange();
-    const box = g.rulerBox();
-    const out = { box, notches: g.notchYs(), onCounter: box.top > g.L.C };
-    out.idle = g.sliderY();
-    g.aim.active = true;
-    out.slider = [0, 0.5, 1].map((f) => {
-      g.setPull(0, P.y * f);
-      return g.sliderY();
-    });
-    // The slider sits on a lane's notch when the pull lands on that lane's line.
-    g.aimAt(200, g.L.lanes[1].line);
-    out.onNotch = Math.abs(g.sliderY() - g.notchYs()[1]);
+    const out = { ruler: ['rulerBox', 'sliderY', 'notchYs', 'reach'].filter((k) => k in g) };
     // The arc, as drawn, from the pouch toward the landing point.
+    g.aim.active = true;
     g.setPull(30, P.y * 0.8);
     const p = g.pouch();
     const a = g.aimPoint();
@@ -1054,11 +1045,29 @@ test('shooting-gallery AC-26: the ruler shows how far a pull reaches and a dotte
     out.arc = { n: pts.length, share: Math.abs(last.x - p.x) / Math.abs(a.x - p.x), shareY: (p.y - last.y) / (p.y - a.y), gap: Math.hypot(a.x - last.x, a.y - last.y), full: Math.hypot(a.x - p.x, a.y - p.y) };
     return out;
   });
-  assert.ok(r.onCounter, 'the ruler is on the counter');
-  assert.equal(r.idle, r.box.bottom, 'at rest the slider is at the bottom');
-  assert.deepEqual(r.slider.map((y) => Math.round(y * 100) / 100), [r.box.bottom, (r.box.bottom + r.box.top) / 2, r.box.top].map((y) => Math.round(y * 100) / 100));
-  assert.equal(r.notches.length, 5);
-  assert.ok(r.onNotch < 1e-6, 'a pull onto a lane puts the slider on its notch');
+  assert.deepEqual(r.ruler, [], 'no ruler, slider or notches');
+  // Nothing is drawn on the counter right of the slingshot, where the ruler stood: that strip of the
+  // counter looks the same pulled or at rest.
+  const strip = async () =>
+    page.evaluate(async () => {
+      const g = window.__gallery;
+      await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      const cv = document.querySelector('#booth');
+      const { k, ox, oy } = g.stage();
+      const dpr = cv.width / innerWidth;
+      const x = g.L.slingX + 70;
+      const top = Math.round(((g.L.C + 4) * k + oy) * dpr);
+      const h = Math.round((g.stage().SH - g.L.C - 8) * k * dpr);
+      const d = cv.getContext('2d').getImageData(Math.round((x * k + ox) * dpr) - 12, top, 24, h).data;
+      return Array.from(d).join(',');
+    });
+  const rest = await strip();
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.aim.active = true;
+    g.setPull(0, g.pullRange().y);
+  });
+  assert.equal(await strip(), rest, 'no slider moves there when pulled');
   assert.equal(r.arc.n, 6);
   assert.ok(near(r.arc.share, 0.2, 1e-6), `the arc ends a fifth of the way across: ${r.arc.share}`);
   assert.ok(r.arc.shareY > 0.15 && r.arc.shareY < 0.45, `and a little over a fifth of the way up, the ball's arc: ${r.arc.shareY}`);
