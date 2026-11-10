@@ -356,6 +356,22 @@ test('crumble AC-6: the tide rises every 3 shots, hurts hulls under water, warns
   assert.ok(stops[0].min >= stops[0].low + 2 * stops[0].notch - 0.5, 'Battlefield 1 stops 2 notches below');
   assert.ok(Math.abs(stops[1].min - (stops[1].high - stops[1].notch)) < 0.5, 'Breakwater stops 1 notch above the higher hull');
 
+  // At its top the tide rises no more, but a hull under water still loses 30 every 3 shots.
+  const pound = await page.evaluate(() => {
+    const c = window.__crumble;
+    c.game.attempt[2] = 0;
+    c.startBattle(2);
+    c.game.waterY = c.game.waterMin = c.hullY(c.tanks[0]) - 5;
+    c.tanks[1].armour = 100;
+    c.game.shots = 2;
+    const w = c.game.waterY;
+    c.fire(c.game.turn, 'shell', c.game.turn ? 0.3 : Math.PI - 0.3, 1);
+    for (let t = 0; t < 10 && !(c.game.phase === 'aim' || c.game.phase === 'cpu'); t += 1 / 60) c.step(1 / 60);
+    return { armour: c.tanks[0].armour, rose: c.game.waterY !== w };
+  });
+  assert.equal(pound.rose, false, 'no rise at the top');
+  assert.ok(pound.armour <= 70, `the hull under water lost 30 (${pound.armour})`);
+
   // Both out at the same rise: a draw, replayed on the same hill with the other side starting.
   const draw = await page.evaluate(() => {
     const c = window.__crumble;
@@ -600,32 +616,78 @@ test('crumble AC-10: wind is calm on Battlefield 1, changes between rounds elsew
   await context.close();
 });
 
-test('crumble AC-11: each battlefield looks its own; girders only on Breakwater; mirrored hills; a low CPU on Battlefield 2', async () => {
+test('crumble AC-11: each level looks its own; girders where designed; mirrored hills; Level 2 changes the terrain', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const c = window.__crumble;
     const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-    const skies = c.FIELDS.map((f) => rgb(f.sky[0]));
-    let minDist = Infinity;
-    for (let i = 0; i < skies.length; i++)
-      for (let j = i + 1; j < skies.length; j++) minDist = Math.min(minDist, Math.hypot(...skies[i].map((v, k) => v - skies[j][k])));
+    const steps = [];
+    for (let i = 1; i < c.FIELDS.length; i++) {
+      const [a, b] = [rgb(c.FIELDS[i - 1].sky[0]), rgb(c.FIELDS[i].sky[0])];
+      steps.push(Math.hypot(...a.map((v, k) => v - b[k])));
+    }
     const fields = [];
-    for (let f = 0; f < 3; f++) {
+    for (let f = 0; f < c.FIELDS.length; f++) {
       for (const seed of [11, 12, 13]) {
         c.setupBattle(f, { seed });
         let mirror = 0;
         for (let x = 0; x < c.W / 2; x++) mirror = Math.max(mirror, Math.abs(c.heights[x] - c.heights[c.W - 1 - x]));
-        fields.push({ f, steel: c.terrain.steel.length, mirror, low: c.hullY(c.tanks[1]) - c.hullY(c.tanks[0]) });
+        const [p, e] = c.tanks;
+        let peak = Infinity; // the highest ground between the tanks (smallest y)
+        for (let x = p.x + 60; x < e.x - 60; x++) peak = Math.min(peak, c.heights[x]);
+        fields.push({ f, name: c.FIELDS[f].name, designedMirror: c.FIELDS[f].mirror, steel: c.terrain.steel.length, mirror, low: c.hullY(e) - c.hullY(p), ridgeAbove: Math.min(p.y, e.y) - peak });
       }
     }
-    return { minDist, fields };
+    return { steps, fields };
   });
-  assert.ok(r.minDist >= 60, `skies differ by ${r.minDist}`);
+  for (const [i, d] of r.steps.entries()) assert.ok(d >= 60, `level ${i + 2}'s sky differs from level ${i + 1}'s by ${d.toFixed(0)}`);
+  const girders = ['Breakwater', 'Fog Harbour', 'Black Sands', 'Night Siege'];
   for (const f of r.fields) {
-    assert.equal(f.steel > 0, f.f === 2, `girders on ${f.f}`);
-    if (f.f !== 1) assert.ok(f.mirror <= 10, `mirrored within ${f.mirror}`);
-    else assert.ok(f.low > 30, `the CPU starts lower on Battlefield 2 (${f.low})`);
+    assert.equal(f.steel > 0, girders.includes(f.name), `girders on ${f.name}`);
+    if (f.designedMirror) assert.ok(f.mirror <= 10, `${f.name} mirrored within ${f.mirror}`);
+    if (f.f === 1) {
+      assert.ok(f.ridgeAbove > 40, `Level 2's ridge rises ${f.ridgeAbove.toFixed(0)} above both tanks`);
+      assert.ok(f.low > 30, `the CPU starts lower on Level 2 (${f.low})`);
+    }
   }
+  const mean = (f) => r.fields.filter((x) => x.f === f).reduce((a, x) => a + x.ridgeAbove, 0) / 3;
+  assert.ok(mean(1) > mean(0) + 50, `Level 2's ground between the tanks stands well above Level 1's (${mean(1).toFixed(0)} vs ${mean(0).toFixed(0)})`);
+  await context.close();
+});
+
+test('crumble AC-21: ten levels, each harder than the one before, each a new terrain; winning the last clears the shore', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const c = window.__crumble;
+    const F = c.FIELDS;
+    const terrain = (f) => JSON.stringify([f.bumps, f.slope, f.girders, f.mirror, f.base]);
+    return {
+      n: F.length,
+      rows: F.map((f, i) => ({ name: f.name, spread: c.TUNING.cpuSpreadAngle[i], power: c.TUNING.cpuSpreadPower[i], wind: f.wind, armour: f.cpuArmour, tide: f.tideRises, terrain: terrain(f) })),
+    };
+  });
+  assert.equal(r.n, 10);
+  for (let i = 1; i < r.n; i++) {
+    const [a, b] = [r.rows[i - 1], r.rows[i]];
+    assert.ok(b.spread <= a.spread && b.power <= a.power, `${b.name}: the CPU's aim never loosens`);
+    assert.ok(b.wind >= a.wind, `${b.name}: the wind never weakens`);
+    assert.ok(b.armour >= a.armour, `${b.name}: the CPU's armour never falls`);
+    assert.ok(b.tide <= a.tide, `${b.name}: the tide never slows`);
+    assert.notEqual(b.terrain, a.terrain, `${b.name}: a new terrain`);
+  }
+  assert.ok(r.rows[9].spread < r.rows[1].spread && r.rows[9].wind > r.rows[1].wind && r.rows[9].armour > r.rows[1].armour, 'the last is clearly harder than the second');
+  // Winning Level 10 clears the shore.
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    c.store.reached = 10;
+    c.manual = true;
+    c.startBattle(9);
+    c.tanks[1].armour = 0;
+    c.game.phase = 'settle';
+    c.game.timer = 1;
+    for (let i = 0; i < 180; i++) c.step(1 / 60);
+  });
+  assert.equal(await page.textContent('[data-result-title]'), 'Shore cleared!');
   await context.close();
 });
 

@@ -29,11 +29,11 @@ export const TUNING = {
   augerCharges: 2,
   augerSpeed: 300,
   tideEvery: 3, // shots per rise
-  tideRises: 6, // rises until an undug tank's hull goes under
   tideDamage: 30,
   cpuDelay: 0.7,
-  cpuSpreadAngle: [0.13, 0.08, 0.06], // radians, by battlefield, at assist 0
-  cpuSpreadPower: [0.11, 0.07, 0.05],
+  // By level, at assist 0: the CPU's aim tightens level by level (radians, and a fraction of power).
+  cpuSpreadAngle: [0.13, 0.09, 0.078, 0.07, 0.064, 0.058, 0.054, 0.05, 0.046, 0.042],
+  cpuSpreadPower: [0.11, 0.075, 0.066, 0.06, 0.055, 0.05, 0.047, 0.044, 0.041, 0.038],
   cpuWarmup: [1.6, 1.3, 1.0], // its first three shots of a battle are this much wider: it homes in
   assistSpread: 1.8, // spread × (1 + assist × this)
   assistStart: 0.25,
@@ -47,77 +47,40 @@ export const TUNING = {
 // A tank's size in world units: the art is drawn 1.2× its 64-unit base.
 const TANK = { w: 77, half: 31, hull: 17, center: 24, radius: 28, pivot: 36, barrel: 38, k: 1.2 };
 
-// The battlefields: each its own look and one new thing.
+// The ten levels: each its own look and terrain, and each harder than the one before (owner,
+// 2026-11-10: "the terrain should change on level 2 ... significantly harder. And keep getting harder
+// over ... 10 levels"). Per level: wind (max), the tide's speed (rises until an undug hull is under),
+// the CPU's armour, how much of the arc the preview shows, and the terrain: bumps (ridges h > 0,
+// channels h < 0), slope (> 0: the right side lower), and girders ('walls', 'towers', 'bridge').
+const LOOK = {
+  beach: { ground: ['#f2d9a6', '#dcb67d', '#a97d4b'], top: '#fbecc8', speck: '#b88a55', scorch: 'rgba(110,70,30,0.45)', debris: '#d9b47a' },
+  rock: { ground: ['#d9834c', '#a9532f', '#6a3220'], top: '#a39250', speck: '#55291a', scorch: 'rgba(50,20,10,0.5)', debris: '#b9693c' },
+  stone: { ground: ['#868b98', '#5e6370', '#363a45'], top: '#a9afba', speck: '#24272e', scorch: 'rgba(20,20,26,0.5)', debris: '#7d8290' },
+  dune: { ground: ['#efcf86', '#d3a85a', '#9b733a'], top: '#fae3a8', speck: '#a37a3d', scorch: 'rgba(90,60,20,0.45)', debris: '#e2bd6e' },
+  red: { ground: ['#c9573d', '#93382a', '#55201a'], top: '#d98a5a', speck: '#3d140f', scorch: 'rgba(40,10,6,0.55)', debris: '#b0503a' },
+  moss: { ground: ['#8e9a78', '#66705a', '#3c4436'], top: '#aab890', speck: '#2a3024', scorch: 'rgba(20,24,16,0.5)', debris: '#7c8868' },
+  slate: { ground: ['#6f7884', '#4c535e', '#2b3038'], top: '#8e98a5', speck: '#1b1f25', scorch: 'rgba(10,12,16,0.55)', debris: '#5f6874' },
+  ash: { ground: ['#4a4644', '#302d2c', '#1a1817'], top: '#6b6460', speck: '#ff7a3a', scorch: 'rgba(0,0,0,0.55)', debris: '#3d3937' },
+  ice: { ground: ['#eef5fb', '#c9dceb', '#93aec4'], top: '#ffffff', speck: '#7f9bb3', scorch: 'rgba(40,60,80,0.4)', debris: '#dbe8f2' },
+  night: { ground: ['#4b4f6a', '#33364c', '#1c1e2c'], top: '#6d7294', speck: '#14151f', scorch: 'rgba(0,0,0,0.55)', debris: '#454962' },
+};
+const level = (o) => ({ auger: true, girders: null, mirror: true, slope: 0, bumps: [], base: 0.66, rough: 0.9, ...LOOK[o.look], ...o });
 const FIELDS = [
-  {
-    name: 'Morning Beach',
-    sky: ['#7cc7ee', '#bfe7f7', '#fff1d6'],
-    far: '#b7ddd6',
-    sun: { x: 0.78, y: 0.22, r: 38, color: '#fff6c4' },
-    ground: ['#f2d9a6', '#dcb67d', '#a97d4b'],
-    top: '#fbecc8',
-    speck: '#b88a55',
-    scorch: 'rgba(110,70,30,0.45)',
-    water: 'rgba(52,160,200,0.78)',
-    waterDeep: '#2a7ea8',
-    foam: '#effcff',
-    enemy: 'navy',
-    debris: '#d9b47a',
-    wind: 0,
-    auger: false,
-    girders: false,
-    preview: 0.45,
-    base: 0.66,
-    rough: 1,
-    mirror: true,
-    slope: 0,
-  },
-  {
-    name: 'Windy Point',
-    sky: ['#4a3a78', '#d8705a', '#ffc98a'],
-    far: '#7a4760',
-    sun: { x: 0.2, y: 0.5, r: 46, color: '#ffdd9a' },
-    ground: ['#d9834c', '#a9532f', '#6a3220'],
-    top: '#a39250',
-    speck: '#55291a',
-    scorch: 'rgba(50,20,10,0.5)',
-    water: 'rgba(58,104,146,0.8)',
-    waterDeep: '#294a6c',
-    foam: '#ffdcc0',
-    enemy: 'desert',
-    debris: '#b9693c',
-    wind: 55,
-    auger: true,
-    girders: false,
-    preview: 0.35,
-    base: 0.68,
-    rough: 0.8,
-    mirror: false,
-    slope: 0.36,
-  },
-  {
-    name: 'Breakwater',
-    sky: ['#121c3a', '#3a4a7c', '#d08a72'],
-    far: '#25304f',
-    sun: { x: 0.7, y: 0.18, r: 22, color: '#f3f0dc' },
-    ground: ['#868b98', '#5e6370', '#363a45'],
-    top: '#a9afba',
-    speck: '#24272e',
-    scorch: 'rgba(20,20,26,0.5)',
-    water: 'rgba(28,66,98,0.82)',
-    waterDeep: '#132c45',
-    foam: '#c8dbee',
-    enemy: 'grey',
-    debris: '#7d8290',
-    wind: 85,
-    auger: true,
-    girders: true,
-    preview: 0.3,
-    base: 0.66,
-    rough: 0.9,
-    mirror: true,
-    slope: 0,
-  },
+  level({ name: 'Morning Beach', look: 'beach', sky: ['#7cc7ee', '#bfe7f7', '#fff1d6'], far: '#b7ddd6', sun: { x: 0.78, y: 0.22, r: 38, color: '#fff6c4' }, water: 'rgba(52,160,200,0.78)', waterDeep: '#2a7ea8', foam: '#effcff', enemy: 'navy', wind: 0, auger: false, preview: 0.45, rough: 1, tideRises: 6, cpuArmour: 100 }),
+  // Level 2: the shore changes: a tall ridge stands between the tanks, so every shot is a lob.
+  level({ name: 'Windy Point', look: 'rock', sky: ['#4a3a78', '#d8705a', '#ffc98a'], far: '#7a4760', sun: { x: 0.2, y: 0.5, r: 46, color: '#ffdd9a' }, water: 'rgba(58,104,146,0.8)', waterDeep: '#294a6c', foam: '#ffdcc0', enemy: 'desert', wind: 60, preview: 0.36, base: 0.68, rough: 0.7, mirror: false, slope: 0.36, bumps: [{ x: 0.47, h: 0.3, w: 0.07 }], tideRises: 6, cpuArmour: 100 }),
+  level({ name: 'Breakwater', look: 'stone', sky: ['#121c3a', '#3a4a7c', '#d08a72'], far: '#25304f', sun: { x: 0.7, y: 0.18, r: 22, color: '#f3f0dc' }, water: 'rgba(28,66,98,0.82)', waterDeep: '#132c45', foam: '#c8dbee', enemy: 'grey', wind: 75, preview: 0.33, girders: 'walls', bumps: [{ x: 0.5, h: 0.14, w: 0.09 }], tideRises: 6, cpuArmour: 100 }),
+  level({ name: 'Dune Sea', look: 'dune', sky: ['#c99a4e', '#f0c98a', '#fbe7c4'], far: '#d6a96a', sun: { x: 0.5, y: 0.2, r: 54, color: '#fff3d0' }, water: 'rgba(70,150,170,0.78)', waterDeep: '#2f6f82', foam: '#fff4dc', enemy: 'desert', wind: 90, preview: 0.31, rough: 1.2, bumps: [{ x: 0.37, h: 0.24, w: 0.06 }, { x: 0.63, h: 0.24, w: 0.06 }], tideRises: 6, cpuArmour: 110 }),
+  // The enemy holds a high plateau across a deep valley.
+  level({ name: 'Red Cliffs', look: 'red', sky: ['#5a1f2e', '#b8494a', '#f2a46c'], far: '#7d3038', sun: { x: 0.85, y: 0.3, r: 34, color: '#ffd1a0' }, water: 'rgba(60,90,120,0.8)', waterDeep: '#253b52', foam: '#ffd8c4', enemy: 'grey', wind: 100, preview: 0.3, mirror: false, slope: -0.18, bumps: [{ x: 0.5, h: -0.2, w: 0.08 }], tideRises: 6, cpuArmour: 110 }),
+  // The sea cuts the shore in two; a steel bridge spans the channel and catches low shots.
+  level({ name: 'Fog Harbour', look: 'moss', sky: ['#6f8a86', '#a9bdb5', '#dfe7df'], far: '#8ea59d', sun: { x: 0.3, y: 0.25, r: 30, color: '#f4f6ee' }, water: 'rgba(50,96,96,0.82)', waterDeep: '#1f4344', foam: '#e6f0ea', enemy: 'navy', wind: 105, preview: 0.28, girders: 'bridge', bumps: [{ x: 0.5, h: -0.6, w: 0.05 }], tideRises: 5, cpuArmour: 120 }),
+  level({ name: 'Storm Coast', look: 'slate', sky: ['#1f2730', '#46525e', '#7c8794'], far: '#353f4a', sun: { x: 0.6, y: 0.2, r: 18, color: '#c9d2dc' }, water: 'rgba(36,60,78,0.85)', waterDeep: '#152635', foam: '#b9c8d4', enemy: 'grey', wind: 130, preview: 0.27, rough: 1.1, bumps: [{ x: 0.5, h: 0.32, w: 0.07 }], tideRises: 5, cpuArmour: 120 }),
+  // Steel towers crown the ridge.
+  level({ name: 'Black Sands', look: 'ash', sky: ['#5a1712', '#8a2e1c', '#e0723a'], far: '#4a1c18', sun: { x: 0.25, y: 0.3, r: 40, color: '#ffb066' }, water: 'rgba(40,52,66,0.85)', waterDeep: '#141c26', foam: '#e8b89a', enemy: 'navy', wind: 135, preview: 0.25, girders: 'towers', bumps: [{ x: 0.5, h: 0.22, w: 0.08 }], tideRises: 5, cpuArmour: 120 }),
+  level({ name: 'Ice Shelf', look: 'ice', sky: ['#8fb4d8', '#cfe2f2', '#f4f9fd'], far: '#b4cde2', sun: { x: 0.8, y: 0.18, r: 30, color: '#ffffff' }, water: 'rgba(40,110,150,0.8)', waterDeep: '#1d4f72', foam: '#ffffff', enemy: 'grey', wind: 140, preview: 0.24, mirror: false, slope: -0.14, bumps: [{ x: 0.47, h: 0.26, w: 0.06 }], tideRises: 5, cpuArmour: 130 }),
+  // The last: the highest ridge, towers on it and walls before each tank, the strongest wind.
+  level({ name: 'Night Siege', look: 'night', sky: ['#05060f', '#151a35', '#3a3060'], far: '#1b1f38', sun: { x: 0.15, y: 0.15, r: 20, color: '#e8e6ff' }, water: 'rgba(20,30,60,0.88)', waterDeep: '#0a1024', foam: '#9aa6d8', enemy: 'grey', wind: 150, preview: 0.22, girders: 'walls+towers', bumps: [{ x: 0.5, h: 0.3, w: 0.07 }], tideRises: 5, cpuArmour: 140 }),
 ];
 
 const PX = 240; // where the player's tank starts
@@ -187,7 +150,7 @@ function sfx(name, opts) {
 
 const STORE = 'crumble';
 function loadStore() {
-  const d = { reached: 1, stars: [0, 0, 0], assist: TUNING.assistStart, taught: false };
+  const d = { reached: 1, stars: FIELDS.map(() => 0), assist: TUNING.assistStart, taught: false };
   try {
     const s = JSON.parse(localStorage.getItem(STORE) || '{}');
     if (Number.isInteger(s.reached)) d.reached = Math.max(1, Math.min(FIELDS.length, s.reached));
@@ -269,7 +232,7 @@ const frameTimes = [];
 const carveTimes = [];
 
 function newTank(side, x, color) {
-  return { side, x, y: 0, tilt: 0, vy: 0, falling: false, fallFrom: 0, armour: 100, aim: side === PLAYER ? 0.85 : Math.PI - 0.85, power: 0.6, augers: TUNING.augerCharges, sunk: 0, out: false, color, hitFlash: 0, swing: null };
+  return { side, x, y: 0, tilt: 0, vy: 0, falling: false, fallFrom: 0, armour: 100, maxArmour: 100, aim: side === PLAYER ? 0.85 : Math.PI - 0.85, power: 0.6, augers: TUNING.augerCharges, sunk: 0, out: false, color, hitFlash: 0, swing: null };
 }
 
 const field = () => FIELDS[game.field];
@@ -337,16 +300,27 @@ function paintGround(f) {
   c.restore();
 }
 
+// Girders are square tiles laid along the girder's long side (a wall stands, a bridge lies).
 function paintGirder(c, g) {
   c.save();
   c.globalCompositeOperation = 'source-over';
-  const tile = g.w;
-  for (let y = g.y; y < g.y + g.h - 0.5; y += tile) {
-    const h = Math.min(tile, g.y + g.h - y);
-    if (ready(IMG.girder)) c.drawImage(IMG.girder, 0, 0, IMG.girder.naturalWidth, (IMG.girder.naturalHeight * h) / tile, g.x, y, g.w, h);
-    else {
+  const along = g.w >= g.h;
+  const tile = along ? g.h : g.w;
+  const len = along ? g.w : g.h;
+  const im = IMG.girder;
+  for (let d = 0; d < len - 0.5; d += tile) {
+    const part = Math.min(tile, len - d);
+    const x = along ? g.x + d : g.x;
+    const y = along ? g.y : g.y + d;
+    const w = along ? part : g.w;
+    const h = along ? g.h : part;
+    if (ready(im)) {
+      const sw = along ? (im.naturalWidth * part) / tile : im.naturalWidth;
+      const sh = along ? im.naturalHeight : (im.naturalHeight * part) / tile;
+      c.drawImage(im, 0, 0, sw, sh, x, y, w, h);
+    } else {
       c.fillStyle = '#9aa3ad';
-      c.fillRect(g.x, y, g.w, h);
+      c.fillRect(x, y, w, h);
     }
   }
   c.restore();
@@ -358,26 +332,39 @@ function setupBattle(index, { seed, starter = PLAYER, demo = false } = {}) {
   game.seed = seed ?? 1000 * (index + 1) + game.hill[index];
   const scale = Math.max(1, Math.min(2, view.s * dpr));
   terrain = createTerrain(W, H, { scale });
-  heights = makeHeights(W, H, { seed: game.seed, base: f.base, rough: f.rough, mirror: f.mirror, slope: f.slope, pads: [PX, CX] });
+  heights = makeHeights(W, H, { seed: game.seed, base: f.base, rough: f.rough, mirror: f.mirror, slope: f.slope, bumps: f.bumps, pads: [PX, CX] });
   terrain.fillFromHeights(heights);
   paintGround(f);
   terrain.steelPainter = paintGirder;
-  if (f.girders) {
+  const girders = f.girders || '';
+  if (girders.includes('walls')) {
     for (const gx of [PX + 150, CX - 150]) {
       const top = Math.min(heights[gx - 22], heights[gx + 22]);
       terrain.addSteel({ x: gx - 20, y: top - 104, w: 40, h: 124 });
     }
   }
+  if (girders.includes('towers')) {
+    for (const gx of [W / 2 - 70, W / 2 + 70]) {
+      const top = Math.min(heights[gx - 22], heights[gx + 22]);
+      terrain.addSteel({ x: gx - 20, y: top - 100, w: 40, h: 120 });
+    }
+  }
+  if (girders.includes('bridge')) {
+    // Across the channel, level with the shore either side of it.
+    const y = Math.min(heights[Math.round(W * 0.38)], heights[Math.round(W * 0.62)]) - 4;
+    terrain.addSteel({ x: W * 0.39, y, w: W * 0.22, h: 24 });
+  }
   tanks = [newTank(PLAYER, PX, 'green'), newTank(CPU, CX, f.enemy)];
+  tanks[CPU].armour = tanks[CPU].maxArmour = f.cpuArmour;
   for (const t of tanks) {
     t.y = supportY(t).y;
     t.tilt = supportY(t).tilt;
   }
-  // The tide: notches sized so an undug tank goes under after about TUNING.tideRises rises.
+  // The tide: notches sized so an undug tank goes under after about the level's tideRises rises.
   const hulls = tanks.map(hullY);
   game.waterStart = H - 26;
   const avg = (hulls[0] + hulls[1]) / 2;
-  game.notch = Math.max(12, (game.waterStart - avg) / TUNING.tideRises);
+  game.notch = Math.max(12, (game.waterStart - avg) / f.tideRises);
   if (index === 0) {
     // Battlefield 1: the tide stops at least 2 notches below both hulls.
     game.waterMin = Math.max(...hulls) + 2 * game.notch;
@@ -685,11 +672,21 @@ function afterShot() {
     updateHud();
     return;
   }
+  // At its top the sea rises no more, but it still pounds a hull under water every few shots, so a
+  // battle always ends (two tanks sunk in their pits would otherwise trade misses for ever).
+  if (game.mode === 'battle' && game.shots % TUNING.tideEvery === 0 && tanks.some(submerged)) {
+    sfx('tide', { gain: 0.9 });
+    return afterTide();
+  }
   startTurn(game.turn === PLAYER ? CPU : PLAYER);
 }
 
+function submerged(t) {
+  return !t.out && hullY(t) > game.waterY + 0.5;
+}
+
 function afterTide() {
-  for (const t of tanks) if (!t.out && hullY(t) > game.waterY + 0.5) hurt(t, TUNING.tideDamage);
+  for (const t of tanks) if (submerged(t)) hurt(t, TUNING.tideDamage);
   const out = tanks.filter((t) => t.armour <= 0 && !t.out);
   if (out.length) return beginSinking(out);
   startTurn(game.turn === PLAYER ? CPU : PLAYER);
@@ -746,8 +743,8 @@ function startBattle(index, { newHill = false, seed } = {}) {
   ui.start.hidden = true;
   ui.result.hidden = true;
   showBanner(`${index + 1} · ${field().name}`);
+  ui.augerBtn.classList.remove('pulse');
   if (field().auger && index === 1 && !store.stars[1]) {
-    ui.augerBtn.classList.remove('pulse');
     void ui.augerBtn.offsetWidth;
     ui.augerBtn.classList.add('pulse');
   }
@@ -966,7 +963,7 @@ function drawArmour(t) {
   c.fill();
   c.fillStyle = t.side === PLAYER ? '#45d17e' : '#ff6b57';
   c.beginPath();
-  c.roundRect(x, y, Math.max(2, 52 * (t.armour / 100)), 6, 3);
+  c.roundRect(x, y, Math.max(2, 52 * (t.armour / t.maxArmour)), 6, 3);
   c.fill();
 }
 
@@ -1320,13 +1317,14 @@ function updateHud() {
   const f = field();
   ui.fieldName.textContent = `${game.field + 1} · ${f.name}`;
   const w = game.wind;
-  const max = 85;
+  const max = 150;
   const bars = w === 0 ? 0 : Math.max(1, Math.round((Math.abs(w) / max) * 3));
   ui.wind.classList.toggle('calm', w === 0);
   ui.windArrow.style.transform = w < 0 ? 'scaleX(-1)' : '';
   ui.windBars.forEach((b, i) => b.classList.toggle('on', i < bars));
   ui.wind.setAttribute('aria-label', w === 0 ? 'No wind' : `Wind ${w > 0 ? 'right' : 'left'}, ${bars} of 3`);
-  const done = game.waterY <= game.waterMin + 0.5;
+  // The pips stop once the tide is at its top, unless a hull is under water: then it still pounds it.
+  const done = game.waterY <= game.waterMin + 0.5 && !tanks.some(submerged);
   const left = TUNING.tideEvery - (game.shots % TUNING.tideEvery);
   const filled = game.phase === 'tide' ? TUNING.tideEvery : game.shots % TUNING.tideEvery;
   ui.pips.forEach((p, i) => p.classList.toggle('on', !done && i < filled));

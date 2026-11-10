@@ -143,7 +143,9 @@ export function createTerrain(w, h, { scale = 1 } = {}) {
 // Heights for a battlefield's hill: a sum of soft waves, cliffs into the sea at both ends, a level
 // pad where each tank starts, and an optional valley in the middle and slope down to the right.
 // mirror: the broad shape is the same on both sides, before a little noise that isn't.
-export function makeHeights(w, h, { seed = 1, base = 0.6, rough = 1, mirror = true, pads = [], valley = 0, slope = 0, shore = 70 } = {}) {
+// bumps: [{ x, h, w }] raise (h > 0, a ridge) or cut (h < 0, a valley or a channel below the sea)
+// the ground at x (fractions of the world's width), h as a fraction of its height, w its half-width.
+export function makeHeights(w, h, { seed = 1, base = 0.6, rough = 1, mirror = true, pads = [], valley = 0, slope = 0, shore = 70, bumps = [] } = {}) {
   const r = rng(seed);
   const heights = new Float32Array(w);
   const waves = [];
@@ -156,6 +158,10 @@ export function makeHeights(w, h, { seed = 1, base = 0.6, rough = 1, mirror = tr
     if (valley) {
       const d = (x - w / 2) / (w * 0.1);
       y += valley * h * Math.exp(-d * d * 2);
+    }
+    for (const b of bumps) {
+      const d = (x - w * b.x) / (w * (b.w || 0.1));
+      y -= b.h * h * Math.exp(-d * d * 2);
     }
     return y;
   };
