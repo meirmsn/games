@@ -253,7 +253,8 @@ test("the very first tap's sound plays, and mute silences it", async () => {
   assert.equal(played[0].state, 'running', 'audio was unlocked by that tap');
 
   await page.locator('[data-sound-toggle]').click(); // mute (its own sound is muted too)
-  await page.locator('.tile.is-soon').nth(1).click();
+  // The same tile again: since Shooting Gallery went live, High Seas is the only coming-soon tile.
+  await page.locator('.tile.is-soon').first().click();
   played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'nothing plays while muted');
 
