@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Crumble</title>
+    <meta name="description" content="Crumble: the tide is coming in. Blast the sand out from under the other tank before the sea reaches yours." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Game explorations" />
+    <meta property="og:title" content="Crumble" />
+    <meta property="og:description" content="Crumble: the tide is coming in. Blast the sand out from under the other tank before the sea reaches yours." />
+    <meta property="og:url" content="https://games.meirmsn.dev/crumble/" />
+    <meta property="og:image" content="https://games.meirmsn.dev/assets/previews/crumble.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="A green tank and a navy tank on a cratered beach, with a shell in the air, a supply crate on its parachute and a blast by the navy tank." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Crumble" />
+    <meta name="twitter:description" content="Crumble: the tide is coming in. Blast the sand out from under the other tank before the sea reaches yours." />
+    <meta name="twitter:image" content="https://games.meirmsn.dev/assets/previews/crumble.png" />
+    <meta name="twitter:image:alt" content="A green tank and a navy tank on a cratered beach, with a shell in the air, a supply crate on its parachute and a blast by the navy tank." />
+    <meta name="theme-color" content="#8fd3f4" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="../assets/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="../shared/game-shell.css" />
+    <link rel="stylesheet" href="style.css" />
+    <script type="module" src="game.js"></script>
+  </head>
+  <body>
+    <canvas id="field" aria-label="Two tanks on a shore, with the tide coming in"></canvas>
+    <div class="safe" data-safe aria-hidden="true"></div>
+
+    <button class="mute round" type="button" data-mute aria-pressed="false" aria-label="Mute">
+      <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" /></svg>
+      <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path d="M16.5 9.5l5 5M21.5 9.5l-5 5" fill="none" /></svg>
+    </button>
+
+    <div class="hud-top" data-hud-top hidden>
+      <span class="field-name" data-field-name></span>
+      <span class="wind" data-wind aria-label="Wind">
+        <svg viewBox="0 0 40 16" aria-hidden="true"><path data-wind-arrow d="M4 8h28M26 3l6 5-6 5" /></svg>
+        <span class="wind-bars" data-wind-bars><i></i><i></i><i></i></span>
+      </span>
+      <span class="tide" data-tide aria-label="Tide">
+        <svg viewBox="0 0 24 16" aria-hidden="true"><path d="M2 10c3-3 5-3 8 0s5 3 8 0 4-2 4-2" /></svg>
+        <span class="pips" data-pips><i></i><i></i><i></i></span>
+      </span>
+    </div>
+
+    <div class="hud-bottom" data-hud-bottom hidden>
+      <button class="weapon" type="button" data-weapon="shell" aria-pressed="true">
+        <img src="img/shell.png" alt="" width="24" height="20" /><span>Shell</span>
+      </button>
+      <button class="weapon" type="button" data-weapon="auger" aria-pressed="false" hidden>
+        <img src="img/auger.png" alt="" width="36" height="24" /><span>Auger</span><b class="charges" data-charges>2</b>
+      </button>
+    </div>
+
+    <section class="card start" data-screen="start" hidden>
+      <div class="picker">
+        <button class="step" type="button" data-prev aria-label="Previous battlefield">‹</button>
+        <div class="pick">
+          <p class="pick-name"><span class="num" data-pick-num>1</span> <span data-pick-name>Morning Beach</span></p>
+          <p class="stars" data-pick-stars aria-label="Stars"><i></i><i></i><i></i></p>
+        </div>
+        <button class="step" type="button" data-next aria-label="Next battlefield">›</button>
+      </div>
+      <button class="play" type="button" data-play>Start</button>
+    </section>
+
+    <section class="card result" data-screen="result" hidden>
+      <h2 data-result-title>You win</h2>
+      <p class="stars big" data-result-stars aria-label="Stars"><i></i><i></i><i></i></p>
+      <p class="detail" data-result-detail></p>
+      <div class="actions">
+        <button class="play" type="button" data-result-next>Next</button>
+        <button class="play alt" type="button" data-result-again>Again</button>
+        <button class="play alt" type="button" data-result-new>New hill</button>
+      </div>
+    </section>
+
+    <div class="banner" data-banner hidden></div>
+    <div class="paused" data-paused hidden><p>Tap to resume</p></div>
+    <div class="rotate" data-rotate aria-live="polite">
+      <div class="rotate-card">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" /><path d="M10 40a24 24 0 0 0 30 16M36 60l4-4-4-4" fill="none" /></svg>
+        <p>Turn your phone sideways</p>
+      </div>
+    </div>
+  </body>
+</html>

@@ -2238,7 +2238,7 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
     const gaps = times.map((x, i) => x - (i ? times[i - 1] : 0));
     // Each other world with the owner's music plays its own accents.
     const own = {};
-    for (const id of ['farm', 'ice', 'candy']) {
+    for (const id of ['farm', 'ice', 'candy', 'sea', 'castle']) {
       L.startWorld(L.WORLDS.findIndex((w) => w.id === id));
       L.game.mode = 'play';
       L.game.accentIn = 0.005;
@@ -2260,7 +2260,7 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
   assert.ok(r.gaps.length >= 15, `${r.gaps.length} accents in ten minutes`);
   for (const g of r.gaps) assert.ok(g >= 15 - 0.01 && g <= 40 + 0.01, `an accent after ${g.toFixed(1)} s`);
   assert.equal(r.distinct, 3, 'all three accents come');
-  for (const id of ['farm', 'ice', 'candy']) assert.match(String(r.own[id]), new RegExp(`^${id}-a[123]$`), `${id} plays its own accent (${r.own[id]})`);
+  for (const id of ['farm', 'ice', 'candy', 'sea', 'castle']) assert.match(String(r.own[id]), new RegExp(`^${id}-a[123]$`), `${id} plays its own accent (${r.own[id]})`);
   for (let i = 1; i < r.names.length; i++) assert.notEqual(r.names[i], r.names[i - 1], 'never the same twice running');
   assert.equal(r.mode, 'paused');
   assert.equal(r.pausedBed, true, 'paused, the bed stops');
@@ -2811,7 +2811,7 @@ test('pixel-leap AC-37: Ink is dark outside a circle of light, in its two colour
   await context.close();
 });
 
-test('pixel-leap AC-39: Ice, Sea and Castle draw from their own packs and play their music; the map shows every world', async () => {
+test('pixel-leap AC-39: Ice, Sea and Castle draw from their own packs and play the owner’s music; the map shows every world', async () => {
   const { context, page } = await open();
   await goPlay(page, true);
   const r = await page.evaluate(() => {
@@ -2846,8 +2846,8 @@ test('pixel-leap AC-39: Ice, Sea and Castle draw from their own packs and play t
     return out;
   });
   assert.equal(r.ice.loop, 'loop:ice-bed', 'Ice plays the owner’s Frost music');
-  assert.equal(r.sea.loop, 'loop:c-music');
-  assert.equal(r.castle.loop, 'loop:c-music');
+  assert.equal(r.sea.loop, 'loop:sea-bed', 'the owner’s bed for Sea');
+  assert.equal(r.castle.loop, 'loop:castle-bed', 'the owner’s bed for Castle');
   assert.ok(r.ice.images.includes('ice.png'), `Ice draws its pack (${r.ice.images})`);
   assert.ok(r.sea.images.includes('sea.png'), 'Sea draws its pack');
   assert.ok(r.castle.images.includes('castle.png'), 'Castle draws its pack');
