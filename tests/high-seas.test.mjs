@@ -970,7 +970,7 @@ test('high-seas AC-23: the first trips bring one passenger at a time; then peopl
   await context.close();
 });
 
-test('high-seas AC-24: other boats sail between the ports and stop at the quays; meeting one is a gentle shove that never stops you', async () => {
+test('high-seas AC-24: other boats sail between the ports and each stops at a quay within two minutes; meeting any of them is a gentle shove that never stops you', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const s = window.__seas;
@@ -978,43 +978,42 @@ test('high-seas AC-24: other boats sail between the ports and stop at the quays;
     s.manual = true;
     const n = S.traffic.length;
     const start = S.traffic.map((t) => [t.x, t.y]);
-    for (let i = 0; i < 60 * 5; i++) s.step(1 / 60);
-    const moved = S.traffic.filter((t, k) => Math.hypot(t.x - start[k][0], t.y - start[k][1]) > 0.5).length;
-    let stopped = 0;
-    const seen = new Set();
+    const moved = new Set();
+    const stopped = new Set();
     for (let i = 0; i < 60 * 120; i++) {
       s.step(1 / 60);
-      for (const t of S.traffic) if (t.wait > 0) seen.add(t.id);
+      S.traffic.forEach((t, k) => {
+        if (Math.hypot(t.x - start[k][0], t.y - start[k][1]) > 0.5) moved.add(t.id);
+        if (t.wait > 0) stopped.add(t.id);
+      });
     }
-    stopped = seen.size;
-    return { n, moved, stopped };
+    return { n, moved: moved.size, stopped: stopped.size };
   });
   assert.equal(r.n, 4);
-  assert.ok(r.moved >= 3, `${r.moved} of 4 moved in 5 s`);
-  assert.ok(r.stopped >= 3, `${r.stopped} stopped at a quay within 2 minutes`);
-  await openWater(page, { heading: 0 });
-  const bump = await page.evaluate(() => {
-    const s = window.__seas;
-    const S = s.S;
-    const t = S.traffic[0];
-    t.wait = 1e9;
-    t.x = S.boat.x + 0.6;
-    t.y = S.boat.y;
-    const x0 = S.boat.x;
-    const y0 = S.boat.y;
-    let minV = Infinity;
-    for (let i = 0; i < 60; i++) {
-      s.step(1 / 60);
-      S.boat.target = 0;
-      minV = Math.min(minV, S.boat.v);
-    }
-    return { moved: Math.hypot(S.boat.x - x0, S.boat.y - y0), knock: S.boat.knock, bump: S.boat.bump, hold: S.hold.length, mode: S.mode };
-  });
-  assert.ok(bump.moved > 0.3, `kept moving: ${bump.moved}`);
-  assert.deepEqual([bump.knock, bump.bump, bump.mode], [0, 0, 'sail']);
+  assert.equal(r.moved, 4, 'every boat sails');
+  assert.equal(r.stopped, 4, 'every boat stops at a quay within two minutes');
+  for (let k = 0; k < 4; k++) {
+    await openWater(page, { heading: 0 });
+    const bump = await page.evaluate((k) => {
+      const s = window.__seas;
+      const S = s.S;
+      const t = S.traffic[k];
+      t.wait = 1e9;
+      t.x = S.boat.x + (t.big ? 1.0 : 0.6);
+      t.y = S.boat.y;
+      const x0 = S.boat.x;
+      const y0 = S.boat.y;
+      for (let i = 0; i < 60; i++) {
+        s.step(1 / 60);
+        S.boat.target = 0;
+      }
+      return { kind: t.sprite, moved: Math.hypot(S.boat.x - x0, S.boat.y - y0), knock: S.boat.knock, bump: S.boat.bump, mode: S.mode };
+    }, k);
+    assert.ok(bump.moved > 0.3, `${bump.kind}: kept moving, ${bump.moved}`);
+    assert.deepEqual([bump.knock, bump.bump, bump.mode], [0, 0, 'sail'], bump.kind);
+  }
   await context.close();
 });
-
 test('high-seas AC-25: until you first steer, a ghost finger shows the drag towards your passenger\'s destination; once you have, it never shows again', async () => {
   const { context, page } = await open();
   await page.click('[data-start]');
