@@ -16,6 +16,8 @@ import { MUSHROOM } from './mushroom-atlas.js';
 import { CASTLE } from './castle-atlas.js';
 import { ICE } from './ice-atlas.js';
 import { SEA } from './sea-atlas.js';
+import { SCRIBBLE } from './scribble-atlas.js';
+import { JUMPER } from './jumper-atlas.js';
 import {
   PARTS, randomMonster, encode, decode, drawVector, bake, scaleFor, makeCanvas, lineArt, toLineArt, BOILS,
 } from './monster.js';
@@ -2220,6 +2222,37 @@ function penLine(g, x0, y0, x1, y1, seed, res) {
   g.stroke();
 }
 const solidAt = (x, y) => SOLID.has(tileAt(x, y));
+// The Scribble Platformer's tiles (70 px per tile) and the Jumper Pack's sprites, from their sheets.
+function scrib(g, name, x, y, w, h) {
+  const f = SCRIBBLE[name];
+  g.drawImage(images.scribble, f[0], f[1], f[2], f[3], x, y, w, h);
+}
+function jump(g, name, x, y, w, h) {
+  const f = JUMPER[name];
+  g.drawImage(images.jumper, f[0], f[1], f[2], f[3], x, y, w, h);
+}
+// The pack's white coin and heart, filled gold and red so they read on the white page.
+const tinted = {};
+function scribTinted(name, colour) {
+  if (!tinted[name]) {
+    const f = SCRIBBLE[name];
+    const c = makeCanvas(f[2], f[3]);
+    const g = c.getContext('2d');
+    g.drawImage(images.scribble, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+    const d = g.getImageData(0, 0, f[2], f[3]);
+    const [r, gg, b] = [1, 3, 5].map((i) => parseInt(colour.slice(i, i + 2), 16));
+    for (let i = 0; i < d.data.length; i += 4) {
+      if (d.data[i + 3] > 0 && d.data[i] > 200 && d.data[i + 1] > 200 && d.data[i + 2] > 200) {
+        d.data[i] = r;
+        d.data[i + 1] = gg;
+        d.data[i + 2] = b;
+      }
+    }
+    g.putImageData(d, 0, 0);
+    tinted[name] = c;
+  }
+  return tinted[name];
+}
 function drawTileScribble(g, w, t, x, y, res, px, py) {
   const seed = x * 13.1 + y * 7.7;
   if (t === T.SKETCH) {
@@ -2227,59 +2260,38 @@ function drawTileScribble(g, w, t, x, y, res, px, py) {
     const r = tileAt(x + 1, y) !== T.SKETCH;
     return drawSketchTile(g, px, py, res, 1, l, r, seed);
   }
-  if (t === T.SPIKES) {
-    g.fillStyle = PEN.white;
-    penStyle(g, res);
-    for (let i = 0; i < 3; i++) {
-      const a = px + (i * res) / 3;
-      g.beginPath();
-      g.moveTo(a + wob(seed + i, res), py + res);
-      g.lineTo(a + res / 6 + wob(seed + i + 3, res), py + res * 0.42);
-      g.lineTo(a + res / 3, py + res);
-      g.fill();
-      g.stroke();
-    }
-    return undefined;
-  }
-  if (t === T.ONEWAY) {
-    g.fillStyle = PEN.white;
-    g.fillRect(px, py, res + seam, res * 0.35);
-    penStyle(g, res);
-    penLine(g, px, py, px + res, py, seed, res);
-    penLine(g, px, py + res * 0.35, px + res, py + res * 0.35, seed + 9, res);
-    return undefined;
-  }
-  // Ground and blocks: white paper, traced where they meet the air, a little hatching inside.
-  g.fillStyle = PEN.white;
-  g.fillRect(px, py, res + seam, res + seam);
+  if (t === T.SPIKES) return scrib(g, 'tile_spikes', px, py, res + seam, res + seam);
+  if (t === T.ONEWAY) return scrib(g, 'tile_bridge', px, py, res + seam, res * 0.5);
+  // Ground and blocks: the pack's grass-topped tile where it meets the air, its plain tile below.
   const top = !solidAt(x, y - 1) && tileAt(x, y - 1) !== T.SPIKES;
-  if (!top && hash(seed) < 0.35) {
-    penStyle(g, res, PEN.pencil, 0.5);
-    for (let k = 0; k < 3; k++) penLine(g, px + res * (0.25 + k * 0.18), py + res * 0.7, px + res * (0.4 + k * 0.18), py + res * 0.45, seed + k * 11, res);
-  }
-  penStyle(g, res);
-  if (top) penLine(g, px, py, px + res, py, seed + 20, res);
-  if (!solidAt(x - 1, y)) penLine(g, px, py, px, py + res, seed + 30, res);
-  if (!solidAt(x + 1, y)) penLine(g, px + res, py, px + res, py + res, seed + 40, res);
+  scrib(g, top ? 'tile_grass' : 'tile', px, py, res + seam, res + seam);
+  void seed;
   return undefined;
 }
 // A sketch tile, drawn k of the way (the pen runs along its top, round its end and back along its
 // bottom, then hatches it). l, r: it ends a run on that side.
 function drawSketchTile(g, px, py, res, k, l, r, seed) {
+  // The pack's bridge plank, revealed left to right as the pen draws it, the pack's pencil at the tip.
+  void l;
+  void r;
+  void seed;
   const h = res * 0.5;
-  g.fillStyle = `rgba(255,255,255,${Math.min(1, k * 1.4)})`;
-  g.fillRect(px, py, res + seam, h);
-  penStyle(g, res);
-  const top = Math.min(1, k / 0.45);
-  if (top > 0) penLine(g, px, py, px + res * top, py, seed, res);
-  const bot = Math.max(0, Math.min(1, (k - 0.35) / 0.45));
-  if (bot > 0) penLine(g, px + res, py + h, px + res * (1 - bot), py + h, seed + 5, res);
-  if (k > 0.5 && r) penLine(g, px + res, py, px + res, py + h, seed + 8, res);
-  if (k > 0.8 && l) penLine(g, px, py, px, py + h, seed + 9, res);
-  if (k >= 1) {
-    penStyle(g, res, PEN.pencil, 0.55);
-    for (let i = 0; i < 3; i++) penLine(g, px + res * (0.12 + i * 0.3), py + h * 0.85, px + res * (0.3 + i * 0.3), py + h * 0.2, seed + 12 + i, res);
-  }
+  if (k >= 1) return scrib(g, 'tile_bridge', px, py, res + seam, h);
+  g.save();
+  g.beginPath();
+  g.rect(px, py - res * 0.1, res * k, h + res * 0.2);
+  g.clip();
+  scrib(g, 'tile_bridge', px, py, res + seam, h);
+  g.restore();
+  const f = SCRIBBLE.item_pencil;
+  const ph = res * 0.9;
+  const pw = (f[2] / f[3]) * ph;
+  g.save();
+  g.translate(px + res * k, py + h * 0.5);
+  g.rotate(0.5);
+  scrib(g, 'item_pencil', -pw / 2, -ph, pw, ph);
+  g.restore();
+  return undefined;
 }
 // Scribble's sketch tiles that aren't solid yet: drawing in, or not there at all. Before a run is
 // drawn, two pencil ticks mark its ends (and in the opening a dotted guide its length).
@@ -2296,11 +2308,14 @@ function drawSketches(g, w, res, mine) {
     const x1 = Math.max(...list.map((k) => k.x)) + 1;
     const y = list[0].y;
     if (list.some((k) => k.state === 'undrawn')) {
-      penStyle(g, res, PEN.pencil, 0.6);
-      for (const [x, d] of [[x0, 1], [x1, -1]]) {
-        penLine(g, x * res, (y - 0.25) * res, x * res, (y + 0.35) * res, x * 3 + y, res);
-        penLine(g, x * res, (y + 0.35) * res, (x + d * 0.3) * res, (y + 0.35) * res, x * 5 + y, res);
-      }
+      // The ticks: the two ends of the pack's plank, faint, where the run will be drawn.
+      g.save();
+      g.globalAlpha = 0.4;
+      const f = SCRIBBLE.tile_bridge;
+      const cap = f[2] * 0.22;
+      g.drawImage(images.scribble, f[0], f[1], cap, f[3], x0 * res, y * res, res * 0.22, res * 0.5);
+      g.drawImage(images.scribble, f[0] + f[2] - cap, f[1], cap, f[3], (x1 - 0.22) * res, y * res, res * 0.22, res * 0.5);
+      g.restore();
       if (list[0].guide) {
         g.fillStyle = PEN.pencil;
         for (let xx = x0 + 0.2; xx < x1 - 0.1; xx += 0.3) {
@@ -2318,60 +2333,23 @@ function drawSketches(g, w, res, mine) {
   }
 }
 function drawDoodle(g, x, y, res, h) {
-  // A tuft of grass or a little flower, in pen, on the ground.
-  const px = x * res;
-  const py = (y + 1) * res;
-  penStyle(g, res, PEN.ink, 0.6);
-  if (h < 0.15) {
-    for (let k = -1; k <= 1; k++) penLine(g, px + res * 0.5, py, px + res * (0.5 + k * 0.18), py - res * (0.35 - Math.abs(k) * 0.1), x * 7 + k, res);
-  } else {
-    penLine(g, px + res * 0.5, py, px + res * 0.5, py - res * 0.55, x * 3, res);
-    g.fillStyle = PEN.white;
-    g.beginPath();
-    g.arc(px + res * 0.5, py - res * 0.65, res * 0.13, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-  }
+  // The pack's bushes and trees on the ground.
+  const n = ['tile_bush', 'tile_bushHalf', 'tile_tree', 'tile_bushHalf'][Math.floor(h * 13) % 4];
+  scrib(g, n, x * res, y * res, res, res);
 }
 // Scribble's coin and heart: drawn in pen, the only colour on the page their fill.
 function penPickup(g, coin, px, py, res) {
-  penStyle(g, res, PEN.ink, 0.8);
-  if (coin) {
-    const sq = 0.45 + 0.55 * Math.abs(Math.cos(game.t * 3 + px));
-    g.fillStyle = '#ffd23f';
-    g.beginPath();
-    g.ellipse(px, py, res * 0.28 * sq, res * 0.28, 0, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-    penLine(g, px, py - res * 0.12, px, py + res * 0.12, px, res);
-    return;
-  }
-  const r = res * 0.32;
-  g.fillStyle = '#ff5d73';
-  g.beginPath();
-  g.moveTo(px, py + r * 0.9);
-  g.bezierCurveTo(px - r * 1.4, py - r * 0.1, px - r * 0.6, py - r * 1.2, px, py - r * 0.4);
-  g.bezierCurveTo(px + r * 0.6, py - r * 1.2, px + r * 1.4, py - r * 0.1, px, py + r * 0.9);
-  g.fill();
-  g.stroke();
+  const img = coin ? scribTinted('tile_coin', '#ffd23f') : scribTinted('tile_heart', '#ff5d73');
+  const sz = res * (coin ? 0.75 : 0.85);
+  const sq = coin ? 0.45 + 0.55 * Math.abs(Math.cos(game.t * 3 + px)) : 1;
+  g.drawImage(img, px - (sz * sq) / 2, py - sz / 2, sz * sq, sz);
 }
 function penDoor(g, px, py, res, glow) {
   g.fillStyle = `rgba(255,230,120,${0.2 + glow * 0.25})`;
   g.beginPath();
   g.arc(px, py - res * 1.1, res * 1.3, 0, Math.PI * 2);
   g.fill();
-  g.fillStyle = PEN.white;
-  penStyle(g, res);
-  g.beginPath();
-  g.moveTo(px - res * 0.6, py);
-  g.lineTo(px - res * 0.6, py - res * 1.4);
-  g.arc(px, py - res * 1.4, res * 0.6, Math.PI, 0);
-  g.lineTo(px + res * 0.6, py);
-  g.fill();
-  g.stroke();
-  g.beginPath();
-  g.arc(px + res * 0.3, py - res * 0.75, res * 0.06, 0, Math.PI * 2);
-  g.stroke();
+  scrib(g, 'tile_door', px - res * 0.75, py - res * 1.5, res * 1.5, res * 1.5);
 }
 // The New Platformer Pack's slimes, redrawn as line art (cached per frame and wobble).
 const lineSlimes = {};
@@ -2389,47 +2367,19 @@ function lineSlime(col, boil) {
 // walls; the plateau of cloud at the top.
 const SKYC = { grass: '#6ccb3f', grassDark: '#4fa82c', earth: '#c98b52', earthDark: '#9a6538', stone: '#9fb3c4', stoneDark: '#71879b', cloud: '#ffffff', cloudShade: '#dceefa' };
 function drawSkyLedge(g, x, y, wTiles, res, kind) {
+  // The pack's floating ground, its ends kept and its middle stretched to the ledge's length:
+  // grass, broken grass for a cracked ledge, stone for a sliding one.
+  const name = kind === 'slide' ? 'ground_stone' : kind === 'cracked' ? 'ground_grass_broken' : 'ground_grass';
+  const f = JUMPER[name];
+  const h = res * 0.62;
+  const s2 = h / f[3];
+  const cap = 34;
+  const capD = Math.min(cap * s2, (wTiles * res) / 2);
   const wpx = wTiles * res;
-  const h = res * 0.55;
-  const body = kind === 'slide' ? SKYC.stone : SKYC.earth;
-  const dark = kind === 'slide' ? SKYC.stoneDark : SKYC.earthDark;
-  g.fillStyle = dark;
-  g.beginPath();
-  g.roundRect(x, y + res * 0.08, wpx, h, res * 0.25);
-  g.fill();
-  g.fillStyle = body;
-  g.beginPath();
-  g.roundRect(x, y, wpx, h * 0.85, res * 0.25);
-  g.fill();
-  if (kind === 'cracked') {
-    g.strokeStyle = dark;
-    g.lineWidth = res * 0.05;
-    for (let i = 1; i < wTiles * 2; i += 2) {
-      const cx = x + (i * res) / 2;
-      g.beginPath();
-      g.moveTo(cx, y);
-      g.lineTo(cx + res * 0.1, y + h * 0.4);
-      g.lineTo(cx - res * 0.05, y + h * 0.8);
-      g.stroke();
-    }
-    return;
-  }
-  g.fillStyle = kind === 'slide' ? '#eef6fb' : SKYC.grass;
-  g.beginPath();
-  g.roundRect(x, y - res * 0.06, wpx, res * 0.2, res * 0.1);
-  g.fill();
-  if (kind === 'slide') {
-    // Little arrows: it slides side to side.
-    g.fillStyle = SKYC.stoneDark;
-    for (const d of [-1, 1]) {
-      const ax = x + wpx / 2 + d * res * 0.35;
-      g.beginPath();
-      g.moveTo(ax + d * res * 0.15, y + h * 0.45);
-      g.lineTo(ax, y + h * 0.25);
-      g.lineTo(ax, y + h * 0.65);
-      g.fill();
-    }
-  }
+  const top = y - res * 0.12;
+  g.drawImage(images.jumper, f[0], f[1], cap, f[3], x, top, capD, h);
+  g.drawImage(images.jumper, f[0] + cap, f[1], f[2] - 2 * cap, f[3], x + capD - 0.5, top, wpx - 2 * capD + 1, h);
+  g.drawImage(images.jumper, f[0] + f[2] - cap, f[1], cap, f[3], x + wpx - capD, top, capD, h);
 }
 function drawCloud(g, cx, cy, r, colour = SKYC.cloud) {
   g.fillStyle = colour;
@@ -2449,7 +2399,11 @@ function drawTileSky(g, w, t, x, y, res, px, py) {
   }
   if (t === T.ONEWAY) {
     if (y === stage.top) {
-      drawCloud(g, px + res * 0.5, py + res * 0.35, res * 0.55);
+      // The plateau: one long ledge of the pack's ground, drawn whole by its left end.
+      if (tileAt(x - 1, y) === T.ONEWAY) return undefined;
+      let n = 1;
+      while (tileAt(x + n, y) === T.ONEWAY) n++;
+      drawSkyLedge(g, px, py, n, res, 'grass');
       return undefined;
     }
     const l = tileAt(x - 1, y) !== T.ONEWAY;
@@ -2462,19 +2416,23 @@ function drawTileSky(g, w, t, x, y, res, px, py) {
     return undefined;
   }
   if (t === T.SPIKES) return candyTile(g, 'canePinkSmall', px, py, res);
-  // The start's ground: grass over earth.
+  // The start's ground: the pack's grass over its earth.
   const top = tileAt(x, y - 1) === T.AIR;
-  g.fillStyle = SKYC.earth;
+  g.fillStyle = SKYC.earthDark;
   g.fillRect(px, py, res + seam, res + seam);
   if (top) {
-    g.fillStyle = SKYC.grass;
-    g.fillRect(px, py, res + seam, res * 0.3);
-    g.fillStyle = SKYC.grassDark;
-    g.fillRect(px, py + res * 0.26, res + seam, res * 0.08);
+    const f = JUMPER.ground_grass;
+    g.drawImage(images.jumper, f[0] + 40, f[1], 70, f[3], px, py - res * 0.12, res + seam, res * 0.62);
   }
   return undefined;
 }
 function drawSkySpring(g, px, py, res, boing) {
+  const f = JUMPER[boing ? 'spring_out' : 'spring'];
+  const w = res * 0.95;
+  const h = (f[3] / f[2]) * w;
+  return jump(g, boing ? 'spring_out' : 'spring', px - w / 2, py - h, w, h);
+}
+function drawSkySpringOld(g, px, py, res, boing) {
   const up = boing ? res * 0.25 : 0;
   g.strokeStyle = '#7a7f87';
   g.lineWidth = res * 0.07;
@@ -2572,6 +2530,19 @@ function drawBackgroundB4(g, w, res, ox, oy, vw, vh, groundY) {
       g.arc(hx, groundY + res * 0.5, hr, Math.PI * 1.05, Math.PI * 1.95);
       g.stroke();
     }
+    // The pack's clouds and far trees, faint.
+    g.save();
+    g.globalAlpha = 0.55;
+    for (let i = 0; i < 6; i++) {
+      const cx = ((i * 9.3 + game.t * (0.12 + (i % 3) * 0.05) - cam.x * 0.15) % 48 + 48) % 48;
+      scrib(g, i % 2 ? 'background_cloudA' : 'background_cloudB', (cx - 6) * res, groundY - res * (5 + ((i * 5) % 7)), res * 2, res);
+    }
+    const p3 = ox * 0.45;
+    for (let i = -1; i < vw / (res * 6) + 2; i++) {
+      const idx = i + Math.floor(p3 / (res * 6));
+      if (hash(idx + 2) < 0.5) scrib(g, 'background_tree', i * res * 6 - (p3 % (res * 6)) + hash(idx) * res * 3, groundY - res * 1.4, res * 0.7, res * 1.4);
+    }
+    g.restore();
     g.strokeStyle = 'rgba(162,156,143,0.45)';
     g.lineWidth = Math.max(1, res / 40);
     const top = groundY + res * 0.6;
@@ -2631,6 +2602,13 @@ function drawThings(g, w, res, pixel, mine) {
         const bob = t.type === 'heart' ? Math.round(Math.sin(game.t * 3 + t.id) * res * 0.08) : 0;
         if (pico) picoTile(g, asCoin ? PICO.coin : PICO.heart, px - res / 2, py - res / 2 + bob, res);
         else if (pen) penPickup(g, asCoin, px, py + Math.sin(game.t * 3 + t.id) * res * 0.06, res);
+        else if (tw.pack === 'sky' && asCoin) {
+          const n = `gold_${1 + (Math.floor(game.t * 8 + t.id) % 4)}`;
+          const fr = JUMPER[n];
+          const hh = res * 0.6;
+          const ww = (fr[2] / fr[3]) * hh;
+          jump(g, n, px - ww / 2, py - hh / 2 + Math.sin(game.t * 3 + t.id) * res * 0.06, ww, hh);
+        }
         else if (mush) {
           const b2 = Math.sin(game.t * 3 + t.id) * res * 0.06;
           if (asCoin) drawSmoothCoin(g, px, py + b2, res);
@@ -2681,6 +2659,13 @@ function drawThings(g, w, res, pixel, mine) {
         } else if (pico) {
           const r2 = Math.round(res * z);
           picoTile(g, (t.id % 3 ? PICO.walker : PICO.walker2)[f], -r2 / 2, -r2, r2);
+        } else if (tw.pack === 'sky') {
+          // Sky's spikies: the Jumper Pack's spikeMan, walking.
+          const n = f ? 'spikeMan_walk1' : 'spikeMan_walk2';
+          const fr = JUMPER[n];
+          const hh = res * z;
+          const ww = (fr[2] / fr[3]) * hh;
+          jump(g, n, -ww / 2, -hh + res * 0.04, ww, hh);
         } else if (pen) {
           // Scribble redraws its slimes as line art, as it does the monster.
           const sz = res * z;
@@ -2714,7 +2699,13 @@ function drawThings(g, w, res, pixel, mine) {
         g.translate(Math.round(px), Math.round(py));
         if (t.dir > 0) g.scale(-1, 1);
         if (pico) picoTile(g, PICO.flyer[f], -r2 / 2, -r2, r2);
-        else if (tw.pack === 'sky') drawSkyFlyer(g, r2, f);
+        else if (tw.pack === 'sky') {
+          const n = `wingMan${1 + (Math.floor(game.t * 8 + t.id) % 4)}`;
+          const fr = JUMPER[n];
+          const ww = r2 * 1.3;
+          const hh = (fr[3] / fr[2]) * ww;
+          jump(g, n, -ww / 2, -hh, ww, hh);
+        }
         else inkTile(g, INK.ghost[f], -r2 / 2, -r2, r2);
         g.restore();
         break;
@@ -2779,8 +2770,8 @@ function drawThings(g, w, res, pixel, mine) {
         g.beginPath();
         g.arc(px, py - res * 0.7, res * 0.7, 0, Math.PI * 2);
         g.fill();
-        drawWing(g, px - res * 0.1, py - res * 0.7, res * 0.55, -1, flap);
-        drawWing(g, px + res * 0.1, py - res * 0.7, res * 0.55, 1, flap);
+        void flap;
+        jump(g, 'powerup_wings', px - res * 0.45, py - res * 1.15, res * 0.9, res * 0.9);
         break;
       }
       case 'worm': {
@@ -2931,14 +2922,13 @@ function drawPortal(g, w, px, py, res, pixel) {
     g.beginPath();
     g.arc(px, py - res * 1.1, res * 1.5, 0, Math.PI * 2);
     g.fill();
-    g.fillStyle = '#fff';
-    g.beginPath();
-    g.roundRect(px - res * 0.6, py - res * 2, res * 1.2, res * 2, [res * 0.6, res * 0.6, 0, 0]);
-    g.fill();
-    g.fillStyle = '#ffcf3f';
-    g.beginPath();
-    g.roundRect(px - res * 0.45, py - res * 1.8, res * 0.9, res * 1.8, [res * 0.45, res * 0.45, 0, 0]);
-    g.fill();
+    // The pack's portal, standing up, turning.
+    g.save();
+    g.translate(px, py - res * 1.1);
+    g.rotate(Math.PI / 2);
+    g.scale(1, 1 + 0.08 * Math.sin(game.t * 3));
+    jump(g, 'portal_yellow', -res * 1.1, -res * 0.4, res * 2.2, res * 0.8);
+    g.restore();
     drawStar(g, px + res * 1.4, py - res * 1.6 + Math.sin(game.t * 2) * res * 0.1, res * 0.55, game.t * 0.8);
     return;
   }
@@ -3104,6 +3094,17 @@ function drawPlayer(g, w, res, pixel) {
     g.drawImage(f, -own.footX, -own.footY);
     g.restore();
   } else {
+    // Sky's wings, while they carry you: the pack's, flapping either side.
+    if (w.pack === 'sky' && game.wingsT > 0) {
+      const flap = Math.sin(game.t * 18) * 0.35;
+      for (const [n, d] of [['wing_left', -1], ['wing_right', 1]]) {
+        g.save();
+        g.translate(fx + d * res * 0.35, fy - res * 1.0);
+        g.rotate(d * flap);
+        jump(g, n, d < 0 ? -res * 0.9 : 0, -res * 0.6, res * 0.9, res * 0.9);
+        g.restore();
+      }
+    }
     drawVector(g, images.monster, monster, fx, fy, scaleFor(monster, res), pose);
   }
 }
@@ -4086,8 +4087,10 @@ Promise.all([
   loadImage('img/ice.png'),
   loadImage('img/sea.png'),
   loadImage('img/critters.png'),
-]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas, farm, ind, pico, mushroom, castle, ice, sea, critters]) => {
-  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes, farm, ind, pico, mushroom, castle, ice, sea, critters });
+  loadImage('img/scribble.png'),
+  loadImage('img/jumper.png'),
+]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas, farm, ind, pico, mushroom, castle, ice, sea, critters, scribble, jumper]) => {
+  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes, farm, ind, pico, mushroom, castle, ice, sea, critters, scribble, jumper });
   MONSTER_FRAMES = atlas.MONSTER;
   // The colour under each background panel's hills, to fill below them.
   images.bgFill = {};
