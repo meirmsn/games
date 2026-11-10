@@ -55,7 +55,7 @@ test('pwa-updates AC-11: the same change with VERSION bumped passes', () => {
 
 test('pwa-updates AC-11: a change only to tests, scripts or docs needs no bump', () => {
   const r = repo();
-  r.change({ 'tests/a.test.mjs': '2\n', 'README.md': '2\n' });
+  r.change({ 'tests/a.test.mjs': '2\n', 'README.md': '2\n', 'reef/README.md': '1\n' });
   const out = r.check();
   assert.equal(out.status, 0, out.stdout);
   assert.match(out.stdout, /no file the site serves changed/);

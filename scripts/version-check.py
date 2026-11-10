@@ -4,10 +4,25 @@ file the site serves (anything .assetsignore doesn't exclude) without changing V
 
 Usage: scripts/version-check.py [base]   No base: nothing to compare, exit 0.
 Exit 0 = fine; 1 = VERSION needs a bump; 2 = couldn't run."""
-import re, subprocess, sys
+import os, re, subprocess, sys, tempfile
 
-def git(*args):
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+def git(*args, env=None):
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=True,
+                          env={**os.environ, **(env or {})}).stdout
+
+def ignored(rev):
+    """The tracked files of <rev> its .assetsignore excludes, read as git (and wrangler) read it, as
+    scripts/deploy.sh does."""
+    with tempfile.TemporaryDirectory() as tmp:
+        idx, ign = os.path.join(tmp, "index"), os.path.join(tmp, "ignore")
+        try:
+            text = git("show", f"{rev}:.assetsignore")
+        except subprocess.CalledProcessError:
+            text = ""
+        open(ign, "w", encoding="utf-8").write(text)
+        git("read-tree", rev, env={"GIT_INDEX_FILE": idx})
+        return set(git("-c", "core.quotePath=false", "ls-files", "-ci", f"--exclude-from={ign}",
+                       env={"GIT_INDEX_FILE": idx}).splitlines())
 
 def version(text):
     m = re.search(r"^const VERSION = '([^']+)';", text, re.M)
@@ -17,9 +32,8 @@ base = sys.argv[1] if len(sys.argv) > 1 else ""
 if not base:
     print("version-check: no base given, nothing to compare"); sys.exit(0)
 try:
-    changed = [f for f in git("diff", "--name-only", f"{base}...HEAD").splitlines() if f]
-    ignored = [l.strip().rstrip("/") for l in open(".assetsignore", encoding="utf-8")
-               if l.strip() and not l.startswith("#")]
+    changed = [f for f in git("-c", "core.quotePath=false", "diff", "--name-only", f"{base}...HEAD").splitlines() if f]
+    unserved = ignored(base) | ignored("HEAD")
     before = version(git("show", f"{base}:sw.js"))
     now = version(open("sw.js", encoding="utf-8").read())
 except (subprocess.CalledProcessError, OSError) as e:
@@ -27,10 +41,7 @@ except (subprocess.CalledProcessError, OSError) as e:
 if not now:
     print("version-check: no `const VERSION = '…';` line in sw.js"); sys.exit(2)
 
-def served(path):
-    return not any(path == i or path.startswith(i + "/") for i in ignored)
-
-site = [f for f in changed if served(f)]
+site = [f for f in changed if f not in unserved]
 if not site:
     print("version-check: no file the site serves changed"); sys.exit(0)
 if now != before:
