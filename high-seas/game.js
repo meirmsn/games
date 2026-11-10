@@ -282,6 +282,8 @@ function refillWaiting() {
   const ports = S.world.ports;
   const others = (id) => ports.filter((p) => p.id !== id);
   const pick = (id) => {
+    // Once you can afford what's next, people are heading for the shipyard: your way.
+    if (canBuyNext() && id !== 0) return 0;
     const list = others(id).filter((p) => !S.waiting.some((w) => w.at === id && w.c.to === p.id));
     return (list.length ? list : others(id))[Math.floor(S.rand() * (list.length || others(id).length))].id;
   };
@@ -380,6 +382,14 @@ function arriveAt(port, quiet) {
   if (port.id === 'lighthouse') {
     S.endIn = TUNE.hopTime + 0.9; // the keeper steps ashore, then the voyage ends
     return;
+  }
+  // With the price of the next part in hand, whoever waits here is bound for the shipyard too.
+  if (canBuyNext() && port.id !== 0) {
+    for (const w of S.waiting) {
+      if (w.at !== port.id || w.c.kind !== 'fare' || w.c.to === 0) continue;
+      const { coat, id } = w.c;
+      w.c = Object.assign(makeContract(port.id, 0), { coat, id });
+    }
   }
   // Then whoever waits here hops aboard, while there's a seat.
   S.boardIn = k * 0.35 + (k ? TUNE.hopTime : 0.5);

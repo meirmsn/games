@@ -96,8 +96,11 @@ minute.
   finale. The first three trips are guided: one passenger at a time, waiting at the port you're at,
   the first going to the port a short reach away. After that every port has someone waiting (two,
   once you sail the galleon), coming back a few seconds after they board, and you choose where to
-  sail. Rejected: cargo with mail windows chosen from a menu, which the owner found unreadable
-  (owner, 2026-11-09).
+  sail. Once you can afford the next part, the people waiting where you dock, and those who come
+  to wait, are bound for the shipyard, so the next passenger takes you where you want to go
+  (Claude, 2026-11-10, from the timed playtest: boarding is automatic, and passengers bound
+  elsewhere kept carrying the boat away from the shipyard). Rejected: cargo with mail windows chosen
+  from a menu, which the owner found unreadable (owner, 2026-11-09).
 - Docking is automatic, and only for a reason: entering a port's ring (armed again only once the
   boat has left it, so casting off never re-docks) docks if there's someone aboard for that port,
   someone waiting with a seat for them, or (at the shipyard) something you can afford; otherwise the
