@@ -1287,7 +1287,18 @@ test('walk-on-red AC-29: the third hit stops the level, he stays down, then Game
   assert.equal(out.mode, 'out');
   assert.equal(out.red, out.redBefore, 'the walk light stops');
   assert.deepEqual([out.rowNow, out.down, out.lives], [out.row, true, 0], 'he stays down where he was hit');
-  assert.ok(!(await page.evaluate(() => !document.querySelector('[data-screen="over"]').hidden)), 'no card yet');
+  const cards = () =>
+    page.evaluate(() => {
+      const vis = (sel) => !document.querySelector(sel).hidden;
+      return { start: vis('[data-screen="start"]'), paused: vis('[data-screen="paused"]'), over: vis('[data-screen="over"]'), hud: vis('[data-hud]') };
+    });
+  assert.deepEqual(await cards(), { start: false, paused: false, over: false, hud: true }, 'down on the last life: no card yet, the HUD stays');
+  // Hidden during those 1.2 s: paused like any other moment, and the run ends only after the tap.
+  await page.evaluate(() => window.__walkOnRed.pause());
+  await run(page, 3);
+  assert.deepEqual(await cards(), { start: false, paused: true, over: false, hud: true }, 'paused, not over');
+  assert.deepEqual(await page.evaluate(() => [window.__walkOnRed.game.mode, window.__walkOnRed.game.red]), ['out', out.red], 'nothing advances while paused');
+  await page.evaluate(() => window.__walkOnRed.resume());
   await run(page, 0.3);
   const s = await page.evaluate(() => {
     const t = window.__walkOnRed;
