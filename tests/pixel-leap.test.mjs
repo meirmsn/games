@@ -1947,6 +1947,16 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
       }
     }
     const gaps = times.map((x, i) => x - (i ? times[i - 1] : 0));
+    // Each other world with the owner's music plays its own accents.
+    const own = {};
+    for (const id of ['farm', 'frost', 'candy']) {
+      L.startWorld(L.WORLDS.findIndex((w) => w.id === id));
+      L.game.mode = 'play';
+      L.game.accentIn = 0.005;
+      L.heard.splice(0, L.heard.length);
+      L.step();
+      own[id] = L.heard.filter((h) => /-a\d$/.test(h));
+    }
     // Paused: the bed stops and no accent comes.
     L.manual = false;
     L.game.mode = 'play';
@@ -1955,12 +1965,13 @@ test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an 
     const before = L.game.accentIn;
     L.manual = true;
     for (let i = 0; i < 120 * 60; i++) L.step();
-    return { bed, gaps, names, distinct: new Set(names).size, pausedBed, still: L.game.accentIn === before, mode: L.game.mode };
+    return { bed, gaps, names, own, distinct: new Set(names).size, pausedBed, still: L.game.accentIn === before, mode: L.game.mode };
   });
   assert.equal(r.bed.world, 'meadow', 'the Meadow’s bed is playing');
   assert.ok(r.gaps.length >= 15, `${r.gaps.length} accents in ten minutes`);
   for (const g of r.gaps) assert.ok(g >= 15 - 0.01 && g <= 40 + 0.01, `an accent after ${g.toFixed(1)} s`);
   assert.equal(r.distinct, 3, 'all three accents come');
+  for (const id of ['farm', 'frost', 'candy']) assert.match(String(r.own[id]), new RegExp(`^${id}-a[123]$`), `${id} plays its own accent (${r.own[id]})`);
   for (let i = 1; i < r.names.length; i++) assert.notEqual(r.names[i], r.names[i - 1], 'never the same twice running');
   assert.equal(r.mode, 'paused');
   assert.equal(r.pausedBed, true, 'paused, the bed stops');
