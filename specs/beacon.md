@@ -254,7 +254,7 @@ the light turns for home; let go too soon and the current takes it onto the rock
   a heading that, left alone, reaches a rock or the cliffs within 4 s (8 s in fog); until 190 s the
   sea holds one to four ships, counting lifeboats and lanterns about to come in (five in the last
   wave) — `tests/beacon.test.mjs`.
-- **AC-10** The set pieces come in order: a cutter by 45 s, fog that halves the beam's reach for
+- **AC-10** The set pieces come in order: a cutter by 45 s (later only while the sea is full), fog that halves the beam's reach for
   30 s, a gale whose whitecaps show 2 s before its 6 s shove of every ship, and a last wave of five ships
   between 172 and 190 s; no ship comes in after 190 s —
   `tests/beacon.test.mjs`.
