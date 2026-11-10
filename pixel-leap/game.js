@@ -7,8 +7,9 @@
 // the monster is baked to its grid; Candy is drawn smooth at 70 px per tile, and the HUD turns
 // smooth with it. The leap between levels steps through the resolutions on screen.
 import { mountShell } from '../shared/game-shell.js';
-import { WORLDS, buildStage, T, ROWS } from './worlds.js';
+import { WORLDS, buildStage, T, ROWS, SOLID } from './worlds.js';
 import { CANDY } from './candy-atlas.js';
+import { MUSHROOM } from './mushroom-atlas.js';
 import {
   PARTS, randomMonster, encode, decode, drawVector, bake, scaleFor, makeCanvas,
 } from './monster.js';
@@ -34,14 +35,22 @@ export const MOVE = {
   iceAccel: 22, // on ice you get going and stop more slowly
   iceFriction: 9,
   drip: 30, // a drip's fall
+  hay: 13.6, // a haybale's bounce: about 2.5 tiles
+  hayHigh: 19.2, // with jump held: about 5
+  caps: [17.2, 21.1, 24.3], // a cap's launch, 4, 6 then 8 tiles, landing on cap after cap
+  mover: 2, // moving platforms and lifts, tiles/s
+  belt: 2.5, // conveyor belts
+  swoop: 6, // a flyer's dive
+  climb: 3, // a flyer's climb back
 };
+const CHAIN_MAX = 4; // the most extra coins one stomp in a chain pays
 const LIVES = 3;
 const ENEMY_SIZE = 1.5; // bad guys' size, in tiles
 const MAX_SHIELDS = 2; // hearts you can hold: each takes one hit for you
 const W_BOX = 0.7; // the monster's collision box, in tiles
 const H_BOX = 1.3;
 const STEP = 1 / 120;
-const VERSION = 2; // best times are kept under this version of the levels
+const VERSION = 3; // best times are kept under this version of the levels
 const KEY = 'pixel-leap';
 
 // ---------------------------------------------------------------- the page
@@ -64,6 +73,10 @@ for (const s of ['m', 'c']) {
   for (const n of ['jump', 'coin', 'stomp', 'poof', 'flag', 'land', 'music']) SOUNDS[`${s}-${n}`] = `sounds/${s}-${n}.mp3`;
 }
 for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music', 'morph-up', 'morph-down']) SOUNDS[n] = `sounds/${n}.mp3`;
+// The owner's music: each such world has a long bed and three short accents. The accents are
+// sounds like any other; the beds are streamed (see music()), not decoded whole.
+const ACCENTS = 3;
+for (const w of WORLDS) if (w.bed) for (let i = 1; i <= ACCENTS; i++) SOUNDS[`${w.id}-a${i}`] = `sounds/${w.id}-a${i}.mp3`;
 const { sound } = mountShell({ sounds: SOUNDS });
 const heard = []; // the last sounds played, for tests
 function play(name, opts) {
@@ -79,6 +92,7 @@ function showMute() {
 }
 muteBtn.addEventListener('click', () => {
   sound.muted = !sound.muted;
+  bedEl.muted = sound.muted;
   showMute();
 });
 showMute();
@@ -209,10 +223,14 @@ function world() {
 function loadStage(w, s) {
   game.world = w;
   game.stage = s;
-  const st = buildStage(WORLDS[w].stages[s]);
+  const st = buildStage(WORLDS[w].stages[s], WORLDS[w].rows);
   st.things = st.things.map((t, i) => ({
-    ...t, id: i, sx: t.x, sy: t.y, alive: true, dir: -1, t: 0, state: 'whole', got: false,
+    ...t, id: i, sx: t.x, sy: t.y, alive: true, dir: -1, t: 0, state: t.type === 'flyer' ? 'hover' : 'whole', got: false,
+    dx: 0, dy: 0, vx: 0,
   }));
+  st.movers = st.things.filter((t) => t.type === 'mover');
+  st.surfaces = st.things.filter((t) => t.type === 'mover' || t.type === 'cap');
+  placeMovers(st, 0);
   stage = st;
   game.inNext = false;
   game.morphT = 0;
@@ -228,6 +246,11 @@ function respawn(fresh = false) {
   player.vy = 0;
   player.ground = true;
   player.poof = 0;
+  player.carry = 0;
+  player.onMover = null;
+  player.groundTile = T.GROUND;
+  game.capChain = 0;
+  game.stompChain = 0;
   player.invul = fresh ? 0 : 0.6;
   player.face = 1;
   snapCamera();
@@ -240,7 +263,7 @@ function bakedFor(w) {
   const key = `${w.id}:${codeOf(monster)}:${game.ears}`;
   let b = bakeCache.get(key);
   if (!b) {
-    b = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit }) };
+    b = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit, fixed: w.fixed }) };
     bakeCache.set(key, b);
     if (bakeCache.size > 16) bakeCache.delete(bakeCache.keys().next().value);
   }
@@ -255,12 +278,11 @@ function ensureBaked() {
 function tileAt(tx, ty) {
   if (tx < 0 || tx >= stage.cols) return T.GROUND; // the stage's ends are walls
   if (ty < 0) return T.AIR;
-  if (ty >= ROWS) return T.AIR;
+  if (ty >= stage.rows) return T.AIR;
   return stage.grid[ty * stage.cols + tx];
 }
 function solid(tx, ty) {
-  const t = tileAt(tx, ty);
-  return t === T.GROUND || t === T.BLOCK;
+  return SOLID.has(tileAt(tx, ty));
 }
 function cookieAt(tx, ty) {
   for (const t of stage.things) {
@@ -270,7 +292,7 @@ function cookieAt(tx, ty) {
 }
 function topSurface(tx, ty) {
   const t = tileAt(tx, ty);
-  return t === T.GROUND || t === T.BLOCK || t === T.ONEWAY || Boolean(cookieAt(tx, ty));
+  return SOLID.has(t) || t === T.ONEWAY || Boolean(cookieAt(tx, ty));
 }
 
 // Feet that clip a ledge's corner, a hair below its top, are lifted onto it instead of stopping.
@@ -286,8 +308,8 @@ function stepUp(tx, ty) {
 
 function movePlayer(dt) {
   const p = player;
-  // Horizontal.
-  p.x += p.vx * dt;
+  // Horizontal: your own speed, plus what carries you (a belt underfoot, or a platform you jumped off).
+  p.x += (p.vx + (p.carry || 0)) * dt;
   const top = p.y - H_BOX;
   const r0 = Math.floor(top + 0.01);
   const r1 = Math.floor(p.y - 0.01);
@@ -319,21 +341,37 @@ function movePlayer(dt) {
   const c1 = Math.floor(p.x + W_BOX / 2 - 0.01);
   p.ground = false;
   p.onCookie = null;
+  p.onMover = null;
+  p.onCap = null;
   if (p.vy >= 0) {
     const ty = Math.floor(p.y);
-    if (ty >= 0 && ty < ROWS && Math.floor(prevY - 0.001) < ty + 0.5) {
+    if (ty >= 0 && ty < stage.rows && Math.floor(prevY - 0.001) < ty + 0.5) {
       for (let tx = c0; tx <= c1; tx++) {
         const t = tileAt(tx, ty);
         const ck = cookieAt(tx, ty);
         const oneWayOk = prevY <= ty + landingGrace();
-        if (t === T.GROUND || t === T.BLOCK || ((t === T.ONEWAY || ck) && oneWayOk)) {
+        if (SOLID.has(t) || ((t === T.ONEWAY || ck) && oneWayOk)) {
           p.y = ty;
           p.vy = 0;
           p.ground = true;
+          p.groundTile = ck ? T.ONEWAY : t;
           if (ck) p.onCookie = ck;
           break;
         }
       }
+    }
+    // Moving platforms, lifts and caps: landed on from above, like a one-way ledge.
+    for (const m of stage.surfaces) {
+      if (p.x + W_BOX / 2 - 0.02 <= m.x || p.x - W_BOX / 2 + 0.02 >= m.x + m.w) continue;
+      if (prevY > m.y + landingGrace() || p.y < m.y) continue;
+      if (p.ground && p.y <= m.y) continue;
+      p.y = m.y;
+      p.vy = 0;
+      p.ground = true;
+      p.onCookie = null;
+      p.groundTile = T.ONEWAY;
+      if (m.type === 'mover') p.onMover = m;
+      else p.onCap = m;
     }
   } else {
     const ty = Math.floor(p.y - H_BOX);
@@ -370,7 +408,7 @@ function update(dt) {
     builderPan += dt;
     animateThings(dt, false);
     cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, 2 + (Math.sin(builderPan * 0.12 - Math.PI / 2) + 1) * 8));
-    cam.y = ROWS - 1.2 - view.tilesH;
+    cam.y = stage.rows - 1.2 - view.tilesH;
     return;
   }
   if (game.mode === 'map') {
@@ -401,6 +439,8 @@ function update(dt) {
   }
   if (game.mode !== 'play') return;
   game.time += dt;
+  accents(dt);
+  placeMovers(stage, dt);
   stepPlayer(dt);
   crossing(dt);
   animateThings(dt, true);
@@ -421,7 +461,9 @@ function crossing(dt) {
   game.inNext = inNext;
   const from = inNext ? w : wn;
   const to = inNext ? wn : w;
-  if (from.smooth === to.smooth && from.res === to.res && !from.oneBit === !to.oneBit) return;
+  // Only a change between pixels and smooth steps through resolutions; between two pixel worlds
+  // (even Pico's 8 into Ink's 16) the monster is redrawn straight in the new style.
+  if (from.smooth === to.smooth) return;
   game.morphT = MORPH;
   game.morphFrom = from;
   play(to.smooth ? 'morph-up' : 'morph-down', { gain: 0.8 });
@@ -453,6 +495,15 @@ function stepPlayer(dt) {
     if (p.poof <= 0) afterLostLife();
     return;
   }
+  // A platform or lift you stand on carries you with it; a belt underfoot carries you its way.
+  if (p.onMover && p.ground) {
+    p.x += p.onMover.dx;
+    p.y += p.onMover.dy;
+  }
+  if (p.ground) {
+    const belt = p.groundTile === T.BELTR ? 1 : p.groundTile === T.BELTL ? -1 : 0;
+    p.carry = belt * MOVE.belt;
+  }
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   const ice = world().ice && p.ground;
   const accel = p.ground ? (ice ? MOVE.iceAccel : MOVE.accel) : MOVE.airAccel;
@@ -476,6 +527,8 @@ function stepPlayer(dt) {
     p.coyote = 0;
     p.ground = false;
     p.airTime = 0;
+    // A jump off a moving platform keeps its sideways motion.
+    if (p.onMover) p.carry = p.onMover.vx;
     play(`${world().sound}-jump`, { rate: 0.96 + Math.random() * 0.08 });
     dust(p.x, p.y, 4);
   }
@@ -491,6 +544,25 @@ function stepPlayer(dt) {
   const fallSpeed = p.vy;
   movePlayer(dt);
   if (!p.ground) p.airTime += dt;
+  if (p.ground && !wasGround) {
+    game.stompChain = 0; // a landing ends a stomp chain
+    if (!p.onMover) p.carry = 0;
+    if (p.onCap) {
+      // A cap launches you: higher for each cap you land on without touching anything else.
+      const v = MOVE.caps[Math.min(MOVE.caps.length - 1, game.capChain)];
+      game.capChain++;
+      bounceOff(v, p.onCap);
+      play('c-bounce', { rate: 0.9 + Math.min(2, game.capChain - 1) * 0.12 });
+      return afterMove(dt);
+    }
+    game.capChain = 0;
+    if (p.groundTile === T.HAY) {
+      bounceOff(input.jump ? MOVE.hayHigh : MOVE.hay, null);
+      play('m-spring', { rate: 0.8, gain: 0.8 });
+      dust(p.x, p.y, 5);
+      return afterMove(dt);
+    }
+  }
   if (p.ground && !wasGround && p.airTime > 0.12) {
     p.land = 0.12;
     if (fallSpeed > 6) {
@@ -502,6 +574,23 @@ function stepPlayer(dt) {
     p.airTime = 0;
     p.coyote = coyoteTime();
   }
+  return afterMove(dt);
+}
+
+// A bounce off a haybale or a cap: an automatic launch, not cut short by letting go of jump.
+function bounceOff(v, thing) {
+  const p = player;
+  p.vy = -v;
+  p.ground = false;
+  p.ownJump = false;
+  p.airTime = 0;
+  p.coyote = 0;
+  p.onMover = null;
+  if (thing) thing.boing = 0.3;
+}
+
+function afterMove(dt) {
+  const p = player;
   if (p.ground && Math.abs(p.vx) > 0.5) p.run += (Math.abs(p.vx) / MOVE.top) * dt * 2.6;
   // A cookie you stand on starts to crumble.
   if (p.onCookie && p.onCookie.state === 'whole') {
@@ -509,7 +598,7 @@ function stepPlayer(dt) {
     p.onCookie.t = 0;
   }
   // Falling off the bottom: no heart saves you from that.
-  if (p.y > ROWS + 1.5) return loseLife();
+  if (p.y > stage.rows + 1.5) return loseLife();
   // Spikes.
   const hb = hurtbox();
   for (let ty = Math.floor(hb.t); ty <= Math.floor(hb.b); ty++) {
@@ -576,9 +665,10 @@ function touchThings(hb) {
         }
         break;
       case 'walker':
+      case 'flyer':
       case 'worm': {
         const hw = t.type === 'worm' ? 0.7 : 0.4 * ENEMY_SIZE;
-        const hh = t.type === 'worm' ? 0.55 : 0.8 * ENEMY_SIZE;
+        const hh = t.type === 'worm' ? 0.55 : (t.type === 'flyer' ? 0.7 : 0.8) * ENEMY_SIZE;
         if (!overlaps({ l: p.x - W_BOX / 2, r: p.x + W_BOX / 2, t: p.y - H_BOX, b: p.y }, t.x - hw, t.y - hh, t.x + hw, t.y)) break;
         // A stomp: falling, with your feet above its middle. A spiky walker can't be stomped.
         if (t.kind !== 'spiky' && p.vy > 0 && p.y - p.vy * STEP <= t.y - hh * 0.5 + 0.15) {
@@ -586,8 +676,18 @@ function touchThings(hb) {
           t.squash = 0;
           p.vy = -(input.jump ? MOVE.jump : MOVE.stomp);
           p.airTime = 0;
-          play(`${s}-stomp`);
+          play(`${s}-stomp`, { rate: 1 + Math.min(game.stompChain, 5) * 0.08 });
           dust(t.x, t.y - 0.2, 6);
+          // A stomp chain: each stomp after the first before you land pays extra, in a world whose
+          // rule it is (Pico).
+          game.stompChain++;
+          const extra = world().chain ? Math.min(CHAIN_MAX, game.stompChain - 1) : 0;
+          if (extra > 0) {
+            game.coins += extra;
+            game.chainPaid = (game.chainPaid || 0) + extra;
+            particles.push({ x: t.x, y: t.y - 1.6, vx: 0, vy: -1.5, t: 0, life: 0.9, kind: 'text', text: `+${extra}`, size: 0.6 });
+            play(`${s}-coin`, { rate: 1.2 + extra * 0.08 });
+          }
         } else if (overlaps(hb, t.x - hw * 0.8, t.y - hh * 0.85, t.x + hw * 0.8, t.y)) {
           return hit(t.x);
         }
@@ -609,6 +709,7 @@ function touchThings(hb) {
 function hit(fromX) {
   const p = player;
   if (p.invul > 0 || p.poof > 0) return;
+  game.stompChain = 0; // a hit ends a stomp chain
   if (game.shields > 0) {
     game.shields--;
     p.invul = 1.2;
@@ -640,7 +741,7 @@ function loseLife() {
   play(`${world().sound}-poof`);
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    particles.push({ x: p.x, y: Math.min(p.y, ROWS) - 0.7, vx: Math.cos(a) * 3.2, vy: Math.sin(a) * 3.2, t: 0, life: 0.45, kind: 'puff', size: 0.32 });
+    particles.push({ x: p.x, y: Math.min(p.y, stage.rows) - 0.7, vx: Math.cos(a) * 3.2, vy: Math.sin(a) * 3.2, t: 0, life: 0.45, kind: 'puff', size: 0.32 });
   }
 }
 function afterLostLife() {
@@ -685,12 +786,13 @@ function animateThings(dt, live) {
       if (t.falling) {
         t.vy = (t.vy || 0) + MOVE.drip * dt;
         t.y += t.vy * dt;
-        if (topSurface(Math.floor(t.x), Math.floor(t.y + 0.8)) || t.y > ROWS) {
+        if (topSurface(Math.floor(t.x), Math.floor(t.y + 0.8)) || t.y > stage.rows) {
           t.alive = false;
           for (let i = 0; i < 4; i++) particles.push({ x: t.x, y: t.y + 0.6, vx: (Math.random() - 0.5) * 4, vy: -2 - Math.random() * 2, g: 25, t: 0, life: 0.5, kind: 'crumb', size: 0.15 });
         }
       }
     }
+    if (t.type === 'flyer' && t.alive && live) flyerStep(t, dt);
     if ((t.type === 'walker' || t.type === 'worm') && t.alive && live) {
       const speed = t.type === 'worm' ? MOVE.worm : MOVE.walker;
       const nx = t.x + t.dir * speed * dt;
@@ -703,12 +805,69 @@ function animateThings(dt, live) {
   }
 }
 
+// Moving platforms and lifts: back and forth along their track at MOVE.mover tiles/s, starting at
+// `phase` of the way along it. Each keeps how far it moved this step, to carry what stands on it.
+function placeMovers(st, dt) {
+  for (const m of st.movers) {
+    m.mt = (m.mt || 0) + dt;
+    const f = (((m.mt * MOVE.mover) / m.range + 2 * m.phase) % 2 + 2) % 2;
+    const u = (f < 1 ? f : 2 - f) * m.range;
+    const nx = m.axis === 'x' ? m.sx + u : m.sx;
+    const ny = m.axis === 'y' ? m.sy - u : m.sy;
+    m.dx = nx - m.x;
+    m.dy = ny - m.y;
+    m.vx = dt > 0 ? m.dx / dt : 0;
+    m.x = nx;
+    m.y = ny;
+  }
+}
+
+// A flyer hovers where it was put, bobbing; when the monster, on the ground, comes within 5 tiles
+// ahead of it, it swoops at where the monster stood, then climbs back home and waits a moment before the next.
+function flyerStep(t, dt) {
+  const p = player;
+  if (t.state === 'hover') {
+    t.wait = Math.max(0, (t.wait || 0) - dt);
+    t.y = t.sy + Math.sin(game.t * 3 + t.id) * 0.15;
+    t.x = t.sx;
+    const ahead = t.x - p.x;
+    // It dives only at a monster on the ground, at where it stands: keep moving and it misses.
+    if (!t.wait && p.ground && ahead > 0 && ahead <= 5 && p.y > t.y && p.y - t.y < 8 && p.poof <= 0) {
+      t.state = 'swoop';
+      t.tx = p.x;
+      t.ty = p.y;
+      t.dir = p.x < t.x ? -1 : 1;
+    }
+  } else {
+    const back = t.state === 'return';
+    const gx = back ? t.sx : t.tx;
+    const gy = back ? t.sy : t.ty;
+    const dx = gx - t.x;
+    const dy = gy - t.y;
+    const d = Math.hypot(dx, dy);
+    const step = (back ? MOVE.climb : MOVE.swoop) * dt;
+    if (d <= step || (!back && t.y >= gy)) {
+      if (back) {
+        t.state = 'hover';
+        t.wait = 1.2;
+        t.x = t.sx;
+        t.y = t.sy;
+      } else t.state = 'return';
+    } else {
+      t.x += (dx / d) * step;
+      t.y += (dy / d) * step;
+      if (Math.abs(dx) > 0.05) t.dir = Math.sign(dx);
+    }
+  }
+}
+
 function updateCamera(dt) {
   const p = player;
   const want = Math.max(-1, Math.min(1, p.vx / MOVE.top)) * Math.min(3, view.tilesW * 0.22);
   cam.lead += (want - cam.lead) * Math.min(1, dt * 2.5);
   const tx = p.x - view.tilesW / 2 + cam.lead;
-  const ty = p.y - view.tilesH * 0.62;
+  // Launched up hard (a spring, a cap), the camera looks up ahead of you, so the landing is in view.
+  const ty = p.y - view.tilesH * (p.vy < -12 ? 0.8 : 0.62);
   cam.x += (tx - cam.x) * Math.min(1, dt * 8);
   cam.y += (ty - cam.y) * Math.min(1, dt * (p.vy < -12 ? 9 : 5));
   clampCamera();
@@ -716,7 +875,7 @@ function updateCamera(dt) {
 function clampCamera() {
   cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, cam.x));
   // Show at most a tile and a bit below the usual ground line's depth: pits still read as bottomless.
-  cam.y = Math.min(ROWS - 1.2 - view.tilesH, cam.y);
+  cam.y = Math.min(stage.rows - 1.2 - view.tilesH, cam.y);
   if (stage.cols < view.tilesW) cam.x = (stage.cols - view.tilesW) / 2;
 }
 function snapCamera() {
@@ -749,7 +908,7 @@ function startWorld(w, keepAssist = true) {
   }
   game.earsThisWorld = false;
   game.earsBefore = game.ears;
-  const built = buildStage(WORLDS[w].stages[0]);
+  const built = buildStage(WORLDS[w].stages[0], WORLDS[w].rows);
   game.coinsTotal = built.coins + built.things.filter((t) => t.type === 'heart').length;
   loadStage(w, 0);
 }
@@ -848,11 +1007,68 @@ document.querySelector('[data-rebuild]').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------- music
+// A world with the owner's music plays its bed, a two-minute track, on a loop, and over it now and
+// then (every 15 to 40 s of play, at random) one of its short accents, never the same one twice
+// running, so the loop never settles into a pattern the ear learns. The bed is streamed by an audio
+// element from a copy fetched as the page loads: cached for offline play, and never decoded whole
+// (eight two-minute tracks decoded would be hundreds of megabytes on a phone). Other worlds loop
+// their sound set's music.
+const ACCENT_GAP = [15, 40];
+const bedEl = new Audio();
+bedEl.loop = true;
+bedEl.preload = 'auto';
+bedEl.volume = 0.6 * 0.35;
+const bedUrls = {};
+for (const w of WORLDS) {
+  if (!w.bed) continue;
+  const url = `sounds/${w.id}-bed.mp3`;
+  bedUrls[w.id] = fetch(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((b) => (b ? URL.createObjectURL(b) : url))
+    .catch(() => url);
+}
 function music() {
   stopMusic();
-  const name = world().music || `${world().sound}-music`;
+  const w = world();
+  if (w.bed) {
+    heard.push(`loop:${w.id}-bed`);
+    let stopped = false;
+    bedUrls[w.id].then((src) => {
+      if (stopped) return;
+      if (bedEl.dataset.world !== w.id) {
+        bedEl.src = src;
+        bedEl.dataset.world = w.id; // the same world's bed carries on where it was after a pause
+      }
+      bedEl.muted = sound.muted;
+      const p = bedEl.play();
+      if (p && p.catch) p.catch(() => {});
+    });
+    game.accentIn = nextAccentGap();
+    stopMusic = () => {
+      stopped = true;
+      bedEl.pause();
+    };
+    return;
+  }
+  game.accentIn = Infinity;
+  const name = w.music || `${w.sound}-music`;
   heard.push(`loop:${name}`);
   stopMusic = sound.loop(name, { gain: 0.35 });
+}
+function nextAccentGap() {
+  return ACCENT_GAP[0] + Math.random() * (ACCENT_GAP[1] - ACCENT_GAP[0]);
+}
+// Counted in play only: paused, on the map or between worlds, no accent comes.
+function accents(dt) {
+  if (!world().bed || !(game.accentIn < Infinity)) return;
+  game.accentIn -= dt;
+  if (game.accentIn > 0) return;
+  let n;
+  do n = 1 + Math.floor(Math.random() * ACCENTS);
+  while (n === game.lastAccent && ACCENTS > 1);
+  game.lastAccent = n;
+  play(`${world().id}-a${n}`, { gain: 0.55 });
+  game.accentIn = nextAccentGap();
 }
 
 // ---------------------------------------------------------------- drawing
@@ -884,6 +1100,34 @@ const INK = {
   door: 56,
   decor: [36, 37, 58, 38, 36],
 };
+// The Pixel Platformer's Farm and Industrial expansions (18 px, 16 to a row), and the Pico-8
+// Platformer (8 px, 15 to a row, in PICO-8's 16 colours).
+const FARM = {
+  top: [1, 2, 3, 0], dirt: [33, 34, 35, 32], oneway: [13, 14, 15, 12], block: 6, hay: 10,
+  decor: [20, 4, 56, 58, 73, 5, 57, 75],
+};
+const IND = {
+  top: [1, 2, 3, 0], dirt: [33, 34, 35, 32], oneway: [4, 5, 6, 5], block: 38, belt: [100, 101, 102, 85],
+  mover: [87, 88, 90], decor: [9, 10, 41, 42, 9, 26],
+};
+const PICO = {
+  top: 34, fill: [2, 2, 17, 2, 32, 2, 9], oneway: [48, 49, 50, 49], block: 19, spikes: 75, spring: [30, 15],
+  coin: 88, heart: 132, walker: [105, 106], walker2: [90, 91], flyer: [112, 113], door: [101, 116],
+  decor: [65, 80, 72, 87, 65], cloud: 81, edge: '#ffa300',
+};
+function sheetTile(g, img, cols, ts, idx, x, y, res) {
+  g.drawImage(img, (idx % cols) * ts, Math.floor(idx / cols) * ts, ts, ts, Math.round(x), Math.round(y), res, res);
+}
+const farmTile = (g, idx, x, y, res) => sheetTile(g, images.farm, 16, 18, idx, x, y, res);
+const indTile = (g, idx, x, y, res) => sheetTile(g, images.ind, 16, 18, idx, x, y, res);
+const picoTile = (g, idx, x, y, res) => sheetTile(g, images.pico, 15, 8, idx, x, y, res);
+function mushTile(g, name, x, y, res, w = 1, h = 1) {
+  const f = MUSHROOM[name];
+  g.drawImage(images.mushroom, f[0], f[1], f[2], f[3], x, y, res * w + seam, res * h + seam);
+}
+// Worlds drawn with the Pixel Platformer's own coins, hearts, springs, spikes, doors and walkers.
+const ppLike = (w) => w.pack === 'pp' || w.pack === 'farm' || w.pack === 'ind';
+
 function ppTile(g, idx, x, y, res) {
   const sx = (idx % 20) * 18;
   const sy = Math.floor(idx / 20) * 18;
@@ -934,11 +1178,11 @@ function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height,
     g.translate(-ox, -oy);
     for (let x = from; x <= to; x++) {
       const gy = stage.ground[x];
-      if (gy >= ROWS || tileAt(x, gy - 1) !== T.AIR) continue;
+      if (gy >= stage.rows || tileAt(x, gy - 1) !== T.AIR) continue;
       const h = hash(x + WORLDS.indexOf(lw) * 31);
       if (h < 0.3) drawDecor(g, lw, x, gy - 1, res, h);
     }
-    for (let y = Math.max(0, Math.floor(cam.y)); y < ROWS; y++) {
+    for (let y = Math.max(0, Math.floor(cam.y)); y < Math.min(stage.rows, Math.ceil(cam.y + vh / res) + 1); y++) {
       for (let x = from; x <= to; x++) {
         const t = stage.grid[y * stage.cols + x];
         if (t !== T.AIR) drawTile(g, lw, t, x, y, res);
@@ -968,6 +1212,7 @@ function edgeIndex(x, y, kind) {
 function drawTile(g, w, t, x, y, res) {
   const px = x * res;
   const py = y * res;
+  if (w.pack === 'farm' || w.pack === 'ind' || w.pack === 'pico' || w.pack === 'mush') return drawTileNew(g, w, t, x, y, res, px, py);
   if (w.id === 'meadow' || w.id === 'frost') {
     const set = PP[w.id];
     if (t === T.GROUND) {
@@ -1008,8 +1253,78 @@ function drawTile(g, w, t, x, y, res) {
   }
 }
 
+// The new worlds' tiles: Farm's straw-topped soil, crates and haybales; Industrial's steel, girders
+// and belts; Pico's dark rock edged in orange; Mushroom's soft tan caps over soil.
+function drawTileNew(g, w, t, x, y, res, px, py) {
+  const top = (k) => tileAt(x, y - 1) !== T.GROUND && tileAt(x, y - 1) !== k;
+  if (w.pack === 'farm' || w.pack === 'ind') {
+    const set = w.pack === 'farm' ? FARM : IND;
+    const tile = w.pack === 'farm' ? farmTile : indTile;
+    if (t === T.GROUND) tile(g, top(T.GROUND) ? set.top[edgeIndex(x, y, T.GROUND)] : set.dirt[edgeIndex(x, y, T.GROUND)], px, py, res);
+    else if (t === T.BLOCK) tile(g, set.block, px, py, res);
+    else if (t === T.ONEWAY) tile(g, set.oneway[edgeIndex(x, y, T.ONEWAY)], px, py, res);
+    else if (t === T.SPIKES) ppTile(g, PP.spikes, px, py, res);
+    else if (t === T.HAY) tile(g, FARM.hay, px, py, res);
+    else if (t === T.BELTL || t === T.BELTR) {
+      const l = tileAt(x - 1, y) === t;
+      const r = tileAt(x + 1, y) === t;
+      tile(g, IND.belt[l && r ? 1 : l ? 2 : r ? 0 : 1], px, py, res);
+      // Arrows running along the belt the way it carries.
+      const u = Math.max(1, Math.round(res / 18));
+      const dir = t === T.BELTR ? 1 : -1;
+      const off = (((game.t * MOVE.belt * dir) % 1) + 1) % 1;
+      g.fillStyle = '#ffd23f';
+      for (let k = 0; k < 2; k++) {
+        const ax = Math.round(px + ((off + k * 0.5) % 1) * res);
+        const ay = Math.round(py + res * 0.42);
+        for (let i = 0; i < 3; i++) g.fillRect(ax + (dir > 0 ? i : -i) * u, ay - (2 - i) * u, u, (2 - i) * 2 * u + u);
+      }
+    }
+  } else if (w.pack === 'pico') {
+    const u = Math.max(1, Math.round(res / 8));
+    if (t === T.GROUND) {
+      picoTile(g, top(T.GROUND) ? PICO.top : PICO.fill[Math.floor(hash(x * 3 + y * 7) * PICO.fill.length)], px, py, res);
+      g.fillStyle = PICO.edge;
+      if (tileAt(x - 1, y) === T.AIR || tileAt(x - 1, y) === T.SPIKES) g.fillRect(Math.round(px), Math.round(py), u, res);
+      if (tileAt(x + 1, y) === T.AIR || tileAt(x + 1, y) === T.SPIKES) g.fillRect(Math.round(px + res - u), Math.round(py), u, res);
+    } else if (t === T.BLOCK) picoTile(g, PICO.block, px, py, res);
+    else if (t === T.ONEWAY) picoTile(g, PICO.oneway[edgeIndex(x, y, T.ONEWAY)], px, py, res);
+    else if (t === T.SPIKES) picoTile(g, PICO.spikes, px, py, res);
+    else picoTile(g, PICO.block, px, py, res);
+  } else {
+    // Mushroom: smooth.
+    if (t === T.GROUND) {
+      if (top(T.GROUND)) {
+        const e = edgeIndex(x, y, T.GROUND);
+        mushTile(g, ['shroomTanLeft', 'shroomTanMid', 'shroomTanRight', 'shroomTanMid'][e], px, py, res);
+      } else {
+        g.fillStyle = '#7a5a3f';
+        g.fillRect(px, py, res + seam, res + seam);
+        g.fillStyle = '#8c6a4c';
+        const h = hash(x * 7 + y * 13);
+        g.beginPath();
+        g.arc(px + res * (0.2 + h * 0.6), py + res * (0.25 + hash(x + y) * 0.5), res * 0.09, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else if (t === T.BLOCK) mushTile(g, 'shroomTanMidAlt', px, py, res);
+    else if (t === T.ONEWAY) {
+      const e = edgeIndex(x, y, T.ONEWAY);
+      mushTile(g, ['shroomBrownLeft', 'shroomBrownMid', 'shroomBrownRight', 'shroomBrownMidAlt'][e], px, py, res);
+    } else candyTile(g, 'canePinkSmall', px, py, res);
+  }
+  return undefined;
+}
+
 function drawDecor(g, w, x, y, res, h) {
   const pick = (list) => list[Math.floor(h * 16) % list.length];
+  if (w.pack === 'farm') return farmTile(g, pick(FARM.decor), x * res, y * res, res);
+  if (w.pack === 'ind') return indTile(g, pick(IND.decor), x * res, y * res, res);
+  if (w.pack === 'pico') return picoTile(g, pick(PICO.decor), x * res, y * res, res);
+  if (w.pack === 'mush') {
+    const n = pick(['tinyShroom_red', 'tinyShroom_tan', 'bush', 'tinyShroom_brown', 'tinyShroom_tan']);
+    if (n === 'bush') return mushTile(g, n, x * res - res, y * res + res * 0.35, res, 3, 0.65);
+    return mushTile(g, n, x * res, y * res, res);
+  }
   if (w.id === 'meadow' || w.id === 'frost') ppTile(g, pick(PP[w.id].decor), x * res, y * res, res);
   else if (w.id === 'ink') inkTile(g, pick(INK.decor), x * res, y * res, res);
   else {
@@ -1029,18 +1344,20 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
   grad.addColorStop(1, w.sky[1]);
   g.fillStyle = grad;
   g.fillRect(0, 0, vw, vh);
-  const groundY = 11 * res - oy; // the usual ground line on screen
-  if (w.id === 'meadow' || w.id === 'frost') {
-    // The pack's background panel (green for the Meadow, icy blue for Frost), with parallax.
+  const groundY = stage.base * res - oy; // the usual ground line on screen
+  if (w.pack === 'ind' || w.pack === 'pico' || w.pack === 'mush') return drawBackgroundNew(g, w, res, ox, oy, vw, vh, groundY);
+  if (w.id === 'meadow' || w.id === 'frost' || w.id === 'farm') {
+    // The pack's background panel (green for the Meadow and the Farm, icy blue for Frost), with parallax.
+    const bg = w.id === 'frost' ? 'frost' : 'meadow';
     const s = res / 18;
     const tw = 24 * s;
     const par = Math.round(ox * 0.35 + game.t * 2 * s);
     const baseY = Math.round(groundY - 24 * s * 2.2);
-    g.fillStyle = images.bgFill[w.id];
+    g.fillStyle = images.bgFill[bg];
     g.fillRect(0, baseY + 3 * tw - 1, vw, vh);
     for (let x = -((par % (2 * tw)) + 2 * tw) % (2 * tw) - 2 * tw; x < vw; x += 2 * tw) {
       for (let r = 0; r < 3; r++) {
-        g.drawImage(images.meadowBg, PP[w.id].bgX, r * 24, 48, 24, Math.round(x), baseY + r * tw, 2 * tw, tw);
+        g.drawImage(images.meadowBg, PP[bg].bgX, r * 24, 48, 24, Math.round(x), baseY + r * tw, 2 * tw, tw);
       }
     }
     // Clouds drifting by (Frost: falling snow too).
@@ -1123,6 +1440,95 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
   }
 }
 
+// Industrial: a far skyline of factories with chimneys, in pixels. Pico: PICO-8's peach sky and
+// its pack's clouds, nothing else. Mushroom: soft hills and giant mushrooms far away, smooth.
+function drawBackgroundNew(g, w, res, ox, oy, vw, vh, groundY) {
+  if (w.pack === 'ind') {
+    const u = Math.max(1, Math.round(res / 18));
+    const par = ox * 0.3;
+    const span = res * 4;
+    for (const [layer, col, f, hgt] of [[0, '#b7c2cd', 0.18, 5.5], [1, '#8d9aa8', 0.32, 3.6]]) {
+      g.fillStyle = col;
+      const p2 = ox * f;
+      for (let i = -1; i < vw / span + 2; i++) {
+        const idx = i + Math.floor(p2 / span) + layer * 17;
+        const bx = Math.round(i * span - (p2 % span));
+        const bh = Math.round(res * (hgt * (0.6 + hash(idx) * 0.6)));
+        g.fillRect(bx, Math.round(groundY - bh), Math.round(span * 0.8), bh + vh);
+        if (hash(idx + 3) < 0.55) {
+          const cx = bx + Math.round(span * 0.2 + hash(idx + 5) * span * 0.4);
+          const chH = Math.round(res * (1.2 + hash(idx + 7) * 1.5));
+          g.fillRect(cx, Math.round(groundY - bh - chH), Math.round(res * 0.35), chH + 1);
+          // A puff of smoke drifting up from the chimney.
+          if (layer === 1) {
+            g.fillStyle = 'rgba(240,244,248,0.8)';
+            const k = (game.t * 0.4 + hash(idx)) % 1;
+            const sz = Math.round(res * (0.25 + k * 0.4));
+            g.fillRect(cx - Math.round(k * res * 0.4), Math.round(groundY - bh - chH - k * res * 2.2 - sz), sz, sz);
+            g.fillStyle = col;
+          }
+        }
+      }
+    }
+    void par;
+    g.fillStyle = '#5d6a78';
+    g.fillRect(0, Math.round(groundY + res * 0.5), vw, vh);
+    void u;
+  } else if (w.pack === 'pico') {
+    const u = Math.max(1, Math.round(res / 8));
+    g.fillStyle = w.sky[0];
+    g.fillRect(0, 0, vw, vh);
+    for (let i = 0; i < 7; i++) {
+      const cx = ((i * 9.7 + game.t * (0.15 + (i % 3) * 0.06) - cam.x * 0.2) % 48 + 48) % 48;
+      const px = Math.round((cx - 6) * res);
+      const py = Math.round(groundY - res * (5 + ((i * 5) % 7) * 1.3));
+      picoTile(g, PICO.cloud, px, py, res);
+      picoTile(g, PICO.cloud, px + res, py, res);
+    }
+    // Far pink trees in a row, as in the pack's sample.
+    const par = ox * 0.4;
+    const span = res * 6;
+    for (let i = -1; i < vw / span + 2; i++) {
+      const idx = i + Math.floor(par / span);
+      const tx = Math.round(i * span - (par % span) + hash(idx) * res * 3);
+      const th = 2 + Math.floor(hash(idx + 1) * 3);
+      for (let k = 0; k < th; k++) picoTile(g, 38, tx, Math.round(groundY - res * (k + 1)), res);
+      picoTile(g, 23, tx, Math.round(groundY - res * (th + 1)), res);
+      picoTile(g, 8, tx, Math.round(groundY - res * (th + 2)), res);
+    }
+    void u;
+  } else {
+    // Mushroom: far hills and giant mushrooms, faded. In a tall level they sit on a horizon that
+    // moves slowly as the camera climbs, so the climb reads as height.
+    const hz = vh * 0.78 + (groundY - vh * 0.78) * 0.12;
+    g.fillStyle = '#b6e083';
+    const par = ox * 0.25;
+    for (let i = -1; i < vw / (res * 4) + 2; i++) {
+      const hx = i * res * 4 - (par % (res * 4));
+      g.beginPath();
+      g.arc(hx, hz + res * 0.6, res * (2.6 + hash(i + Math.floor(par / (res * 4))) * 1.6), Math.PI, 0);
+      g.fill();
+    }
+    g.fillRect(0, hz + res * 0.5, vw, vh);
+    g.globalAlpha = 0.4;
+    const par2 = ox * 0.15;
+    for (let i = -1; i < vw / (res * 6) + 2; i++) {
+      const idx = i + Math.floor(par2 / (res * 6));
+      const lx = i * res * 6 - (par2 % (res * 6)) + res * hash(idx) * 2;
+      const n = ['tallShroom_red', 'tallShroom_tan', 'tallShroom_brown'][Math.abs(idx) % 3];
+      const sz = res * (2 + hash(idx + 4) * 2);
+      mushTile(g, n, lx, hz - sz + res * 0.6, sz);
+    }
+    g.globalAlpha = 1;
+    const deep = g.createLinearGradient(0, groundY, 0, groundY + res * 4);
+    deep.addColorStop(0, '#6a9a3f');
+    deep.addColorStop(1, '#2f4d22');
+    g.fillStyle = deep;
+    g.fillRect(0, groundY + res * 0.55, vw, vh);
+  }
+  return undefined;
+}
+
 // A heart you can't hold (you already hold two) shows as a coin.
 function heartAsCoin() {
   return game.shields >= MAX_SHIELDS;
@@ -1134,17 +1540,34 @@ function drawThings(g, w, res, pixel, mine) {
     const tw = w;
     const px = t.x * res;
     const py = t.y * res;
-    const pp = tw.id === 'meadow' || tw.id === 'frost';
+    const pp = ppLike(tw);
     const ink = tw.id === 'ink';
+    const pico = tw.pack === 'pico';
+    const mush = tw.pack === 'mush';
     const sm = g.imageSmoothingEnabled;
     if (!tw.smooth) g.imageSmoothingEnabled = false;
     switch (t.type) {
       case 'coin':
       case 'heart': {
         if (!t.alive) break;
+        // A hidden pocket's coins show only once you come within 3 tiles; until then a faint glint
+        // marks the pocket every 2 s.
+        if (t.hidden && !t.found) {
+          if (Math.hypot(t.x - player.x, t.y - (player.y - H_BOX / 2)) <= POCKET_NEAR) t.found = true;
+          else {
+            const first = stage.things.find((c) => c.pocket === t.pocket);
+            if (first === t && glintOn(t)) drawGlint(g, tw, px, py, res, pixel);
+            break;
+          }
+        }
         const asCoin = t.type === 'coin' || heartAsCoin();
         const bob = t.type === 'heart' ? Math.round(Math.sin(game.t * 3 + t.id) * res * 0.08) : 0;
-        if (pp) ppTile(g, asCoin ? PP.coin[Math.floor(game.t * 4 + t.id) % 2] : PP.heart, px - res / 2, py - res / 2 + bob, res);
+        if (pico) picoTile(g, asCoin ? PICO.coin : PICO.heart, px - res / 2, py - res / 2 + bob, res);
+        else if (mush) {
+          const b2 = Math.sin(game.t * 3 + t.id) * res * 0.06;
+          if (asCoin) drawSmoothCoin(g, px, py + b2, res);
+          else candyTile(g, 'heart', px - res * 0.45, py - res * 0.45 + b2, res * 0.9, 1, 1);
+        } else if (pp) ppTile(g, asCoin ? PP.coin[Math.floor(game.t * 4 + t.id) % 2] : PP.heart, px - res / 2, py - res / 2 + bob, res);
         else if (ink) inkTile(g, asCoin ? INK.coin[Math.floor(game.t * 4 + t.id) % 2] : INK.heart, px - res / 2, py - res / 2 + bob, res);
         else {
           const b2 = Math.sin(game.t * 3 + t.id) * res * 0.06;
@@ -1156,6 +1579,7 @@ function drawThings(g, w, res, pixel, mine) {
       case 'spring': {
         const up = t.boing ? Math.round(res * 0.15) : 0;
         if (ink) inkTile(g, INK.spring[t.boing ? 1 : 0], px - res / 2, py - res, res);
+        else if (pico) picoTile(g, PICO.spring[t.boing ? 1 : 0], px - res / 2, py - res, res);
         else if (pp) ppTile(g, PP.spring, px - res / 2, py - res - up, res);
         else candyTile(g, 'candyBlue', px - res * 0.6, py - res, res * 1.2, 1, 1);
         break;
@@ -1185,6 +1609,9 @@ function drawThings(g, w, res, pixel, mine) {
         if (t.kind === 'ghost') {
           const r2 = Math.round(res * z);
           inkTile(g, INK.ghost[f], -r2 / 2, -r2 + Math.round(Math.sin(game.t * 4 + t.id) * res * 0.06), r2);
+        } else if (pico) {
+          const r2 = Math.round(res * z);
+          picoTile(g, (t.id % 3 ? PICO.walker : PICO.walker2)[f], -r2 / 2, -r2, r2);
         } else if (tw.smooth) {
           // Candy's bad guys: the New Platformer Pack's slimes, purple (stomp it) or green with a spike (don't).
           const col = (t.kind === 'spiky' ? 3 : 0) + f;
@@ -1198,6 +1625,57 @@ function drawThings(g, w, res, pixel, mine) {
           g.drawImage(images.meadowChars, sx, sy, 24, 24, Math.round(-12 * s), Math.round(-24 * s + 2 * s), Math.round(24 * s), Math.round(24 * s));
         }
         g.restore();
+        break;
+      }
+      case 'flyer': {
+        if (!t.alive) break;
+        // A flyer: the Pico pack's winged one, flapping (fast while it swoops).
+        const f = Math.floor(game.t * (t.state === 'swoop' ? 14 : 7)) % 2;
+        const r2 = Math.round(res * ENEMY_SIZE);
+        g.save();
+        g.translate(Math.round(px), Math.round(py));
+        if (t.dir > 0) g.scale(-1, 1);
+        if (pico) picoTile(g, PICO.flyer[f], -r2 / 2, -r2, r2);
+        else inkTile(g, INK.ghost[f], -r2 / 2, -r2, r2);
+        g.restore();
+        break;
+      }
+      case 'cap': {
+        // A bouncy cap on its stem down to the ground (or the level's bottom), squashing as it launches.
+        const sq = t.boing ? Math.sin(t.boing * 20) * t.boing * 0.5 : 0;
+        const cx = t.x * res;
+        let gy = t.y + 1;
+        const col = Math.floor(t.x + 1);
+        while (gy < stage.rows && !SOLID.has(tileAt(col, gy))) gy++;
+        if (mush) {
+          for (let y = t.y + 1; y < gy; y++) mushTile(g, y === gy - 1 && gy < stage.rows ? 'stemBase' : y === t.y + 1 ? 'stemTop' : 'stem', cx + res, y * res, res);
+          const h = res * (1 - sq * 0.4);
+          const ww = res * (1 + sq * 0.15);
+          const x0 = cx - (ww - res) * 1.5;
+          mushTile(g, 'shroomRedLeft', x0, py + res - h, ww, 1, h / ww);
+          mushTile(g, 'shroomRedMid', x0 + ww, py + res - h, ww, 1, h / ww);
+          mushTile(g, 'shroomRedRight', x0 + ww * 2, py + res - h, ww, 1, h / ww);
+        } else {
+          g.fillStyle = '#e8d8b8';
+          g.fillRect(cx + res * 1.3, py + res, res * 0.4, (gy - t.y - 1) * res);
+          g.fillStyle = '#d6453d';
+          g.fillRect(cx, py, res * 3, res * 0.6);
+        }
+        break;
+      }
+      case 'mover': {
+        // A moving platform or lift: the Industrial pack's striped plates (its track drawn faintly).
+        const x0 = Math.round(t.x * res);
+        const y0 = Math.round(t.y * res);
+        if (tw.pack === 'ind') {
+          g.fillStyle = 'rgba(38,35,56,0.25)';
+          const u = Math.max(1, Math.round(res / 18));
+          if (t.axis === 'x') g.fillRect(Math.round(t.sx * res), Math.round(t.sy * res + res * 0.5), Math.round((t.range + 3) * res), u);
+          else g.fillRect(Math.round((t.sx + 1.5) * res), Math.round((t.sy - t.range) * res), u, Math.round(t.range * res));
+          for (let i = 0; i < 3; i++) indTile(g, IND.mover[i], x0 + i * res, y0, res);
+        } else if (pico) for (let i = 0; i < 3; i++) picoTile(g, PICO.oneway[i], x0 + i * res, y0, res);
+        else if (pp) for (let i = 0; i < 3; i++) ppTile(g, PP.oneway[i], x0 + i * res, y0, res);
+        else for (let i = 0; i < 3; i++) candyTile(g, ['cakeHalfLeft', 'cakeHalfMid', 'cakeHalfRight'][i], x0 + i * res, y0, res);
         break;
       }
       case 'worm': {
@@ -1226,10 +1704,57 @@ function drawThings(g, w, res, pixel, mine) {
   }
 }
 
+const POCKET_NEAR = 3; // a hidden pocket's coins show once the monster is this near (tiles)
+function glintOn(t) {
+  return ((game.t + t.pocket * 0.7) % 2) < 0.35;
+}
+// The glint over a hidden pocket: a little four-pointed twinkle.
+function drawGlint(g, w, px, py, res, pixel) {
+  const u = pixel ? Math.max(1, Math.round(res / (w.res || 18))) : res / 18;
+  g.fillStyle = w.pack === 'pico' ? '#fff1e8' : 'rgba(255,255,240,0.9)';
+  g.fillRect(Math.round(px - u / 2), Math.round(py - 3 * u), Math.max(1, Math.round(u)), Math.round(6 * u));
+  g.fillRect(Math.round(px - 3 * u), Math.round(py - u / 2), Math.round(6 * u), Math.max(1, Math.round(u)));
+}
+// Mushroom's coin: a smooth gold disc (the pack has none of its own).
+function drawSmoothCoin(g, px, py, res) {
+  const r = res * 0.3;
+  const sq = Math.abs(Math.cos(game.t * 3 + px));
+  g.fillStyle = '#e8a417';
+  g.beginPath();
+  g.ellipse(px, py, r * (0.35 + sq * 0.65), r, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffd23f';
+  g.beginPath();
+  g.ellipse(px, py, r * (0.35 + sq * 0.65) * 0.72, r * 0.72, 0, 0, Math.PI * 2);
+  g.fill();
+}
+
 // The door at a level's end, in the style of the world it leads to (it stands in the glimpse).
 function drawPortal(g, w, px, py, res, pixel) {
   const glow = 0.5 + 0.5 * Math.sin(game.t * 4);
-  if (w.id === 'meadow' || w.id === 'frost') {
+  if (w.pack === 'pico') {
+    // Pico's own door, and a twinkle in its colours only (the world stays in its 16).
+    picoTile(g, PICO.door[0], px - res / 2, py - 2 * res, res);
+    picoTile(g, PICO.door[1], px - res / 2, py - res, res);
+    g.fillStyle = '#fff1e8';
+    const u = Math.max(1, Math.round(res / 8));
+    const a = game.t * 2;
+    g.fillRect(Math.round(px + Math.cos(a) * res * 0.9), Math.round(py - res * 1.1 + Math.sin(a) * res * 1.1), u, u);
+    return;
+  }
+  if (w.pack === 'mush') {
+    // A tall red mushroom, glowing: the way on.
+    g.fillStyle = `rgba(255,255,220,${0.25 + glow * 0.25})`;
+    g.beginPath();
+    g.arc(px, py - res * 1.1, res * 1.3, 0, Math.PI * 2);
+    g.fill();
+    mushTile(g, 'tallShroom_red', px - res * 1.1, py - res * 2.2, res * 2.2);
+    return;
+  }
+  if (w.pack === 'farm' || w.pack === 'ind') {
+    ppTile(g, PP.door[0], px - res / 2, py - 2 * res, res);
+    ppTile(g, PP.door[1], px - res / 2, py - res, res);
+  } else if (w.id === 'meadow' || w.id === 'frost') {
     ppTile(g, PP.door[0], px - res / 2, py - 2 * res, res);
     ppTile(g, PP.door[1], px - res / 2, py - res, res);
   } else if (w.id === 'ink') {
@@ -1347,6 +1872,18 @@ function drawParticles(g, w, res, pixel) {
     const s = p.size * res * (p.kind === 'puff' ? 1 + p.t * 2 : 1);
     g.globalAlpha = pixel ? 1 : Math.max(0, a);
     if (pixel && a < 0.25) continue;
+    if (p.kind === 'text') {
+      // A stomp chain's "+n", in the world's lettering.
+      g.globalAlpha = 1;
+      g.font = `${Math.round(res * p.size)}px 'Kenney Pixel', monospace`;
+      g.textAlign = 'center';
+      g.lineWidth = Math.max(1, res / 8);
+      g.strokeStyle = '#000000';
+      g.fillStyle = '#ffec27';
+      g.strokeText(p.text, Math.round(p.x * res), Math.round(p.y * res));
+      g.fillText(p.text, Math.round(p.x * res), Math.round(p.y * res));
+      continue;
+    }
     g.fillStyle = ink || (p.kind === 'spark' ? '#fff6b0' : p.kind === 'crumb' ? '#5b3a29' : p.kind === 'puff' ? '#ffffff' : w.id === 'meadow' ? '#e8d5b5' : '#fff');
     if (pixel) {
       const u = Math.max(1, Math.round(s));
@@ -1463,17 +2000,28 @@ const buffer2 = makeCanvas(1, 1); // the glimpse of a pixel world
 const b2ctx = buffer2.getContext('2d');
 
 // ---------------------------------------------------------------- the world map
-// Cells along a zig-zag path (up the screen in portrait, across it in landscape), the start first.
-function mapNodes() {
-  const n = WORLDS.length + 1;
+// Cells along a snaking path in rows, the start first: three across going up the screen in
+// portrait, four across in landscape. Returns the nodes (in tiles) and the cells' size (in tiles).
+function mapLayout() {
   const portrait = view.H >= view.W;
-  const nodes = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const zig = i === 0 ? 0.5 : i % 2 ? 0.27 : 0.73;
-    nodes.push(portrait ? { x: zig, y: 0.86 - t * 0.68 } : { x: 0.1 + t * 0.8, y: i === 0 ? 0.55 : i % 2 ? 0.34 : 0.68 });
+  const across = portrait ? 3 : 4;
+  const rows = Math.ceil(WORLDS.length / across);
+  const top = portrait ? 0.2 : 0.24;
+  const bottom = portrait ? 0.7 : 0.62;
+  const nodes = [portrait ? { x: 0.5, y: 0.9 } : { x: 0.05, y: 0.9 }];
+  for (let i = 0; i < WORLDS.length; i++) {
+    const r = Math.floor(i / across);
+    const c = r % 2 ? across - 1 - (i % across) : i % across;
+    const x = across === 1 ? 0.5 : 0.17 + (c * 0.66) / (across - 1);
+    nodes.push({ x: portrait ? x : 0.14 + (c * 0.72) / (across - 1), y: rows === 1 ? bottom : bottom - (r * (bottom - top)) / (rows - 1) });
   }
-  return nodes.map((p) => ({ x: p.x * view.tilesW, y: p.y * view.tilesH }));
+  const colGap = ((portrait ? 0.33 : 0.24) * view.tilesW);
+  const rowGap = ((bottom - top) / Math.max(1, rows - 1)) * view.tilesH;
+  const cs = Math.max(1.2, Math.min(3, colGap * 0.78, rowGap * 0.62));
+  return { nodes: nodes.map((p) => ({ x: p.x * view.tilesW, y: p.y * view.tilesH })), cs };
+}
+function mapNodes() {
+  return mapLayout().nodes;
 }
 // A world's cell picture: a little scene drawn by that world's own rule.
 const thumbs = {};
@@ -1490,7 +2038,17 @@ function thumbFor(wi) {
   g.fillStyle = grad;
   g.fillRect(0, 0, res * 3, res * 3);
   for (let x = 0; x < 3; x++) {
-    if (w.id === 'meadow' || w.id === 'frost') {
+    if (w.pack === 'farm' || w.pack === 'ind') {
+      const set = w.pack === 'farm' ? FARM : IND;
+      const tile = w.pack === 'farm' ? farmTile : indTile;
+      tile(g, set.top[x === 0 ? 0 : x === 2 ? 2 : 1], x * res, res * 2, res);
+      if (x !== 1) tile(g, set.decor[x], x * res, res, res);
+    } else if (w.pack === 'pico') {
+      picoTile(g, PICO.top, x * res, res * 2, res);
+      if (x === 0) picoTile(g, PICO.decor[0], x * res, res, res);
+    } else if (w.pack === 'mush') {
+      mushTile(g, ['shroomTanLeft', 'shroomTanMid', 'shroomTanRight'][x], x * res, res * 2, res);
+    } else if (w.id === 'meadow' || w.id === 'frost') {
       ppTile(g, PP[w.id].top[x === 0 ? 0 : x === 2 ? 2 : 1], x * res, res * 2, res);
       ppTile(g, PP[w.id].decor[x], x * res, res, res);
     } else if (w.id === 'ink') {
@@ -1506,15 +2064,29 @@ function thumbFor(wi) {
     g.drawImage(images.slimes, 0, 0, 128, 128, res * 1.6, res * 1.1, res * 1.1, res * 1.1);
   }
   if (w.id === 'ink') inkTile(g, INK.ghost[0], res, res, res);
+  if (w.pack === 'farm') farmTile(g, FARM.hay, res, res, res);
+  if (w.pack === 'ind') for (let i = 0; i < 3; i++) indTile(g, IND.mover[i], i * res, res * 0.4, res);
+  if (w.pack === 'pico') {
+    picoTile(g, PICO.flyer[0], res, 0, res);
+    picoTile(g, PICO.walker[0], res * 2, res, res);
+  }
+  if (w.pack === 'mush') {
+    mushTile(g, 'shroomRedMid', res, res * 0.6, res);
+    mushTile(g, 'stem', res, res * 1.6, res, 1, 0.4);
+  }
   thumbs[wi] = c;
   return c;
+}
+// The cells' names: in proportion to the cells, never under 13 CSS px.
+function mapFont(cs) {
+  return Math.round(Math.max(13 * view.ratio, view.U * 0.3 * cs));
 }
 function drawMap() {
   const { from, to } = game.map;
   const U = view.U;
   const k = view.k;
   const t = game.modeT;
-  const nodes = mapNodes();
+  const { nodes, cs } = mapLayout();
   // The wall: a dark stone face, drawn in the Meadow's pixels (18 per tile).
   const bw = Math.ceil(view.W / k);
   const bh = Math.ceil(view.H / k);
@@ -1561,7 +2133,7 @@ function drawMap() {
   g.fillStyle = '#6d6482';
   g.fillRect(s0.x - 10, s0.y - 5, 20, 6);
   // The cells: hollows in the wall, lit once reached.
-  const cell = 3 * 18;
+  const cell = Math.round(cs * 18);
   const lit = (i) => i <= from || i === to;
   for (let i = 0; i < WORLDS.length; i++) {
     const c = P(nodes[i + 1]);
@@ -1581,15 +2153,15 @@ function drawMap() {
     const img = thumbFor(i);
     ctx.imageSmoothingEnabled = Boolean(WORLDS[i].smooth);
     const pop = i === to && t > MAP.arrive ? 1 + Math.sin(Math.min(1, (t - MAP.arrive) / (MAP.enter - MAP.arrive)) * Math.PI) * 0.12 : 1;
-    const sz = 3 * U * pop;
+    const sz = cs * U * pop;
     ctx.drawImage(img, c.x * U - sz / 2, c.y * U - sz / 2, sz, sz);
-    ctx.font = `${Math.round(U * 0.9)}px 'Kenney Pixel', monospace`;
+    ctx.font = `${mapFont(cs)}px 'Kenney Pixel', monospace`;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fffdf2';
     ctx.lineWidth = Math.max(2, Math.round(U / 9));
     ctx.strokeStyle = '#1c1826';
-    ctx.strokeText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
-    ctx.fillText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
+    ctx.strokeText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * (cs / 2 + 0.2) + mapFont(cs) * 0.75);
+    ctx.fillText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * (cs / 2 + 0.2) + mapFont(cs) * 0.75);
   }
   // The monster, walking from where it was to the next cell, and stepping in.
   const a = from < 0 ? nodes[0] : nodes[from + 1];
@@ -1783,7 +2355,16 @@ function icon(kind, on) {
     g.fillRect(3, 3, 10, 10);
   } else if (kind === 'coin') {
     const w = world();
-    if (w.oneBit) {
+    if (w.pack === 'pico') {
+      c.width = 8;
+      c.height = 8;
+      picoTile(g, PICO.coin, 0, 0, 8);
+    } else if (w.pack === 'mush') {
+      c.width = 70;
+      c.height = 70;
+      g.imageSmoothingEnabled = true;
+      drawSmoothCoin(g, 35, 35, 100);
+    } else if (w.oneBit) {
       c.width = 16;
       c.height = 16;
       inkTile(g, INK.coin[0], 0, 0, 16);
@@ -1797,6 +2378,10 @@ function icon(kind, on) {
       c.height = 18;
       ppTile(g, PP.coin[0], 0, 0, 18);
     }
+  } else if (world().pack === 'pico') {
+    c.width = 8;
+    c.height = 8;
+    picoTile(g, PICO.heart, 0, 0, 8);
   } else if (world().oneBit) {
     c.width = 16;
     c.height = 16;
@@ -2020,8 +2605,12 @@ Promise.all([
   loadImage('img/ink-tiles.png'),
   loadImage('img/candy-slimes.png'),
   import('./monster-atlas.js'),
-]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas]) => {
-  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes });
+  loadImage('img/farm-tiles.png'),
+  loadImage('img/industrial-tiles.png'),
+  loadImage('img/pico-tiles.png'),
+  loadImage('img/mushroom.png'),
+]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas, farm, ind, pico, mushroom]) => {
+  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes, farm, ind, pico, mushroom });
   MONSTER_FRAMES = atlas.MONSTER;
   // The colour under each background panel's hills, to fill below them.
   images.bgFill = {};
@@ -2058,6 +2647,8 @@ Promise.all([
     baked: () => baked,
     renderRes: () => renderRes,
     heard,
+    bed: () => ({ world: bedEl.dataset.world || null, paused: bedEl.paused, muted: bedEl.muted }),
+    ACCENT_GAP,
     frameWork,
     step: (dt = STEP) => update(dt),
     advance,
@@ -2079,6 +2670,11 @@ Promise.all([
     resume,
     leap,
     skipMap,
+    mapLayout,
+    mapFont,
+    clearParticles: () => {
+      particles.length = 0;
+    },
     MAP,
     tileAt,
     sync,

@@ -168,7 +168,9 @@ export const POSES = {
 // pack's own characters are drawn. Returns { frames, w, h, footX, footY }.
 // oneBit ({ ink, dark }): a two-colour world, drawn like the pack's own characters: a solid ink
 // body with its dark features (pupils, mouth) cut out; the outline is the dark of the world.
-export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, faceBoost = 1.4, oneBit = null } = {}) {
+// fixed (a list of '#rrggbb'): a world with a fixed palette (Pico's 16): every pixel of the baked
+// monster is mapped to its nearest colour in that list.
+export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, faceBoost = 1.4, oneBit = null, fixed = null } = {}) {
   const s = scaleFor(m, pxPerTile);
   const w = Math.ceil(pxPerTile * 4);
   const h = Math.ceil(pxPerTile * 3.6);
@@ -294,6 +296,16 @@ export function bake(img, m, pxPerTile, { outline = '#262338', ears = false, fac
     }
     // The face, drawn as pixel art: clean eyes and a clean mouth, sized to the body.
     pixelFace(d, w, h, m, s, pose, footX, footY, face, solid);
+    if (fixed) {
+      const fx = fixed.map(hex);
+      for (let i = 0; i < w * h; i++) {
+        if (!d[i * 4 + 3]) continue;
+        const [r, g2, b] = nearest(fx, d[i * 4], d[i * 4 + 1], d[i * 4 + 2]);
+        d[i * 4] = r;
+        d[i * 4 + 1] = g2;
+        d[i * 4 + 2] = b;
+      }
+    }
     g.putImageData(data, 0, 0);
     frames[name] = c;
   }
