@@ -74,6 +74,8 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
   politely to screen readers (`role="status"`). It appears without animation. While it shows, the
   page gets bottom padding so the last tiles can scroll clear of it. No dismiss button: it's small,
   out of the way, and goes when the update is applied.
+- AC-5 reworded after the go: cached images and sounds are served from the cache and refreshed in
+  the background, not never requested (owner, 2026-11-10, "Yes, reword it").
 - Accepted platform limits: iOS may clear a site's caches after weeks unused, and installed iOS
   apps check for updates unevenly; navigation preload isn't used.
 
@@ -91,8 +93,9 @@ shared files change (`sw.js`, `assets/site.js`, `assets/site.css`, `index.html`,
 - **AC-4** After a new version is deployed, a page and the script it loads come from the same
   version (each carries a version mark, and they match) on the first online load, both before and
   after tapping Update.
-- **AC-5** Online, with everything cached, a page, a script and a stylesheet are requested from the
-  network on each load, and an image and a sound are not.
+- **AC-5** Online, with everything cached, a page, a script and a stylesheet come from the network
+  on each load (a change shows at once), and an image and a sound come from the cache (a change
+  shows one load later).
 - **AC-6** Bumping `VERSION` and changing one game's script, then updating, leaves another game,
   played before, playable offline without having been opened online again.
 - **AC-7** Upgrading from the old worker, with a `games-v<N>` cache holding a played game, takes
