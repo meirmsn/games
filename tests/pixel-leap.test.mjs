@@ -2144,16 +2144,17 @@ test('pixel-leap AC-33: Castle: a gate stops you until you touch it holding a ke
       return p.x;
     };
     const stopped = runAt(gate.x - 4);
-    const hud0 = document.querySelector('[data-hud-keys]').hidden;
-    // Pick up the first key.
+    // Pick up the first key (the HUD shows it on the next frames).
     const key = st.things.find((t) => t.type === 'key');
     Object.assign(p, { x: key.x, y: key.y + 0.6, vx: 0, vy: 0, ground: false });
     L.step();
     const held = L.game.keys;
     window.__leap.render();
     // The HUD updates on the next frame.
+    // The HUD updates on the frames that follow.
     return new Promise((res) =>
-      requestAnimationFrame(() => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const hud0 = document.querySelector('[data-hud-keys]').hidden;
         const hudN = document.querySelector('[data-hud-keys-n]').textContent;
         const through = runAt(gate.x - 4);
         const after = { keys: L.game.keys, open: gate.open, tile: L.tileAt(Math.floor(gate.x), gate.y - 1) };
@@ -2170,7 +2171,7 @@ test('pixel-leap AC-33: Castle: a gate stops you until you touch it holding a ke
         const run = bot({ limit: 20, ride: true, keys: false });
         const firstGate = L.stage().things.find((t) => t.type === 'gate');
         res({ stopped, gateX: gate.x, hud0, held, hudN, through, after, reset, runX: run.x, runKeys: L.game.keys, taken: L.stage().things.filter((t) => t.type === 'key' && !t.alive).length, firstGate: firstGate.x, gates: L.stage().things.filter((t) => t.type === 'gate').length });
-      })
+      }))
     );
   }, BOT);
   assert.ok(r.stopped < r.gateX - 0.5, `the shut gate stops the monster (${r.stopped} at a gate at ${r.gateX})`);
