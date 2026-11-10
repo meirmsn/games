@@ -1,4 +1,4 @@
-# Two flaky slow-tier tests stop blocking deploys
+# Flaky slow-tier tests stop blocking deploys
 
 **Go:** "go, option A, and install gitleaks" (owner, 2026-11-10)
 
@@ -33,10 +33,23 @@ that the owner said "yes to both" in chat on 2026-11-10.
   change those responses. Each file builds its base URL once `before()` has the port.
 - `tests/pwa-updates.test.mjs` keeps its own server: it already listens on port 0 and serves a temp
   folder.
-- How Crumble's frame-timing test measures carving: option A. It takes up to three samples and
-  passes when one of them meets item 12's numbers unchanged; item 12's wording stays as it is.
-  Rejected: option B, a CI-only margin, which would change what item 12 promises. (Owner,
-  2026-11-10: "go, option A")
+- No test is retried. Each flaky test is fixed at its cause, so the suite runs once. (Owner,
+  2026-11-10, after the go: "we shouldn't be running 3 times. We should only run it once, and we
+  should understand the source of the flakiness and put the test around that. Or change the code so
+  that it is easier, reliable to test.") This replaces option A, the three-sample retry, which the
+  owner chose at the go.
+- Orbit's first-fire hint test (item 22 of `specs/orbit.md`) failed under load because the game's own frames run while the page loads, before the
+  test takes the clock; their idle time reached the hint's 4 s early. The game now reads
+  `window.__orbitManual` at start, and the test sets it before the first frame. This is one line of
+  Orbit's game code. (Owner, 2026-11-10: "yes to both", after an adversarial review picked it over
+  resetting the idle timer in the test.)
+- Crumble's portrait-pause test (item 13 of `specs/crumble.md`) failed under load because it waited 1.3 s of real time for the CPU's 0.7 s turn,
+  while a busy machine runs fewer frames in that time. It now waits on the page's frames and on the
+  game's state, not on milliseconds.
+- Crumble's frame-timing test (item 12 of `specs/crumble.md`) gets its own change, with its own
+  spec: a CPU-time budget read from a Chromium trace. The reviewer takes one spec per change, and
+  that one changes what item 12 promises (the owner's "yes to both", 2026-11-10). Here it stays as it
+  is on `main`.
 
 ## Acceptance items
 
@@ -48,18 +61,23 @@ that the owner said "yes to both" in chat on 2026-11-10.
   at least one `ERR_CONNECTION_REFUSED`, failed bind or `open()` timeout. On the new code, five such
   runs show none. A frame-timing failure under that load is reported separately and doesn't count.
   — verified by review: the PR shows the command and each run's result, before and after.
-- **AC-3** Crumble's frame-timing test takes up to three samples of the blast run and passes when one
-  of them meets item 12's numbers unchanged: frame p95 under 16.7 ms, carve + settle p95 under 4 ms,
-  and a transparent crater pixel. It logs each sample.
-- **AC-4** That test still catches carving that gets expensive. With a busy loop of 3 ms added to
-  every carve (a local, uncommitted change), it fails all three samples. — verified by review: the
-  PR shows the failing output.
-- **AC-5** The PR's `slow` runs pass, and the slow suite passes 5 times in a row run alone locally.
-  — verified by review: the PR's runs and the local log.
-- **AC-6** Outside `tests/`, the only files that change are `specs/ci-flakes.md` and `FINDINGS.md`. No game code changes. — verified by review:
-  the PR's diff.
+- **AC-3** Orbit's first-fire hint test owns the game's clock from the first frame: it opens the page
+  with `window.__orbitManual` set by an init script, so no real frame adds to the hint's 4 s, on the
+  first visit or after the reload. The rest of what Orbit's item 22 checks is unchanged.
+- **AC-4** Crumble's portrait-pause test waits on the page's animation frames and the game's state,
+  never on a fixed time:
+  - in portrait, after 30 and then 60 real frames, the shell holds and the CPU's timer hasn't moved;
+  - in landscape, it waits (up to 10 s) for the CPU to leave its turn.
+- **AC-5** The fixes hold under the conditions that broke them, and still catch what they protect.
+  — verified by review: the PR shows each run, made with local, uncommitted probes:
+  - Orbit's test with 1.5 s between load and taking the clock fails on `main` and passes here.
+  - Crumble's pause test at a 10× CPU slowdown fails on `main` ("play goes on") and passes here.
+  - With the portrait hold removed from the game, it fails here.
+- **AC-6** The PR's `slow` run passes, run once. — verified by review: the PR's checks.
+- **AC-7** Outside `tests/`, the only files that change are `specs/ci-flakes.md`, `FINDINGS.md` and
+  one line of `orbit/game.js` (it reads `window.__orbitManual`). — verified by review: the PR's diff.
 
 ## Out of scope
 
-- Making other timing-based tests robust (each is logged in `FINDINGS.md` if found).
-- Changing Crumble's carving code, or what Crumble's item 12 promises, beyond what the owner decides here.
+- Crumble's frame-timing test: its own change (see Decisions).
+- Other tests that wait on real time and haven't failed: logged in `FINDINGS.md`.
