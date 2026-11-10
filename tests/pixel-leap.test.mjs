@@ -772,40 +772,32 @@ const touch = (page, type, id, x, y) =>
     [type, id, x, y]
   );
 
-test('edge-gestures AC-5: with iPhone insets, the pad and the jump key sit above the bottom strip at their former size, and a press that starts in the strip moves nothing', async () => {
-  for (const [viewport, insets, keyH] of [
-    [{ width: 390, height: 844 }, PORTRAIT_INSETS, (h) => Math.min(180, 0.26 * h) - 28],
-    [{ width: 844, height: 390 }, LANDSCAPE_INSETS, (h) => Math.min(150, 0.38 * h) - 28],
+test('edge-gestures AC-5: Pixel Leap keeps its deck as it was: with iPhone insets the keys stand 14 px above the safe area, and a press low on them runs and jumps', async () => {
+  for (const [viewport, insets] of [
+    [{ width: 390, height: 844 }, PORTRAIT_INSETS],
+    [{ width: 844, height: 390 }, LANDSCAPE_INSETS],
   ]) {
     const { context, page } = await open({ viewport, hasTouch: true, isMobile: true });
     await simulateInsets(context, page, insets, () => window.__leap);
     await goPlay(page);
     const label = `${viewport.width}x${viewport.height}`;
-    const strip = viewport.height - insets.bottom - STRIP.bottom;
     const pad = await page.locator('[data-pad]').boundingBox();
     const jump = await page.locator('[data-jump]').boundingBox();
     for (const [name, b] of [['pad', pad], ['jump key', jump]]) {
-      assert.ok(b.y + b.height <= strip + 0.5, `${label}: the ${name} is above the strip (${b.y + b.height} <= ${strip})`);
-      assert.ok(Math.abs(b.height - keyH(viewport.height)) < 1, `${label}: the ${name} keeps its size (${b.height})`);
+      const gap = viewport.height - insets.bottom - (b.y + b.height);
+      assert.ok(Math.abs(gap - 14) < 0.5, `${label}: the ${name} stands 14 px above the safe area (${gap})`);
     }
-    assert.ok(pad.x >= insets.left + STRIP.left - 0.5, `${label}: the pad starts clear of the left strip (${pad.x})`);
-    // Presses that start in the strip, below each key, reach nothing; the guard also stops one
-    // aimed at the key itself.
-    const st = () => page.evaluate(() => ({ left: window.__leap.input.left, right: window.__leap.input.right, jump: window.__leap.input.jump }));
-    const none = { left: false, right: false, jump: false };
-    await touch(page, 'pointerdown', 21, pad.x + pad.width * 0.8, strip + 8);
-    await touch(page, 'pointerdown', 22, jump.x + jump.width / 2, strip + 8);
-    assert.deepEqual(await st(), none, `${label}: presses in the strip move nothing`);
-    await page.evaluate(([x, y]) => {
-      for (const sel of ['[data-pad]', '[data-jump]']) {
-        document.querySelector(sel).dispatchEvent(new PointerEvent('pointerdown', { pointerId: 23, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, cancelable: true }));
-      }
-    }, [pad.x + pad.width * 0.8, strip + 8]);
-    assert.deepEqual(await st(), none, `${label}: a press starting in the strip is the phone's, even on a key`);
-    for (const id of [21, 22, 23]) await touch(page, 'pointerup', id, 0, 0);
-    await touch(page, 'pointerdown', 24, pad.x + pad.width * 0.8, pad.y + pad.height / 2);
-    assert.equal((await st()).right, true, `${label}: a press on the pad above the strip runs`);
-    await touch(page, 'pointerup', 24, 0, 0);
+    // As before #27, the pad starts at max(24 px, the left inset), with no 20 px for the left strip.
+    assert.ok(Math.abs(pad.x - Math.max(24, insets.left)) < 0.5, `${label}: the pad starts at ${pad.x}`);
+    // Presses and holds aren't swipes: one that starts low on a key, inside the bottom strip, acts.
+    const st = () => page.evaluate(() => ({ right: window.__leap.input.right, jump: window.__leap.input.jump }));
+    const low = pad.y + pad.height - 6;
+    assert.ok(low > viewport.height - insets.bottom - STRIP.bottom, `${label}: the press starts in the strip`);
+    await touch(page, 'pointerdown', 31, pad.x + pad.width * 0.8, low);
+    await touch(page, 'pointerdown', 32, jump.x + jump.width / 2, jump.y + jump.height - 6);
+    assert.deepEqual(await st(), { right: true, jump: true }, `${label}: low presses run and jump`);
+    await touch(page, 'pointerup', 31, 0, 0);
+    await touch(page, 'pointerup', 32, 0, 0);
     await context.close();
   }
 });

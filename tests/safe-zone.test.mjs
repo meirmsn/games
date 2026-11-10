@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { MARGIN, rectFor, isEdgeStart, inside } from '../shared/safe-zone.js';
+import { MARGIN, SIDES_ONLY, rectFor, isEdgeStart, inside } from '../shared/safe-zone.js';
 
 const PORT = 9500 + Math.floor(Math.random() * 100);
 const BASE = `http://127.0.0.1:${PORT}/`;
@@ -59,6 +59,11 @@ test('edge-gestures AC-1: a touch or pen starting outside the rectangle is an ed
   assert.equal(isEdgeStart({ changedTouches: [{ clientX: 200, clientY: 830 }] }, r), true);
   assert.equal(isEdgeStart({ changedTouches: [{ clientX: 200, clientY: 300 }] }, r), false);
   assert.equal(inside(r, 20, 71), true);
+  // SIDES_ONLY: the bottom strip is open, the left and top strips are not.
+  const s = rectFor(390, 844, IPHONE, SIDES_ONLY);
+  assert.equal(isEdgeStart(at(200, 830), s), false, 'the bottom strip is open to a slow slide');
+  assert.equal(isEdgeStart(at(10, 830), s), true, 'the left strip is not');
+  assert.equal(isEdgeStart(at(200, 60), s), true, 'nor the top strip');
 });
 
 test('edge-gestures AC-2: the helper reads simulated iPhone insets, and ignoreEdgeStarts stops only edge starts', async () => {

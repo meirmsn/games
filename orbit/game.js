@@ -2,7 +2,7 @@
 // planet's orbit ring. One canvas; the physics lives in physics.js and the systems in levels.js.
 // The spec is specs/orbit.md. Tests reach the game through window.__orbit.
 import { mountShell } from '../shared/game-shell.js';
-import { MARGIN, ignoreEdgeStarts } from '../shared/safe-zone.js';
+import { MARGIN, SIDES_ONLY, isEdgeStart, safeRect } from '../shared/safe-zone.js';
 import {
   FIELD,
   DT,
@@ -120,8 +120,10 @@ const view = { x: 0, y: 0, s: 1 }; // field → CSS px: px = view.x + wx * view.
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const EDGE = 24; // touches starting this close to the bottom (plus the safe area) are the phone's
 const BAR_SPACE = 82; // room under the field for the booster bar and the probes left above it
-// The bar sits on the phone's bottom gesture strip (shared/safe-zone.js), never in it: style.css
-// puts its foot MARGIN.bottom (40 px) above the safe area.
+// The bar's foot sits at half the bottom gesture strip's height above the screen's edge
+// ((inset + MARGIN.bottom) / 2, style.css): a slow slide may start low, a quick swipe may not
+// (specs/edge-gestures.md, the owner's rule of 2026-11-10).
+const barFoot = () => (insets.bottom + MARGIN.bottom) / 2;
 
 function readInsets() {
   const probe = document.createElement('div');
@@ -143,9 +145,9 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
-  // The field sits below the buttons (12 + 44 + 10 px) and above the bottom edge strip.
+  // The field sits below the buttons (12 + 44 + 10 px) and above the booster bar's room.
   const top = insets.top + 66;
-  const bottom = insets.bottom + MARGIN.bottom + BAR_SPACE; // the booster bar sits below the field
+  const bottom = barFoot() + BAR_SPACE; // the booster bar sits below the field
   const side = 8;
   const aw = W - insets.left - insets.right - 2 * side;
   const ah = H - top - bottom;
@@ -1064,9 +1066,7 @@ function onDown(e) {
 canvas.addEventListener('pointerdown', onDown);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// The booster bar: tap a point on it to set the power there, or drag along it. A drag never starts
-// in the phone's edge strips (the bar is clear of the bottom one; this keeps the sides too).
-ignoreEdgeStarts(ui.boost);
+// The booster bar: tap a point on it to set the power there, or drag along it.
 let barDrag = null;
 function powerAt(clientX) {
   const r = ui.boostTrack.getBoundingClientRect();
@@ -1078,6 +1078,8 @@ ui.boost.addEventListener('pointerdown', (e) => {
     resumeGame();
     return;
   }
+  // A slow slide may start in the bottom strip, never in the left or top one (a back swipe).
+  if (isEdgeStart(e, safeRect(window, SIDES_ONLY))) return;
   if (barDrag !== null) return; // a second finger
   barDrag = e.pointerId;
   try {

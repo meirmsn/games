@@ -83,6 +83,27 @@ design; this change moves two control bars up and adds no colours, type or compo
   up 26 px; in landscape the deck already floats over the view), and its pad starts 20 px past the
   left inset, clear of the left strip. Orbit's canvas keeps ignoring a fire tap in its own 24 px
   bottom strip, as it did before. (Claude, 2026-11-10)
+- **Changed after the merge (#27): the bottom strip's rule is about quick swipes, not every
+  drag.** The owner, 2026-11-10: "I don't think the pixel monster platformer needs the safe space
+  because you're not swiping those controls. And the space exploration, you could move it down to,
+  I don't know, maybe half the space distance there is now to use even more space for the game."
+  Then: "What I don't know is how to make it generic. I think if you need to do a quick swipe, if
+  you need to do quick swipe horizontally or any swipe down near the bottom edge, then it has to be
+  pushed." So a control must clear the bottom strip when using it takes a quick sideways swipe (app
+  switching) or any swipe down (Reachability); presses, holds and slow adjusting slides may sit in
+  it. The left-edge and top strips keep the rule as it was. Pixel Leap's deck goes back to how it
+  was before #27 (keys 14 px above the inset, no guard: they are pressed and held). The owner's
+  "doesn't need the safe space" covers every strip, so in landscape the pad again starts at the
+  left inset, in the left strip: a press there, and the short slide within the pad, are not a back
+  swipe from the edge. Orbit's bar, a
+  slow slide, sits at half the gap #27 gave it: its foot (inset + 40 px) / 2 above the screen's
+  edge (37 px on a home-screen iPhone, 20 px with no inset; the owner chose "Half the whole gap"
+  over 20 px above the safe area or the pre-#27 26 px), guarded only against the left and top
+  strips (`SIDES_ONLY`), since those keep their rule; the probes row and the hint
+  keep their distance above it and the field takes the room. This replaces the decision above for
+  those two games, and in `specs/orbit.md` the field-and-bar fit item's "above the bottom edge
+  strip". (Owner,
+  2026-11-10)
 - **Splat Gallery in landscape** keeps the same rule: at 844×390 the pouch rests just above the
   strip and the counter's top half is safe, enough for the 80-unit full pull. (Claude, 2026-11-10)
 - **A second finger** is unchanged: where a game gives one finger the gesture (Runes, Gotta Go!), a
@@ -95,9 +116,9 @@ design; this change moves two control bars up and adds no colours, type or compo
   | Reef | relative drag to steer (touch); mouse follow; taps wake | anywhere on the screen | drags from every edge | ignore: touch drags start only in the safe area (a tap still wakes) |
   | Googly Faces | taps on faces; a finger sliding only moves the eyes' gaze | anywhere | taps only | none |
   | Runes | drag the line; tap a stone | anywhere on the board's screen | drags from every edge | tap only: an edge start can tap, never drag |
-  | Orbit | tap the space to fire; tap or drag along the booster bar | space; the bar, 26–70 px above the inset | the bar's bottom 14 px in the strip | bar raised to 40 px above the inset; ignore: bar presses start only in the safe area |
+  | Orbit | tap the space to fire; tap or drag along the booster bar | space; the bar, 26–70 px above the inset | the bar's bottom 14 px in the strip | bar raised to 40 px above the inset in #27; after the merge, by the owner's rule, its foot at (inset + 40 px) / 2 above the edge, guarded against the left and top strips only (a slow slide) |
   | Gotta Go! | swipe to hop four ways; tap to hop up | anywhere | swipes from every edge | tap only: an edge start can tap (hop up), never swipe, not even up |
-  | Pixel Leap | press and slide on the pad; hold the jump key | the bottom deck, keys 14 px above the inset | keys' bottom 26 px in the strip; in landscape the pad's first 20 px in the left strip | keys raised to 40 px above the inset, pad 20 px past the left inset; ignore: pad and jump-key presses start only in the safe area |
+  | Pixel Leap | press and slide on the pad; hold the jump key | the bottom deck, keys 14 px above the inset | keys' bottom 26 px in the strip; in landscape the pad's first 20 px in the left strip | raised and guarded in #27; after the merge, by the owner's rule, back as before (presses and holds) |
   | Splat Gallery | pull the slingshot (touch, from the counter); mouse press anywhere | the counter, down to the inset | pulls from the bottom strip and the left edge | ignore: pulls start only in the safe area; on the home screen the counter grows by the strip |
   | Crumble | pull back and let go to aim (landscape); tap to resume | anywhere | aims from every edge | ignore: aims start only in the safe area (a tap still resumes) |
 
@@ -117,11 +138,13 @@ design; this change moves two control bars up and adds no colours, type or compo
   nothing; the pouch rests above the strip, and a pull that starts at the top of the counter reaches
   the full far pull straight down with the finger still on screen — `tests/splat-gallery.test.mjs`.
 - **AC-4** In Orbit at 390×844 with iPhone insets simulated (top 47, bottom 34), the booster bar's
-  whole box sits above the bottom strip, and a drag that starts in the strip doesn't set the power —
+  foot sits (34 + 40) / 2 = 37 px above the screen's edge (20 px with no inset), the probes and the
+  hint above it; a slide that starts low on the bar, in the bottom strip, sets the power, and one
+  that starts on the bar in the left-edge strip doesn't —
   `tests/orbit.test.mjs`.
-- **AC-5** In Pixel Leap at 390×844 with iPhone insets simulated (top 47, bottom 34), the pad's and
-  the jump key's boxes sit above the bottom strip at their former size, in portrait and at 844×390,
-  and a press that starts in the strip doesn't move the player — `tests/pixel-leap.test.mjs`.
+- **AC-5** In Pixel Leap with iPhone insets simulated, at 390×844 and 844×390, the pad and the jump
+  key stand 14 px above the safe area as before #27, and a press that starts low on them, in the
+  bottom strip, runs and jumps — `tests/pixel-leap.test.mjs`.
 - **AC-6** In Reef at 390×844 with iPhone insets simulated (top 47, bottom 34), a touch drag that
   starts in an edge strip doesn't steer the fish; one that starts in the safe area does —
   `tests/reef.test.mjs`.
@@ -135,9 +158,11 @@ design; this change moves two control bars up and adds no colours, type or compo
   `tests/crumble.test.mjs`.
 - **AC-10** `sw.js` precaches `shared/safe-zone.js`, with `VERSION` bumped past main's v7 —
   `tests/safe-zone.test.mjs`.
-- **AC-11** `discussion/game-guidelines.md`'s "Phone hygiene" says no drag or swipe may start in
-  the bottom, left-edge or top strip and that games use `shared/safe-zone.js`, and its concept
-  check asks where each gesture starts — verified by review: read both passages.
+- **AC-11** `discussion/game-guidelines.md`'s "Phone hygiene" says a control clears the bottom strip
+  when it takes a quick sideways swipe or any swipe down there (presses, holds and slow slides may
+  sit in it), that no drag or swipe starts in the left-edge or top strip, and that games use
+  `shared/safe-zone.js`; its concept check asks where each gesture starts — verified by review:
+  read both passages.
 
 ## Out of scope
 
