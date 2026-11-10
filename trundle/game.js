@@ -1,15 +1,15 @@
-// Trundle: place green parts so the ball Trundle kicks off rolls into the exit.
+// Trundle: rebuild the machine under the falling balls, so they reach the exit.
 //
-// sim.js runs the physics (one run of one room, deterministic); this module draws, takes input,
-// keeps progress and plays the floor run. The page exposes window.__trundle for the tests: with
-// __trundle.manual set, the page's frames only draw, and __trundle.frame(ms) advances the game the
-// way one display frame of that length would.
+// sim.js runs the physics (one attempt at one room, deterministic, every edit logged with its
+// step); this module draws, takes input, keeps progress and plays the floor run. The page exposes
+// window.__trundle for the tests: with __trundle.manual set, the page's frames only draw, and
+// __trundle.frame(ms) advances the game the way one display frame of that length would.
 import { mountShell } from '../shared/game-shell.js';
-import { createRun, overlaps, partPoly, rectPoly, flapBox, robotBox, W, H, S, STEP, TOUCH_R, BALL_R, PARTS } from './sim.js';
+import { createAttempt, replay, overlaps, partPoly, rectPoly, flapBox, girderBox, W, H, S, STEP, BALL_R, PARTS } from './sim.js';
 import { ROOMS, FLOOR } from './rooms.js';
 import * as SIM from './sim.js';
 
-const SOUNDS = ['plank', 'wood', 'metal', 'crate', 'place', 'turn', 'star', 'key', 'unlock', 'kick', 'miss', 'win', 'floor', 'exit', 'toggle'];
+const SOUNDS = ['plank', 'wood', 'metal', 'crate', 'place', 'turn', 'star', 'key', 'unlock', 'kick', 'miss', 'win', 'floor', 'exit', 'toggle', 'pop'];
 const { sound } = mountShell({ sounds: Object.fromEntries(SOUNDS.map((n) => [n, `sounds/${n}.mp3`])) });
 
 function play(name, opts = {}) {
@@ -20,7 +20,7 @@ function play(name, opts = {}) {
 // Images: every image of the floor loads now, so each room plays offline once the game has opened.
 
 const IMG = {};
-for (const n of ['background_brown', 'ball_red_large', 'block_narrow', 'block_corner', 'hole_large_end', 'hole_large_end_locked', 'hole_start', 'key', 'star', 'star_outline', 'particle_2', 'robot_blueDrive1', 'robot_blueDrive2', 'robot_blueHurt', 'robot_blueJump', 'crate']) {
+for (const n of ['background_brown', 'ball_red_large', 'block_narrow', 'block_corner', 'hole_large_end', 'hole_large_end_locked', 'key', 'star', 'star_outline', 'robot_blueDrive1', 'robot_blueDrive2', 'robot_blueHurt', 'robot_blueJump', 'crate']) {
   IMG[n] = new Image();
   IMG[n].src = `img/${n}.png`;
 }
@@ -29,7 +29,7 @@ const ready = (im) => im && im.complete && im.naturalWidth > 0;
 // ---------------------------------------------------------------------------------------------
 // Storage: one key per room, so one unreadable room never costs the others; every access guarded.
 
-const KEY = (i) => `trundle-v1-room-${i + 1}`;
+const KEY = (i) => `trundle-v2-room-${i + 1}`;
 const memory = new Map(); // what's kept when localStorage is blocked: lasts until the page reloads
 
 function loadRoom(i) {
@@ -48,14 +48,16 @@ function loadRoom(i) {
   return data;
 }
 
+const okPart = (p) => p && PARTS[p.type] && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.a) && Number.isInteger(p.id);
+const cleanParts = (i, l) => fitTray(i, l.filter(okPart).map(({ id, type, x, y, a }) => ({ id, type, x, y, a })));
+
 function sanitize(i, d) {
-  const okPart = (p) => p && PARTS[p.type] && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.a);
-  const layout = d.layout.filter(okPart).map(({ type, x, y, a }) => ({ type, x, y, a }));
+  const b = d.best;
   const best =
-    d.best && Array.isArray(d.best.rec) && d.best.rec.length > 1 && Number.isFinite(d.best.stars)
-      ? { stars: d.best.stars, kick: d.best.kick === 'hard' ? 'hard' : 'soft', rec: d.best.rec }
+    b && Number.isFinite(b.stars) && Number.isFinite(b.inCount) && Array.isArray(b.layout) && Array.isArray(b.log)
+      ? { stars: b.stars, inCount: b.inCount, layout: cleanParts(i, b.layout), log: b.log.filter((e) => e && Number.isInteger(e.s) && typeof e.op === 'string') }
       : null;
-  return { layout: fitTray(i, layout), kick: d.kick === 'hard' ? 'hard' : 'soft', best };
+  return { layout: cleanParts(i, d.layout), best };
 }
 
 // Never more parts of a type than the room's tray holds.
@@ -80,24 +82,24 @@ function saveRoom(i, data) {
 const G = {
   ri: 0,
   room: ROOMS[0],
-  layout: [],
-  kick: 'soft',
-  mode: 'edit', // 'demo' | 'edit' | 'run' | 'done' | 'floor'
-  run: null,
+  layout: [], // the player's parts: {id, type, x, y, a}
+  nextId: 1,
+  mode: 'run', // 'run' | 'failed' | 'done' | 'floor'
+  att: null, // the attempt playing (or just finished)
+  layout0: [], // the layout the attempt started from
   acc: 0,
-  trail: [],
-  marker: null,
   sel: null,
   drag: null,
-  misses: ROOMS.map(() => 0),
+  fails: ROOMS.map(() => 0),
   paused: false,
   time: 0,
   robot: { state: 'idle', t: 0 },
-  ballIn: null, // {x, y, t}: the ball dropping into the exit
+  sinks: [], // balls dropping into an exit: {x, y, ex, ey, t}
   parts: [], // particles
   shake: null, // {part, t}
   floor: null,
   stepsTotal: 0,
+  lastStars: null,
 };
 
 let k = 30; // CSS px per unit
@@ -116,18 +118,24 @@ const ui = {
   roomNo: $('[data-room-no]'),
   roomName: $('[data-room-name]'),
   roomStars: $('[data-room-stars]'),
+  balls: $('[data-balls]'),
   bar: $('[data-bar]'),
   tray: $('[data-tray]'),
   turnL: $('[data-turn="-15"]'),
   turnR: $('[data-turn="15"]'),
-  go: $('[data-go]'),
+  restart: $('[data-restart]'),
   done: $('[data-card="done"]'),
   doneTitle: $('[data-done-title]'),
   doneStars: $('[data-done-stars]'),
+  doneCount: $('[data-done-count]'),
   next: $('[data-next]'),
   again: $('[data-again]'),
+  failed: $('[data-card="failed"]'),
+  failedCount: $('[data-failed-count]'),
+  retry: $('[data-retry]'),
   floorCard: $('[data-card="floor"]'),
   floorStars: $('[data-floor-stars]'),
+  floorTotal: $('[data-floor-total]'),
   rooms: $('[data-card="rooms"]'),
   roomGrid: $('[data-room-grid]'),
   floorRun: $('[data-floor-run]'),
@@ -136,7 +144,7 @@ const ui = {
 };
 
 // ---------------------------------------------------------------------------------------------
-// Layout: the board keeps its 10 × 16 shape, between the top bar and the bottom bar.
+// Layout: the board keeps its 10 × 16 shape, between the ball counter and the bottom bar.
 
 function layout() {
   vw = window.innerWidth;
@@ -144,12 +152,11 @@ function layout() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(vw * dpr);
   canvas.height = Math.round(vh * dpr);
-  const top = document.querySelector('.top').getBoundingClientRect().bottom + 10;
+  const top = document.querySelector('.top').getBoundingClientRect().bottom + 30; // room for the ball counter
   // The board keeps its place when the bar hides (room done), so it doesn't jump.
   if (!ui.bar.hidden) barH = vh - ui.bar.getBoundingClientRect().top;
   const barTop = vh - barH - 8;
   playTop = top;
-
   const availW = vw - 32;
   const availH = Math.max(100, (G.mode === 'floor' ? vh - 16 : barTop) - top);
   k = Math.min(availW / W, availH / H);
@@ -161,30 +168,46 @@ const toBoard = (px, py) => ({ x: (px - bx) / k, y: (py - by) / k });
 const snap = (v, s = 0.25) => Math.round(v / s) * s;
 
 // ---------------------------------------------------------------------------------------------
-// Rooms
+// Rooms open one by one: a room opens once the room before it is solved.
+
+function bestStars(i) {
+  const d = loadRoom(i);
+  return d && d.best ? d.best.stars : -1; // -1: not solved yet
+}
+
+function unlocked(i) {
+  return i === 0 || bestStars(i - 1) >= 0;
+}
+
+// The furthest room open: the first one not yet solved, or the last.
+function furthest() {
+  let i = 0;
+  while (i < ROOMS.length - 1 && bestStars(i) >= 0) i++;
+  return i;
+}
+
+function floorComplete() {
+  return ROOMS.every((_, i) => bestStars(i) >= 0);
+}
 
 // The hash opens a room you've reached; a locked room, a bad hash or none opens the furthest one.
 function roomFromHash() {
-  const m = /^#1-([1-6])$/.exec(location.hash);
+  const m = /^#1-([1-8])$/.exec(location.hash);
   const i = m ? +m[1] - 1 : -1;
   return i >= 0 && unlocked(i) ? i : furthest();
 }
 
 function openRoom(i) {
-  stopRun();
+  G.paused = false;
+  ui.paused.hidden = true;
   G.ri = i;
   G.room = ROOMS[i];
   const saved = loadRoom(i);
   G.layout = saved ? saved.layout.map((p) => ({ ...p })) : [];
-  G.kick = saved ? saved.kick : 'soft';
-  G.trail = [];
-  G.marker = null;
+  G.nextId = 1 + G.layout.reduce((m, p) => Math.max(m, p.id), 0);
   G.sel = null;
   G.drag = null;
-  G.ballIn = null;
-  G.parts = [];
   G.floor = null;
-  G.robot = { state: 'idle', t: 0 };
   hideCards();
   try {
     if (location.hash !== `#1-${i + 1}`) history.replaceState(null, '', `#1-${i + 1}`);
@@ -194,13 +217,12 @@ function openRoom(i) {
   ui.roomNo.textContent = String(i + 1);
   ui.roomName.textContent = G.room.name;
   renderStars();
-  if (saved) setMode('edit');
-  else startRun(true); // a room never played opens with Trundle's demo kick
-  renderTray();
+  startAttempt(); // a room opens running
 }
 
 function hideCards() {
   ui.done.hidden = true;
+  ui.failed.hidden = true;
   ui.floorCard.hidden = true;
   ui.rooms.hidden = true;
 }
@@ -208,8 +230,7 @@ function hideCards() {
 function setMode(mode) {
   G.mode = mode;
   ui.bar.hidden = mode === 'done' || mode === 'floor';
-  ui.go.classList.toggle('running', mode === 'run' || mode === 'demo');
-  ui.go.setAttribute('aria-label', mode === 'run' || mode === 'demo' ? 'Stop' : 'Go');
+  ui.balls.hidden = mode === 'floor';
   updateTurn();
   layout();
   if (ui.tray.childElementCount) renderTray();
@@ -217,16 +238,7 @@ function setMode(mode) {
 
 function persist() {
   const old = loadRoom(G.ri);
-  saveRoom(G.ri, {
-    layout: G.layout.map(({ type, x, y, a }) => ({ type, x, y, a })),
-    kick: G.kick,
-    best: old ? old.best : null,
-  });
-}
-
-function bestStars(i) {
-  const d = loadRoom(i);
-  return d && d.best ? d.best.stars : -1; // -1: not solved yet
+  saveRoom(G.ri, { layout: G.layout.map(({ id, type, x, y, a }) => ({ id, type, x, y, a })), best: old ? old.best : null });
 }
 
 function starImgs(n, size) {
@@ -237,8 +249,26 @@ function starImgs(n, size) {
 
 function renderStars() {
   const b = Math.max(0, bestStars(G.ri));
-  ui.roomStars.innerHTML = starImgs(b, 20);
+  ui.roomStars.innerHTML = starImgs(b, 15);
   ui.roomStars.setAttribute('aria-label', `Best: ${b} of 3 stars`);
+}
+
+// The ball counter: one mark per ball, waiting, falling, in an exit or lost, and the quota.
+function renderBalls() {
+  const att = G.att;
+  if (!att) return;
+  let html = '';
+  for (let n = 0; n < att.total; n++) {
+    const b = att.balls[n];
+    const st = b ? b.state : 'wait';
+    html += `<i class="b ${st}${n === att.quota - 1 ? ' q' : ''}"></i>`;
+  }
+  html += `<span class="count">${att.inCount}/${att.quota}</span>`;
+  if (ui.balls.dataset.html !== html) {
+    ui.balls.innerHTML = html;
+    ui.balls.dataset.html = html;
+    ui.balls.setAttribute('aria-label', `${att.inCount} of ${att.quota} balls in; ${att.total - att.dropped} still to drop`);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -261,7 +291,9 @@ function renderTray() {
   for (const t of types) {
     const b = document.createElement('button');
     b.type = 'button';
-    const hint = G.mode === 'edit' && !G.layout.length && !G.drag && bestStars(G.ri) < 0 && left[t] > 0 && t === G.room.tray[0];
+    // In a room not yet solved, until a part is placed, the tray's part bobs: the screen says where to
+    // start, with no words.
+    const hint = !G.layout.length && !G.drag && bestStars(G.ri) < 0 && left[t] > 0 && t === G.room.tray[0];
     b.className = 'part' + (left[t] > 0 ? '' : ' empty') + (hint ? ' hint' : '');
     b.dataset.part = t;
     b.setAttribute('aria-label', `${t === 'plank' ? 'Plank' : 'Wedge'}: ${left[t]} left`);
@@ -275,20 +307,21 @@ function renderTray() {
 }
 
 function updateTurn() {
-  const can = G.mode === 'edit' && !!G.sel;
+  const can = G.mode !== 'floor' && G.mode !== 'done' && !!G.sel;
   ui.turnL.disabled = !can;
   ui.turnR.disabled = !can;
 }
 
 // A part placed from the keyboard goes to the first free spot near the board's middle.
 function keyboardPlace(type) {
-  if (trayLeft()[type] <= 0) return;
-  editNow();
+  if (trayLeft()[type] <= 0 || !editable()) return;
   for (let r = 0; r < 12; r++) {
     for (let a = 0; a < 8; a++) {
-      const p = { type, x: snap(5 + Math.cos(a) * r * 0.5), y: snap(8 + Math.sin(a) * r * 0.5), a: 0 };
+      const p = { id: G.nextId, type, x: snap(5 + Math.cos(a) * r * 0.5), y: snap(8 + Math.sin(a) * r * 0.5), a: 0 };
       if (!overlaps(G.room, p, G.layout)) {
+        G.nextId++;
         G.layout.push(p);
+        sendSet(p);
         select(p);
         play('place');
         afterEdit();
@@ -299,112 +332,114 @@ function keyboardPlace(type) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Runs
+// Attempts
 
-function startRun(demo = false) {
-  G.sel = null;
-  G.marker = null;
-  G.ballIn = null;
-  const assist = demo ? 0 : assistFor(G.ri);
-  G.run = createRun(G.room, demo ? [] : G.layout, { kick: demo ? 'soft' : G.kick, assist });
-  G.run.demo = demo;
+function startAttempt() {
+  const assist = assistFor(G.ri);
+  G.layout0 = G.layout.map((p) => ({ ...p }));
+  G.att = createAttempt(G.room, G.layout0, { assist });
   G.acc = 0;
-  G.trail = G.run.trail;
-  G.robot = { state: 'kick', t: 0 };
-  play('kick', { gain: demo ? 0.6 : 1 });
-  setMode(demo ? 'demo' : 'run');
+  G.sinks = [];
+  G.robot = { state: 'idle', t: 0 };
+  hideCards();
+  setMode('run');
+  renderBalls();
 }
 
-// The hidden assist: from the 4th missed run in a room, the exit takes the ball from 5% further
-// away per miss, up to 20%. It resets when the room is done and when the page reloads.
+// The hidden assist: from the 4th failed attempt in a room, the exits take a ball from 5% further
+// away per failed attempt, up to 20%. It resets when the room is done and when the page reloads.
 function assistFor(i) {
-  return Math.min(0.2, Math.max(0, G.misses[i] - 3) * 0.05);
+  return Math.min(0.2, Math.max(0, G.fails[i] - 3) * 0.05);
 }
 
-function stopRun() {
-  if (G.run && !G.run.result) G.trail = G.run.trail.slice();
-  G.run = null;
-  G.acc = 0;
+const editable = () => G.mode === 'run' || G.mode === 'failed';
+const live = () => G.mode === 'run' && G.att && !G.att.result;
+
+// An edit reaches the running attempt at its next step; between attempts it only changes the
+// layout the next one starts from.
+function sendSet(p) {
+  if (live()) G.att.edit({ op: 'set', id: p.id, type: p.type, x: p.x, y: p.y, a: p.a });
+}
+function sendLift(p) {
+  if (live()) G.att.edit({ op: 'lift', id: p.id });
+}
+function sendDel(p) {
+  if (live()) G.att.edit({ op: 'del', id: p.id });
 }
 
-// Any edit or touch while a run plays ends it, and takes you back to editing.
-function editNow() {
-  if (G.mode === 'run' || G.mode === 'demo') {
-    stopRun();
-    G.robot = { state: 'idle', t: 0 };
-    setMode('edit');
-  }
-  G.marker = null;
+function turnTrundle() {
+  if (!live()) return;
+  G.att.edit({ op: 'turn' });
+  G.robot = { state: 'turn', t: 0 };
+  play('toggle');
 }
 
-function onRunEvent(e) {
-  const run = G.run;
+function onEvent(e) {
+  const att = G.att;
   if (e.type === 'hit') {
     const g = Math.max(0.12, Math.min(1, e.speed / 9));
     if (e.on === 'plank' || e.on === 'wedge') play('plank', { gain: g });
     else if (e.on === 'crate' || e.by === 'crate') play(e.by === 'crate' ? 'wood' : 'crate', { gain: g });
     else if (e.on === 'flap') play('metal', { gain: g, rate: 1.3 });
     else play('metal', { gain: g * 0.8 });
-    if (e.speed > 4) dust(run.pose().x, run.pose().y, 4);
+  } else if (e.type === 'drop') {
+    play('kick', { gain: 0.55, rate: 1.2 });
+    G.robot = { state: 'drop', t: 0 };
   } else if (e.type === 'star') {
-    play('star', { rate: 1 + run.stars.size * 0.12 });
+    play('star', { rate: 1 + att.stars.size * 0.12 });
     const s = G.room.stars[e.i];
     burst(s.x, s.y, '#ffd400', 14);
   } else if (e.type === 'key') {
     play('key');
     setTimeout(() => play('unlock'), 220);
     burst(G.room.key.x, G.room.key.y, '#ffb400', 12);
+  } else if (e.type === 'exit') {
+    play('exit', { gain: 0.8, rate: 1 + att.inCount * 0.05 });
+    G.sinks.push({ x: e.x, y: e.y, ex: e.ex, ey: e.ey, t: 0 });
+    burst(e.ex, e.ey, '#ffffff', 10);
+  } else if (e.type === 'lost') {
+    play('pop', { gain: 0.7 });
+    burst(Math.max(0.3, Math.min(W - 0.3, e.x)), Math.min(H - 0.3, e.y), 'rgba(255,255,255,0.9)', 8);
   }
 }
 
-function finishRun() {
-  const run = G.run;
-  if (run.result === 'won') {
-    const p = run.pose();
-    G.ballIn = { x: p.x, y: p.y, t: 0 };
-    play('exit');
-    setTimeout(() => play('win'), 380);
+function finishAttempt() {
+  const att = G.att;
+  renderBalls();
+  if (att.result === 'won') {
+    play('win');
     G.robot = { state: 'cheer', t: 0 };
-    burst(G.room.exit.x, G.room.exit.y, '#ffffff', 18);
-    G.misses[G.ri] = 0;
-    const wasComplete = floorComplete();
+    G.fails[G.ri] = 0;
     const old = loadRoom(G.ri);
-    const stars = run.stars.size;
+    const stars = att.stars.size;
     let best = old && old.best;
-    // The best run is the one with the most stars; a tie goes to the latest.
-    if (!best || stars >= best.stars) best = { stars, kick: run.kick, rec: run.rec };
-    saveRoom(G.ri, { layout: G.layout.map(({ type, x, y, a }) => ({ type, x, y, a })), kick: G.kick, best });
-    G.trail = run.trail;
-    G.run = null;
+    // The best attempt has the most stars, then the most balls in; a tie goes to the latest.
+    if (!best || stars > best.stars || (stars === best.stars && att.inCount >= best.inCount)) {
+      best = { stars, inCount: att.inCount, layout: G.layout0.map((p) => ({ ...p })), log: att.log.map((e) => ({ ...e })) };
+    }
+    const wasComplete = floorComplete();
+    saveRoom(G.ri, { layout: G.layout.map(({ id, type, x, y, a }) => ({ id, type, x, y, a })), best });
     G.lastStars = stars;
+    G.sel = null;
     setMode('done');
     renderStars();
     const nowComplete = floorComplete();
     setTimeout(() => {
       if (G.mode !== 'done') return;
       if (!wasComplete && nowComplete) startFloorRun();
-      else showDone(stars);
+      else showDone(stars, att.inCount, att.total);
     }, 1100);
   } else {
-    G.trail = run.trail;
-    if (!run.demo) {
-      G.misses[G.ri]++;
-      G.marker = { x: run.closest.x, y: run.closest.y, t: 0 };
-      play('miss', { gain: 0.7 });
-      G.robot = { state: 'wince', t: 0 };
-    } else {
-      G.robot = { state: 'idle', t: 0 };
-    }
-    G.run = null;
-    setMode('edit');
+    G.fails[G.ri]++;
+    play('miss', { gain: 0.7 });
+    G.robot = { state: 'wince', t: 0 };
+    ui.failedCount.textContent = `${att.inCount} of ${att.quota} in`;
+    setMode('failed');
+    ui.failed.hidden = false;
   }
 }
 
-function floorComplete() {
-  return ROOMS.every((_, i) => bestStars(i) >= 0);
-}
-
-function showDone(stars) {
+function showDone(stars, inCount, total) {
   ui.doneTitle.textContent = stars === 3 ? 'All three stars!' : 'Room done!';
   ui.doneStars.innerHTML = '';
   for (let s = 0; s < 3; s++) {
@@ -415,45 +450,34 @@ function showDone(stars) {
     ui.doneStars.appendChild(im);
   }
   ui.doneStars.setAttribute('aria-label', `${stars} of 3 stars`);
-  ui.next.textContent = floorComplete() && nextRoom() === null ? 'Floor run' : 'Next';
+  ui.doneCount.textContent = `${inCount} of ${total} balls in`;
+  ui.next.textContent = nextRoom() === null ? 'Floor run' : 'Next';
   ui.done.hidden = false;
 }
 
-// The next room: the one after this, or the first not yet solved once at the end.
 function nextRoom() {
   return G.ri < ROOMS.length - 1 ? G.ri + 1 : null;
 }
 
-// Rooms open one by one: a room opens once the room before it is solved.
-function unlocked(i) {
-  return i === 0 || bestStars(i - 1) >= 0;
-}
-
-// The furthest room open: the first one not yet solved, or the last.
-function furthest() {
-  let i = 0;
-  while (i < ROOMS.length - 1 && bestStars(i) >= 0) i++;
-  return i;
-}
-
 // ---------------------------------------------------------------------------------------------
-// The floor run: each room's best run, played back in order, the camera following the ball down.
-// It never steps the physics.
+// The floor run: each room's best attempt, replayed in order three times faster than life, the
+// camera moving down from room to room. It re-runs the logged attempt: exact on this browser.
 
 const GAP = 3; // units between rooms: the pipe
+const FLOOR_SPEED = 3;
+const oy = (i) => i * (H + GAP);
 
 function startFloorRun() {
-  stopRun();
   hideCards();
   const segs = ROOMS.map((room, i) => {
     const d = loadRoom(i);
-    const rec = d && d.best ? d.best.rec : null;
-    return { room, i, rec, kick: d && d.best ? d.best.kick : 'soft', layout: d ? d.layout : [], stars: d && d.best ? d.best.stars : 0 };
-  });
-  // The layout drawn is the one saved; the run is the recording, so the floor run can't fail.
-  G.floor = { segs: segs.filter((s) => s.rec), si: 0, t: 0, phase: 'pipe', phaseT: 0.6, camY: 0, end: false, kicked: -1 };
-  G.floor.total = segs.reduce((n, s) => n + Math.max(0, s.stars), 0);
+    return d && d.best ? { room, i, best: d.best } : null;
+  }).filter(Boolean);
+  G.floor = { segs, si: 0, att: null, phase: 'pan', phaseT: 0.7, camY: viewH() / 2 - 0.5, end: false, log: 0 };
+  G.floor.total = segs.reduce((n, s) => n + s.best.stars, 0);
   G.sel = null;
+  G.att = null;
+  G.sinks = [];
   setMode('floor');
   ui.roomNo.textContent = String(FLOOR.n);
   ui.roomName.textContent = FLOOR.name;
@@ -461,63 +485,45 @@ function startFloorRun() {
   play('floor', { gain: 0.8 });
 }
 
-function floorPose(seg, t) {
-  const f = Math.min(seg.rec.length - 1, t * 30);
-  const i = Math.floor(f);
-  const j = Math.min(seg.rec.length - 1, i + 1);
-  const u = f - i;
-  const A = seg.rec[i];
-  const B = seg.rec[j];
-  return A.map((v, n) => v + (B[n] - v) * u);
-}
+const viewH = () => (vh - playTop - 16) / k;
 
-function segDur(seg) {
-  return (seg.rec.length - 1) / 30;
-}
-
-function tickFloor(dt0) {
+function tickFloor(dt) {
   const F = G.floor;
   if (!F || F.end) return;
-  const dt = dt0 * 1.3; // a little faster than life: you've seen each room already
   const seg = F.segs[F.si];
-  if (F.phase === 'pipe') {
+  if (F.phase === 'pan') {
     F.phaseT -= dt;
     if (F.phaseT <= 0) {
       F.phase = 'play';
-      F.t = 0;
-      F.robotT = 0;
-      play('kick', { gain: 0.7 });
+      F.att = createAttempt(seg.room, seg.best.layout.map((p) => ({ ...p })));
+      F.log = 0;
+      F.acc = 0;
     }
   } else if (F.phase === 'play') {
-    const before = F.t;
-    F.t += dt;
-    F.robotT = (F.robotT || 0) + dt;
-    // stars and the key as the ball reaches them
-    const pose = floorPose(seg, F.t);
-    seg.room.stars.forEach((s, n) => {
-      if (Math.hypot(s.x - pose[0], s.y - pose[1]) < TOUCH_R && !(seg.taken || (seg.taken = new Set())).has(n)) {
-        seg.taken.add(n);
-        play('star', { rate: 1 + seg.taken.size * 0.12 });
-        burst(s.x, s.y + oy(F.si), '#ffd400', 12);
+    const att = F.att;
+    F.acc += dt * FLOOR_SPEED;
+    let n = Math.min(24, Math.floor(F.acc / STEP + 1e-9));
+    F.acc -= n * STEP;
+    while (n-- > 0 && !att.result) {
+      while (F.log < seg.best.log.length && seg.best.log[F.log].s === att.steps) {
+        const { s, ...e } = seg.best.log[F.log++];
+        void s;
+        att.edit(e);
       }
-    });
-    if (seg.room.key && !seg.keyed && Math.hypot(seg.room.key.x - pose[0], seg.room.key.y - pose[1]) < TOUCH_R) {
-      seg.keyed = true;
-      play('key');
+      att.step();
+      for (const e of att.events) {
+        if (e.type === 'star') burst(seg.room.stars[e.i].x, seg.room.stars[e.i].y + oy(seg.i), '#ffd400', 10);
+        if (e.type === 'exit') burst(e.ex, e.ey + oy(seg.i), '#ffffff', 8);
+      }
+      if (att.events.some((e) => e.type === 'star')) play('star', { gain: 0.6, rate: 1 + att.stars.size * 0.12 });
+      if (att.events.some((e) => e.type === 'exit')) play('exit', { gain: 0.4 });
     }
-    if (before < segDur(seg) && F.t >= segDur(seg)) {
-      play('exit', { gain: 0.8 });
-      burst(seg.room.exit.x, seg.room.exit.y + oy(F.si), '#ffffff', 14);
-      F.phase = 'sink';
-      F.phaseT = 0.35;
-    }
-  } else if (F.phase === 'sink') {
-    F.phaseT -= dt;
-    if (F.phaseT <= 0) {
+    if (att.result) {
+      seg.final = att;
       if (F.si < F.segs.length - 1) {
         F.si++;
-        F.phase = 'pipe';
-        F.phaseT = 0.7;
+        F.phase = 'pan';
+        F.phaseT = 0.8;
       } else {
         F.phase = 'outro';
         F.phaseT = 1.6;
@@ -526,33 +532,27 @@ function tickFloor(dt0) {
     }
   } else if (F.phase === 'outro') {
     F.phaseT -= dt;
-    if (F.phaseT <= 0) {
-      F.end = true;
-      ui.floorStars.textContent = String(F.total);
-      ui.floorCard.hidden = false;
-    }
+    if (F.phaseT <= 0) endFloor();
   }
-  // camera: centre on the ball, eased
-  const target = floorBallWorldY();
-  const viewH = (vh - playTop - 16) / k;
-  const maxY = oy(ROOMS.length) + 3 + viewH * 0.3; // the door ends up high, clear of the card
-  const want = Math.max(viewH / 2 - 0.5, Math.min(maxY, target));
-  F.camY += (want - F.camY) * Math.min(1, dt * 4);
+  // the camera: the room playing, or floor 2's door at the end
+  const target = F.phase === 'outro' ? oy(ROOMS.length) + 3 + viewH() * 0.3 : oy(F.segs[F.si].i) + H / 2;
+  F.camY += (target - F.camY) * Math.min(1, dt * 3);
 }
 
-const oy = (i) => i * (H + GAP);
-
-function floorBallWorldY() {
+function endFloor() {
   const F = G.floor;
-  const seg = F.segs[F.si];
-  if (F.phase === 'outro') return oy(ROOMS.length) + 3 + ((vh - playTop) / k) * 0.3;
-  if (F.phase === 'pipe') return oy(seg.i) + seg.room.ball.y;
-  return oy(seg.i) + floorPose(seg, F.phase === 'sink' ? segDur(seg) : F.t)[1];
+  F.end = true;
+  F.phase = 'outro';
+  F.si = F.segs.length - 1;
+  F.camY = oy(ROOMS.length) + 3 + viewH() * 0.3;
+  ui.floorStars.textContent = String(F.total);
+  ui.floorTotal.textContent = String(ROOMS.length * 3);
+  ui.floorCard.hidden = false;
 }
 
 // ---------------------------------------------------------------------------------------------
 // The frame loop: the physics steps at a fixed 1/120 s whatever the display rate; a frame takes at
-// most 8 steps, so after a stall the run slows down instead of jumping.
+// most 8 steps, so after a stall the attempt slows down instead of jumping.
 
 let last = 0;
 function frame(now) {
@@ -566,7 +566,7 @@ function frame(now) {
 function tick(dt) {
   if (G.paused) return;
   G.time += dt;
-  if (G.run && !G.run.result) {
+  if (live()) {
     G.acc += dt;
     let n = Math.floor(G.acc / STEP + 1e-9);
     if (n > 8) {
@@ -574,18 +574,19 @@ function tick(dt) {
       G.acc = 8 * STEP;
     }
     for (let s = 0; s < n; s++) {
-      G.run.step();
+      G.att.step();
       G.stepsTotal++;
-      for (const e of G.run.events) onRunEvent(e);
-      if (G.run.result) break;
+      for (const e of G.att.events) onEvent(e);
+      if (G.att.result) break;
     }
     G.acc -= n * STEP;
-    if (G.run && G.run.result) finishRun();
+    renderBalls();
+    if (G.att.result) finishAttempt();
   }
   if (G.mode === 'floor') tickFloor(dt);
   G.robot.t += dt;
-  if (G.ballIn) G.ballIn.t += dt;
-  if (G.marker) G.marker.t += dt;
+  for (const s of G.sinks) s.t += dt;
+  G.sinks = G.sinks.filter((s) => s.t < 0.4);
   if (G.shake) {
     G.shake.t += dt;
     if (G.shake.t > 0.35) G.shake = null;
@@ -604,12 +605,6 @@ function burst(x, y, color, n) {
     const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
     const v = 2 + Math.random() * 3;
     G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 2, life: 0.5 + Math.random() * 0.4, color, r: 0.07 + Math.random() * 0.06 });
-  }
-}
-
-function dust(x, y, n) {
-  for (let i = 0; i < n; i++) {
-    G.parts.push({ x, y: y + BALL_R, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 2, life: 0.35, color: 'rgba(255,255,255,0.8)', r: 0.05 });
   }
 }
 
@@ -643,14 +638,13 @@ function drawBlock(pts, fill, edge, hi, rivets = true) {
   ctx.lineWidth = 0.09;
   ctx.strokeStyle = edge;
   ctx.stroke();
-  // inner highlight along the first edge
-  ctx.beginPath();
   const c = centroid(pts);
   const inset = (p) => ({ x: p.x + (c.x - p.x) * 0.18, y: p.y + (c.y - p.y) * 0.18 });
   if (pts.length === 4) {
     const top = [...pts].sort((a, b) => a.y - b.y).slice(0, 2);
     const a = inset(top[0]);
     const b = inset(top[1]);
+    ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.lineWidth = 0.06;
@@ -660,13 +654,10 @@ function drawBlock(pts, fill, edge, hi, rivets = true) {
   if (rivets) {
     ctx.fillStyle = edge;
     for (const p of pts) {
-      const q = { x: p.x + (c.x - p.x) * 0.0, y: p.y };
       const d = Math.hypot(c.x - p.x, c.y - p.y);
       const r = Math.min(0.22, d * 0.35) / d;
-      q.x = p.x + (c.x - p.x) * r;
-      q.y = p.y + (c.y - p.y) * r;
       ctx.beginPath();
-      ctx.arc(q.x, q.y, 0.045, 0, Math.PI * 2);
+      ctx.arc(p.x + (c.x - p.x) * r, p.y + (c.y - p.y) * r, 0.045, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -725,115 +716,6 @@ function boardPattern() {
   return pattern;
 }
 
-// A room at vertical offset y0 (units). dyn: what moves: ball, flap and crate poses, stars taken.
-function drawRoom(room, layoutParts, dyn, y0 = 0, opts = {}) {
-  ctx.save();
-  ctx.translate(0, y0);
-  // the board: the pack's warm checks, in a white frame
-  ctx.fillStyle = COL.frame;
-  roundRect(-0.22, -0.22, W + 0.44, H + 0.44, 0.35);
-  ctx.fill();
-  ctx.save();
-  roundRect(0, 0, W, H, 0.2);
-  ctx.clip();
-  ctx.fillStyle = boardPattern();
-  ctx.fillRect(0, 0, W, H);
-  // a soft shade toward the open floor, where the ball falls out
-  const g = ctx.createLinearGradient(0, H - 2, 0, H);
-  g.addColorStop(0, 'rgba(60,30,10,0)');
-  g.addColorStop(1, 'rgba(60,30,10,0.22)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, H - 2, W, 2);
-
-  // the trail of the last run
-  if (opts.trail && opts.trail.length > 4) {
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
-    for (let i = 0; i < opts.trail.length; i += 4) {
-      ctx.beginPath();
-      ctx.arc(opts.trail[i], opts.trail[i + 1], 0.055, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  // the exit: locked until the key is touched
-  const locked = room.key && !dyn.keyed;
-  const pulse = 1 + 0.05 * Math.sin(G.time * 3);
-  if (dyn.pipeIn) drawImg(IMG.hole_start, room.ball.x, room.ball.y, 0.9, 0.9);
-  drawImg(locked ? IMG.hole_large_end_locked : IMG.hole_large_end, room.exit.x, room.exit.y, 1.25 * pulse, 1.25 * pulse);
-
-  for (const b of room.fixed) {
-    drawBlock(rectPoly(b), COL.yellow, COL.yellowEdge, COL.yellowHi);
-    keyhole(b);
-  }
-
-  // stars and the key
-  room.stars.forEach((s, i) => {
-    if (dyn.taken && dyn.taken.has(i)) return;
-    const tw = 1 + 0.07 * Math.sin(G.time * 2.4 + i * 1.7);
-    drawImg(IMG.star, s.x, s.y + Math.sin(G.time * 1.6 + i) * 0.05, 0.78 * tw, 0.78 * tw, Math.sin(G.time + i) * 0.12);
-  });
-  if (room.key && !dyn.keyed) drawImg(IMG.key, room.key.x, room.key.y + Math.sin(G.time * 2) * 0.06, 0.8, 0.75, -0.3);
-
-  // the crate
-  if (room.crate) {
-    const c = dyn.crate || { x: room.crate.x, y: room.crate.y, a: 0 };
-    drawImg(IMG.crate, c.x, c.y, room.crate.w, room.crate.h, c.a);
-  }
-
-  // parts
-  for (const p of layoutParts) drawPart(p, opts);
-
-  // the flap: blue, hinged at its top
-  if (room.flap) {
-    const f = room.flap;
-    const a = dyn.flap || 0;
-    ctx.save();
-    drawBlock(rectPoly(flapBox(f, a)), COL.blue, COL.blueEdge, '#a9d6ff', false);
-    ctx.fillStyle = '#e8eef5';
-    ctx.strokeStyle = '#7d8a99';
-    ctx.lineWidth = 0.05;
-    ctx.beginPath();
-    ctx.arc(f.x, f.y, 0.14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  drawRobot(room, dyn.robot || { state: 'idle', t: 0 }, opts.kickChip ? dyn.kick : null);
-
-  // the ball
-  if (dyn.ball && !dyn.ballGone) {
-    const s = dyn.ballScale ?? 1;
-    drawImg(IMG.ball_red_large, dyn.ball.x, dyn.ball.y, BALL_R * 2 * s, BALL_R * 2 * s, dyn.ball.spin || 0);
-  }
-
-  // the near-miss marker: where the ball came closest to the exit
-  if (opts.marker) {
-    const m = opts.marker;
-    const r = 0.42 + 0.06 * Math.sin(m.t * 6);
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, m.t * 4);
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 0.08;
-    ctx.setLineDash([0.12, 0.1]);
-    ctx.beginPath();
-    ctx.arc(m.x, m.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.strokeStyle = 'rgba(239,79,90,0.9)';
-    ctx.lineWidth = 0.06;
-    ctx.beginPath();
-    ctx.moveTo(m.x - 0.16, m.y - 0.16);
-    ctx.lineTo(m.x + 0.16, m.y + 0.16);
-    ctx.moveTo(m.x + 0.16, m.y - 0.16);
-    ctx.lineTo(m.x - 0.16, m.y + 0.16);
-    ctx.stroke();
-    ctx.restore();
-  }
-  ctx.restore(); // clip
-  ctx.restore();
-}
-
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -844,13 +726,111 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawPart(p, opts = {}) {
+// A room at vertical offset y0 (units), with an attempt's state (att: may be null), the parts to
+// draw and what the player is doing.
+function drawRoom(room, att, parts, y0 = 0, opts = {}) {
+  ctx.save();
+  ctx.translate(0, y0);
+  ctx.fillStyle = COL.frame;
+  roundRect(-0.22, -0.22, W + 0.44, H + 0.44, 0.35);
+  ctx.fill();
+  ctx.save();
+  roundRect(0, 0, W, H, 0.2);
+  ctx.clip();
+  ctx.fillStyle = boardPattern();
+  ctx.fillRect(0, 0, W, H);
+  // a soft shade toward the open floor, where balls fall out
+  const g = ctx.createLinearGradient(0, H - 2, 0, H);
+  g.addColorStop(0, 'rgba(60,30,10,0)');
+  g.addColorStop(1, 'rgba(60,30,10,0.22)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, H - 2, W, 2);
+
+  // the balls' trails: where this attempt's balls went
+  if (att && opts.trails) {
+    for (const b of att.balls) {
+      const t = b.trail;
+      ctx.fillStyle = b.state === 'in' ? 'rgba(170,255,200,0.55)' : 'rgba(255,255,255,0.45)';
+      for (let i = 0; i < t.length; i += 6) {
+        ctx.beginPath();
+        ctx.arc(t[i], t[i + 1], 0.045, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  // the exits: locked until the key is touched
+  const keyed = att ? att.keyed : !room.key;
+  const pulse = 1 + 0.05 * Math.sin(G.time * 3);
+  for (const e of room.exits) drawImg(keyed ? IMG.hole_large_end : IMG.hole_large_end_locked, e.x, e.y, 1.25 * pulse, 1.25 * pulse);
+
+  for (const b of room.fixed) {
+    drawBlock(rectPoly(b), COL.yellow, COL.yellowEdge, COL.yellowHi);
+    keyhole(b);
+  }
+  // Trundle's girder, with the hopper's chute under his track
+  drawBlock(rectPoly(girderBox(room)), COL.yellow, COL.yellowEdge, COL.yellowHi);
+
+  // stars and the key
+  room.stars.forEach((s, i) => {
+    if (att && att.stars.has(i)) return;
+    const tw = 1 + 0.07 * Math.sin(G.time * 2.4 + i * 1.7);
+    drawImg(IMG.star, s.x, s.y + Math.sin(G.time * 1.6 + i) * 0.05, 0.78 * tw, 0.78 * tw, Math.sin(G.time + i) * 0.12);
+  });
+  if (room.key && !keyed) drawImg(IMG.key, room.key.x, room.key.y + Math.sin(G.time * 2) * 0.06, 0.8, 0.75, -0.3);
+
+  if (room.crate) {
+    const c = att && att.crate ? { x: att.crate.position.x / S, y: att.crate.position.y / S, a: att.crate.angle } : { x: room.crate.x, y: room.crate.y, a: 0 };
+    drawImg(IMG.crate, c.x, c.y, room.crate.w, room.crate.h, c.a);
+  }
+
+  for (const p of parts) drawPart(p, att, opts);
+
+  if (room.flap) {
+    const f = room.flap;
+    const a = att && att.flap ? att.flap.angle : 0;
+    drawBlock(rectPoly(flapBox(f, a)), COL.blue, COL.blueEdge, '#a9d6ff', false);
+    ctx.fillStyle = '#e8eef5';
+    ctx.strokeStyle = '#7d8a99';
+    ctx.lineWidth = 0.05;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  const tr = att ? att.trundle : { x: room.trundle.x, dir: room.trundle.dir || 1, speed: room.trundle.speed };
+  drawRobot(room, tr, opts.robot || { state: 'idle', t: 0 }, opts.chevron);
+
+  // the balls
+  if (att) {
+    for (const b of att.balls) {
+      if (b.state !== 'live') continue;
+      const x = b.body.position.x / S;
+      const y = b.body.position.y / S;
+      drawImg(IMG.ball_red_large, x, y, BALL_R * 2, BALL_R * 2, x / BALL_R);
+    }
+  }
+  for (const s of opts.sinks || []) {
+    const u = Math.min(1, s.t / 0.35);
+    drawImg(IMG.ball_red_large, s.x + (s.ex - s.x) * u, s.y + (s.ey - s.y) * u, BALL_R * 2 * (1 - u * 0.8), BALL_R * 2 * (1 - u * 0.8));
+  }
+  ctx.restore(); // clip
+  ctx.restore();
+}
+
+function drawPart(p, att, opts = {}) {
   let dx = 0;
   if (G.shake && G.shake.part === p) dx = Math.sin(G.shake.t * 60) * 0.12 * (1 - G.shake.t / 0.35);
   const pts = partPoly({ ...p, x: p.x + dx });
-  const bad = G.drag && G.drag.part === p && G.drag.bad;
+  const held = G.drag && G.drag.part === p;
+  const bad = held && G.drag.bad;
+  // a ghost: held, or let go on a ball and waiting for it to pass
+  const sp = att && att.parts.get(p.id);
+  const ghost = held || (sp && sp.ghost);
   ctx.save();
-  if (G.drag && G.drag.part === p) {
+  if (ghost) ctx.globalAlpha = held ? 0.75 : 0.45 + 0.25 * Math.sin(G.time * 14);
+  if (held) {
     ctx.shadowColor = 'rgba(0,0,0,0.3)';
     ctx.shadowBlur = 0.4 * k;
     ctx.shadowOffsetY = 0.12 * k;
@@ -868,70 +848,54 @@ function drawPart(p, opts = {}) {
   }
 }
 
-// Trundle: drives into the ball to kick it, cheers at the exit, winces at a miss, and leans toward
-// the ball while it runs. The chip over Trundle shows the kick: one chevron soft, two hard.
-function drawRobot(room, R, kick) {
-  const r = room.robot;
-  const dir = r.dir || 1;
-  let x = r.x;
-  let y = r.y;
-  let im = IMG.robot_blueDrive1;
-  let rot = 0;
+// Trundle on his girder: drives along it (his tracks turning), bobs as a ball drops from his
+// hopper, cheers when the room is done, winces when an attempt fails. The chevron over him shows
+// which way he's heading.
+function drawRobot(room, tr, R, chevron) {
+  const g = room.girder;
+  const dir = tr.dir;
+  let x = tr.x;
+  let y = g.y;
+  let im = tr.speed && Math.floor(G.time * 10) % 2 ? IMG.robot_blueDrive2 : IMG.robot_blueDrive1;
   const t = R.t;
-  if (R.state === 'kick') {
-    const u = t < 0.12 ? t / 0.12 : Math.max(0, 1 - (t - 0.12) / 0.35);
-    x += dir * 0.3 * u;
-    im = Math.floor(t * 16) % 2 ? IMG.robot_blueDrive2 : IMG.robot_blueDrive1;
-  } else if (R.state === 'cheer') {
+  if (R.state === 'drop' && t < 0.3) y += Math.sin((t / 0.3) * Math.PI) * 0.08;
+  else if (R.state === 'cheer') {
     im = IMG.robot_blueJump;
-    y -= Math.abs(Math.sin(t * 7)) * 0.45 * Math.max(0, 1 - t / 1.6);
+    y -= Math.abs(Math.sin(t * 7)) * 0.4 * Math.max(0, 1 - t / 1.6);
   } else if (R.state === 'wince') {
-    im = t < 1.1 ? IMG.robot_blueHurt : IMG.robot_blueDrive1;
+    im = t < 1.1 ? IMG.robot_blueHurt : im;
     if (t < 0.4) x += Math.sin(t * 50) * 0.05;
-  } else {
-    y -= Math.abs(Math.sin(G.time * 2.2)) * 0.03;
-  }
-  if (R.look != null) rot = Math.max(-0.18, Math.min(0.18, R.look));
-  const w = 1.5;
+  } else if (R.state === 'turn' && t < 0.25) y -= Math.sin((t / 0.25) * Math.PI) * 0.15;
+  const w = 1.3;
   const h = (w * 150) / 184;
   ctx.save();
   ctx.translate(x, y - h / 2);
-  ctx.rotate(rot);
   if (dir < 0) ctx.scale(-1, 1);
   if (ready(im)) ctx.drawImage(im, -w / 2, -h / 2, w, h);
   ctx.restore();
-  if (kick) {
-    // the kick chip
-    const cx = r.x + dir * 0.15;
-    const cy = r.y - h - 0.45 + Math.sin(G.time * 3) * 0.04;
+  if (chevron && tr.speed) {
+    // which way he's heading: tap him to turn him around
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.fillStyle = 'rgba(255,253,248,0.95)';
-    roundRect(-0.42, -0.24, 0.84, 0.48, 0.24);
-    ctx.fill();
-    ctx.strokeStyle = kick === 'hard' ? '#ef4f5a' : '#23a457';
-    ctx.lineWidth = 0.09;
+    ctx.translate(x + dir * 0.95, y - h * 0.55);
+    ctx.strokeStyle = 'rgba(255,253,248,0.95)';
+    ctx.lineWidth = 0.1;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    const n = kick === 'hard' ? 2 : 1;
-    for (let i = 0; i < n; i++) {
-      const ox = (i - (n - 1) / 2) * 0.22;
-      ctx.beginPath();
-      ctx.moveTo(ox - dir * 0.08, -0.12);
-      ctx.lineTo(ox + dir * 0.08, 0);
-      ctx.lineTo(ox - dir * 0.08, 0.12);
-      ctx.stroke();
-    }
+    ctx.beginPath();
+    ctx.moveTo(-dir * 0.1, -0.16);
+    ctx.lineTo(dir * 0.1, 0);
+    ctx.lineTo(-dir * 0.1, 0.16);
+    ctx.stroke();
     ctx.restore();
   }
 }
 
-function drawParticles(y0 = 0) {
+function drawParticles() {
   for (const p of G.parts) {
     ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 2.5));
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y + y0, p.r, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
@@ -953,83 +917,27 @@ function draw() {
     ctx.fill();
   }
   if (G.mode === 'floor' && G.floor) return drawFloor();
-
   ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * bx, dpr * by);
-  const run = G.run;
-  const dyn = { robot: G.robot, kick: G.kick, keyed: !G.room.key };
-  if (run) {
-    const p = run.pose();
-    dyn.ball = { x: p.x, y: p.y, spin: p.x / BALL_R };
-    dyn.taken = run.stars;
-    dyn.keyed = run.keyed;
-    if (run.flap) dyn.flap = run.flap.angle;
-    if (run.crate) dyn.crate = { x: run.crate.position.x / S, y: run.crate.position.y / S, a: run.crate.angle };
-    G.robot.look = (p.x - G.room.robot.x) * 0.02 * (G.room.robot.dir || 1);
-  } else if (G.ballIn) {
-    const u = Math.min(1, G.ballIn.t / 0.35);
-    const ex = G.room.exit;
-    dyn.ball = { x: G.ballIn.x + (ex.x - G.ballIn.x) * u, y: G.ballIn.y + (ex.y - G.ballIn.y) * u, spin: 0 };
-    dyn.ballScale = 1 - u * 0.8;
-    dyn.ballGone = u >= 1;
-    dyn.keyed = true;
-  } else {
-    dyn.ball = { x: G.room.ball.x, y: G.room.ball.y, spin: 0 };
-    G.robot.look = null;
-  }
-  if (G.mode === 'done' && G.lastStars != null) dyn.taken = new Set(); // stars hidden only during a run
   const parts = G.layout.slice();
   if (G.drag && G.drag.isNew) parts.push(G.drag.part);
-  drawRoom(G.room, parts, dyn, 0, {
-    trail: G.mode === 'run' || G.mode === 'demo' ? G.run && G.run.trail : G.trail,
-    marker: G.marker,
-    select: G.mode === 'edit',
-    kickChip: G.mode !== 'floor',
-  });
+  drawRoom(G.room, G.att, parts, 0, { trails: G.mode !== 'run', select: editable(), robot: G.robot, chevron: G.mode === 'run', sinks: G.sinks });
   drawParticles();
 }
 
 function drawFloor() {
   const F = G.floor;
-  const camTop = F.camY - (vh - playTop - 16) / k / 2;
+  const camTop = F.camY - viewH() / 2;
   ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * bx, dpr * (playTop - camTop * k));
-  const viewH = (vh - playTop) / k;
   for (const seg of F.segs) {
     const y0 = oy(seg.i);
-    if (y0 > camTop + viewH + 1 || y0 + H < camTop - 1) continue;
-    const dyn = { robot: { state: 'idle', t: 0 }, keyed: !seg.room.key || seg.keyed, taken: seg.taken, pipeIn: seg.i > 0 };
-    const active = F.segs[F.si] === seg;
-    const doneSeg = F.segs.indexOf(seg) < F.si || (active && (F.phase === 'sink' || F.phase === 'outro'));
-    if (active && F.phase === 'play') {
-      const p = floorPose(seg, F.t);
-      dyn.ball = { x: p[0], y: p[1], spin: p[0] / BALL_R };
-      let n = 3;
-      if (seg.room.flap) dyn.flap = p[n++];
-      if (seg.room.crate) dyn.crate = { x: p[n], y: p[n + 1], a: p[n + 2] };
-      dyn.robot = { state: F.robotT < 0.5 ? 'kick' : 'idle', t: F.robotT };
-    } else if (active && F.phase === 'pipe') {
-      dyn.ball = { x: seg.room.ball.x, y: seg.room.ball.y, spin: 0 };
-      dyn.ballScale = Math.max(0.2, 1 - F.phaseT);
-    } else if (doneSeg) {
-      const p = floorPose(seg, segDur(seg));
-      let n = 3;
-      if (seg.room.flap) dyn.flap = p[n++];
-      if (seg.room.crate) dyn.crate = { x: p[n], y: p[n + 1], a: p[n + 2] };
-      dyn.keyed = true;
-      if (active && F.phase === 'sink') {
-        const u = 1 - F.phaseT / 0.35;
-        dyn.ball = { x: p[0] + (seg.room.exit.x - p[0]) * u, y: p[1] + (seg.room.exit.y - p[1]) * u };
-        dyn.ballScale = 1 - u * 0.8;
-      }
-    } else {
-      dyn.ball = { x: seg.room.ball.x, y: seg.room.ball.y, spin: 0 };
-    }
-    drawRoom(seg.room, seg.layout, dyn, y0, {});
-    // the pipe down to the next room
-    if (seg.i < ROOMS.length) {
-      ctx.fillStyle = 'rgba(16,40,70,0.35)';
-      roundRect(W / 2 - 0.35, y0 + H + 0.3, 0.7, GAP - 0.6, 0.3);
-      ctx.fill();
-    }
+    if (y0 > camTop + viewH() + 1 || y0 + H < camTop - 1) continue;
+    const active = F.segs[F.si] === seg && F.phase === 'play';
+    const att = active ? F.att : seg.final || null;
+    const parts = active || seg.final ? [...(att ? att.parts.values() : [])].filter((p) => !p.held) : seg.best.layout;
+    drawRoom(seg.room, att, parts, y0, { robot: { state: active ? 'drop' : 'idle', t: 1 } });
+    ctx.fillStyle = 'rgba(16,40,70,0.35)';
+    roundRect(W / 2 - 0.35, y0 + H + 0.3, 0.7, GAP - 0.6, 0.3);
+    ctx.fill();
   }
   // floor 2's locked door, below the last room
   const y2 = oy(ROOMS.length);
@@ -1041,11 +949,12 @@ function drawFloor() {
   ctx.font = `800 0.8px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   ctx.fillText('2', W / 2, y2 + 1.4);
-  if (F.phase === 'outro' || F.end) {
-    const t = F.end ? 2 : 1.6 - F.phaseT;
-    drawRobot({ robot: { x: W / 2 - 2.4, y: y2 + 4.6, dir: 1 } }, { state: 'cheer', t: t % 1.6 }, null);
+  if (F.phase === 'outro') {
+    const room = { girder: { x1: W / 2 - 2.4, x2: W / 2 - 2.4, y: y2 + 4.6 } };
+    drawRobot(room, { x: W / 2 - 2.4, dir: 1, speed: 0 }, { state: 'cheer', t: (G.time % 1.6) + 0.01 }, false);
   }
-  drawParticles(0);
+  ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * bx, dpr * (playTop - camTop * k));
+  drawParticles();
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1077,9 +986,11 @@ function distToPoly(pt, pts) {
   return inside ? 0 : d;
 }
 
-function hitRobot(pt) {
-  const b = robotBox(G.room);
-  return Math.abs(pt.x - b.x) < b.w / 2 + 0.4 && Math.abs(pt.y - (b.y - 0.3)) < b.h / 2 + 0.7;
+// Trundle's hit area: at least 64 px across, around him on his girder.
+function hitTrundle(pt) {
+  const tr = G.att ? G.att.trundle : G.room.trundle;
+  const r = Math.max(1, 32 / k);
+  return Math.abs(pt.x - tr.x) < r && pt.y > G.room.girder.y - 1.3 - r / 2 && pt.y < G.room.girder.y + 0.6;
 }
 
 function select(p) {
@@ -1092,44 +1003,33 @@ canvas.addEventListener('pointerdown', (e) => {
   if (G.paused) return;
   if (G.mode === 'floor') {
     // a tap skips to the end of the floor run
-    if (G.floor && !G.floor.end) skipFloor();
+    if (G.floor && !G.floor.end) endFloor();
     return;
   }
-  if (G.mode === 'run' || G.mode === 'demo') {
-    editNow();
-    return;
-  }
-  if (G.mode !== 'edit') return;
+  if (!editable()) return;
   const pt = toBoard(e.clientX, e.clientY);
+  if (hitTrundle(pt) && G.room.trundle.speed) {
+    turnTrundle();
+    return;
+  }
   const p = hitPart(pt);
   if (p) {
     activePointer = e.pointerId;
-    G.marker = null;
     select(p);
     G.drag = { part: p, isNew: false, px0: e.clientX, py0: e.clientY, orig: { x: p.x, y: p.y, a: p.a }, moved: false, bad: false };
-    return;
-  }
-  if (hitRobot(pt)) {
-    G.kick = G.kick === 'soft' ? 'hard' : 'soft';
-    G.robot = { state: 'kick', t: 0.3 };
-    play('toggle');
-    G.marker = null;
-    persist();
     return;
   }
   select(null);
 });
 
 function trayDown(e, type) {
-  if (activePointer !== null || G.paused) return;
-  if (G.mode === 'done' || G.mode === 'floor') return;
-  editNow();
+  if (activePointer !== null || G.paused || !editable()) return;
   if (trayLeft()[type] <= 0) return;
   e.preventDefault();
   activePointer = e.pointerId;
   const lift = e.pointerType === 'mouse' ? 0 : 64; // a finger never hides the part it carries
   const pt = toBoard(e.clientX, e.clientY - lift);
-  const part = { type, x: snap(pt.x), y: snap(pt.y), a: type === 'plank' ? 0 : 0 };
+  const part = { id: G.nextId++, type, x: snap(pt.x), y: snap(pt.y), a: 0 };
   G.drag = { part, isNew: true, lift, moved: true, bad: true };
   select(null);
   renderTray();
@@ -1144,15 +1044,15 @@ window.addEventListener('pointermove', (e) => {
     p.x = clampX(snap(pt.x));
     p.y = clampY(snap(pt.y));
   } else {
-    const dx = (e.clientX - D.px0) / k;
-    const dy = (e.clientY - D.py0) / k;
-    if (Math.hypot(e.clientX - D.px0, e.clientY - D.py0) > 6) D.moved = true;
+    if (Math.hypot(e.clientX - D.px0, e.clientY - D.py0) > 6 && !D.moved) {
+      D.moved = true;
+      sendLift(p); // picked up: the balls pass through it until it's let go
+    }
     if (!D.moved) return;
-    p.x = clampX(snap(D.orig.x + dx));
-    p.y = clampY(snap(D.orig.y + dy));
+    p.x = clampX(snap(D.orig.x + (e.clientX - D.px0) / k));
+    p.y = clampY(snap(D.orig.y + (e.clientY - D.py0) / k));
   }
   D.bad = overlaps(G.room, p, G.layout.filter((q) => q !== p));
-  D.overBar = e.clientY > ui.bar.getBoundingClientRect().top;
 });
 
 const clampX = (x) => Math.max(0.25, Math.min(W - 0.25, x));
@@ -1165,10 +1065,10 @@ function endDrag(e) {
   G.drag = null;
   if (!D) return;
   const p = D.part;
-  const overBar = e.clientY > ui.bar.getBoundingClientRect().top;
   if (!D.isNew && !D.moved) return; // a tap: just selected it
-  if (overBar) {
+  if (e.clientY > ui.bar.getBoundingClientRect().top) {
     // back to the tray
+    if (!D.isNew) sendDel(p);
     G.layout = G.layout.filter((q) => q !== p);
     select(null);
     play('turn', { rate: 0.8 });
@@ -1181,12 +1081,14 @@ function endDrag(e) {
       select(null);
     } else {
       Object.assign(p, D.orig);
+      sendSet(p);
       G.shake = { part: p, t: 0 };
     }
     afterEdit();
     return;
   }
   if (D.isNew) G.layout.push(p);
+  sendSet(p);
   select(p);
   play('place');
   afterEdit();
@@ -1197,12 +1099,14 @@ window.addEventListener('pointercancel', (e) => {
   const D = G.drag;
   activePointer = null;
   G.drag = null;
-  if (D && !D.isNew) Object.assign(D.part, D.orig);
+  if (D && !D.isNew && D.moved) {
+    Object.assign(D.part, D.orig);
+    sendSet(D.part);
+  }
   renderTray();
 });
 
 function afterEdit() {
-  G.marker = null;
   renderTray();
   updateTurn();
   persist();
@@ -1210,7 +1114,7 @@ function afterEdit() {
 
 function turn(deg) {
   const p = G.sel;
-  if (!p || G.mode !== 'edit') return;
+  if (!p || !editable()) return;
   const before = p.a;
   p.a = (((p.a + deg) % 360) + 360) % 360;
   if (overlaps(G.room, p, G.layout.filter((q) => q !== p))) {
@@ -1219,13 +1123,14 @@ function turn(deg) {
     play('turn', { rate: 0.6, gain: 0.8 });
     return;
   }
+  sendSet(p);
   play('turn');
   afterEdit();
 }
 
 function nudge(dx, dy) {
   const p = G.sel;
-  if (!p || G.mode !== 'edit') return;
+  if (!p || !editable()) return;
   const o = { x: p.x, y: p.y };
   p.x = clampX(p.x + dx);
   p.y = clampY(p.y + dy);
@@ -1234,22 +1139,19 @@ function nudge(dx, dy) {
     G.shake = { part: p, t: 0 };
     return;
   }
+  sendSet(p);
   afterEdit();
 }
 
-function go() {
-  if (G.drag) return; // a drag in progress ends first
-  if (G.mode === 'run' || G.mode === 'demo') {
-    editNow();
-    return;
-  }
-  if (G.mode !== 'edit') return;
-  startRun(false);
+function restart() {
+  if (G.drag || G.mode === 'floor') return; // a drag in progress ends first
+  startAttempt();
 }
 
 ui.turnL.addEventListener('click', () => turn(-15));
 ui.turnR.addEventListener('click', () => turn(15));
-ui.go.addEventListener('click', go);
+ui.restart.addEventListener('click', restart);
+ui.retry.addEventListener('click', restart);
 canvas.addEventListener(
   'wheel',
   (e) => {
@@ -1280,7 +1182,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (G.mode === 'floor') {
     if (e.key === ' ' || e.key === 'Enter') {
-      skipFloor();
+      endFloor();
       e.preventDefault();
     }
     return;
@@ -1288,21 +1190,17 @@ window.addEventListener('keydown', (e) => {
   const onButton = t instanceof HTMLButtonElement;
   if (e.key === ' ' && !onButton) {
     e.preventDefault();
-    go();
+    restart();
   } else if (e.key === 'q' || e.key === 'Q') turn(-15);
   else if (e.key === 'e' || e.key === 'E') turn(15);
-  else if (e.key === 'k' || e.key === 'K') {
-    if (G.mode === 'edit') {
-      G.kick = G.kick === 'soft' ? 'hard' : 'soft';
-      play('toggle');
-      persist();
-    }
-  } else if (e.key === 'n' || e.key === 'N') {
-    if (G.mode === 'edit' && G.layout.length) {
+  else if (e.key === 't' || e.key === 'T') turnTrundle();
+  else if (e.key === 'n' || e.key === 'N') {
+    if (G.layout.length) {
       const i = G.layout.indexOf(G.sel);
       select(G.layout[(i + 1) % G.layout.length]);
     }
-  } else if ((e.key === 'Delete' || e.key === 'Backspace') && G.sel && G.mode === 'edit') {
+  } else if ((e.key === 'Delete' || e.key === 'Backspace') && G.sel && editable()) {
+    sendDel(G.sel);
     G.layout = G.layout.filter((q) => q !== G.sel);
     select(null);
     afterEdit();
@@ -1317,12 +1215,7 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Cards
-ui.again.addEventListener('click', () => {
-  hideCards();
-  G.ballIn = null;
-  G.robot = { state: 'idle', t: 0 };
-  setMode('edit');
-});
+ui.again.addEventListener('click', restart);
 ui.next.addEventListener('click', () => {
   const n = nextRoom();
   if (n === null) startFloorRun();
@@ -1332,18 +1225,23 @@ $('[data-replay]').addEventListener('click', startFloorRun);
 $('[data-floor-rooms]').addEventListener('click', showRooms);
 $('[data-rooms]').addEventListener('click', () => (ui.rooms.hidden ? showRooms() : closeRooms()));
 $('[data-close-rooms]').addEventListener('click', closeRooms);
+ui.floorRun.addEventListener('click', startFloorRun);
 
-// Closing the list puts back the card it covered.
+// Closing the list puts back what it covered.
 function closeRooms() {
   ui.rooms.hidden = true;
   ui.bar.hidden = G.mode === 'done' || G.mode === 'floor';
-  if (G.mode === 'done') showDone(G.lastStars);
+  if (G.mode === 'done') showDone(G.lastStars, G.att ? G.att.inCount : 0, G.room.balls);
+  else if (G.mode === 'failed') ui.failed.hidden = false;
   else if (G.mode === 'floor' && G.floor && G.floor.end) ui.floorCard.hidden = false;
+  if (G.paused && G.mode === 'run') ui.paused.hidden = false;
 }
-ui.floorRun.addEventListener('click', startFloorRun);
 
 function showRooms() {
-  if (G.mode === 'run' || G.mode === 'demo') editNow();
+  // the attempt waits while the list is open
+  if (G.mode === 'run' || (G.mode === 'floor' && G.floor && !G.floor.end)) {
+    G.paused = true;
+  }
   ui.roomGrid.innerHTML = '';
   ROOMS.forEach((room, i) => {
     const b = document.createElement('button');
@@ -1362,20 +1260,10 @@ function showRooms() {
   ui.floorRun.hidden = !floorComplete();
   ui.floorCard.hidden = true;
   ui.done.hidden = true;
+  ui.failed.hidden = true;
+  ui.paused.hidden = true;
   ui.rooms.hidden = false;
   ui.bar.hidden = true;
-}
-
-function skipFloor() {
-  const F = G.floor;
-  if (!F) return;
-  F.end = true;
-  F.si = F.segs.length - 1;
-  F.phase = 'outro';
-  F.phaseT = 0;
-  F.camY = oy(ROOMS.length) + 3 + ((vh - playTop) / k) * 0.3;
-  ui.floorStars.textContent = String(F.total);
-  ui.floorCard.hidden = false;
 }
 
 // Mute
@@ -1391,7 +1279,7 @@ renderMute();
 
 // Pause when hidden; resume only on a tap, never on its own.
 function moving() {
-  return G.mode === 'run' || G.mode === 'demo' || (G.mode === 'floor' && G.floor && !G.floor.end);
+  return live() || (G.mode === 'floor' && G.floor && !G.floor.end);
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -1427,24 +1315,29 @@ const api = {
   manual: false,
   frame: (ms) => tick(ms / 1000),
   openRoom,
-  go,
+  restart,
   turn,
-  startRun,
+  turnTrundle,
   showRooms,
   startFloorRun,
+  endFloor,
   loadRoom,
+  replay,
   view: () => ({ k, bx, by }),
   toScreen: (x, y) => ({ x: bx + x * k, y: by + y * k }),
-  // Place parts directly (tests and the solution replays): [{type, x, y, a}]
-  setLayout(parts, kick) {
-    editNow();
+  // Set the parts (tests): [{id, type, x, y, a}], then start a new attempt from them.
+  setLayout(parts) {
     G.layout = parts.map((p) => ({ ...p }));
-    if (kick) G.kick = kick;
-    afterEdit();
+    G.nextId = 1 + G.layout.reduce((m, p) => Math.max(m, p.id), 0);
+    G.sel = null;
+    persist();
+    renderTray();
+    startAttempt();
   },
 };
 window.__trundle = api;
 
 layout();
+renderTray();
 openRoom(roomFromHash());
 requestAnimationFrame(frame);

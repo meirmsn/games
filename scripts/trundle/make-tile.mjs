@@ -1,5 +1,6 @@
-// Renders the landing tile for Trundle (assets/tiles/trundle.png) with the game itself: room 1 in
-// mid-run, Trundle on its ledge, the ball over the green plank, cropped to the tile's 640 × 400.
+// Renders the landing tile for Trundle (assets/tiles/trundle.png) with the game itself: room 7 in
+// mid-attempt, Trundle on his girder, a ball off a green plank and a star bursting, cropped to the tile's
+// 640 × 400.
 // Run: node scripts/trundle/make-tile.mjs   (needs Playwright's Chromium, like scripts/check-slow.sh)
 import { spawn } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -19,22 +20,31 @@ const browser = await chromium.launch();
 try {
   // 10 board units ≈ 320 CSS px, so a 320 × 200 crop at 2x is close to the tile's 640 × 400.
   const page = await browser.newPage({ viewport: { width: 352, height: 720 }, deviceScaleFactor: 2 });
-  await page.goto(`http://127.0.0.1:${PORT}/trundle/#1-1`);
+  await page.goto(`http://127.0.0.1:${PORT}/trundle/`);
   await page.waitForFunction(() => window.__trundle);
   await page.waitForTimeout(800);
-  const clip = await page.evaluate(() => {
+  const clip = await page.evaluate(([AT, ROOM]) => {
     const T = window.__trundle;
     T.manual = true;
-    T.openRoom(0);
-    T.setLayout(T.ROOMS[0].solution.layout, T.ROOMS[0].solution.kick);
-    T.go();
-    // run until the ball is over the plank, between the stars
-    let n = 0;
-    while (T.G.run && T.G.run.pose().x < 5.2 && n++ < 400) T.frame(1000 / 120);
-    const a = T.toScreen(0, 1.9);
-    const b = T.toScreen(10, 8.15);
+    T.openRoom(ROOM);
+    const sol = T.ROOMS[ROOM].solution;
+    T.setLayout(sol.layout);
+    const att = T.G.att;
+    let li = 0;
+    const step = att.step;
+    att.step = () => {
+      while (li < sol.log.length && sol.log[li].s === att.steps) {
+        const { s, ...e } = sol.log[li++];
+        att.edit(e);
+      }
+      step();
+    };
+    // a moment with balls on the way down
+    while (att.t < AT) T.frame(1000 / 120);
+    const a = T.toScreen(0, 0.2);
+    const b = T.toScreen(10, 6.45);
     return { x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y };
-  });
+  }, [+(process.env.TILE_AT || 7.6), +(process.env.TILE_ROOM || 6)]);
   await page.waitForTimeout(100);
   const shot = await page.screenshot({ clip });
   // scale the crop to exactly 640 × 400
@@ -48,7 +58,7 @@ try {
     c.getContext('2d').drawImage(im, 0, 0, 640, 400);
     return c.toDataURL('image/png').split(',')[1];
   }, shot.toString('base64'));
-  writeFileSync(new URL('../../assets/tiles/trundle.png', import.meta.url), Buffer.from(png, 'base64'));
+  writeFileSync(process.env.TILE_OUT || new URL('../../assets/tiles/trundle.png', import.meta.url), Buffer.from(png, 'base64'));
   console.log('wrote assets/tiles/trundle.png');
 } finally {
   await browser.close();

@@ -2,7 +2,7 @@
 
 Play at **https://games.meirmsn.dev**
 
-**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Trundle](trundle/), place planks so the ball a little robot kicks off rolls into the exit.
+**Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Trundle](trundle/), rebuild the machine under the balls a little robot drops, to get them into the exit.
 
 Small browser games, built one at a time. They're touch-first (phone, then tablet, then desktop), and the site installs as a PWA that works offline.
 
@@ -17,7 +17,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 | `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) |
 | `<slug>/` | One folder per game, holding its `index.html`, code and only the assets it uses |
 | `reef/` | **Reef**, the fish game. Its sprite atlas is built from the Fish Pack SVGs by `scripts/reef/build-atlas.mjs` |
-| `trundle/` | **Trundle**, the contraption puzzle, on a vendored [Matter.js](https://brm.io/matter-js/) (`matter.min.js`, MIT). `sim.js` is its deterministic physics; `scripts/trundle/design.mjs` places a room's stars and finds its recorded solution, and `scripts/trundle/make-tile.mjs` draws its tile |
+| `trundle/` | **Trundle**, the contraption puzzle, on a vendored [Matter.js](https://brm.io/matter-js/) (`matter.min.js`, MIT). `sim.js` is its deterministic physics; `scripts/trundle/design.mjs` places a room's stars and finds its recorded solution (a layout and its timed edits), and `scripts/trundle/make-tile.mjs` draws its tile |
 
 Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1:8000/.
 

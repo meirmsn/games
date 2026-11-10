@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Trundle</title>
-    <meta name="description" content="Trundle: place planks and wedges so the ball the little robot kicks off rolls into the exit, then watch it run through every room you built." />
+    <meta name="description" content="Trundle: a little robot drops a ball every three seconds; rebuild the machine under the falling balls to get them into the exit." />
     <meta name="theme-color" content="#3a8fd9" />
     <link rel="manifest" href="../manifest.webmanifest" />
     <link rel="icon" href="../assets/icons/favicon.png" type="image/png" />
@@ -35,6 +35,8 @@
       </button>
     </header>
 
+    <div class="balls" data-balls role="status" aria-label="Balls"></div>
+
     <nav class="bar" data-bar aria-label="Parts and controls">
       <div class="tray" data-tray></div>
       <div class="controls">
@@ -44,9 +46,8 @@
         <button class="ctl" type="button" data-turn="15" aria-label="Turn right" disabled>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 6.5A7.5 7.5 0 1 0 19 13" /><path d="M14.5 2.5l1 4-4 1" /></svg>
         </button>
-        <button class="go" type="button" data-go aria-label="Go">
-          <svg class="i-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" /></svg>
-          <svg class="i-stop" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+        <button class="go" type="button" data-restart aria-label="Restart">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12a6.5 6.5 0 1 0 2-4.7" fill="none" /><path d="M4.5 3.5v5h5" fill="none" /></svg>
         </button>
       </div>
     </nav>
@@ -54,15 +55,24 @@
     <section class="card" data-card="done" hidden>
       <h2 data-done-title>Room done!</h2>
       <div class="big-stars" data-done-stars></div>
+      <p class="tally" data-done-count></p>
       <div class="row">
         <button class="btn ghost" type="button" data-again>Retry</button>
         <button class="btn" type="button" data-next>Next</button>
       </div>
     </section>
 
+    <section class="card" data-card="failed" hidden>
+      <h2>Try again</h2>
+      <p class="tally" data-failed-count></p>
+      <div class="row">
+        <button class="btn" type="button" data-retry>Retry</button>
+      </div>
+    </section>
+
     <section class="card" data-card="floor" hidden>
       <h2>The Workshop runs!</h2>
-      <p class="total"><span data-floor-stars>0</span> of 18 stars</p>
+      <p class="total"><span data-floor-stars>0</span> of <span data-floor-total>24</span> stars</p>
       <p class="soon">Floor 2 is still locked.</p>
       <div class="row">
         <button class="btn ghost" type="button" data-replay>Watch again</button>

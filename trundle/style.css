@@ -284,20 +284,65 @@ button:focus-visible {
 .go svg {
   width: 28px;
   height: 28px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.go .i-stop,
-.go.running .i-go {
+/* The ball counter, under the top bar: one mark per ball, and the quota's mark ringed. */
+.balls {
+  position: fixed;
+  z-index: 5;
+  top: calc(env(safe-area-inset-top) + 62px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  pointer-events: none;
+}
+
+.balls[hidden] {
   display: none;
 }
 
-.go.running {
-  color: var(--red);
+.balls .b {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid rgb(255 255 255 / 70%);
 }
 
-.go.running .i-stop {
-  display: block;
+.balls .b.live {
+  background: var(--red);
+  border-color: #fff;
+}
+
+.balls .b.in {
+  background: var(--green);
+  border-color: #fff;
+}
+
+.balls .b.lost {
+  background: rgb(16 40 70 / 45%);
+  border-color: transparent;
+}
+
+.balls .b.q {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.balls .count {
+  margin-left: 6px;
+  font-size: 14px;
+  font-weight: 800;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 25%);
 }
 
 /* Cards */
@@ -396,6 +441,13 @@ button:focus-visible {
   box-shadow: none;
 }
 
+.tally {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #50657c;
+}
+
 .total {
   margin: 0;
   font-size: 18px;
@@ -487,4 +539,9 @@ button:focus-visible {
   border-radius: 999px;
   background: var(--paper);
   fill: var(--green-deep);
+}
+
+/* Try again sits above the bottom bar, which stays usable: fix the parts, then Retry. */
+[data-card='failed'] {
+  bottom: calc(env(safe-area-inset-bottom) + 92px);
 }
