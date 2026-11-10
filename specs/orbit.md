@@ -1,6 +1,6 @@
 # Orbit: fling a probe from planet to planet on gravity
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; the next jump's stardust: "Follow this repo's CLAUDE.md and devshop workflow (ak:intent → update `specs/orbit.md` … → ak:build → ak:pr)" 2026-11-10
 
 ## Intent
 
@@ -203,7 +203,19 @@ three differ.
   Skyboxes Space that differs per system. Planets are the pack's whole planets with a slowly
   turning cloud layer from its parts and a soft shadow on the side away from one sun direction;
   a skim makes the planet's air glow for a moment. The target's ring is one thin plain circle,
-  brighter while it catches; stardust is small plain dots; the probe is a tiny dart-shaped
+  brighter while it catches; stardust is small plain dots, at three brightnesses: the current
+  jump's full (alpha 0.95, full size), the next jump's a little brighter than the rest (alpha 0.5,
+  0.85 × size), and every later jump's dim (alpha 0.3, 0.75 × size), the alpha dimming the dot's
+  glow too and the size factor applied as the dim one always was; caught motes and past jumps'
+  motes are hidden, and on the end card every uncaught mote is dim. The jump moves on only when a
+  capture finishes, so while one steers in or rewinds the jump being flown is still the current
+  one. The next jump's line shows which way you need to arrive circling the next planet, which this
+  jump's flight decides, so it is there to plan by if you look for it, without reading as a second
+  trail to chase (owner, 2026-11-10: on the last planet the trail sometimes needs the opposite
+  circling direction, and the dim trail was "so faint" they didn't notice it; the next jump's
+  stardust "in between ... closer to the dim end", around 0.45–0.5 and × 0.85, tuned by eye: 0.5
+  and 0.85). Rejected: brightening every later jump's motes, and making the next jump's as bright
+  as the current one's; the probe is a tiny dart-shaped
   spacecraft, white with a cyan cockpit, pointing the way it moves, with a flame behind it for a
   moment when its boosters fire, and a thin trail in one soft colour
   (owner, 2026-11-09: "I don't know if we should make it a circle ... or something that looks like
@@ -324,6 +336,11 @@ three differ.
   fits a 360 px wide screen.
 - **AC-28** Back (and Escape) ask "Leave this level?" before leaving, as in every game; while the
   question shows, Space launches nothing (it presses Stay), and Stay keeps the game.
+- **AC-29** Uncaught stardust shows at three brightnesses: the current jump's at alpha 0.95 and full
+  size, the next jump's at 0.5 and 0.85 ×, and every later jump's at 0.3 and 0.75 ×; caught motes
+  and past jumps' motes are not drawn. While a capture steers in, the jump being flown is still the
+  current one. On the last jump nothing shows at the middle brightness, and on the end card every
+  uncaught mote is dim.
 
 ## Core flow
 

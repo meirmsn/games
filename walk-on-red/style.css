@@ -17,6 +17,7 @@
   --gold-dark: #b38a00;
   --dim: #c9ccd6;
   --go: #5ae17c;
+  --heart: #ff4b4b; /* the walk light's red */
 }
 
 body {
@@ -174,9 +175,17 @@ body {
   text-overflow: clip;
 }
 
+.hud-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
 .quota {
+  flex: 1;
+  min-width: 0;
   height: 6px;
-  margin-top: 5px;
   overflow: hidden;
   border: 1px solid var(--dim);
   background: transparent;
@@ -187,6 +196,28 @@ body {
   width: 0;
   height: 100%;
   background: var(--go);
+}
+
+/* Lives: three pixel hearts, 7×6 art px at 2×; a lost one is just its outline's colour, dimmed. */
+.lives {
+  flex: none;
+  display: flex;
+  gap: 2px;
+}
+
+.lives svg {
+  display: block;
+  width: 14px;
+  height: 12px;
+  fill: var(--heart);
+  shape-rendering: crispEdges;
+}
+
+.lives svg.lost {
+  fill: var(--ink);
+  stroke: var(--dim);
+  stroke-width: 0.5;
+  opacity: 0.8;
 }
 
 /* A fixed width, room for five digits, so the bar beside it never changes width as points come in. */

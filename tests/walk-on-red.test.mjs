@@ -82,6 +82,36 @@ const carOn = (page, row, col) =>
     { row, col }
   );
 
+// A car stands on his column in the lane just ahead of the near kerb, he hops into it, and it goes.
+const hitOnce = (page) =>
+  page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const row = t.layout().bottom - 1;
+    t.put(row);
+    const v = t.spawnVehicle(row, 'sedan');
+    const want = t.colX(t.player.col);
+    v.s = v.dir === 1 ? want + v.w / 2 + t.ENTRY : t.PLAY_W + t.ENTRY - (want - v.w / 2);
+    v.speed = 0;
+    v.v = 0;
+    t.step(1 / 60);
+    const down = t.player.down > 0;
+    t.vehicles().length = 0;
+    return down;
+  });
+
+// The HUD is synced on each drawn frame, so this waits for one first.
+const hearts = (page) =>
+  page.evaluate(async () => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const el = document.querySelector('[data-lives]');
+    return {
+      full: el.querySelectorAll('svg:not(.lost)').length,
+      lost: el.querySelectorAll('svg.lost').length,
+      label: el.getAttribute('aria-label'),
+      shown: !document.querySelector('[data-hud]').hidden,
+    };
+  });
+
 test('walk-on-red AC-1: traffic drives behind the start card; Start begins level 1 alone with 30 s of red', async () => {
   const { context, page, errors } = await open();
   await page.waitForTimeout(500);
@@ -516,15 +546,16 @@ test('walk-on-red AC-8: a follower hit by a car tumbles and is gone, and no long
     const hit = p.state;
     t.vehicles().length = 0;
     run(1.2);
-    return { hit, after: p.state, mode: t.game.mode, row: p.row, b: t.layout().bottom };
+    return { hit, after: p.state, mode: t.game.mode, row: p.row, b: t.layout().bottom, lives: t.game.lives };
   });
   assert.equal(r.hit, 'down');
+  assert.equal(r.lives, 3, 'a follower hit costs no life');
   assert.equal(r.after, 'gone', 'gone, not back to the crowd');
   assert.equal(r.mode, 'play', 'the level carries on');
   await context.close();
 });
 
-test('walk-on-red AC-9: a hit knocks the player down and sends him back to the start', async () => {
+test('walk-on-red AC-9: a hit with a life to spare knocks the player down and sends him back to the start, one life fewer', async () => {
   const { context, page } = await open();
   await startEmpty(page, 2);
   const m = await page.evaluate(() => {
@@ -542,9 +573,10 @@ test('walk-on-red AC-9: a hit knocks the player down and sends him back to the s
   await run(page, 1.3);
   const back = await page.evaluate(() => {
     const t = window.__walkOnRed;
-    return [t.player.row, t.player.col, t.player.down, t.game.mode, t.layout().bottom, t.PCOL];
+    return [t.player.row, t.player.col, t.player.down, t.game.mode, t.layout().bottom, t.PCOL, t.game.lives];
   });
   assert.deepEqual(back.slice(0, 4), [back[4], back[5], 0, 'play'], 'on the near kerb, at his starting column');
+  assert.equal(back[6], 2, 'one life fewer');
   await context.close();
 });
 
@@ -619,9 +651,11 @@ test('walk-on-red AC-12: after level 21 the run ends with the total, the stars a
     over: !document.querySelector('[data-screen="over"]').hidden,
     score: document.querySelector('[data-final-score]').textContent,
     detail: document.querySelector('[data-final-detail]').textContent,
+    title: document.querySelector('[data-over-title]').textContent,
   }));
   assert.equal(s.mode, 'over');
   assert.ok(s.over);
+  assert.equal(s.title, 'Across!');
   assert.ok(total > 300);
   assert.equal(s.score, String(total));
   assert.match(s.detail, new RegExp(`of 63 stars · Best: ${total}`));
@@ -1041,6 +1075,7 @@ test('walk-on-red AC-23: every level starts with traffic and a car passing in fr
         t.startGame(level);
         t.manual = true;
         t.game.assist = 0;
+        t.game.lives = 99; // this measures how often he's hit, not how far 3 lives get him
         cars.push(t.vehicles().length);
         // A car in the first lane right across his column.
         const x = t.colX(t.PCOL);
@@ -1170,5 +1205,121 @@ test('walk-on-red AC-26: the game is called Gotta Go!, and nothing the player se
   const seen = await page.evaluate(() => document.title + ' ' + document.body.innerText + ' ' + document.querySelector('meta[name="description"]').content);
   assert.ok(!/walk on red/i.test(seen), 'no "Walk on Red" left');
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('walk-on-red AC-28: a run has 3 lives in the HUD; a hit empties one, a follower hit or running out of time none; the next level keeps them; a new run has 3', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 2);
+  assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true });
+  assert.ok(await hitOnce(page));
+  await run(page, 0.1);
+  assert.deepEqual(await hearts(page), { full: 2, lost: 1, label: '2 lives left', shown: true }, 'a hit empties one');
+  await run(page, 1.3);
+  assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'play');
+  // Too slow: the level again, no life lost.
+  await page.evaluate(() => (window.__walkOnRed.game.red = 0.05));
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    for (let i = 0; i < 60 * 30 && !(t.game.mode === 'play' && t.game.red > 20); i++) t.step(1 / 60);
+  });
+  assert.deepEqual(await page.evaluate(() => [window.__walkOnRed.game.mode, window.__walkOnRed.game.level, window.__walkOnRed.game.lives]), ['play', 2, 2], 'too slow costs no life');
+  // Across: the next level keeps the lives left.
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.clearTraffic();
+    t.put(0);
+    for (let i = 0; i < 60 * 30 && t.game.level === 2; i++) t.step(1 / 60);
+  });
+  assert.deepEqual(await page.evaluate(() => [window.__walkOnRed.game.level, window.__walkOnRed.game.lives]), [3, 2], 'the next level keeps them');
+  await run(page, 0.1);
+  assert.equal((await hearts(page)).full, 2);
+  // A new run: 3 again.
+  await startEmpty(page, 0);
+  await run(page, 0.1);
+  assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true }, 'a new run has 3');
+  // The hearts fit at 360 px and the HUD keeps one width.
+  await page.setViewportSize({ width: 360, height: 640 });
+  await run(page, 0.1);
+  const fit = await page.evaluate(() => {
+    const hud = document.querySelector('[data-hud]').getBoundingClientRect();
+    const l = document.querySelector('[data-lives]').getBoundingClientRect();
+    return { inside: l.left >= hud.left && l.right <= hud.right, scroll: document.documentElement.scrollWidth <= innerWidth };
+  });
+  assert.deepEqual(fit, { inside: true, scroll: true });
+  await context.close();
+});
+
+test('walk-on-red AC-29: the third hit stops the level, he stays down, then Game over shows the total, stars and best; Play again leads to a new run with 3 lives', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => (window.__walkOnRed.saved.best = 0));
+  await startEmpty(page, 4);
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.game.score = 120;
+    t.game.results = [{ score: 40, stars: 2 }, { score: 40, stars: 2 }, { score: 40, stars: 1 }, { score: 0, stars: 0 }];
+  });
+  for (let i = 0; i < 2; i++) {
+    assert.ok(await hitOnce(page));
+    await run(page, 1.3);
+  }
+  assert.equal(await page.evaluate(() => window.__walkOnRed.game.lives), 1);
+  // The last hit with under 1.2 s on the walk light: the hit wins, the light doesn't turn green.
+  await page.evaluate(() => (window.__walkOnRed.game.red = 0.5));
+  assert.ok(await hitOnce(page));
+  const out = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const row = t.player.row;
+    const red = t.game.red;
+    for (let i = 0; i < 60; i++) t.step(1 / 60);
+    return { mode: t.game.mode, red: t.game.red, redBefore: red, row, rowNow: t.player.row, down: t.player.down > 0, lives: t.game.lives };
+  });
+  assert.equal(out.mode, 'out');
+  assert.equal(out.red, out.redBefore, 'the walk light stops');
+  assert.deepEqual([out.rowNow, out.down, out.lives], [out.row, true, 0], 'he stays down where he was hit');
+  const cards = () =>
+    page.evaluate(() => {
+      const vis = (sel) => !document.querySelector(sel).hidden;
+      return { start: vis('[data-screen="start"]'), paused: vis('[data-screen="paused"]'), over: vis('[data-screen="over"]'), hud: vis('[data-hud]') };
+    });
+  assert.deepEqual(await cards(), { start: false, paused: false, over: false, hud: true }, 'down on the last life: no card yet, the HUD stays');
+  // Hidden during those 1.2 s: paused like any other moment, and the run ends only after the tap.
+  await page.evaluate(() => window.__walkOnRed.pause());
+  await run(page, 3);
+  assert.deepEqual(await cards(), { start: false, paused: true, over: false, hud: true }, 'paused, not over');
+  assert.deepEqual(await page.evaluate(() => [window.__walkOnRed.game.mode, window.__walkOnRed.game.red]), ['out', out.red], 'nothing advances while paused');
+  await page.evaluate(() => window.__walkOnRed.resume());
+  await run(page, 0.3);
+  const s = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    return {
+      mode: t.game.mode,
+      over: !document.querySelector('[data-screen="over"]').hidden,
+      title: document.querySelector('[data-over-title]').textContent,
+      score: document.querySelector('[data-final-score]').textContent,
+      detail: document.querySelector('[data-final-detail]').textContent,
+      hud: !document.querySelector('[data-hud]').hidden,
+      best: t.saved.best,
+      jingle: t.heard.filter((h) => h.name === 'over').pop(),
+      row: t.player.row,
+      start: t.layout().bottom,
+    };
+  });
+  assert.equal(s.mode, 'over');
+  assert.ok(s.over);
+  assert.equal(s.title, 'Game over');
+  assert.equal(s.score, '120');
+  assert.equal(s.detail, '5 of 63 stars · Best: 120');
+  assert.equal(s.best, 120, 'the best counts the run');
+  assert.ok(!s.hud);
+  assert.ok(s.jingle && s.jingle.rate < 1, 'the closing jingle, lower');
+  assert.notEqual(s.row, s.start, 'no return to the start');
+  await page.click('[data-again]');
+  assert.ok(await page.evaluate(() => !document.querySelector('[data-screen="start"]').hidden), 'the start card');
+  await page.click('[data-play]');
+  const again = await page.evaluate(() => [window.__walkOnRed.game.mode, window.__walkOnRed.game.level, window.__walkOnRed.game.lives]);
+  assert.deepEqual(again, ['play', 0, 3]);
+  await run(page, 0.1);
+  assert.equal((await hearts(page)).full, 3);
   await context.close();
 });

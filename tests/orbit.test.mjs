@@ -840,6 +840,52 @@ test('orbit AC-20: the probe dims over the last 2 s before its time runs out', a
   await context.close();
 });
 
+test('orbit AC-29: stardust shows at three brightnesses: this jump full, the next a little brighter than the rest, later ones dim', async () => {
+  const { context, page, errors } = await open({ hash: '#s2' });
+  await manual(page);
+  const r = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const looks = () => {
+      const by = {};
+      g.level.motes.forEach((m, i) => {
+        const l = o.moteLook(i);
+        const k = l ? `${l.alpha}/${l.scale}` : 'hidden';
+        (by[m.leg] ??= new Set()).add(k);
+      });
+      return Object.fromEntries(Object.entries(by).map(([leg, set]) => [leg, [...set]]));
+    };
+    const legs = g.level.legs.length;
+    const out = { legs, first: looks() };
+    // a mote of this jump, once caught, is not drawn
+    const i0 = g.level.motes.findIndex((m) => m.leg === 0);
+    g.taken.add(i0);
+    out.caught = o.moteLook(i0);
+    g.taken.delete(i0);
+    // while a capture steers in, the jump being flown is still the current one
+    g.mode = 'capture';
+    out.capture = looks();
+    g.mode = 'idle';
+    g.leg = 1;
+    out.second = looks();
+    g.leg = legs - 1;
+    out.last = looks();
+    g.mode = 'done';
+    out.done = looks();
+    o.draw();
+    return out;
+  });
+  assert.equal(r.legs, 4);
+  assert.deepEqual(r.first, { 0: ['0.95/1'], 1: ['0.5/0.85'], 2: ['0.3/0.75'], 3: ['0.3/0.75'] });
+  assert.equal(r.caught, null);
+  assert.deepEqual(r.capture, r.first);
+  assert.deepEqual(r.second, { 0: ['hidden'], 1: ['0.95/1'], 2: ['0.5/0.85'], 3: ['0.3/0.75'] });
+  assert.deepEqual(r.last, { 0: ['hidden'], 1: ['hidden'], 2: ['hidden'], 3: ['0.95/1'] });
+  assert.deepEqual(r.done, { 0: ['0.3/0.75'], 1: ['0.3/0.75'], 2: ['0.3/0.75'], 3: ['0.3/0.75'] });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('orbit AC-22, ci-flakes AC-3: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
   // The test owns the clock from the first frame: real frames never add to the 4 s of idling, however
   // slowly the page loads (the init script runs again on the reload below).
