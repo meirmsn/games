@@ -929,7 +929,7 @@ function drawTank(t) {
   // The barrel, under the body, from the turret's pivot.
   c.save();
   c.translate(0, -TANK.pivot + 2);
-  const local = -(t.aim) - t.tilt;
+  const local = -(t.ghostAim ?? t.aim) - t.tilt;
   c.rotate(local);
   if (ready(IMG.turret)) c.drawImage(IMG.turret, -2, -5.5, 40, 11);
   c.restore();
@@ -1105,25 +1105,30 @@ function drawAim() {
     c.setLineDash([]);
   }
   if (!aim.shown) return;
-  // The power band: a stretched wedge from the barrel, as long as the pull.
-  const dir = { x: Math.cos(t.aim), y: -Math.sin(t.aim) };
+  drawAimVisuals(t, t.aim, t.power, 1);
+}
+
+// The power band (a stretched wedge from the barrel, as long as the pull) and the arc preview (the
+// first part of the flight, without the wind). The ghost hand draws the same, so it teaches the real thing.
+function drawAimVisuals(t, angle, power, alpha) {
+  const c = ctx;
+  const dir = { x: Math.cos(angle), y: -Math.sin(angle) };
   const nx = -dir.y;
   const ny = dir.x;
   const bx = t.x + dir.x * 20;
   const by = t.y - TANK.pivot + dir.y * 20;
-  const len = 20 + 90 * t.power;
-  c.fillStyle = t.power > 0.98 ? 'rgba(255,214,90,0.75)' : 'rgba(255,255,255,0.6)';
+  const len = 20 + 90 * power;
+  c.globalAlpha = alpha;
+  c.fillStyle = power > 0.98 ? 'rgba(255,214,90,0.75)' : 'rgba(255,255,255,0.6)';
   c.beginPath();
   c.moveTo(bx + nx * 2, by + ny * 2);
-  c.lineTo(bx + dir.x * len + nx * (3 + 6 * t.power), by + dir.y * len + ny * (3 + 6 * t.power));
-  c.lineTo(bx + dir.x * len - nx * (3 + 6 * t.power), by + dir.y * len - ny * (3 + 6 * t.power));
+  c.lineTo(bx + dir.x * len + nx * (3 + 6 * power), by + dir.y * len + ny * (3 + 6 * power));
+  c.lineTo(bx + dir.x * len - nx * (3 + 6 * power), by + dir.y * len - ny * (3 + 6 * power));
   c.lineTo(bx - nx * 2, by - ny * 2);
   c.closePath();
   c.fill();
-  // The arc preview: the first part of the flight, without the wind.
-  const p = { ...launch(t, t.aim, t.power), age: 0 };
-  const flight = estimateFlight(t);
-  const until = flight * field().preview;
+  const p = { ...launch(t, angle, power), age: 0 };
+  const until = estimateFlight(t, angle, power) * field().preview;
   c.fillStyle = '#ffffff';
   let i = 0;
   while (p.age < until && i < 1000) {
@@ -1132,7 +1137,7 @@ function drawAim() {
     p.y += p.vy * SIM;
     p.age += SIM;
     if (i % 5 === 0) {
-      c.globalAlpha = 0.9 * (1 - p.age / until);
+      c.globalAlpha = alpha * 0.9 * (1 - p.age / until);
       c.beginPath();
       c.arc(p.x, p.y, 3.2, 0, Math.PI * 2);
       c.fill();
@@ -1144,8 +1149,8 @@ function drawAim() {
 }
 
 // How long the shot would fly with no wind (for the preview's fraction).
-function estimateFlight(t) {
-  const hit = { ...launch(t, t.aim, t.power), age: 0 };
+function estimateFlight(t, angle = t.aim, power = t.power) {
+  const hit = { ...launch(t, angle, power), age: 0 };
   for (let i = 0; i < 1200; i++) {
     hit.vy += TUNING.gravity * SIM;
     hit.x += hit.vx * SIM;
@@ -1156,47 +1161,110 @@ function estimateFlight(t) {
   return hit.age;
 }
 
-// Before the first aiming touch: a ghost finger pulls back beside the tank, the arc growing with it.
-function drawGhost() {
-  if (store.taught || game.mode !== 'battle' || game.phase !== 'aim' || aim.active) return;
+// Before the first aiming touch, a ghost hand acts out a turn beside your tank: it presses, pulls back
+// (the barrel turns, the power band stretches and the arc shows, exactly as when you aim), lets go,
+// and a faint shell flies off along the arc. It loops until your first aiming touch.
+const GHOST = { cycle: 3.2, pull: { x: -125, y: 90 } };
+
+function ghostPose() {
+  if (store.taught || game.mode !== 'battle' || game.phase !== 'aim' || aim.active) return null;
   const t = tanks[PLAYER];
+  const s = game.time % GHOST.cycle;
+  const press = { x: t.x + 210, y: t.y - 85 };
+  const ease = (k) => k * k * (3 - 2 * k);
+  const k = s < 0.55 ? 0 : s < 1.6 ? ease((s - 0.55) / 1.05) : 1;
+  const finger = { x: press.x + GHOST.pull.x * k, y: press.y + GHOST.pull.y * k };
+  const angle = Math.atan2(GHOST.pull.y, -GHOST.pull.x);
+  const power = 0.2 + 0.55 * k;
+  const handIn = Math.min(1, s / 0.3);
+  const handOut = s < 2.0 ? 1 : Math.max(0, 1 - (s - 2.0) / 0.35);
+  return {
+    t,
+    s,
+    press,
+    finger,
+    angle,
+    power,
+    pressing: s >= 0.4 && s < 2.0,
+    aiming: s >= 0.55 && s < 2.0,
+    alpha: handIn * handOut,
+    shell: s >= 2.0 && s < 3.0 ? (s - 2.0) / 1.0 : -1,
+  };
+}
+
+function drawHand(x, y, alpha) {
   const c = ctx;
-  const cyc = (game.time % 2.2) / 2.2;
-  const k = cyc < 0.15 ? 0 : cyc < 0.7 ? (cyc - 0.15) / 0.55 : 1;
-  const ease = k * k * (3 - 2 * k);
-  const sx = t.x + 260;
-  const sy = t.y - 170;
-  const x = sx - 110 * ease;
-  const y = sy + 80 * ease;
-  const alpha = cyc > 0.85 ? (1 - cyc) / 0.15 : Math.min(1, cyc / 0.1);
-  c.globalAlpha = 0.85 * alpha;
-  c.strokeStyle = 'rgba(255,255,255,0.7)';
+  c.save();
+  c.globalAlpha = alpha;
+  c.translate(x, y);
+  c.rotate(-0.4);
+  c.fillStyle = 'rgba(255,255,255,0.95)';
+  c.strokeStyle = 'rgba(20,24,36,0.7)';
   c.lineWidth = 2;
-  c.setLineDash([4, 5]);
-  c.beginPath();
-  c.moveTo(sx, sy);
-  c.lineTo(x, y);
-  c.stroke();
-  c.setLineDash([]);
-  c.fillStyle = 'rgba(255,255,255,0.9)';
-  c.beginPath();
-  c.arc(x, y, 14, 0, Math.PI * 2);
-  c.fill();
-  c.strokeStyle = 'rgba(20,24,36,0.6)';
-  c.lineWidth = 2;
-  c.stroke();
-  // The arc the ghost's pull would make: the start of it, as the real preview shows.
-  const p = { ...launch(t, Math.atan2(80, 110), 0.25 + 0.5 * ease), age: 0 };
-  c.fillStyle = '#ffffff';
-  for (let i = 0; i < 40; i++) {
-    p.vy += TUNING.gravity * SIM * 3;
-    p.x += p.vx * SIM * 3;
-    p.y += p.vy * SIM * 3;
-    if (i % 2 === 0) {
+  for (const [rx, ry, rw, rh, rr] of [
+    [12, 22, 11, 16, 5],
+    [21, 25, 10, 14, 5],
+    [-9, 26, 32, 30, 10],
+    [-6, 0, 12, 36, 6],
+  ]) {
+    c.beginPath();
+    c.roundRect(rx, ry, rw, rh, rr);
+    c.fill();
+    c.stroke();
+  }
+  c.restore();
+}
+
+function drawGhost(g) {
+  if (!g) return;
+  const c = ctx;
+  const { t, press, finger } = g;
+  if (g.aiming) {
+    drawAimVisuals(t, g.angle, g.power, 0.9 * g.alpha);
+    // The pull: from where the finger pressed to where it is now.
+    c.globalAlpha = 0.6 * g.alpha;
+    c.strokeStyle = '#ffffff';
+    c.lineWidth = 2;
+    c.setLineDash([4, 5]);
+    c.beginPath();
+    c.moveTo(press.x, press.y);
+    c.lineTo(finger.x, finger.y);
+    c.stroke();
+    c.setLineDash([]);
+  }
+  if (g.pressing) {
+    // The touch: a soft dot under the fingertip, and a ring as it lands.
+    c.globalAlpha = 0.45 * g.alpha;
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(finger.x, finger.y, 9, 0, Math.PI * 2);
+    c.fill();
+    const r = (g.s - 0.4) / 0.35;
+    if (r < 1) {
+      c.globalAlpha = 0.8 * (1 - r) * g.alpha;
+      c.strokeStyle = '#ffffff';
+      c.lineWidth = 3;
       c.beginPath();
-      c.arc(p.x, p.y, 2.8, 0, Math.PI * 2);
-      c.fill();
+      c.arc(press.x, press.y, 10 + 18 * r, 0, Math.PI * 2);
+      c.stroke();
     }
+  }
+  if (g.alpha > 0) drawHand(finger.x, finger.y + (g.pressing ? 0 : -8), g.alpha);
+  // Let go: a faint shell flies off along the arc.
+  if (g.shell >= 0) {
+    const p = { ...launch(t, g.angle, g.power), age: 0 };
+    const until = g.shell * 1.6;
+    while (p.age < until) {
+      p.vy += TUNING.gravity * SIM;
+      p.x += p.vx * SIM;
+      p.y += p.vy * SIM;
+      p.age += SIM;
+    }
+    c.globalAlpha = 0.7 * (1 - g.shell);
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    c.fill();
   }
   c.globalAlpha = 1;
 }
@@ -1227,6 +1295,8 @@ function draw() {
   ctx.setTransform(dpr * view.s, 0, 0, dpr * view.s, dpr * (view.ox + sx), dpr * (view.oy + sy));
   drawDeep(f);
   if (terrain) ctx.drawImage(terrain.canvas, 0, 0, W, H);
+  const ghost = ghostPose();
+  if (tanks[PLAYER]) tanks[PLAYER].ghostAim = ghost && ghost.aiming ? ghost.angle : undefined;
   for (const t of tanks) drawTank(t);
   drawProjectile();
   fx.draw(ctx);
@@ -1236,7 +1306,7 @@ function draw() {
     drawArmour(t);
   }
   drawAim();
-  drawGhost();
+  drawGhost(ghost);
   drawTexts();
 }
 
