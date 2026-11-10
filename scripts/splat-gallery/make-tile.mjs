@@ -1,6 +1,6 @@
-// Renders the landing tile for Shooting Gallery (assets/tiles/shooting-gallery.png) with the game's
+// Renders the landing tile for Splat Gallery (assets/tiles/splat-gallery.png) with the game's
 // own drawing code: a posed booth, cropped to the tile's 640 × 400.
-// Run: node scripts/shooting-gallery/make-tile.mjs   (needs Playwright's Chromium)
+// Run: node scripts/splat-gallery/make-tile.mjs   (needs Playwright's Chromium)
 import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 
@@ -17,7 +17,7 @@ for (let i = 0; i < 50; i++) {
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
-  await page.goto(`http://127.0.0.1:${PORT}/shooting-gallery/`);
+  await page.goto(`http://127.0.0.1:${PORT}/splat-gallery/`);
   await page.waitForFunction(() => window.__gallery);
   await page.addStyleTag({ content: 'body > :not(canvas) { display: none !important; }' });
   const clip = await page.evaluate(() => {
@@ -86,13 +86,13 @@ try {
     return c.toDataURL('image/png').split(',')[1];
   }, shot.toString('base64'));
   const { writeFileSync } = await import('node:fs');
-  const out = `${root}assets/tiles/shooting-gallery.png`;
+  const out = `${root}assets/tiles/splat-gallery.png`;
   writeFileSync(out, Buffer.from(png, 'base64'));
   // The flat art fits 128 colours with no visible change, at a fifth of the size (needs Pillow).
   const { spawnSync } = await import('node:child_process');
   const q = spawnSync('python3', ['-I', '-c', 'import sys\nfrom PIL import Image\nim = Image.open(sys.argv[1]).convert("RGB")\nim.quantize(colors=128, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).save(sys.argv[1], optimize=True)', out]);
   if (q.status !== 0) console.warn('not quantized (Pillow missing?): the tile is larger but fine');
-  console.log('wrote assets/tiles/shooting-gallery.png');
+  console.log('wrote assets/tiles/splat-gallery.png');
 } finally {
   await browser.close();
   server.kill();
