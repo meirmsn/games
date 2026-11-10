@@ -1755,7 +1755,7 @@ test('shooting-gallery AC-39: the paintballs are flat, one colour each; the slin
       }
     }
     const spread = Math.max(...[0, 1, 2].map((ch) => Math.max(...inner.map((p) => p[ch])) - Math.min(...inner.map((p) => p[ch]))));
-    // A band, halfway along, pulled: red rubber, and narrower than at rest.
+    // A band, halfway along, at rest and pulled: red rubber either way.
     const bandAt = (pull) => {
       g.aim.active = pull > 0;
       g.setPull(0, pull);
