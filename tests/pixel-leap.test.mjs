@@ -519,13 +519,15 @@ test('pixel-leap AC-9: a heart adds a heart (at most two) and a coin; with two h
     return out;
   });
   assert.deepEqual(r, [[1, 1], [2, 2], [2, 3]]);
-  await page.evaluate(() => window.__leap.render());
+  // The HUD is rebuilt by the page's own frame loop (updateHud), not by render(): wait for a frame to
+  // show the hearts just taken before reading it. Read straight away, a busy machine may not have run
+  // a frame since the level loaded, and the lives row is still empty.
+  await page.waitForFunction(() => document.querySelectorAll('[data-hud-hearts] .hud-icon.on').length === 2);
   const hud = await page.evaluate(() => ({
     lives: document.querySelectorAll('[data-hud-lives] .hud-icon.on').length,
     hearts: document.querySelectorAll('[data-hud-hearts] .hud-icon.on').length,
     slots: document.querySelectorAll('[data-hud-hearts] .hud-icon').length,
   }));
-  await page.waitForFunction(() => document.querySelectorAll('[data-hud-hearts] .hud-icon.on').length === 2);
   assert.equal(hud.lives, 3);
   assert.equal(hud.slots, 2);
   // With two held, a heart in the level is drawn as a coin.
