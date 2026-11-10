@@ -356,7 +356,8 @@ item.
 - **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
-  can't hold eight.
+  can't hold eight. With ten (batch 3, found in the build, Claude, 2026-11-10), landscape takes five
+  across in two rows: four across would need three rows, too tight on a short landscape screen.
 - **Batch 3: ten levels, in this order** (owner, 2026-11-10, at the go: "Ice replaces Frost" and
   "Perfect alternation"): 1 Meadow (pixel, 18), 2 Ice (smooth, 70; it replaces Frost, and takes
   Frost's ears), 3 Farm (pixel, 18), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7
@@ -404,7 +405,11 @@ item.
   the slope; snails turn back at a slope. A snow pile at a slope's top, always in view from the
   slope's foot, sends a snowball every 2.5 s (each pile its own phase): it rolls down at up to 4
   tiles/s, carries on along the flat at 3 tiles/s and shatters at a wall or the edge of a pit. Its
-  pile's steady rhythm is the warning. A snowball, 1.2 tiles across, hurts; it can't be stomped,
+  pile's steady rhythm is the warning, and it shakes a moment before it sends one. Found in the
+  build (Claude, 2026-11-10): each snow slope has a ditch at its foot that catches its snowballs, so
+  they never roll on across the level, and its pile sits a tile back from the top; a snowball sets
+  off slowly and gathers speed. Then the way up is readable: wait for a snowball to drop into the
+  ditch, run up, and jump the next one on the flat top. A snowball, 1.2 tiles across, hurts; it can't be stomped,
   only jumped. Ice's bad guys are snails (stompable, slow). The ears are on a high ice ledge in plain
   view from the main path.
 - **Sea: swimming.** The level starts on a beach and goes under the water in basins. The monster is in the
@@ -428,6 +433,7 @@ item.
   must commit: ghosts' eyes, a drip's glint, spikes' tips, a pit's edges and the ends of ledges
   glimmer at any distance. The glimpse of the next world and the door are lit: the way out of the
   dark. Ink's glimpse at the end of Sea and its map cell are drawn lit (a peek, not the level).
+  Ink's sky is now flat and its far pillars dotted, so not even the light shows a third colour.
   Rejected: a light that shrinks over time (a timer
   again).
 

@@ -621,6 +621,11 @@ body:not(.smooth) .hud > span {
   display: inline-flex;
 }
 
+/* Castle's keys held: shown only in a world with keys. */
+.hud > span[hidden] {
+  display: none !important;
+}
+
 .hud-coin-icon .hud-icon {
   height: 26px;
 }
