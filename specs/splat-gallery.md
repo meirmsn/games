@@ -29,7 +29,7 @@ Where they differ from the decisions below, these win.
   not married to it … show me a list of 10 names to pick from." From the ten offered they picked
   "Splat gallery", and confirmed it with "Yes". The game is Splat Gallery everywhere a player sees
   its name: the landing tile, the page title, the share tags, the README. Kenney's pack keeps its own
-  name, Shooting Gallery, where the credits and build scripts name it.
+  name, Shooting Gallery, where the build scripts and the generated `atlas.js` header name it.
 - **The address moves too.** "Fix url as well. No need to preserve old name link." The game, its
   build scripts, tests, tile and share picture move from `shooting-gallery` to `splat-gallery`; the
   old address gets no redirect.
