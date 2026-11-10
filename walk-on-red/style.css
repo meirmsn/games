@@ -1,4 +1,4 @@
-/* Walk on Red: the street canvas fills the screen; the HUD and cards float over it. Everything is
+/* Gotta Go! (walk-on-red/): the street canvas fills the screen; the HUD and cards float over it. Everything is
    in the street's own 8-bit look: Kenney's pixel font Kenney Mini Square (CC0, from the Kenney
    Fonts pack), square boxes with solid borders and hard shadows, no blur and no rounding. Sizes
    are multiples of 8px, where the font's pixels stay whole. */

@@ -1,4 +1,4 @@
-// End-to-end tests for Walk on Red. Run: scripts/check-slow.sh.
+// End-to-end tests for Gotta Go! (walk-on-red/). Run: scripts/check-slow.sh.
 // The game exposes window.__walkOnRed (its state, put() to place the player, and a step(dt) that
 // advances the simulation), so these tests set up a situation and check what the rules do with it.
 import { test, before, after } from 'node:test';
@@ -1136,5 +1136,15 @@ test('walk-on-red AC-25: the page is 8-bit too: the game’s pixel font, square 
     if (what === 'loaded') continue;
     assert.deepEqual(l, { font: true, radius: '0px', blur: 'none' }, what);
   }
+  await context.close();
+});
+
+test('walk-on-red AC-26: the game is called Gotta Go!, and nothing the player sees says Walk on Red', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.title(), 'Gotta Go!');
+  assert.equal((await page.locator('[data-screen="start"] h1').textContent()).trim(), 'Gotta Go!');
+  const seen = await page.evaluate(() => document.title + ' ' + document.body.innerText + ' ' + document.querySelector('meta[name="description"]').content);
+  assert.ok(!/walk on red/i.test(seen), 'no "Walk on Red" left');
+  assert.deepEqual(errors, []);
   await context.close();
 });
