@@ -1,6 +1,6 @@
 # Island Hop: errands across an isometric archipelago, by boat, on foot and by car
 
-**Go:** pending
+**Go:** the owner, in the session's chat on 2026-11-10: "go"
 
 ## Intent
 
