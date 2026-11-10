@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: pending
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10
 
 ## Intent
 
@@ -269,9 +269,9 @@ item.
   Farm and Industrial use the Pixel Platformer's characters (they are its expansions, with tiles
   only); Mushroom uses the New Platformer Pack's slimes, as Candy does (the Mushroom pack has no
   characters); Pico uses its own pack's bad guys (walkers, and the winged ones as flyers). Farm,
-  Industrial and Pico use the retro sound set, Mushroom Candy's soft one; each new world has its own
-  Kenney music loop (Farm: Farm Frolics, Industrial: Mission Plausible, Mushroom: Mishief Stroll,
-  Pico: Retro Beat), until the owner's own music. The hidden assist never changes moving platforms,
+  Industrial and Pico use the retro sound set and its loop, Mushroom Candy's soft set and loop, until
+  the owner's own music (owner, 2026-11-10, at the go: kept Pico at 8 px, accepted the snaking map,
+  no crushers and slimes in Mushroom, and did not take new Kenney loops for the new worlds). The hidden assist never changes moving platforms,
   belts, caps, haybales or flyers. Best times move to a new version of the levels (3), so an old
   four-level run is no best to beat. A crossing between two pixel worlds of different resolutions
   (Pico's 8 into Ink's 16) redraws the monster straight in the new style, with no sound, as between
@@ -444,7 +444,7 @@ item.
   from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
   third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
   pays nothing extra — `tests/pixel-leap.test.mjs`.
-- **AC-31** Each new world plays its own music loop and draws from its own pack: Farm's and
+- **AC-31** Each new world plays its sound set's music loop and draws from its own pack: Farm's and
   Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
   pack's — `tests/pixel-leap.test.mjs`.
 
