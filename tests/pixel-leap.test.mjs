@@ -959,7 +959,7 @@ test("pixel-leap AC-18: each world plays its own jump sound and starts its own m
   };
   const m = await jumpIn(0);
   assert.ok(m.includes('m-jump'));
-  assert.ok(m.includes('loop:m-music'), 'the Meadow music starts');
+  assert.ok(m.includes('loop:meadow-bed'), 'the Meadow music starts');
   const leapFrom = (w) =>
     page.evaluate((w) => {
       const L = window.__leap;
@@ -971,7 +971,7 @@ test("pixel-leap AC-18: each world plays its own jump sound and starts its own m
       for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
       return L.heard.slice();
     }, w);
-  assert.ok((await leapFrom(W.frost)).includes('loop:c-music'), 'Candy starts its own music');
+  assert.ok((await leapFrom(W.frost)).includes('loop:candy-bed'), 'Candy starts its own music');
   assert.ok((await leapFrom(W.pico)).includes('loop:i-music'), 'Ink starts its own music');
   const c = await jumpIn(W.candy);
   assert.equal(c.filter((x) => x.endsWith('-jump')).pop(), 'c-jump');
@@ -1855,7 +1855,7 @@ test('pixel-leap AC-30: Pico is the most crowded; flyers swoop and climb back, h
   await context.close();
 });
 
-test('pixel-leap AC-31: each new world plays its sound set’s music and draws from its own pack', async () => {
+test('pixel-leap AC-31: each new world plays its music (its own bed, else its sound set’s loop) and draws from its own pack', async () => {
   const { context, page } = await open();
   await goPlay(page, true);
   const r = await page.evaluate(() => {
@@ -1889,7 +1889,7 @@ test('pixel-leap AC-31: each new world plays its sound set’s music and draws f
     CanvasRenderingContext2D.prototype.drawImage = orig;
     return out;
   });
-  assert.equal(r.farm.loop, 'loop:m-music');
+  assert.equal(r.farm.loop, 'loop:farm-bed', 'the owner’s bed for the Farm');
   assert.equal(r.industrial.loop, 'loop:m-music');
   assert.equal(r.mushroom.loop, 'loop:c-music');
   assert.equal(r.pico.loop, 'loop:m-music');
@@ -1898,5 +1898,65 @@ test('pixel-leap AC-31: each new world plays its sound set’s music and draws f
   assert.ok(r.mushroom.images.includes('mushroom.png'), 'Mushroom draws its pack');
   assert.ok(r.pico.images.includes('pico-tiles.png'), 'Pico draws its pack');
   for (const id of Object.keys(r)) assert.equal(r[id].world, true);
+  await context.close();
+});
+
+test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an accent over it every 15 to 40 s of play, never twice running; pause stops both', async () => {
+  const { context, page } = await open();
+  await goPlay(page, true);
+  const r = await page.evaluate(async () => {
+    const L = window.__leap;
+    L.manual = true;
+    await new Promise((res) => setTimeout(res, 300));
+    const bed = L.bed();
+    // Ten minutes of play in the Meadow: when each accent comes, and which.
+    const times = [];
+    const names = [];
+    let t = 0;
+    const from = L.heard.length;
+    let seen = from;
+    for (let i = 0; i < 600 * 120; i++) {
+      L.game.mode = 'play';
+      L.player.invul = 9;
+      L.player.x = 4;
+      L.player.y = 11;
+      L.player.vy = 0;
+      L.step();
+      t += 1 / 120;
+      while (seen < L.heard.length) {
+        const h = L.heard[seen++];
+        if (/^meadow-a\d$/.test(h)) {
+          times.push(t);
+          names.push(h);
+        }
+      }
+      if (L.heard.length > 25) {
+        L.heard.splice(0, L.heard.length);
+        seen = 0;
+      }
+    }
+    const gaps = times.map((x, i) => x - (i ? times[i - 1] : 0));
+    // Paused: the bed stops and no accent comes.
+    L.manual = false;
+    L.game.mode = 'play';
+    L.pause();
+    const pausedBed = L.bed().paused;
+    const before = L.game.accentIn;
+    L.manual = true;
+    for (let i = 0; i < 120 * 60; i++) L.step();
+    return { bed, gaps, names, distinct: new Set(names).size, pausedBed, still: L.game.accentIn === before, mode: L.game.mode };
+  });
+  assert.equal(r.bed.world, 'meadow', 'the Meadow’s bed is playing');
+  assert.ok(r.gaps.length >= 15, `${r.gaps.length} accents in ten minutes`);
+  for (const g of r.gaps) assert.ok(g >= 15 - 0.01 && g <= 40 + 0.01, `an accent after ${g.toFixed(1)} s`);
+  assert.equal(r.distinct, 3, 'all three accents come');
+  for (let i = 1; i < r.names.length; i++) assert.notEqual(r.names[i], r.names[i - 1], 'never the same twice running');
+  assert.equal(r.mode, 'paused');
+  assert.equal(r.pausedBed, true, 'paused, the bed stops');
+  assert.equal(r.still, true, 'paused, no accent comes');
+  // Muting mutes the bed too.
+  await page.click('[data-mute]');
+  assert.equal((await page.evaluate(() => window.__leap.bed())).muted, true);
+  await page.click('[data-mute]');
   await context.close();
 });

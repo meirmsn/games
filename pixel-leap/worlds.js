@@ -23,6 +23,7 @@ export const PICO8 = [
 export const WORLDS = [
   {
     id: 'meadow',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Meadow',
     res: 18, // pixels per tile: the Pixel Platformer pack
     pack: 'pp',
@@ -54,6 +55,7 @@ export const WORLDS = [
   },
   {
     id: 'farm',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Farm',
     res: 18, // the Pixel Platformer Farm Expansion
     pack: 'farm',
@@ -88,6 +90,7 @@ export const WORLDS = [
   },
   {
     id: 'frost',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Frost',
     res: 18, // the same pack's snow
     pack: 'pp',
@@ -115,6 +118,7 @@ export const WORLDS = [
   },
   {
     id: 'candy',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Candy',
     res: 70, // the Platformer Assets Candy pack, vector
     pack: 'candy',

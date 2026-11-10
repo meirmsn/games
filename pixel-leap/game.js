@@ -73,6 +73,10 @@ for (const s of ['m', 'c']) {
   for (const n of ['jump', 'coin', 'stomp', 'poof', 'flag', 'land', 'music']) SOUNDS[`${s}-${n}`] = `sounds/${s}-${n}.mp3`;
 }
 for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music', 'morph-up', 'morph-down']) SOUNDS[n] = `sounds/${n}.mp3`;
+// The owner's music: each such world has a long bed and three short accents. The accents are
+// sounds like any other; the beds are streamed (see music()), not decoded whole.
+const ACCENTS = 3;
+for (const w of WORLDS) if (w.bed) for (let i = 1; i <= ACCENTS; i++) SOUNDS[`${w.id}-a${i}`] = `sounds/${w.id}-a${i}.mp3`;
 const { sound } = mountShell({ sounds: SOUNDS });
 const heard = []; // the last sounds played, for tests
 function play(name, opts) {
@@ -88,6 +92,7 @@ function showMute() {
 }
 muteBtn.addEventListener('click', () => {
   sound.muted = !sound.muted;
+  bedEl.muted = sound.muted;
   showMute();
 });
 showMute();
@@ -434,6 +439,7 @@ function update(dt) {
   }
   if (game.mode !== 'play') return;
   game.time += dt;
+  accents(dt);
   placeMovers(stage, dt);
   stepPlayer(dt);
   crossing(dt);
@@ -1002,11 +1008,68 @@ document.querySelector('[data-rebuild]').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------- music
+// A world with the owner's music plays its bed, a two-minute track, on a loop, and over it now and
+// then (every 15 to 40 s of play, at random) one of its short accents, never the same one twice
+// running, so the loop never settles into a pattern the ear learns. The bed is streamed by an audio
+// element from a copy fetched as the page loads: cached for offline play, and never decoded whole
+// (eight two-minute tracks decoded would be hundreds of megabytes on a phone). Other worlds loop
+// their sound set's music.
+const ACCENT_GAP = [15, 40];
+const bedEl = new Audio();
+bedEl.loop = true;
+bedEl.preload = 'auto';
+bedEl.volume = 0.6 * 0.35;
+const bedUrls = {};
+for (const w of WORLDS) {
+  if (!w.bed) continue;
+  const url = `sounds/${w.id}-bed.mp3`;
+  bedUrls[w.id] = fetch(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((b) => (b ? URL.createObjectURL(b) : url))
+    .catch(() => url);
+}
 function music() {
   stopMusic();
-  const name = world().music || `${world().sound}-music`;
+  const w = world();
+  if (w.bed) {
+    heard.push(`loop:${w.id}-bed`);
+    let stopped = false;
+    bedUrls[w.id].then((src) => {
+      if (stopped) return;
+      if (bedEl.dataset.world !== w.id) {
+        bedEl.src = src;
+        bedEl.dataset.world = w.id; // the same world's bed carries on where it was after a pause
+      }
+      bedEl.muted = sound.muted;
+      const p = bedEl.play();
+      if (p && p.catch) p.catch(() => {});
+    });
+    game.accentIn = nextAccentGap();
+    stopMusic = () => {
+      stopped = true;
+      bedEl.pause();
+    };
+    return;
+  }
+  game.accentIn = Infinity;
+  const name = w.music || `${w.sound}-music`;
   heard.push(`loop:${name}`);
   stopMusic = sound.loop(name, { gain: 0.35 });
+}
+function nextAccentGap() {
+  return ACCENT_GAP[0] + Math.random() * (ACCENT_GAP[1] - ACCENT_GAP[0]);
+}
+// Counted in play only: paused, on the map or between worlds, no accent comes.
+function accents(dt) {
+  if (!world().bed || !(game.accentIn < Infinity)) return;
+  game.accentIn -= dt;
+  if (game.accentIn > 0) return;
+  let n;
+  do n = 1 + Math.floor(Math.random() * ACCENTS);
+  while (n === game.lastAccent && ACCENTS > 1);
+  game.lastAccent = n;
+  play(`${world().id}-a${n}`, { gain: 0.55 });
+  game.accentIn = nextAccentGap();
 }
 
 // ---------------------------------------------------------------- drawing
@@ -2585,6 +2648,8 @@ Promise.all([
     baked: () => baked,
     renderRes: () => renderRes,
     heard,
+    bed: () => ({ world: bedEl.dataset.world || null, paused: bedEl.paused, muted: bedEl.muted }),
+    ACCENT_GAP,
     frameWork,
     step: (dt = STEP) => update(dt),
     advance,

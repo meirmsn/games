@@ -325,7 +325,14 @@ item.
   world gets a prompt for a bed (about 2 minutes, instrumental, made to loop) and for three short
   accents (4–8 s, free-time, no drums, so they sit on any bar) that play over the bed at random
   every 15–40 s, never twice in a row. The prompts are given in the chat; the files are the owner's
-  to generate, and wiring them in follows when they arrive. Until then the worlds keep Kenney loops.
+  to generate. Until a world's arrive, it keeps its Kenney loop.
+- **The owner's music is in for four worlds** (owner, 2026-11-10, sending the Meadow's bed and
+  accents: "maybe you can use them", then the Farm's, Frost's and Candy's). Each bed is levelled and
+  kept at 64 kbps (about 1 MB); each accents file is cut into its three phrases. A bed is streamed
+  by an audio element from a copy fetched as the page loads, so it is cached for offline play like
+  everything else but never decoded whole: eight two-minute tracks decoded would take hundreds of
+  megabytes on a phone. The accents count only while playing; pausing stops the bed, and the
+  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive.
 - **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
@@ -444,10 +451,14 @@ item.
   from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
   third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
   pays nothing extra — `tests/pixel-leap.test.mjs`.
-- **AC-31** Each new world plays its sound set's music loop and draws from its own pack: Farm's and
+- **AC-31** Each new world plays its music (the owner's bed where it has arrived, Farm's so far,
+  else its sound set's loop) and draws from its own pack: Farm's and
   Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
   pack's — `tests/pixel-leap.test.mjs`.
 
+- **AC-32** A world with the owner's music plays its bed and, over it, one of its three accents
+  after every 15–40 s of play, all three in turn but never the same twice running; paused, the bed
+  stops and no accent comes; muting mutes the bed — `tests/pixel-leap.test.mjs`.
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
