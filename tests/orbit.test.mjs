@@ -4,34 +4,24 @@
 // manual = true stops the page's own frames from advancing it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { serve } from './serve.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-// Its own port range: the test files run in parallel.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ hash = '', viewport = { width: 390, height: 844 }, init = [], hasTouch = true } = {}) {
