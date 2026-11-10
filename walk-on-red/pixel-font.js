@@ -1,4 +1,4 @@
-// Walk on Red's pixel alphabet: 3×5 glyphs, read left to right, top to bottom ('1' = a pixel).
+// Gotta Go!'s pixel alphabet: 3×5 glyphs, read left to right, top to bottom ('1' = a pixel).
 // The game draws its street text with it (game.js): the countdown, the score table, the labels.
 // The page's own text uses Kenney Mini Square, in the same blocky capitals.
 export const GLYPHS = {

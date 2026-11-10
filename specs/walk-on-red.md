@@ -1,6 +1,6 @@
-# Walk on Red: a lane-crossing game on the Pixel Vehicle Pack
+# Gotta Go! (walk-on-red): a lane-crossing game on the Pixel Vehicle Pack
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09; for the close-up tile and a new name, the owner's request "can you make a zoom … towards the top where the WCs and … a little bit of walkway" 2026-11-09, and the name: the owner chose "Gotta Go!" 2026-11-10
 
 ## Intent
 
@@ -115,6 +115,15 @@ showing you the level names, those should also be 8-bit … if we have anything 
 8-bit, we should also make it." Then: "the one with the siren should show up earlier … fix the bug …
 at the top where the bar, depending on the number of points, the bar is changing width … there
 should be fixed space for the number of points in there so that the bar never changes the width."
+Then, after it was on the site, the owner said (2026-11-09): "the tile for the walk on red looks
+incorrect because it's showing the cars on the left and the right. So can you make a zoom, I guess?
+I guess I will do it towards the top where the WCs and the maybe a little bit of walkway as well,
+kind of like that area. And I wonder if we should come up with a funnier name. Maybe we call it
+Can't Hold It, or some variation riff around that notion, and also the walking on red or something
+like that. I don't know. Keep it child friendly, cute, but funny." Offered Cross Your Legs!, Can't
+Hold It!, Gotta Go! and Potty Dash, the owner chose "Gotta Go!" (2026-11-10). This change makes the
+landing-page tile a close-up of the far end of the crossing and renames the game Gotta Go! wherever
+its name shows: the tile's title, the game page's title and start card, and the README.
 This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
@@ -152,8 +161,10 @@ goes now, and the people waiting start copying him.
 
 ## Decisions
 
-- **Name and hook:** "Walk on Red", slug `walk-on-red`. The second concept review called it "Red
-  Man"; Claude renamed it because "Red Man" can read as a slur. He really needs the loo: a blue
+- **Name and hook:** "Gotta Go!", slug `walk-on-red` (owner, 2026-11-10, choosing from Cross Your Legs!,
+  Can't Hold It!, Gotta Go! and Potty Dash, after asking for "a funnier name … Can't Hold It, or some
+  variation … Keep it child friendly, cute, but funny"). It was first "Walk on Red": the second concept
+  review called it "Red Man"; Claude renamed it because "Red Man" can read as a slur. He really needs the loo: a blue
   porta-potty (roof, vent, a WC sign on its door, and a red or green busy dot) stands in the middle
   of the far sidewalk, above his starting column; across, he walks along the sidewalk to its door;
   now and then, standing still, he hops from foot to foot for a
@@ -172,7 +183,7 @@ goes now, and the people waiting start copying him.
   doesn't change with the device turned, only rescales. Every street and every state uses one scale
   (as if each street had 8 rows), so the width never changes, Start included. The street is
   simulated in fixed world coordinates, 12 columns wide (vehicles enter 80 art pixels beyond them),
-  and the view is cut from its middle; the landing page's tile picture shows it wider (owner,
+  and the view is cut from its middle (owner,
   2026-11-09: "The game should be only on the crosswalk … if it's on desktop, you only see the
   portrait"; then "don't show the little slivers of street on the left and the right"; this replaces
   the earlier screen-shaped street and its turn-back card).
@@ -316,8 +327,20 @@ goes now, and the people waiting start copying him.
   and a siren, all under the site-wide mute. The flush is the owner's own recording (made with ElevenLabs, 2026-11-09), trimmed and levelled; the ambience, horn, siren and chirp are synthesised for
   the game; the rest are Kenney's CC0 sounds as MP3 (owner, 2026-11-09: "more of like sounds of being
   on a street … but it shouldn't be annoying … different types of horn depending on the car").
-- **Tile:** a new playable tile on the landing page, right after Googly Faces, drawn from the game
-  itself (`scripts/walk-on-red/make-tile.mjs`), which makes 8 tiles on `main` with Runes and Orbit; games built
+- **Folder and URL stay `walk-on-red/`:** the rename changes only the name people see. Renaming the
+  folder would break links people have saved or shared and the copy their browser keeps to play
+  offline, and lose their best scores, kept under the `walk-on-red` key (Claude, 2026-11-10, as the
+  owner's brief for this change asked); rejected: a `gotta-go/` folder with a redirect.
+- **Tile:** a playable tile on the landing page, right after Googly Faces, titled "Gotta Go!", drawn
+  from the game itself (`scripts/walk-on-red/make-tile.mjs`). It is a close-up of the far end of the
+  crossing: the game's own portrait view at exactly 6×, cut to the porta-potty, the far sidewalk and
+  the top of the zebra, with him halfway through his hop onto the far kerb, his drop of sweat
+  showing, on level 1 with the traffic cleared, so there are no cars in it (owner, 2026-11-09: "it's
+  showing the cars on the left and the right. So can you make a zoom … towards the top where the
+  WCs and … a little bit of walkway"; this replaces the wide street, with cars either side of the
+  crossing, that the tile showed before). Its `?tile` page is the game's own view with no cards or
+  buttons. The service worker's cache version goes up, so returning visitors get the new picture.
+  The landing page shows 8 tiles; games built
   in parallel add theirs, so the count is set when this brings `main` in. The atlas is the pack's own
   spritesheet, its frame list made by `scripts/walk-on-red/build-atlas.mjs`.
 - **Tests** drive the game through `window.__walkOnRed` (its state, a seeded random source and a
@@ -388,8 +411,8 @@ goes now, and the people waiting start copying him.
   is worth right now shows as "s s × m people = score", clear of the porta-potty; a follower arriving shows the new
   multiplier ("×2"); the HUD shows no clock; the walk light shows the seconds left in its pixel countdown —
   `tests/walk-on-red.test.mjs`.
-- **AC-21** The landing page shows 8 tiles, Walk on Red's playable after Googly Faces —
-  `tests/site.test.mjs`.
+- **AC-21** The landing page shows 8 tiles, Gotta Go!'s playable after Googly Faces, linking to
+  `walk-on-red/` — `tests/site.test.mjs`.
 - **AC-22** A car coming within 10 art px of him honks once, deep for big vehicles and high for
   small ones — `tests/walk-on-red.test.mjs`.
 - **AC-23** Every level starts with traffic in its lanes and a car passing right in front of him;
@@ -400,10 +423,17 @@ goes now, and the people waiting start copying him.
 - **AC-25** The page's text and boxes are 8-bit like the street: the pixel font loads, and the start
   and paused cards, the banner, the HUD, the Start, mute and back buttons use it, square, with no
   blur; the HUD's bar keeps one width whatever the points — `tests/walk-on-red.test.mjs`.
+- **AC-26** The game page's title and start card say "Gotta Go!", and nothing the player sees says
+  "Walk on Red" — `tests/walk-on-red.test.mjs`.
+- **AC-27** The tile picture is the close-up made by `scripts/walk-on-red/make-tile.mjs` from the
+  game: the porta-potty, the far sidewalk, the top of the zebra and him with his drop of sweat, with
+  no vehicle in it — verified by review: serve the site, run the script, and the committed
+  `assets/tiles/walk-on-red.png` is what it makes; the script stops if the view isn't at 6× or he
+  isn't mid-hop.
 
 ## Core flow
 
-1. Tap the Walk on Red tile: traffic is driving behind a small start card.
+1. Tap the Gotta Go! tile: traffic is driving behind a small start card.
 2. Tap Start: he's on the near kerb, hopping from foot to foot, and the walk light is counting down.
 3. Hop across through the gaps; from level 8, people stick to you and follow your footsteps.
 4. Reach the porta-potty: the door closes, a flush, a chime; the street fast-forwards as the seconds
