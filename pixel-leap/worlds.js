@@ -72,8 +72,8 @@ export const WORLDS = [
         ['pit', 4, [[1, -3, 2, '-']]], ['flat', 3], ['plat', 0, 3, 1, '='], ['plat', 2, 5, 1, '='], ['plat', 4, 7, 4, '-'],
         ['coins', 4, 8, 4], ['flat', 7], ['pit', 5, [[0, -2, 1, '-'], [3, -4, 1, '-']]], ['flat', 4],
         ['heart', 2, 3], ['plat', 1, 2, 3, '-'], ['flat', 5],
-        // A haybale up to a high shelf; a pocket tucked under it.
-        ['hay', 0], ['plat', 2, 6, 6, '-'], ['coins', 5, 7, 3], ['pocket', 3, 3, 4], ['flat', 10],
+        // A haybale up to a high shelf; a pocket tucked up above it.
+        ['hay', 0], ['plat', 2, 6, 6, '-'], ['coins', 3, 7, 2], ['pocket', 5, 9, 3], ['flat', 10],
         ['walker', 2], ['walker', 7], ['flat', 10], ['spikes', 2], ['flat', 3],
         // Then the real thing: a wide gap of floating platforms, small and big, at every height.
         ['pit', 14, [[3, -1, 3, '-'], [8, -2, 3, '-'], [1, -4, 1, '-'], [5, -6, 2, '-'], [10, -7, 1, '-']]], ['coins', 2, 7, -9],

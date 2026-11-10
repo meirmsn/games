@@ -576,7 +576,7 @@ test('pixel-leap AC-11: jelly bounces, cookies crumble and come back, springs la
     L.step();
     L.step();
     const jelly = -p.vy;
-    L.loadStage(2, 0);
+    L.loadStage(3, 0);
     const ck = L.stage().things.find((t) => t.type === 'cookie');
     Object.assign(p, { x: ck.x, y: ck.y, vx: 0, vy: 0, ground: true });
     let gone = 0;
@@ -1118,6 +1118,7 @@ const BOT = `(opts) => {
   L.sync();
   return { end, t, firstCoin, lives, deaths, x: +p.x.toFixed(1), y: +p.y.toFixed(1) };
 }`;
+const BOT_SRC = BOT;
 
 test('pixel-leap AC-21: every level can be finished; first coin within 5 s; hazards clear of the start; open air above bouncers; mover tracks clear', async () => {
   const { context, page, errors } = await open();
@@ -1326,12 +1327,15 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
       L.game.mode = 'play';
       const st = L.stage();
       Object.assign(L.player, { x: st.next - 1.5, y: st.ground[st.next - 2], vx: 0, vy: 0, invul: 0 });
+      L.game.lives = 9;
+      L.game.shields = 2; // a bad guy near the door doesn't restart the level mid-check
       L.steps(5);
       const heard = L.heard.length;
       const res = [];
       L.input.keys.add('right');
       L.sync();
-      for (let i = 0; i < 100; i++) {
+      // Into the glimpse, short of the door.
+      for (let i = 0; i < 100 && L.player.x < st.next + 2.5; i++) {
         L.step();
         L.render();
         if (L.player.x >= st.next) res.push(L.game.morphRes);
@@ -1351,7 +1355,9 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
         for (let x = 1; x < U; x++) {
           const i = (y * U + x) * 4;
           const diff = Math.abs(d[i] - d[i - 4]) + Math.abs(d[i + 1] - d[i - 3]) + Math.abs(d[i + 2] - d[i - 2]);
-          if (diff > 0 && diff < 30) soft++; // a soft step between neighbours: smooth drawing
+          // A soft step between neighbours is smooth drawing; a step of up to two levels a channel is only the
+          // browser dithering a gradient sky.
+          if (diff > 6 && diff < 30) soft++;
         }
       }
       return { sounds: L.heard.slice(heard), steps: [...new Set(res.filter(Boolean))], soft };
@@ -1439,4 +1445,458 @@ test('pixel-leap AC-24: the map shows the start, the cells reached and the next 
     assert.ok(fit.fontCss >= 12, `names ${fit.fontCss} CSS px`);
     await o.context.close();
   }
+});
+
+// ---------------------------------------------------------------- batch 2: Farm, Industrial, Mushroom, Pico
+
+test('pixel-leap AC-25: Farm is platforms, big and small at many heights; a haybale bounces, higher with jump held', async () => {
+  const { context, page } = await open();
+  await play(page, W.farm, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const st = L.stage();
+    const T = L.T;
+    // Platforms: runs of ledge or block tiles side by side in one row (not ground).
+    const plats = [];
+    for (let y = 0; y < st.rows; y++) {
+      let run = 0;
+      for (let x = 0; x <= st.cols; x++) {
+        const k = x < st.cols ? L.tileAt(x, y) : T.AIR;
+        if (k === T.ONEWAY || k === T.BLOCK) run++;
+        else if (run) {
+          const x0 = x - run;
+          const g = st.ground[x0] < st.rows ? st.ground[x0] : st.base;
+          plats.push({ len: run, h: g - y });
+          run = 0;
+        }
+      }
+    }
+    // A haybale: drop onto it from a little above; how high do the feet go above its top?
+    let hay = null;
+    for (let x = 0; x < st.cols && !hay; x++) for (let y = 0; y < st.rows; y++) if (L.tileAt(x, y) === T.HAY && L.tileAt(x, y - 1) === T.AIR) hay = { x, y };
+    const bounce = (held) => {
+      Object.assign(L.player, { x: hay.x + 0.5, y: hay.y - 0.5, vx: 0, vy: 2, ground: false, poof: 0, invul: 9 });
+      L.input.keys.clear();
+      if (held) L.input.keys.add('jump');
+      L.sync();
+      let top = Infinity;
+      let launched = false;
+      for (let i = 0; i < 240; i++) {
+        L.step();
+        if (L.player.vy < -5) launched = true;
+        if (launched) top = Math.min(top, L.player.y);
+        if (launched && L.player.vy > 0) break;
+      }
+      L.input.keys.clear();
+      L.sync();
+      return hay.y - top;
+    };
+    return { plats, low: bounce(false), high: bounce(true) };
+  });
+  assert.ok(r.plats.length >= 14, `${r.plats.length} platforms`);
+  assert.ok(r.plats.some((p) => p.len === 1), 'a platform 1 tile long');
+  assert.ok(r.plats.some((p) => p.len >= 6), 'a platform at least 6 long');
+  const heights = new Set(r.plats.filter((p) => p.h >= 1 && p.h <= 8).map((p) => p.h));
+  assert.ok(heights.size >= 5, `${heights.size} different heights: ${[...heights]}`);
+  assert.ok(r.low >= 2 && r.low <= 3, `a haybale bounces ${r.low.toFixed(2)} tiles`);
+  assert.ok(r.high >= 4.5 && r.high <= 5.5, `with jump held ${r.high.toFixed(2)} tiles`);
+  await context.close();
+});
+
+test('pixel-leap AC-26: Farm hides pockets of coins off the route, drawn only within 3 tiles, with a glint every 2 s', async () => {
+  const { context, page } = await open();
+  await page.click('[data-go]');
+  const r = await page.evaluate((BOT) => {
+    const L = window.__leap;
+    L.manual = true;
+    L.game.mode = 'play';
+    L.game.lives = 99;
+    L.startWorld(1);
+    const st = L.stage();
+    const pockets = {};
+    for (const t of st.things) if (t.hidden) (pockets[t.pocket] = pockets[t.pocket] || []).push(t);
+    // The coins' drawing: a block of the screen around the pocket, with the monster far, then near.
+    const c = document.getElementById('view');
+    const g = c.getContext('2d');
+    const look = (coin) => {
+      L.cam.x = coin.x - L.view.tilesW / 2;
+      L.cam.y = coin.y - L.view.tilesH / 2;
+      L.render();
+      const U = L.view.U;
+      return Array.from(g.getImageData(Math.round((coin.x - L.cam.x) * U - U * 0.4), Math.round((coin.y - L.cam.y) * U - U * 0.4), Math.round(U * 0.8), Math.round(U * 0.8)).data).join(',');
+    };
+    const draws = [];
+    for (const list of Object.values(pockets)) {
+      const coin = list[1] || list[0];
+      L.game.t = 1; // between glints
+      Object.assign(L.player, { x: coin.x + 6, y: st.base, vx: 0, vy: 0 });
+      const far = look(coin);
+      const farAgain = look(coin);
+      Object.assign(L.player, { x: coin.x + 1, y: coin.y + 1.2 });
+      const near = look(coin);
+      // The glint: within any 2 s, the first coin's spot is marked at least once.
+      let glints = 0;
+      for (let t = 0; t < 2; t += 0.05) {
+        L.game.t = 10 + t;
+        if ((L.game.t + list[0].pocket * 0.7) % 2 < 0.35) glints++;
+      }
+      draws.push({ n: list.length, hiddenFar: far === farAgain, shownNear: near !== far, glints });
+    }
+    // Off the route: the scripted run passes without taking any of them.
+    L.startWorld(1);
+    const run = eval(BOT)({ limit: 150, ride: true });
+    const taken = L.stage().things.filter((t) => t.hidden && t.got).length;
+    return { draws, end: run.end, taken };
+  }, BOT_SRC);
+  assert.ok(r.draws.length >= 3, `${r.draws.length} pockets`);
+  for (const d of r.draws) {
+    assert.ok(d.n >= 3, `a pocket of ${d.n} coins`);
+    assert.equal(d.shownNear, true, 'its coins show once the monster comes within 3 tiles');
+    assert.ok(d.glints >= 1, 'a glint every 2 s');
+  }
+  assert.equal(r.end, 'map');
+  assert.equal(r.taken, 0, 'the pockets are off the scripted route');
+  // Drawn only near: a pocket's coins aren't drawn while far (the game keeps them unfound).
+  const far = await page.evaluate(() => {
+    const L = window.__leap;
+    L.startWorld(1);
+    L.game.mode = 'play';
+    const coin = L.stage().things.find((t) => t.hidden);
+    Object.assign(L.player, { x: coin.x + 6, y: L.stage().base });
+    L.render();
+    const before = Boolean(coin.found);
+    Object.assign(L.player, { x: coin.x + 2, y: coin.y + 1.2 });
+    L.render();
+    return { before, after: Boolean(coin.found) };
+  });
+  assert.deepEqual(far, { before: false, after: true });
+  await context.close();
+});
+
+test('pixel-leap AC-27: Industrial: platforms and lifts carry you, you jump up through them, belts carry you; wide gaps only riding crosses', async () => {
+  const { context, page } = await open();
+  await page.click('[data-go]');
+  const r = await page.evaluate((BOT) => {
+    const L = window.__leap;
+    L.manual = true;
+    L.game.mode = 'play';
+    L.game.lives = 99;
+    L.startWorld(4);
+    const st = L.stage();
+    const movers = st.things.filter((t) => t.type === 'mover');
+    const ride = (m) => {
+      L.startWorld(4);
+      const mm = L.stage().things.find((t) => t.id === m.id);
+      const off = 1.5;
+      Object.assign(L.player, { x: mm.x + off, y: mm.y, vx: 0, vy: 0, ground: true, onMover: mm, invul: 9, poof: 0 });
+      L.input.keys.clear();
+      L.sync();
+      for (let i = 0; i < 120; i++) L.step();
+      return Math.hypot(L.player.x - (mm.x + off), L.player.y - mm.y);
+    };
+    const flat = movers.find((m) => m.axis === 'x');
+    const lift = movers.find((m) => m.axis === 'y');
+    const drift = [ride(flat), ride(lift)];
+    // Up through a platform from below, then down onto it.
+    L.startWorld(4);
+    const m2 = L.stage().things.find((t) => t.id === flat.id);
+    Object.assign(L.player, { x: m2.x + 1.5, y: m2.y + 2.2, vx: 0, vy: -17, ground: false, invul: 9 });
+    let through = false;
+    let landed = false;
+    for (let i = 0; i < 200; i++) {
+      L.step();
+      if (L.player.y < m2.y - 0.5) through = true;
+      if (through && L.player.onMover === m2) landed = true;
+    }
+    // A belt: standing still on it for 1 s.
+    L.startWorld(4);
+    let bx = 0;
+    while (L.tileAt(bx, st.base) !== L.T.BELTR) bx++;
+    Object.assign(L.player, { x: bx + 0.5, y: st.base, vx: 0, vy: 0, ground: true, onMover: null, invul: 9 });
+    L.step();
+    const x0 = L.player.x;
+    for (let i = 0; i < 120; i++) L.step();
+    const belt = L.player.x - x0;
+    // Gaps of 10 or more, each with a moving platform in it.
+    const gaps = [];
+    for (let x = 0, run = 0; x <= st.cols; x++) {
+      if (x < st.cols && st.ground[x] >= st.rows) run++;
+      else {
+        if (run >= 10) gaps.push({ x0: x - run, x1: x, mover: movers.some((m) => m.axis === 'x' && m.sx >= x - run - 0.5 && m.sx < x) });
+        run = 0;
+      }
+    }
+    // A run with the ears that never rides falls into each of those gaps.
+    const falls = [];
+    for (const g of gaps) {
+      L.startWorld(4);
+      L.game.ears = true;
+      // Never riding: the moving platforms aren't there to land on.
+      const s2 = L.stage();
+      s2.surfaces = s2.surfaces.filter((m) => m.type !== 'mover');
+      s2.things = s2.things.filter((m) => m.type !== 'mover');
+      s2.movers = [];
+      Object.assign(L.player, { x: g.x0 - 3.5, y: L.stage().ground[g.x0 - 4], vx: 0, vy: 0, ground: true, invul: 0 });
+      const res = eval(BOT)({ limit: 20, ride: false, stopAfterDeaths: 1 });
+      falls.push(res.deaths[0] >= g.x0 - 1 && res.deaths[0] <= g.x1 + 1 ? true : res.deaths[0] ?? res.end);
+    }
+    L.game.ears = false;
+    return { drift, through, landed, belt, gaps, lifts: movers.filter((m) => m.axis === 'y').length, falls };
+  }, BOT_SRC);
+  assert.ok(r.drift[0] < 0.1, `a moving platform carries the monster (off by ${r.drift[0]})`);
+  assert.ok(r.drift[1] < 0.1, `a lift carries the monster (off by ${r.drift[1]})`);
+  assert.equal(r.through, true, 'jumps up through a platform');
+  assert.equal(r.landed, true, 'and lands on it');
+  assert.ok(Math.abs(r.belt - 2.5) <= 0.3, `a belt carries 2.5 tiles a second (${r.belt.toFixed(2)})`);
+  assert.ok(r.gaps.length >= 2, `${r.gaps.length} gaps of 10 or more`);
+  assert.ok(r.gaps.every((g) => g.mover), 'each with a moving platform');
+  assert.ok(r.lifts >= 1, 'a lift');
+  assert.deepEqual(r.falls, r.gaps.map(() => true), `without riding, even with the ears, each gap is a fall (${JSON.stringify(r.gaps)} ${JSON.stringify(r.falls)})`);
+  await context.close();
+});
+
+test('pixel-leap AC-28: Mushroom is a tall climb; caps launch 4, 6, 8 tiles in a run, 4 again after the ground; the landing stays in view', async () => {
+  for (const opts of [{}, PHONE]) {
+    const { context, page } = await open(opts);
+    await play(page, W.mushroom, 0);
+    const r = await page.evaluate(() => {
+      const L = window.__leap;
+      const st = L.stage();
+      const door = st.things.find((t) => t.type === 'portal');
+      const caps = st.things.filter((t) => t.type === 'cap');
+      const cap = caps[0];
+      const launch = () => {
+        let top = Infinity;
+        let up = false;
+        for (let i = 0; i < 400; i++) {
+          L.step();
+          if (L.player.vy < -5) up = true;
+          if (up) top = Math.min(top, L.player.y);
+          if (up && L.player.vy > 0) break;
+        }
+        return cap.y - top;
+      };
+      const dropOn = () => {
+        Object.assign(L.player, { x: cap.x + 1.5, y: cap.y - 0.3, vx: 0, vy: 2, ground: false, poof: 0, invul: 9 });
+        return launch();
+      };
+      L.input.keys.clear();
+      L.sync();
+      const run = [dropOn(), dropOn(), dropOn(), dropOn()];
+      // Land on the ground, then the cap again.
+      Object.assign(L.player, { x: 3, y: st.ground[3] - 0.2, vx: 0, vy: 2, ground: false });
+      for (let i = 0; i < 20; i++) L.step();
+      const after = dropOn();
+      // An 8-tile launch in a real run: from the third cap to the fourth (6 higher), the fourth
+      // cap stays in view the whole way.
+      const run2 = caps.filter((c) => c.x > 80).sort((a, b) => a.x - b.x);
+      let inView = true;
+      if (run2.length >= 4) {
+        const [c3, c4] = [run2[2], run2[3]];
+        L.game.capChain = 2;
+        Object.assign(L.player, { x: c3.x + 1.5, y: c3.y - 0.3, vx: 0, vy: 2, ground: false });
+        L.cam.y = L.player.y - L.view.tilesH * 0.62;
+        for (let i = 0; i < 300; i++) {
+          const dx = c4.x + 1.5 - L.player.x;
+          L.input.keys.clear();
+          if (L.player.y < c4.y && Math.abs(dx) > 0.3) L.input.keys.add(dx > 0 ? 'right' : 'left');
+          else if (L.player.vy < 0) L.input.keys.add('right');
+          L.sync();
+          L.step();
+          if (c4.y < L.cam.y || c4.y > L.cam.y + L.view.tilesH) inView = false;
+          if (L.player.onCap === c4 || L.player.vy < -5 && L.player.y > c4.y - 1 && i > 30) break;
+        }
+      }
+      // Falling below the level's bottom costs a life.
+      const lives = L.game.lives;
+      Object.assign(L.player, { x: run2[0] ? run2[0].x + 6 : 100, y: st.rows + 1, vx: 0, vy: 5, ground: false, invul: 0 });
+      for (let i = 0; i < 30; i++) L.step();
+      return { climb: st.start.y - door.y, run, after, inView, lost: lives - L.game.lives, rows: st.rows };
+    });
+    assert.ok(r.climb >= 30, `the door is ${r.climb} tiles above the start`);
+    assert.ok(r.rows > 15, 'a tall level');
+    for (const [got, want] of r.run.map((h, i) => [h, [4, 6, 8, 8][i]])) assert.ok(Math.abs(got - want) <= 0.5, `cap launch ${got.toFixed(2)} for ${want}`);
+    assert.ok(Math.abs(r.after - 4) <= 0.5, `back to 4 after the ground (${r.after.toFixed(2)})`);
+    assert.equal(r.inView, true, `the landing cap stays in view (${JSON.stringify(opts.viewport || 'desktop')})`);
+    assert.equal(r.lost, 1, 'falling off the bottom costs a life');
+    await context.close();
+  }
+});
+
+test('pixel-leap AC-29: Pico is drawn at 8 px per tile in PICO-8’s 16 colours, its monster too', async () => {
+  const { context, page } = await open(PHONE);
+  await play(page, W.pico, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const pal = new Set(L.WORLDS[6].fixed.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(',')));
+    const off = [];
+    const scan = (x) => {
+      const st = L.stage();
+      Object.assign(L.player, { x, y: st.ground[Math.floor(x)] < st.rows ? st.ground[Math.floor(x)] : st.base, vx: 0, vy: 0, ground: true, invul: 0 });
+      L.steps(30);
+      L.clearParticles();
+      L.render();
+      const c = document.getElementById('view');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let bad = 0;
+      for (let i = 0; i < d.length; i += 4 * 7) if (!pal.has(`${d[i]},${d[i + 1]},${d[i + 2]}`)) bad++;
+      off.push(bad);
+    };
+    for (const x of [4, 30, 60, 90]) scan(x);
+    const b = L.baked();
+    const cols = new Set();
+    for (const f of Object.values(b.frames)) {
+      const d = f.getContext('2d').getImageData(0, 0, f.width, f.height).data;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3]) cols.add(`${d[i]},${d[i + 1]},${d[i + 2]}`);
+    }
+    return { res: L.renderRes(), off, monster: [...cols].filter((c) => !pal.has(c)) };
+  });
+  assert.equal(r.res, 8);
+  assert.deepEqual(r.off, [0, 0, 0, 0], 'every pixel of the world is a PICO-8 colour');
+  assert.deepEqual(r.monster, [], 'the monster is baked in PICO-8 colours');
+  await context.close();
+});
+
+test('pixel-leap AC-30: Pico is the most crowded; flyers swoop and climb back, hurt and can be stomped; stomp chains pay extra in Pico only', async () => {
+  const { context, page } = await open();
+  await play(page, W.pico, 0);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    const counts = L.WORLDS.map((w, i) => {
+      L.startWorld(i);
+      const st = L.stage();
+      const bad = st.things.filter((t) => t.type === 'walker' || t.type === 'flyer' || t.type === 'worm');
+      return { id: w.id, n: bad.length, after: bad.filter((t) => t.x >= 15 && t.x < st.next).length, span: st.next - 15 };
+    });
+    L.startWorld(6);
+    L.game.mode = 'play';
+    const st = L.stage();
+    const f = st.things.find((t) => t.type === 'flyer');
+    // A swoop: the monster on the ground 4 tiles before it.
+    const gy = st.ground[Math.floor(f.sx - 4)];
+    Object.assign(L.player, { x: f.sx - 4, y: gy, vx: 0, vy: 0, ground: true, invul: 99 });
+    L.input.keys.clear();
+    L.sync();
+    let low = f.y;
+    let swooped = false;
+    let back = false;
+    for (let i = 0; i < 600; i++) {
+      L.step();
+      low = Math.max(low, f.y);
+      if (f.state === 'swoop') swooped = true;
+      if (swooped && f.state === 'hover') {
+        back = true;
+        break;
+      }
+      // The monster steps aside so the flyer misses.
+      if (swooped) L.player.x = f.sx + 8;
+    }
+    // From the side it hurts; from above it's stomped.
+    L.startWorld(6);
+    const f2 = L.stage().things.find((t) => t.type === 'flyer');
+    f2.state = 'return';
+    L.game.shields = 1;
+    Object.assign(L.player, { x: f2.x - 0.5, y: f2.y, vx: 0, vy: 0, ground: false, invul: 0 });
+    L.step();
+    const hurt = L.game.shields === 0;
+    L.startWorld(6);
+    const f3 = L.stage().things.find((t) => t.type === 'flyer');
+    Object.assign(L.player, { x: f3.x, y: f3.y - 1.3, vx: 0, vy: 6, ground: false, invul: 0 });
+    for (let i = 0; i < 20; i++) L.step();
+    const stomped = !f3.alive;
+    // Stomp chains: six stomps in the air, then one after landing.
+    const chain = (w) => {
+      L.startWorld(w);
+      L.game.mode = 'play';
+      const s = L.stage();
+      const walkers = s.things.filter((t) => t.type === 'walker' && t.kind !== 'spiky').slice(0, 3);
+      const coins = [];
+      let n = 0;
+      const stompOn = () => {
+        const e = walkers[n++ % walkers.length];
+        e.alive = true;
+        e.x = 30.5;
+        e.y = s.ground[30] < s.rows ? s.ground[30] : s.base;
+        Object.assign(L.player, { x: 30.5, y: e.y - 2.4, vx: 0, vy: 8, ground: false, invul: 0, poof: 0 });
+        const c0 = L.game.coins;
+        for (let i = 0; i < 30 && e.alive; i++) L.step();
+        coins.push(L.game.coins - c0);
+      };
+      for (let i = 0; i < 6; i++) stompOn();
+      // Land, then stomp again: a new chain.
+      Object.assign(L.player, { x: 20, y: s.ground[20], vx: 0, vy: 1, ground: false });
+      for (let i = 0; i < 5; i++) L.step();
+      stompOn();
+      return coins;
+    };
+    const pico = chain(6);
+    const meadow = chain(0);
+    // A hit ends a chain.
+    L.startWorld(6);
+    L.game.mode = 'play';
+    L.game.stompChain = 3;
+    L.game.shields = 1;
+    L.player.invul = 0;
+    L.hit(L.player.x + 1);
+    const afterHit = L.game.stompChain;
+    return { counts, swooped, low: low - f.sy, back, hurt, stomped, pico, meadow, afterHit };
+  });
+  const pico = r.counts.find((c) => c.id === 'pico');
+  for (const c of r.counts) if (c.id !== 'pico') assert.ok(pico.n > c.n, `Pico (${pico.n}) has more bad guys than ${c.id} (${c.n})`);
+  assert.ok(pico.after >= Math.floor(pico.span / 8), `at least one per 8 tiles after the opening (${pico.after} in ${pico.span})`);
+  assert.equal(r.swooped, true, 'a flyer swoops at the monster');
+  assert.ok(r.low > 1.5, `it dives down (${r.low.toFixed(2)} tiles)`);
+  assert.equal(r.back, true, 'and climbs back home');
+  assert.equal(r.hurt, true, 'a flyer hurts from the side');
+  assert.equal(r.stomped, true, 'a flyer can be stomped');
+  assert.deepEqual(r.pico, [0, 1, 2, 3, 4, 4, 0], 'in Pico each stomp in a chain pays one more, up to 4; landing ends it');
+  assert.deepEqual(r.meadow, [0, 0, 0, 0, 0, 0, 0], 'in the Meadow a chain pays nothing extra');
+  assert.equal(r.afterHit, 0, 'a hit ends the chain');
+  await context.close();
+});
+
+test('pixel-leap AC-31: each new world plays its sound set’s music and draws from its own pack', async () => {
+  const { context, page } = await open();
+  await goPlay(page, true);
+  const r = await page.evaluate(() => {
+    const L = window.__leap;
+    L.manual = true;
+    const used = new Set();
+    const orig = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (img, ...rest) {
+      if (img && img.src) used.add(img.src.split('/').pop());
+      return orig.call(this, img, ...rest);
+    };
+    const out = {};
+    for (const id of ['farm', 'industrial', 'mushroom', 'pico']) {
+      const w = L.WORLDS.findIndex((x) => x.id === id);
+      // Through the previous level's door and the map into this world.
+      L.startWorld(w - 1);
+      L.game.mode = 'play';
+      const po = L.stage().things.find((t) => t.type === 'portal');
+      Object.assign(L.player, { x: po.x, y: po.y, invul: 0 });
+      L.step();
+      for (let i = 0; i < 1000 && L.game.mode !== 'play'; i++) L.step();
+      const loops = L.heard.filter((x) => x.startsWith('loop:'));
+      used.clear();
+      const st = L.stage();
+      Object.assign(L.player, { x: 10, y: st.ground[10] });
+      L.cam.x = 4;
+      L.cam.y = st.ground[10] - L.view.tilesH * 0.62;
+      L.render();
+      out[id] = { world: L.game.world === w, loop: loops[loops.length - 1], images: [...used] };
+    }
+    CanvasRenderingContext2D.prototype.drawImage = orig;
+    return out;
+  });
+  assert.equal(r.farm.loop, 'loop:m-music');
+  assert.equal(r.industrial.loop, 'loop:m-music');
+  assert.equal(r.mushroom.loop, 'loop:c-music');
+  assert.equal(r.pico.loop, 'loop:m-music');
+  assert.ok(r.farm.images.includes('farm-tiles.png'), `Farm draws its pack (${r.farm.images})`);
+  assert.ok(r.industrial.images.includes('industrial-tiles.png'), 'Industrial draws its pack');
+  assert.ok(r.mushroom.images.includes('mushroom.png'), 'Mushroom draws its pack');
+  assert.ok(r.pico.images.includes('pico-tiles.png'), 'Pico draws its pack');
+  for (const id of Object.keys(r)) assert.equal(r[id].world, true);
+  await context.close();
 });

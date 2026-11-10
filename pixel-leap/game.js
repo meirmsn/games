@@ -2608,6 +2608,9 @@ Promise.all([
     skipMap,
     mapLayout,
     mapFont,
+    clearParticles: () => {
+      particles.length = 0;
+    },
     MAP,
     tileAt,
     sync,
