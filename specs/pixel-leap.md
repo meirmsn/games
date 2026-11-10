@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: pending
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: "Go" 2026-11-10
 
 ## Intent
 
@@ -357,20 +357,19 @@ item.
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
   can't hold eight.
-- **Batch 3: ten levels, in this order** (proposed; the owner's answer on Frost goes here at the
-  go): 1 Meadow (pixel, 18), 2 Farm (pixel, 18), 3 Ice (smooth, 70; it takes Frost's place, and
-  Frost's ears), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7 Pico (pixel, 8), 8
-  Sea (smooth, 70), 9 Ink (two colours, 16, now dark), 10 Castle (smooth, 70). Ice replaces Frost
+- **Batch 3: ten levels, in this order** (owner, 2026-11-10, at the go: "Ice replaces Frost" and
+  "Perfect alternation"): 1 Meadow (pixel, 18), 2 Ice (smooth, 70; it replaces Frost, and takes
+  Frost's ears), 3 Farm (pixel, 18), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7
+  Pico (pixel, 8), 8 Sea (smooth, 70), 9 Ink (two colours, 16, now dark), 10 Castle (smooth, 70).
+  Pixel and smooth alternate at every door. Ice opens gently, as level 2 must: its first stretch
+  is snow, its ice ledges come later and its ears sit on a route you choose to risk. Ice replaces Frost
   because two ice worlds would be the same mechanic twice, the owner's "different skin" note; it
-  keeps Frost's slot, its prize and the owner's Frost music (a cold, glassy bed fits Ice). The
-  order keeps every shipped world's place and breaks the pixel/smooth alternation only twice
-  (Meadow–Farm, Ice–Candy), as few as any order that keeps the shipped worlds' places; Sea, a new
+  keeps Frost's slot, its prize and the owner's Frost music (a cold, glassy bed fits Ice). Proposed
+  first was keeping every shipped world's place (Meadow, Farm, Ice, Candy, …), which breaks the
+  alternation twice; the owner chose perfect alternation. Sea, a new
   control, comes at 8 rather than last, so a game over there costs less replay; Ink's darkness is
-  late; Castle's puzzles, at the end of a castle's road, close the journey for now. The other
-  choice, offered at the go: Meadow, Ice, Farm, Candy, … alternates perfectly but puts Ice's
-  precision and the ears at level 2. If the owner keeps Frost, the journey is eleven levels
-  (Meadow, Farm, Frost, Candy, Industrial, Mushroom, Pico, Sea, Ink, Ice, Castle), the map holds
-  eleven cells, and Frost keeps the ears. The three new worlds are vector packs with no characters
+  late; Castle's puzzles, at the end of a castle's road, close the journey for now. Frost, the Pixel
+  Platformer's snow, leaves the game; its level and art go. The three new worlds are vector packs with no characters
   of their own, so their bad guys come from the New Platformer Pack (as Candy's and Mushroom's
   slimes do): Castle's mice, Ice's snails, Sea's fish; Castle's key and Sea's urchins (its spikes) come
   from it too, as the world's own pack has none. Added beyond the request, for the go: lamps in
@@ -467,7 +466,7 @@ item.
   ice keeps the monster sliding further than the Meadow's grass, and an Ink drip falls as the
   monster comes near and hurts — `tests/pixel-leap.test.mjs`.
 - **AC-12** Reaching a level's door shows the world map, with no numbers card, heading from that
-  level's cell to the next; the map then leaps into the next level's world, which from Farm to
+  level's cell to the next; the map then leaps into the next level's world, which from the Meadow to
   Ice goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
   the monster's ears kept and its time at 0 — `tests/pixel-leap.test.mjs`.
 - **AC-13** At 360×640 and 390×844 in portrait, at pixel ratios 1, 2 and 3, the view shows at least
@@ -486,7 +485,7 @@ item.
 - **AC-16** After two lives lost the coyote time and buffer grow (to at most double), enemies keep
   their speed, the assist survives a game over, and clearing a level resets it —
   `tests/pixel-leap.test.mjs`.
-- **AC-17** Each level is its own world, in this order: Meadow, Farm, Ice, Candy, Industrial,
+- **AC-17** Each level is its own world, in this order: Meadow, Ice, Farm, Candy, Industrial,
   Mushroom, Pico, Sea, Ink, Castle; best times are kept under version 4 of the levels; each level's
   last stretch, from its `next` column, is drawn in the next world's style; the UI is pixel-styled in
   pixel worlds and smooth in Ice, Candy, Mushroom, Castle and Sea; the best time per level is kept — `tests/pixel-leap.test.mjs`.
@@ -511,10 +510,10 @@ item.
 - **AC-23** The glimpse before Farm's door is drawn smooth, the one before Candy's door in
   Industrial's 18-px pixels and the one before Sea's door in Ink's; stepping into a glimpse that
   changes the style plays the rising (into smooth) or falling (out of smooth) sound and draws the
-  monster at in-between resolutions, then in the new style, and stepping from the Meadow into Farm's
-  glimpse changes nothing — `tests/pixel-leap.test.mjs`.
+  monster at in-between resolutions, then in the new style; in this order every door changes the
+  style (owner, 2026-11-10, at the go: "Perfect alternation") — `tests/pixel-leap.test.mjs`.
 - **AC-24** The map at the start lights only the first world's cell and carves the others dark, and
-  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Farm with
+  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Ice with
   both lit; a tap skips ahead to the step into the world; at 360×640 and 390×844 in portrait and
   1024×700 in landscape, all ten cells and the start are on screen, no two cells overlap and each
   name is at least 12 CSS px tall — `tests/pixel-leap.test.mjs`.
@@ -604,8 +603,8 @@ item.
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
 2. Change parts or Shuffle, then Go.
-3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Farm.
-4. Back on the map, walk on through Farm, Ice (redrawn smooth), Candy, Industrial, Mushroom
+3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Ice.
+4. Back on the map, walk on through Ice (redrawn smooth), Farm, Candy, Industrial, Mushroom
    (smooth), Pico (16 colours), Sea (swimming), Ink (two colours, in the dark) and Castle, with
    three lives and up to two hearts; the run's statistics show at its end.
 
@@ -650,7 +649,7 @@ item.
   | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top |
 
   Today's Frost (Pixel Platformer snow: ice and spiky walkers) stayed as a world through batch 2; batch
-  3 proposes Ice in its place (see Decisions). **Batch 2:** Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
+  3 replaced it with Ice (owner, 2026-11-10). **Batch 2:** Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
   Ice, Sea, and Ink's darkness. **Batch 4:** Scribble and Sky, then the journey's end. After each
   batch ships, the next batch's session is suggested.
 - Music: the owner will generate music for each world (and the two crossing sounds) from prompts
