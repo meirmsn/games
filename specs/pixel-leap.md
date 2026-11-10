@@ -454,8 +454,8 @@ item.
   from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
   third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
   pays nothing extra — `tests/pixel-leap.test.mjs`.
-- **AC-31** Each new world plays its music (the owner's bed where it has arrived, Farm's so far,
-  else its sound set's loop) and draws from its own pack: Farm's and
+- **AC-31** Each new world plays its music (the owner's bed where it has arrived, which among the
+  four new worlds is so far only Farm's, else its sound set's loop) and draws from its own pack: Farm's and
   Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
   pack's — `tests/pixel-leap.test.mjs`.
 

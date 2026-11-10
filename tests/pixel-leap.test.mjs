@@ -1774,8 +1774,15 @@ test('pixel-leap AC-30: Pico is the most crowded; flyers swoop and climb back, h
     L.game.mode = 'play';
     const st = L.stage();
     const f = st.things.find((t) => t.type === 'flyer');
-    // A swoop: the monster on the ground 4 tiles before it.
+    // In the air within 5 tiles ahead: no dive (it dives only at a monster on the ground).
     const gy = st.ground[Math.floor(f.sx - 4)];
+    let airDive = false;
+    for (let i = 0; i < 60; i++) {
+      Object.assign(L.player, { x: f.sx - 4, y: gy - 2, vx: 0, vy: -1, ground: false, invul: 99 });
+      L.step();
+      if (f.state !== 'hover') airDive = true;
+    }
+    // A swoop: the monster on the ground 4 tiles before it.
     Object.assign(L.player, { x: f.sx - 4, y: gy, vx: 0, vy: 0, ground: true, invul: 99 });
     L.input.keys.clear();
     L.sync();
@@ -1841,12 +1848,13 @@ test('pixel-leap AC-30: Pico is the most crowded; flyers swoop and climb back, h
     L.player.invul = 0;
     L.hit(L.player.x + 1);
     const afterHit = L.game.stompChain;
-    return { counts, swooped, low: low - f.sy, back, hurt, stomped, pico, meadow, afterHit };
+    return { counts, airDive, swooped, low: low - f.sy, back, hurt, stomped, pico, meadow, afterHit };
   });
   const pico = r.counts.find((c) => c.id === 'pico');
   for (const c of r.counts) if (c.id !== 'pico') assert.ok(pico.n > c.n, `Pico (${pico.n}) has more bad guys than ${c.id} (${c.n})`);
   assert.ok(pico.after >= Math.floor(pico.span / 8), `at least one per 8 tiles after the opening (${pico.after} in ${pico.span})`);
-  assert.equal(r.swooped, true, 'a flyer swoops at the monster');
+  assert.equal(r.airDive, false, 'no dive at a monster in the air');
+  assert.equal(r.swooped, true, 'a flyer swoops at the monster on the ground');
   assert.ok(r.low > 1.5, `it dives down (${r.low.toFixed(2)} tiles)`);
   assert.equal(r.back, true, 'and climbs back home');
   assert.equal(r.hurt, true, 'a flyer hurts from the side');
