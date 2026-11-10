@@ -6,6 +6,7 @@
 // angle "off the wind" is between the heading and where the wind comes from: 0 is straight into
 // it, π dead downwind.
 import { wrap } from './world.js';
+import { drawPerson } from './people.js';
 
 const D = Math.PI / 180;
 
@@ -202,18 +203,10 @@ export function drawDinghy(ctx, iso, x, y, s, zs = 32) {
   p = P(-0.12, 0.13, DECK);
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
-  // Cargo: a crate (or a mail sack) per load, aft of the mast.
+  // Passengers sit aft of the mast, facing forward.
   (s.cargo || []).forEach((c, k) => {
-    const cx = -0.26 + k * 0.0;
-    const q = P(cx, 0, DECK + 0.07);
-    const w = 0.15 * zs;
-    ctx.fillStyle = c.mail ? '#f6f1e3' : '#b98245';
-    ctx.strokeStyle = c.colour;
-    ctx.lineWidth = 0.035 * zs;
-    ctx.beginPath();
-    ctx.rect(q.x - w / 2, q.y - w / 2, w, w * 0.8);
-    ctx.fill();
-    ctx.stroke();
+    const q = P(-0.24 - k * 0.12, 0, DECK + 0.02);
+    drawPerson(ctx, q.x, q.y, { coat: c.coat, skin: c.id, t: s.t + c.id, sit: true, wave: 0.15, face: 1, scale: 0.85 * (zs / 32) });
   });
   // Mast and sail. The boom swings from the mast to leeward; the sail is a triangle from the
   // masthead, its foot along the boom, bellied by the wind (or fluttering when it luffs).

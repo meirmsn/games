@@ -66,34 +66,25 @@ async function autopilot(max) {
   let clear = null;
   let wide = null;
   let awayT = 0;
-  let quayT = 0; // seconds left reading the cards at a quay
+  let quayT = null; // seconds left watching the quay
   let steerT = 0; // seconds until the next steering adjustment
   for (let k = 0; k < max * 30; k++) {
     if (S.mode === 'over') {
       mark('voyage done');
       break;
     }
-    if (S.mode === 'docked' && S.dock === null && quayT <= 0) quayT = 4;
-    if (S.mode === 'docked' && S.dock === null && (quayT -= 1 / 30) <= 0) {
-      if (S.portAt === 0) {
-        for (const w of ['keel', 'spinnaker', 'galleon']) if (!S.owned[w] && s.buy(w)) mark('bought the ' + w);
-        if (S.owned.galleon) s.takeCharter();
+    // At a quay: watch people get off and on for a few seconds, buy if the card is up, then go.
+    if (S.mode !== 'docked') quayT = null;
+    else if (S.dock === null && quayT === null) quayT = 3;
+    if (S.mode === 'docked' && S.dock === null && !S.hops.length && (quayT -= 1 / 30) <= 0) {
+      if (S.portAt === 0) for (let w = s.nextBuy(); w && s.buy(w); w = s.nextBuy()) mark('bought the ' + w);
+      // Wait for whoever will board here (the keeper boards only an empty boat), a few seconds at most.
+      const keeperAboard = S.hold.some((c) => c.kind === 'charter');
+      const boarding = !keeperAboard && S.hold.length < s.rig().cargo && S.waiting.some((w) => w.at === S.portAt);
+      if (!boarding || quayT < -6) {
+        s.castOff();
+        wp = null;
       }
-      const offers = (S.offers[S.portAt] || []).slice().sort((a, b) => b.pay / b.len - a.pay / a.len);
-      // With the galleon, it sets off with the Grand Charter alone, as a player heading for the end.
-      // Once it can afford the next purchase it heads for the shipyard, taking only cargo bound
-      // there, as a player saving for the price tag on the quay would.
-      const next = ['keel', 'spinnaker', 'galleon'].find((w) => !S.owned[w]);
-      const saving = next && S.portAt !== 0 && S.coins >= s.TUNE.prices[next];
-      if (!S.owned.galleon) for (const c of offers) if (S.hold.length < s.rig().cargo && (!saving || c.to === 0)) s.takeOffer(c);
-      if (!S.hold.length) {
-        // Nothing to carry from here: head back to the shipyard (a contract that pays nothing).
-        const c = s.makeContract(S.portAt, 0, 'goods');
-        c.pay = c.goods = 0;
-        S.hold.push(c);
-      }
-      s.castOff();
-      wp = null;
     }
     if (S.mode === 'sail') {
       const b = S.boat;
@@ -105,7 +96,25 @@ async function autopilot(max) {
         const d = Math.hypot(p.rx - b.x, p.ry - b.y);
         if (d < best) [best, dest] = [d, p];
       }
+      // With the lighthouse keeper aboard, straight to the lighthouse: the voyage's end.
+      if (S.hold.some((c) => c.kind === 'charter')) dest = S.world.lighthouse;
       if (S.crates.length && S.hold.length < r.cargo) dest = { rx: S.crates[0].x, ry: S.crates[0].y };
+      // Nobody aboard: the shipyard if the next thing is affordable, else the nearest port where
+      // someone waits, else the shipyard. With room aboard, a waiting passenger close by is worth it.
+      if (!dest) {
+        const next = s.nextBuy();
+        if (next && S.coins >= s.TUNE.prices[next]) dest = S.world.ports[0];
+        else {
+          // With the galleon, the keeper at the shipyard: the way to the end.
+          if (S.owned.galleon && S.waiting.some((w) => w.c.kind === 'charter')) dest = S.world.ports[0];
+          for (const w of dest ? [] : S.waiting) {
+            const p = S.world.ports[w.at];
+            const d = Math.hypot(p.rx - b.x, p.ry - b.y);
+            if (d < best) [best, dest] = [d, p];
+          }
+          if (!dest) dest = S.world.ports[0];
+        }
+      }
       if (dest && (k % 6 === 0 || !wp)) {
         // The dinghy keeps a tile clear of rocks, as a person seeing the surf ring would.
         if (!clear) {

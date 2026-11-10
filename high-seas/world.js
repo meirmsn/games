@@ -14,7 +14,7 @@ export const H = 44;
 
 // Port names: made up for this game.
 const NAMES = ['Saltby', 'Gull Quay', 'Merrow Bay', 'Tern Harbour', 'Brackwater', 'Pebble Cove', 'Kelpton', 'Driftwick'];
-export const PORT_COLOURS = ['#e8604c', '#f2c14e', '#5fb36b', '#8e6fd1'];
+export const PORT_COLOURS = ['#e8604c', '#5fb36b', '#8e6fd1'];
 
 // A small seeded random generator (mulberry32) and a string hash for seeds.
 export function hashSeed(s) {
@@ -142,7 +142,7 @@ function attempt(seed) {
     const p = placeQuay(tiles, is, rand);
     if (!p) return fail("quay");
     const name = k === 0 ? 'Shipyard' : names.splice(Math.floor(rand() * names.length), 1)[0];
-    ports.push({ id: k, name, colour: k === 0 ? '#d9d4c7' : PORT_COLOURS[k - 1], island: is, ...p });
+    ports.push({ id: k, name, colour: k === 0 ? '#ffd23f' : PORT_COLOURS[k - 1], island: is, ...p });
   }
   const lhPort = placeQuay(tiles, islands[0], rand);
   if (!lhPort) return fail("lhquay");
@@ -384,4 +384,33 @@ export function nearestNav(nav, x, y, avoid = [], clearOf = 0) {
         if (!best || d < best.d) best = { x: i + 0.5, y: j + 0.5, d };
       }
   return best ? { x: best.x, y: best.y } : { x, y };
+}
+
+// The shortest water route between two points as tile centres (8-way, no corner cutting), or null.
+// For boats that sail on their own between the ports.
+export function routePath(nav, ax, ay, bx, by) {
+  const s = idx(Math.floor(ax), Math.floor(ay));
+  const t = idx(Math.floor(bx), Math.floor(by));
+  if (!nav[s] || !nav[t]) return null;
+  const prev = new Int32Array(W * H).fill(-1);
+  prev[s] = s;
+  const q = [s];
+  for (let h = 0; h < q.length && prev[t] < 0; h++) {
+    const u = q[h];
+    const ui = u % W;
+    const uj = (u - ui) / W;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const a = ui + di;
+      const b = uj + dj;
+      if (!inside(a, b) || !nav[idx(a, b)] || prev[idx(a, b)] >= 0) continue;
+      if (di && dj && (!nav[idx(ui + di, uj)] || !nav[idx(ui, uj + dj)])) continue;
+      prev[idx(a, b)] = u;
+      q.push(idx(a, b));
+    }
+  }
+  if (prev[t] < 0) return null;
+  const out = [];
+  for (let u = t; u !== s; u = prev[u]) out.push({ x: (u % W) + 0.5, y: Math.floor(u / W) + 0.5 });
+  out.push({ x: (s % W) + 0.5, y: Math.floor(s / W) + 0.5 });
+  return out.reverse();
 }

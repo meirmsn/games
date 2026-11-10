@@ -127,9 +127,9 @@ button:focus-visible {
 
 .slot {
   position: relative;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
   border: 2px dashed rgb(255 255 255 / 35%);
   box-sizing: border-box;
 }
@@ -143,28 +143,12 @@ button:focus-visible {
 .slot.full::after {
   content: '';
   position: absolute;
-  inset: 6px 5px;
-  border-radius: 2px;
-  background: rgb(255 255 255 / 85%);
-}
-
-.slot.mail::after {
-  inset: 7px 4px;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, 50% 55%, 100% 0);
-}
-
-.slot.charter::after {
-  inset: 5px;
+  left: 7px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  background: #fff6c2;
-}
-
-.slot .ring {
-  position: absolute;
-  inset: -5px;
-  width: calc(100% + 10px);
-  height: calc(100% + 10px);
-  transform: rotate(-90deg);
+  background: #f3d2b3;
 }
 
 /* Cards in the middle: start, pause, voyage done. */
@@ -247,152 +231,82 @@ button:focus-visible {
   cursor: pointer;
 }
 
-/* The port's sheet, along the bottom. */
-.sheet {
+/* The goal in the HUD: the next thing the shipyard sells, its ring filling as coins come in. */
+.goal {
+  position: relative;
+  width: 34px;
+  height: 34px;
+}
+
+.goal > svg:first-child {
+  position: absolute;
+  inset: 5px;
+  width: 24px;
+  height: 24px;
+}
+
+.goal .ring {
+  position: absolute;
+  inset: 0;
+  width: 34px;
+  height: 34px;
+  transform: rotate(-90deg);
+}
+
+.goal.ready {
+  animation: ready 1.2s ease-in-out infinite;
+}
+
+/* At the shipyard, when you can afford it: one button with a picture and a price. */
+.buy-card {
   position: fixed;
   z-index: 7;
   left: 50%;
-  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 28px);
   transform: translateX(-50%);
-  width: min(420px, calc(100vw - 24px));
-  max-height: 58dvh;
-  overflow-y: auto;
-  box-sizing: border-box;
-  padding: 12px 12px 12px;
-  border-radius: 22px;
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgb(0 20 40 / 30%);
   animation: rise 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.sheet-head {
+.buy {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.sheet-head h2 {
-  flex: 1;
-  margin: 0;
-  font-size: 22px;
-}
-
-.port-flag {
-  width: 14px;
-  height: 22px;
-  border-radius: 2px 6px 6px 2px;
-  background: var(--c, #fff);
-}
-
-.cast {
-  min-width: 104px;
-  min-height: 44px;
+  gap: 12px;
+  min-width: 160px;
+  min-height: 72px;
+  padding: 10px 18px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 22px;
   font: inherit;
-  font-weight: 700;
   color: var(--ink);
   background: var(--sun);
-  box-shadow: 0 3px 0 #c99a12;
+  box-shadow: 0 4px 0 #c99a12, 0 10px 30px rgb(0 20 40 / 30%);
   cursor: pointer;
 }
 
-.paid {
-  margin: 0 0 8px;
-  font-weight: 700;
-  color: var(--sun);
-  animation: rise 360ms cubic-bezier(0.2, 0.8, 0.2, 1);
+.buy svg {
+  width: 52px;
+  height: 52px;
 }
 
-.offers,
-.yard {
-  display: grid;
-  gap: 8px;
-}
-
-.yard {
-  margin-top: 8px;
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.offer,
-.buy {
+.buy .price {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 14px;
-  font: inherit;
-  text-align: left;
-  color: var(--ink);
-  background: var(--paper);
-  box-shadow: 0 3px 0 rgb(0 0 0 / 18%);
-  cursor: pointer;
-}
-
-.offer[aria-disabled='true'],
-.buy[aria-disabled='true'] {
-  opacity: 0.55;
-  cursor: default;
-}
-
-.offer .to {
-  flex: 1;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.offer .kind {
-  display: block;
-  font-size: 13px;
-  font-weight: 400;
-  opacity: 0.75;
-}
-
-.offer .swatch {
-  width: 12px;
-  height: 34px;
-  border-radius: 3px;
-  background: var(--c);
-}
-
-.offer .pay,
-.buy .price {
+  gap: 6px;
+  font-size: 24px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-}
-
-.offer.charter {
-  background: #fff6c2;
-}
-
-.buy {
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-  padding: 8px 6px;
-  text-align: center;
-  font-size: 14px;
-}
-
-.buy .what {
-  font-weight: 700;
-}
-
-.buy.owned {
-  background: rgb(255 255 255 / 25%);
-  color: #fff;
 }
 
 @keyframes rise {
   from {
     opacity: 0;
     translate: 0 16px;
+  }
+}
+
+@keyframes ready {
+  50% {
+    transform: scale(1.18);
   }
 }
 
@@ -405,8 +319,8 @@ button:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
   .card,
-  .sheet,
-  .paid,
+  .buy-card,
+  .goal.ready,
   .coins.bump strong {
     animation: none;
   }

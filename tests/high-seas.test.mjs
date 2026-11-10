@@ -106,7 +106,7 @@ const steps = (page, n, dt = 1 / 60) =>
 const boat = (page) => page.evaluate(() => ({ ...window.__seas.S.boat }));
 const near = (a, b, eps, msg) => assert.ok(Math.abs(a - b) <= eps, `${msg || ''} ${a} ≈ ${b} ± ${eps}`);
 
-test('high-seas AC-4: the page opens on a moving sea behind a start card; Start docks at the shipyard with its contracts', async () => {
+test('high-seas AC-4: the page opens on a moving sea behind a start card; Start docks at the shipyard, where a passenger waits on the jetty and hops aboard, with no menu', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.isVisible('[data-screen="start"]'), true);
   assert.equal(await page.isVisible('[data-hud]'), false);
@@ -118,11 +118,14 @@ test('high-seas AC-4: the page opens on a moving sea behind a start card; Start 
   assert.ok(t1 > t0, 'the sea clock runs');
   assert.notEqual(shot0, shot1, 'two frames differ');
   await page.click('[data-start]');
-  const st = await page.evaluate(() => ({ mode: window.__seas.S.mode, port: window.__seas.S.portAt }));
-  assert.deepEqual(st, { mode: 'docked', port: 0 });
-  assert.equal(await page.isVisible('[data-screen="port"]'), true);
-  assert.equal(await page.textContent('[data-port-name]'), 'Shipyard');
-  assert.ok((await page.locator('[data-offer]').count()) >= 2);
+  const st = await page.evaluate(() => ({ mode: window.__seas.S.mode, port: window.__seas.S.portAt, waiting: window.__seas.S.waiting.map((w) => w.at) }));
+  assert.deepEqual(st, { mode: 'docked', port: 0, waiting: [0] }, 'someone waits on the shipyard jetty');
+  assert.equal(await page.isVisible('[data-screen="buy"]'), false, 'no menu: nothing to buy yet');
+  assert.equal(await page.locator('section:not([hidden])').count(), 0, 'no card at all');
+  await page.waitForFunction(() => window.__seas.S.hold.length === 1, null, { timeout: 5000 });
+  const r = await page.evaluate(() => ({ to: window.__seas.S.hold[0].to, first: window.__seas.S.world.first.port, waiting: window.__seas.S.waiting.length }));
+  assert.equal(r.to, r.first, 'they are going to the first port, a short reach away');
+  assert.equal(r.waiting, 0);
   assert.equal(await page.isVisible('[data-hud]'), true);
   assert.deepEqual(errors, []);
   await context.close();
@@ -238,7 +241,7 @@ test('high-seas AC-7: inside a gust the speed settles at the gust\'s strength ti
   await context.close();
 });
 
-test('high-seas AC-8: entering a port\'s ring docks and pays; casting off doesn\'t re-dock; other cargo stays; a full hold refuses; mail on time pays more', async () => {
+test('high-seas AC-8: entering the destination\'s ring docks; the passenger hops ashore and stays on the quay, and the fare is paid; casting off doesn\'t re-dock; a port with no reason to stop is sailed past', async () => {
   const { context, page } = await open();
   await openWater(page);
   const r = await page.evaluate(() => {
@@ -246,11 +249,10 @@ test('high-seas AC-8: entering a port\'s ring docks and pays; casting off doesn\
     const S = s.S;
     const p = S.world.ports[1];
     S.coins = 0;
-    const forHere = s.makeContract(0, 1, 'goods');
-    const forThere = s.makeContract(0, 2, 'goods');
-    S.hold.push(forHere);
-    S.owned.galleon = true; // room for two
-    // Two and a half tiles out from the ring, in deep water, heading for it on a beam reach.
+    S.owned.galleon = true; // seats for two
+    const forHere = s.makeContract(0, 1);
+    const forThere = s.makeContract(0, 2);
+    S.hold.push(forHere, forThere);
     let a = 0;
     for (let k = 0; k < 16; k++) {
       a = (k / 16) * Math.PI * 2;
@@ -259,17 +261,15 @@ test('high-seas AC-8: entering a port\'s ring docks and pays; casting off doesn\
       if (S.world.deep[Math.floor(y) * 44 + Math.floor(x)]) break;
     }
     S.wind.dir = a + Math.PI / 2;
-    S.gusts.length = 0;
     Object.assign(S.boat, { x: p.rx + Math.cos(a) * 2.6, y: p.ry + Math.sin(a) * 2.6, h: a + Math.PI, target: a + Math.PI, v: 1 });
-    S.hold.push(forThere);
-    for (let i = 0; i < 600 && !(S.mode === 'docked' && S.dock === null); i++) s.step(1 / 60);
-    return { mode: S.mode, port: S.portAt, coins: S.coins, pay: forHere.pay, hold: S.hold.map((c) => c.to) };
+    for (let i = 0; i < 900 && !(S.mode === 'docked' && S.dock === null && !S.hops.length); i++) s.step(1 / 60);
+    return { mode: S.mode, port: S.portAt, coins: S.coins, pay: forHere.pay, hold: S.hold.map((c) => c.to), residents: S.residents[1] || 0 };
   });
   assert.equal(r.mode, 'docked');
   assert.equal(r.port, 1);
-  assert.equal(r.coins, r.pay);
-  assert.deepEqual(r.hold, [2]);
-  assert.equal(await page.isVisible('[data-screen="port"]'), true);
+  assert.equal(r.coins, r.pay, 'the fare is paid');
+  assert.ok(r.hold.includes(2) && !r.hold.includes(1), 'the passenger for elsewhere stays aboard');
+  assert.equal(r.residents, 1, 'the one who got off stays on the quay');
   // Cast off: still inside the ring, but it doesn't dock again until it has left.
   const again = await page.evaluate(() => {
     const s = window.__seas;
@@ -280,63 +280,69 @@ test('high-seas AC-8: entering a port\'s ring docks and pays; casting off doesn\
     return S.mode;
   });
   assert.equal(again, 'sail');
-  // A full hold refuses another contract.
-  const full = await page.evaluate(() => {
+  // A port with nobody to drop, nobody waiting and nothing to buy: the boat sails through its ring.
+  const past = await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
-    s.startVoyage('KAPOS');
-    s.manual = true;
-    S.hold.push(s.makeContract(0, 1, 'goods')); // the dinghy's one space
-    const offer = S.offers[0][0];
-    const ok = s.takeOffer(offer);
-    return { ok, hold: S.hold.length, disabled: document.querySelector('[data-offer]').getAttribute('aria-disabled') };
+    S.hold.length = 0;
+    S.waiting.length = 0;
+    S.deliveries = 10;
+    S.coins = 0;
+    for (const p of S.world.ports) S.respawnAt[p.id] = 1e9;
+    const p = S.world.ports[2];
+    Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0.2 });
+    S.armed[2] = true;
+    for (let i = 0; i < 60; i++) s.step(1 / 60);
+    return { mode: S.mode, wants: s.wantsDock(p) };
   });
-  assert.deepEqual(full, { ok: false, hold: 1, disabled: 'true' });
-  // Mail on time pays more than the same mail late.
-  const mail = await page.evaluate(() => {
-    const s = window.__seas;
-    const S = s.S;
-    const pays = [];
-    for (const left of [5, 0]) {
-      s.startVoyage('KAPOS');
-      s.manual = true;
-      S.coins = 0;
-      const c = s.makeContract(0, 1, 'mail');
-      c.left = left;
-      S.hold.push(c);
-      s.castOff();
-      const p = S.world.ports[1];
-      Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0 });
-      S.armed[1] = true;
-      for (let i = 0; i < 200 && !(S.mode === 'docked' && S.dock === null); i++) s.step(1 / 60);
-      pays.push(S.coins);
-    }
-    return pays;
-  });
-  assert.ok(mail[0] > mail[1], `on time ${mail[0]} > late ${mail[1]}`);
+  assert.deepEqual(past, { mode: 'sail', wants: false });
   await context.close();
 });
 
-test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on the quay from the start; one you can\'t afford changes nothing', async () => {
+test('high-seas AC-9: keel, spinnaker and galleon change the boat; the HUD shows the next one filling as coins come in; at the shipyard one button offers it once you can pay, and nothing changes if you can\'t', async () => {
   const { context, page } = await open();
   await page.click('[data-start]');
-  // On the quay from the start, with prices.
-  const yard = await page.$$eval('[data-buy]', (b) => b.map((x) => [x.dataset.buy, x.querySelector('.price').textContent, x.getAttribute('aria-disabled')]));
-  assert.deepEqual(yard, [
-    ['keel', '60', 'true'],
-    ['spinnaker', '130', 'true'],
-    ['galleon', '360', 'true'],
-  ]);
-  assert.ok(await page.evaluate(() => !!window.__seas.S.yardGalleon), 'the galleon waits at the shipyard');
-  // Can't afford: nothing changes.
-  await page.evaluate(() => (window.__seas.S.coins = 59));
-  await page.click('[data-buy="keel"]', { force: true }); // it says it's disabled; tap it anyway
+  const goal = () => page.evaluate(() => ({ goal: document.querySelector('[data-goal]').dataset.goal, label: document.querySelector('[data-goal]').getAttribute('aria-label') }));
+  assert.equal((await goal()).goal, 'keel', 'the next thing is shown from the start');
+  await page.evaluate(() => {
+    window.__seas.S.coins = 59;
+    window.__seas.renderHud();
+  });
+  assert.match((await goal()).label, /59 of 60/);
+  assert.equal(await page.evaluate(() => window.__seas.buy('keel')), false, "can't afford it");
   assert.deepEqual(await page.evaluate(() => ({ c: window.__seas.S.coins, k: window.__seas.S.owned.keel })), { c: 59, k: false });
+  assert.ok(await page.evaluate(() => !!window.__seas.S.yardGalleon), 'the galleon waits at the shipyard');
+  // With the price in hand, the shipyard is marked; docking there offers it on one button.
+  const docked = await page.evaluate(() => {
+    const s = window.__seas;
+    const S = s.S;
+    s.manual = true;
+    for (let i = 0; i < 240 && !S.hold.length; i++) s.step(1 / 60);
+    s.castOff();
+    S.hold.length = 0;
+    S.coins = 60;
+    s.renderHud();
+    const marked = s.marked();
+    const p = S.world.ports[0];
+    Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0.2 });
+    S.armed[0] = true;
+    for (let i = 0; i < 200 && !(S.mode === 'docked' && S.dock === null); i++) s.step(1 / 60);
+    return { marked, mode: S.mode, port: S.portAt };
+  });
+  assert.ok(docked.marked.includes(0), 'the shipyard is marked once you can pay');
+  assert.deepEqual([docked.mode, docked.port], ['docked', 0]);
+  assert.equal(await page.isVisible('[data-screen="buy"]'), true);
+  const box = await page.locator('[data-buy]').boundingBox();
+  assert.ok(box.width >= 44 && box.height >= 44);
+  await page.click('[data-buy]');
+  assert.deepEqual(await page.evaluate(() => ({ c: window.__seas.S.coins, k: window.__seas.S.owned.keel })), { c: 0, k: true });
+  assert.equal(await page.isVisible('[data-screen="buy"]'), false, 'the card goes once you can\'t afford the next');
   const res = await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
     const D = Math.PI / 180;
     const out = {};
+    S.owned.keel = false;
     out.dinghyWedge = s.rig().wedge / D;
     // The spinnaker on its own: downwind gets faster, the wedge stays the dinghy's.
     S.coins = 130;
@@ -367,9 +373,7 @@ test('high-seas AC-9: keel, spinnaker and galleon change the boat; each is on th
   const inShallow = await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
-    s.manual = true;
     s.castOff();
-    // A deep-water tile two tiles from a shallow one, along grid +x.
     const t = S.world.tiles;
     for (let j = 4; j < 40; j++)
       for (let i = 4; i < 37; i++) {
@@ -580,53 +584,56 @@ test('high-seas AC-13: a seed always gives the same sea; every sea links its por
   }
 });
 
-test('high-seas AC-14: with the galleon, the shipyard offers the Grand Charter, on a fair wind; the lighthouse ends the voyage with its time and the sea\'s best; then a new sea or the same', async () => {
+test('high-seas AC-14: with the galleon, the lighthouse keeper waits at the shipyard and boards on a fair wind; taking them home ends the voyage with its time and the sea\'s best; then a new sea or the same', async () => {
   const { context, page } = await open({ hash: 'LUMEN' });
   await page.click('[data-start]');
-  assert.equal(await page.locator('[data-charter]').count(), 0, 'no charter without the galleon');
-  await page.evaluate(() => {
-    const s = window.__seas;
-    s.manual = true;
-    s.S.coins = 400;
-    s.buy('galleon');
-  });
-  assert.equal(await page.locator('[data-charter]').count(), 1);
-  await page.click('[data-charter]');
+  assert.equal(await page.evaluate(() => window.__seas.S.waiting.some((w) => w.c.kind === 'charter')), false, 'no keeper without the galleon');
   const r = await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
-    // A fair wind for the charter: within a few seconds the lighthouse lies 135° off the wind.
+    s.manual = true;
+    S.coins = 400;
+    S.deliveries = 5;
+    s.buy('galleon');
+    const keeper = S.waiting.some((w) => w.c.kind === 'charter' && w.at === 0);
+    for (let i = 0; i < 60 * 6 && !S.hold.some((c) => c.kind === 'charter'); i++) s.step(1 / 60);
+    const aboard = S.hold.some((c) => c.kind === 'charter');
+    // A fair wind for the last passage: within a few seconds the lighthouse lies 135° off the wind.
     for (let i = 0; i < 60 * 6; i++) s.step(1 / 60);
     const y = S.world.ports[0];
     const lh = S.world.lighthouse;
-    const bearing = Math.atan2(lh.ry - y.ry, lh.rx - y.rx);
+    const route = s.routePath(S.world.deep, y.rx, y.ry, lh.rx, lh.ry);
+    const ahead = route[Math.min(route.length - 1, 10)];
+    const bearing = Math.atan2(ahead.y - y.ry, ahead.x - y.rx);
     const off = Math.abs(Math.atan2(Math.sin(bearing - S.wind.dir - Math.PI), Math.cos(bearing - S.wind.dir - Math.PI)));
-    window.__fair = { off: (off * 180) / Math.PI, next: S.wind.next };
+    const fair = { off: (off * 180) / Math.PI, next: S.wind.next };
     s.castOff();
-    // Sailing through another port's ring with only the charter aboard doesn't stop the voyage.
+    S.hold = S.hold.filter((c) => c.kind === 'charter');
+    // Sailing through another port's ring with the keeper aboard doesn't stop the voyage.
     const p = S.world.ports[1];
     Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0.5 });
     S.armed[1] = true;
     for (let i = 0; i < 30; i++) s.step(1 / 60);
-    window.__passed = S.mode;
-    S.clock = 425;
-    const l = S.world.lighthouse;
-    Object.assign(S.boat, { x: l.rx, y: l.ry, v: 0 });
-    for (let i = 0; i < 200 && S.mode !== 'over'; i++) s.step(1 / 60);
-    return { mode: S.mode, best: JSON.parse(localStorage.getItem('high-seas-best')) };
+    const passed = S.mode;
+    S.clock = 424;
+    Object.assign(S.boat, { x: lh.rx, y: lh.ry, v: 0 });
+    for (let i = 0; i < 400 && S.mode !== 'over'; i++) s.step(1 / 60);
+    return { keeper, aboard, fair, passed, mode: S.mode, time: S.done.time, best: JSON.parse(localStorage.getItem('high-seas-best')) };
   });
-  assert.equal(await page.evaluate(() => window.__passed), 'sail', 'no stop on the way');
-  const fair = await page.evaluate(() => window.__fair);
-  near(fair.off, 135, 0.5, 'the lighthouse on a broad reach');
-  assert.equal(fair.next, null, 'and no further shift is coming');
+  assert.equal(r.keeper, true, 'the keeper waits at the shipyard once the galleon is yours');
+  assert.equal(r.aboard, true, 'and boards');
+  near(r.fair.off, 135, 0.5, 'the way out to the lighthouse on a broad reach');
+  assert.equal(r.fair.next, null, 'and no further shift is coming');
+  assert.equal(r.passed, 'sail', 'no stop on the way');
   assert.equal(r.mode, 'over');
   assert.equal(await page.isVisible('[data-screen="over"]'), true);
-  assert.equal(await page.textContent('[data-final-time]'), '7:06');
-  assert.equal(r.best.LUMEN, 426);
+  assert.ok(r.time > 424 && r.time < 428, `the voyage clock, ${r.time}`);
+  assert.equal(await page.textContent('[data-final-time]'), `7:0${Math.floor(r.time) - 420}`);
+  assert.equal(r.best.LUMEN, Math.round(r.time));
   await page.click('[data-same]');
   assert.equal(await page.isVisible('[data-screen="start"]'), true);
   assert.equal(await page.textContent('[data-sea-name]'), 'LUMEN');
-  assert.match(await page.textContent('[data-sea-best]'), /7:06/);
+  assert.ok((await page.textContent('[data-sea-best]')).includes(`7:0${Math.round(r.time) - 420}`), 'the best shown');
   await page.click('[data-new-sea]');
   assert.notEqual(await page.textContent('[data-sea-name]'), 'LUMEN');
   await context.close();
@@ -679,7 +686,7 @@ test('high-seas AC-15: the address keeps the voyage after a port; reloading resu
 test('high-seas AC-16: hiding the page pauses the voyage; nothing moves until a tap', async () => {
   const { context, page } = await open();
   await page.click('[data-start]');
-  await page.click('[data-cast]');
+  await page.evaluate(() => window.__seas.castOff());
   const before = await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -770,7 +777,7 @@ test('high-seas AC-20: on a phone nothing scrolls, buttons are 44 px or more, th
   }));
   assert.ok(dims.scroll <= 0, 'no scroll');
   assert.ok(dims.cw <= dims.w * 2, `canvas ${dims.cw} for ${dims.w} css px`);
-  await page.click('[data-cast]');
+  await page.evaluate(() => window.__seas.castOff());
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForTimeout(1500);
   const land = await page.evaluate(() => {
@@ -882,17 +889,28 @@ test('high-seas: each state shows only its own cards and HUD, as in the spec\'s 
       };
       return {
         start: vis('[data-screen="start"]'),
-        port: vis('[data-screen="port"]'),
+        buy: vis('[data-screen="buy"]'),
         hud: vis('[data-hud]'),
         over: vis('[data-screen="over"]'),
         pause: vis('[data-screen="pause"]'),
       };
     });
-  const row = (start, port, hud, over, pause) => ({ start, port, hud, over, pause });
+  const row = (start, buy, hud, over, pause) => ({ start, buy, hud, over, pause });
   assert.deepEqual(await shown(), row(true, false, false, false, false), 'Start');
   await page.click('[data-start]');
-  assert.deepEqual(await shown(), row(false, true, true, false, false), 'Docked');
-  await page.click('[data-cast]');
+  assert.deepEqual(await shown(), row(false, false, true, false, false), 'Docked');
+  await page.evaluate(() => {
+    const s = window.__seas;
+    s.manual = true;
+    s.S.coins = 60;
+    s.castOff();
+    const p = s.S.world.ports[0];
+    Object.assign(s.S.boat, { x: p.rx, y: p.ry, v: 0.2 });
+    s.S.armed[0] = true;
+    for (let i = 0; i < 200 && !(s.S.mode === 'docked' && s.S.dock === null); i++) s.step(1 / 60);
+  });
+  assert.deepEqual(await shown(), row(false, true, true, false, false), 'Docked at the shipyard, able to buy');
+  await page.evaluate(() => window.__seas.castOff());
   assert.deepEqual(await shown(), row(false, false, true, false, false), 'Sailing');
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
@@ -903,17 +921,112 @@ test('high-seas: each state shows only its own cards and HUD, as in the spec\'s 
   await page.evaluate(() => {
     const s = window.__seas;
     const S = s.S;
-    s.manual = true;
-    S.mode = 'docked';
-    S.portAt = 0;
-    S.coins = 400;
-    s.buy('galleon');
-    s.takeCharter();
-    s.castOff();
+    S.hold.push(s.makeContract(0, 'lighthouse', 'charter'));
     const l = S.world.lighthouse;
     Object.assign(S.boat, { x: l.rx, y: l.ry, v: 0 });
-    for (let i = 0; i < 200 && S.mode !== 'over'; i++) s.step(1 / 60);
+    S.armed.lighthouse = true;
+    for (let i = 0; i < 400 && S.mode !== 'over'; i++) s.step(1 / 60);
   });
   assert.deepEqual(await shown(), row(false, false, false, true, false), 'Voyage over');
   await context.close();
 });
+
+test('high-seas AC-23: the first trips bring one passenger at a time; then people wait at every port, each with a flag of their destination\'s colour and shape and coin bags for the fare; boarding marks their destination', async () => {
+  const { context, page } = await open();
+  await page.click('[data-start]');
+  const r = await page.evaluate(() => {
+    const s = window.__seas;
+    const S = s.S;
+    s.manual = true;
+    const guided = [];
+    for (let trip = 0; trip < 3; trip++) {
+      for (let i = 0; i < 300 && !S.hold.length; i++) s.step(1 / 60);
+      guided.push({ aboard: S.hold.length, waiting: S.waiting.length, marked: s.marked(), to: S.hold[0] && S.hold[0].to });
+      const c = S.hold[0];
+      s.castOff();
+      const p = S.world.ports[c.to];
+      Object.assign(S.boat, { x: p.rx, y: p.ry, v: 0.3 });
+      S.armed[p.id] = true;
+      for (let i = 0; i < 400 && !(S.mode === 'docked' && !S.dock && !S.hops.length); i++) s.step(1 / 60);
+    }
+    for (let i = 0; i < 60 * 12; i++) s.step(1 / 60);
+    const ports = new Set(S.waiting.map((w) => w.at));
+    const people = S.waiting.map((w) => ({ colour: w.c.colour, shape: w.c.shape, bags: w.c.bags, destColour: S.world.ports[w.c.to].colour, destShape: s.shapeOf(w.c.to) }));
+    const shapes = new Set(S.world.ports.map((p) => s.shapeOf(p.id)));
+    return { guided, ports: ports.size, people, shapes: shapes.size };
+  });
+  for (const g of r.guided) {
+    assert.equal(g.aboard, 1);
+    assert.equal(g.waiting, 0, 'nobody else waits during the first trips');
+    assert.ok(g.marked.includes(g.to), 'their destination is marked');
+  }
+  assert.ok(r.ports >= 3, `people wait at ${r.ports} ports after the first trips`);
+  for (const p of r.people) {
+    assert.equal(p.colour, p.destColour);
+    assert.equal(p.shape, p.destShape);
+    assert.ok(p.bags >= 1 && p.bags <= 3);
+  }
+  assert.equal(r.shapes, 4, 'every port\'s flag has its own shape');
+  await context.close();
+});
+
+test('high-seas AC-24: other boats sail between the ports and stop at the quays; meeting one is a gentle shove that never stops you', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const s = window.__seas;
+    const S = s.S;
+    s.manual = true;
+    const n = S.traffic.length;
+    const start = S.traffic.map((t) => [t.x, t.y]);
+    for (let i = 0; i < 60 * 5; i++) s.step(1 / 60);
+    const moved = S.traffic.filter((t, k) => Math.hypot(t.x - start[k][0], t.y - start[k][1]) > 0.5).length;
+    let stopped = 0;
+    const seen = new Set();
+    for (let i = 0; i < 60 * 120; i++) {
+      s.step(1 / 60);
+      for (const t of S.traffic) if (t.wait > 0) seen.add(t.id);
+    }
+    stopped = seen.size;
+    return { n, moved, stopped };
+  });
+  assert.equal(r.n, 4);
+  assert.ok(r.moved >= 3, `${r.moved} of 4 moved in 5 s`);
+  assert.ok(r.stopped >= 3, `${r.stopped} stopped at a quay within 2 minutes`);
+  await openWater(page, { heading: 0 });
+  const bump = await page.evaluate(() => {
+    const s = window.__seas;
+    const S = s.S;
+    const t = S.traffic[0];
+    t.wait = 1e9;
+    t.x = S.boat.x + 0.6;
+    t.y = S.boat.y;
+    const x0 = S.boat.x;
+    const y0 = S.boat.y;
+    let minV = Infinity;
+    for (let i = 0; i < 60; i++) {
+      s.step(1 / 60);
+      S.boat.target = 0;
+      minV = Math.min(minV, S.boat.v);
+    }
+    return { moved: Math.hypot(S.boat.x - x0, S.boat.y - y0), knock: S.boat.knock, bump: S.boat.bump, hold: S.hold.length, mode: S.mode };
+  });
+  assert.ok(bump.moved > 0.3, `kept moving: ${bump.moved}`);
+  assert.deepEqual([bump.knock, bump.bump, bump.mode], [0, 0, 'sail']);
+  await context.close();
+});
+
+test('high-seas AC-25: until you first steer, a ghost finger shows the drag towards your passenger\'s destination; once you have, it never shows again', async () => {
+  const { context, page } = await open();
+  await page.click('[data-start]');
+  await page.waitForFunction(() => window.__seas.S.hold.length === 1 && !window.__seas.S.hops.length, null, { timeout: 5000 });
+  assert.equal(await page.evaluate(() => window.__seas.hintShown()), true);
+  await page.evaluate(() => window.__seas.steer(70, 30));
+  assert.equal(await page.evaluate(() => window.__seas.S.mode), 'sail', 'the drag casts off');
+  await page.reload();
+  await page.waitForFunction(() => window.__seas);
+  await page.click('[data-start]');
+  await page.waitForFunction(() => window.__seas.S.hold.length === 1 && !window.__seas.S.hops.length, null, { timeout: 5000 });
+  assert.equal(await page.evaluate(() => window.__seas.hintShown()), false, 'remembered in this browser');
+  await context.close();
+});
+

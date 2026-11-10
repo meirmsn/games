@@ -32,6 +32,10 @@ for n in ['035', '036', '037', '025', '019', '021', '022']:
     sprites['rock' + n] = (NATURE % (n, 0), 0.5, 0.8)
 for k in range(8):
     sprites['galleon%d' % k] = (CRAFT % (7, k), 0.55, 0.78)
+# Traffic: boats that sail between the ports on their own, in all eight headings.
+for boat, scale in [(23, 0.42), (19, 0.42), (29, 0.4), (6, 0.5)]:
+    for k in range(8):
+        sprites['traffic%d_%d' % (boat, k)] = (CRAFT % (boat, k), scale, 0.72)
 # Moored boats: houseboats, a rowboat, a tug and a buoy, in two headings each.
 for boat, frames in [(25, [0, 2]), (26, [0, 2]), (28, [0, 2]), (23, [0, 2]), (27, [0])]:
     for k in frames:

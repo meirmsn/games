@@ -7,20 +7,23 @@
 // so tests can set up a moment and check what the rules do with it.
 import { mountShell } from '../shared/game-shell.js';
 import { createIso, createCamera, sortByDepth, attachGestures } from '../shared/iso.js';
-import { makeWorld, newSeed, hashSeed, rng, wrap, tileAt, nearestNav, routeLength, DEEP, SHALLOW, SAND, GRASS, W, H } from './world.js';
+import { makeWorld, newSeed, hashSeed, rng, wrap, tileAt, nearestNav, routeLength, routePath, DEEP, SHALLOW, SAND, GRASS, W, H } from './world.js';
 import { BOATS, rig, polarAt, offWind, clampToWedge, turnTowards, heelTarget, drawDinghy } from './boat.js';
+import { drawPerson, flagCloth } from './people.js';
 import { ATLAS } from './atlas.js';
 
 // --- Tuning: every knob in one place -------------------------------------------------------------
 const TUNE = {
   firstLimit: 40, // s: the first contract's route at the starting wind
   prices: { keel: 60, spinnaker: 130, galleon: 360 },
-  goodsBase: 5, // coins for any delivery
-  goodsPerTile: 0.65, // and per tile of route
-  mailBonus: 1.6, // mail on time pays this many times the goods rate
-  mailShare: 0.4, // share of offers that are mail
-  mailSlack: 1.45, // mail window: route time at 70% speed, times this, plus mailGrace
-  mailGrace: 10,
+  goodsBase: 7, // coins for any fare
+  goodsPerTile: 0.85, // and per tile of route
+  guidedTrips: 3, // the first trips: one passenger at a time, nothing else waiting
+  respawn: 7, // s before a port has someone waiting again
+  hopTime: 0.7, // s for a passenger to hop aboard or ashore
+  residents: 5, // most delivered passengers that stay standing on a quay
+  traffic: 4, // boats that sail between the ports on their own
+  trafficSpeed: 1.05, // tiles a second
   gustEvery: 2.2, // s between gust chains
   gustMax: 14,
   gustStrength: [1.25, 1.7],
@@ -49,7 +52,7 @@ let ctx = canvas.getContext('2d'); // swapped briefly while a cached bitmap is d
 const $ = (sel) => document.querySelector(sel);
 const screens = {
   start: $('[data-screen="start"]'),
-  port: $('[data-screen="port"]'),
+  buy: $('[data-screen="buy"]'),
   pause: $('[data-screen="pause"]'),
   over: $('[data-screen="over"]'),
 };
@@ -95,7 +98,7 @@ function resize() {
   canvas.height = Math.round(h * dpr);
   cam.resize(w, h);
   // The dinghy about 48 px long on a phone, a little bigger on bigger screens.
-  baseZoom = Math.max(1, Math.min(1.6, Math.min(w, h) / 390));
+  baseZoom = Math.max(1.4, Math.min(1.9, (Math.min(w, h) / 390) * 1.4));
   const wb = worldBox();
   cam.minZoom = Math.min(baseZoom, cam.fitZoom(wb, 12));
   cam.maxZoom = baseZoom * 2;
@@ -122,9 +125,13 @@ const S = {
   coins: 0,
   owned: { keel: false, spinnaker: false, galleon: false },
   deliveries: 0,
-  hold: [], // contracts aboard
-  offers: {}, // port id -> [contract]
-  crates: [], // floating cargo: { x, y, c }
+  hold: [], // passengers aboard
+  waiting: [], // passengers waiting on jetties: { c, at, t, respawn }
+  residents: {}, // port id -> passengers delivered there, standing on its quay
+  hops: [], // passengers hopping between boat and jetty: { c, port, on, t }
+  respawnAt: {}, // port id -> clock when someone may wait there again
+  traffic: [],
+  crates: [], // passengers in the water: { x, y, c }
   gusts: [],
   gustIn: 1,
   wind: { dir: 0, strength: 1, next: null, shiftAt: Infinity, from: 0, turnT: 0 },
@@ -171,6 +178,7 @@ function loadSea(seed) {
   S.gusts = [];
   S.crates = [];
   for (let k = 0; k < 6; k++) spawnGusts(true);
+  makeTraffic();
   const box = worldBox();
   cam.bounds = { minX: box.minX + 40, maxX: box.maxX - 40, minY: box.minY + 40, maxY: box.maxY - 40 };
   cam.lookAt(iso.toScreen(S.boat.x, S.boat.y));
@@ -182,13 +190,17 @@ function resetVoyage() {
   S.owned = { keel: false, spinnaker: false, galleon: false };
   S.deliveries = 0;
   S.hold = [];
-  S.offers = {};
+  S.waiting = [];
+  S.residents = {};
+  S.hops = [];
+  S.respawnAt = {};
   S.crates = [];
   S.shifts = 0;
   S.wind.next = null;
   S.wind.shiftAt = Infinity;
   S.wind.turnT = 0;
   S.wind.fair = false;
+  S.wind.fairGoal = undefined;
   S.done = null;
   S.paid = null;
   S.slowFor = 0;
@@ -225,72 +237,84 @@ function placeById(id) {
   return id === 'lighthouse' ? S.world.lighthouse : S.world.ports[id];
 }
 
-function makeContract(from, to, kind) {
+// A passenger: where they're going, their fare, and how they look. kind is 'fare' or 'charter'
+// (the lighthouse keeper, who ends the voyage).
+const COATS = ['#3d5a80', '#9c6644', '#6d597a', '#2a9d8f', '#bc4749', '#e9c46a', '#577590', '#8d6e63'];
+function makeContract(from, to, kind = 'fare') {
   const w = S.world;
   const a = placeById(from);
   const b = placeById(to);
   const len = routeLength(w.light, a.rx, a.ry, b.rx, b.ry);
-  const goods = Math.round(TUNE.goodsBase + TUNE.goodsPerTile * len);
-  const c = { id: nextId++, from, to, kind, colour: b.colour, name: b.name, goods, len };
-  if (kind === 'mail') {
-    c.window = Math.round((len / (BOATS.dinghy.top * 0.7)) * TUNE.mailSlack + TUNE.mailGrace);
-    c.left = c.window;
-    c.pay = Math.round(goods * TUNE.mailBonus);
-  } else if (kind === 'charter') {
-    c.pay = 0;
-  } else c.pay = goods;
+  const pay = kind === 'charter' ? 0 : Math.round(TUNE.goodsBase + TUNE.goodsPerTile * len);
+  const c = { id: nextId++, from, to, kind, colour: b.colour, shape: shapeOf(to), name: b.name, pay, len };
+  c.bags = pay < 15 ? 1 : pay < 25 ? 2 : 3; // coin bags at their feet: what the fare is worth
+  c.coat = kind === 'charter' ? '#f4f1e8' : COATS[Math.floor(S.rand() * COATS.length)];
   return c;
 }
 
-function makeOffers(port) {
-  const others = S.world.ports.filter((p) => p.id !== port.id);
-  const list = [];
-  if (port.id === 0 && S.deliveries === 0 && !S.hold.length) {
-    // The very first: a short hop on a reach.
-    list.push(makeContract(0, S.world.first.port, 'goods'));
-  }
-  while (list.length < 2) {
-    const to = others[Math.floor(S.rand() * others.length)];
-    if (list.some((c) => c.to === to.id)) continue;
-    list.push(makeContract(port.id, to.id, S.rand() < TUNE.mailShare && S.deliveries > 0 ? 'mail' : 'goods'));
-  }
-  return list;
-}
+// Each place's flag has its own shape as well as its colour, so destinations read without colour.
+const SHAPES = ['square', 'pennant', 'swallow', 'triangle'];
+const shapeOf = (id) => (id === 'lighthouse' ? 'star' : SHAPES[id % SHAPES.length]);
 
 function holdRoom() {
   return currentRig().cargo - S.hold.length;
 }
 
-function takeOffer(c) {
-  if (S.mode !== 'docked') return false;
-  if (holdRoom() <= 0) {
-    renderPort(); // the cards show the hold is full
-    return false;
+// Where someone waits on a port's jetty: near its end, by the berth.
+function jettySpot(p, k = 0) {
+  const [di, dj] = p.dir;
+  const back = 0.55 + k * 0.32;
+  return { x: p.bx - di * back - dj * 0.12, y: p.by - dj * back + di * 0.12 };
+}
+
+function spawnWaiting(at, to, kind = 'fare') {
+  const port = placeById(at);
+  const c = makeContract(at, to, kind);
+  S.waiting.push({ c, at, t: 0 });
+  void port;
+  return c;
+}
+
+// Keep people waiting. The first trips are guided: one passenger at a time, at the port you're at.
+// After that every port has someone (two, once you sail the galleon), and you choose where to go.
+// With the galleon, the lighthouse keeper waits at the shipyard for the last passage.
+function refillWaiting() {
+  const ports = S.world.ports;
+  const others = (id) => ports.filter((p) => p.id !== id);
+  const pick = (id) => {
+    const list = others(id).filter((p) => !S.waiting.some((w) => w.at === id && w.c.to === p.id));
+    return (list.length ? list : others(id))[Math.floor(S.rand() * (list.length || others(id).length))].id;
+  };
+  if (S.deliveries < TUNE.guidedTrips && !S.owned.galleon) {
+    if (S.waiting.length || S.hold.length || S.hops.length || S.crates.length) return;
+    const at = S.portAt;
+    const to = S.deliveries === 0 && at === 0 ? S.world.first.port : pick(at);
+    spawnWaiting(at, to);
+    return;
   }
-  const list = S.offers[S.portAt] || [];
-  const k = list.indexOf(c);
-  if (k < 0) return false;
-  list.splice(k, 1);
-  S.hold.push(c);
-  play('load', { rate: 0.95 + Math.random() * 0.1 });
-  renderPort();
-  renderHud();
-  return true;
+  const want = S.owned.galleon ? 2 : 1;
+  for (const p of ports) {
+    const here = S.waiting.filter((w) => w.at === p.id && w.c.kind === 'fare').length;
+    if (here < want && (S.respawnAt[p.id] || 0) <= S.clock) {
+      spawnWaiting(p.id, pick(p.id));
+      S.respawnAt[p.id] = S.clock + TUNE.respawn * 0.5;
+    }
+  }
+  const keeper = S.waiting.some((w) => w.c.kind === 'charter') || S.hold.some((c) => c.kind === 'charter') || S.crates.some((cr) => cr.c.kind === 'charter') || S.hops.some((h) => h.c.kind === 'charter');
+  if (S.owned.galleon && !keeper) spawnWaiting(0, 'lighthouse', 'charter');
 }
 
-function takeCharter() {
-  if (S.mode !== 'docked' || S.portAt !== 0 || !S.owned.galleon || holdRoom() <= 0) return false;
-  if (S.hold.some((c) => c.kind === 'charter')) return false;
-  S.hold.push(makeContract(0, 'lighthouse', 'charter'));
-  play('load');
-  fairWind();
-  renderPort();
-  renderHud();
-  return true;
+// What the shipyard sells next, in order, and whether you can pay for it.
+function nextBuy() {
+  return ['keel', 'spinnaker', 'galleon'].find((w) => !S.owned[w]) || null;
 }
+const canBuyNext = () => {
+  const w = nextBuy();
+  return !!w && S.coins >= TUNE.prices[w];
+};
 
-function buy(what) {
-  if (S.mode !== 'docked' || S.portAt !== 0) return false;
+function buy(what = nextBuy()) {
+  if (S.mode !== 'docked' || S.portAt !== 0 || !what) return false;
   if (S.owned[what]) return false;
   if ((what === 'keel' || what === 'spinnaker') && S.owned.galleon) return false;
   const price = TUNE.prices[what];
@@ -301,58 +325,112 @@ function buy(what) {
     const b = S.boat;
     S.boat = newBoat(b.x, b.y, b.h);
     scheduleShift(TUNE.shiftWarn);
+    refillWaiting();
   }
   play('buy');
-  fxText(S.boat.x, S.boat.y, what === 'galleon' ? 'The galleon is yours' : what === 'keel' ? 'Keel fitted' : 'Spinnaker aboard', '#ffd23f');
+  fxText(S.boat.x, S.boat.y, '★', '#ffd23f');
   saveHash();
-  renderPort();
+  showScreen(canBuyNext() ? 'buy' : null);
+  renderBuy();
   renderHud();
   return true;
+}
+
+// Does this port give the boat a reason to stop? Someone to drop off, someone waiting with a seat
+// free, or the shipyard with something you can afford. Otherwise the boat sails past.
+function wantsDock(p) {
+  if (S.hold.some((c) => c.to === p.id)) return true;
+  if (S.hold.some((c) => c.kind === 'charter')) return false; // the last passage: no detours
+  if (p.id === 'lighthouse') return false;
+  // Someone waiting, and a seat for them.
+  if (holdRoom() > 0 && S.waiting.some((w) => w.at === p.id)) return true;
+  return p.id === 0 && canBuyNext();
 }
 
 // --- Docking -------------------------------------------------------------------------------------
 function arriveAt(port, quiet) {
   S.mode = 'docked';
-  S.dock = null; // the glide is over: a drag or Cast off sails again
+  S.dock = null; // the glide is over: a drag sails again
   S.portAt = port.id;
   const b = S.boat;
   b.v = 0;
   b.heel = 0;
   b.heelHold = 0;
   S.steer = null;
-  // Unload what's bound here.
+  // Those bound here hop ashore, one after another, and are paid for.
   let paid = 0;
-  const notes = [];
+  let k = 0;
   S.hold = S.hold.filter((c) => {
     if (c.to !== port.id) return true;
-    if (c.kind === 'charter') return true; // handled below
-    const onTime = c.kind === 'mail' && c.left > 0;
-    const pay = c.kind === 'mail' ? (onTime ? c.pay : c.goods) : c.pay;
-    paid += pay;
-    S.deliveries++;
-    notes.push(c.kind === 'mail' ? (onTime ? 'mail on time' : 'mail, late') : 'goods');
+    S.hops.push({ c, port: port.id, on: false, t: -k * 0.35 });
+    k++;
+    paid += c.pay;
+    if (c.kind !== 'charter') S.deliveries++;
     if (S.deliveries === TUNE.shiftAfterDeliveries && S.wind.shiftAt === Infinity) scheduleShift(TUNE.shiftWarn);
     return false;
   });
-  if (port.id === 'lighthouse' && S.hold.some((c) => c.kind === 'charter')) {
-    endVoyage();
-    return;
-  }
   if (paid) {
     S.coins += paid;
-    S.paid = { amount: paid, notes };
+    S.paid = { amount: paid };
     play('coins');
     fxText(port.bx, port.by, `+${paid}`, '#ffd23f');
     hudBump();
   } else S.paid = null;
   if (!quiet) play('bell', { rate: 0.95 + Math.random() * 0.1 });
-  if (port.id !== 'lighthouse') {
-    S.offers[port.id] = makeOffers(port);
-    saveHash();
+  if (port.id === 'lighthouse') {
+    S.endIn = TUNE.hopTime + 0.9; // the keeper steps ashore, then the voyage ends
+    return;
   }
-  showScreen('port');
-  renderPort();
+  // Then whoever waits here hops aboard, while there's a seat.
+  S.boardIn = k * 0.35 + (k ? TUNE.hopTime : 0.5);
+  refillWaiting();
+  saveHash();
+  showScreen(port.id === 0 && canBuyNext() ? 'buy' : null);
+  renderBuy();
   renderHud();
+}
+
+// While docked: people hop ashore and aboard; the next waiting passenger boards when a seat's free.
+function stepDocked(dt) {
+  for (const h of S.hops) {
+    h.t += dt;
+    if (h.t >= TUNE.hopTime && !h.done) {
+      h.done = true;
+      if (h.on) {
+        S.hold.push(h.c);
+        play('load', { rate: 1.1 });
+        if (h.c.kind === 'charter') fairWind();
+        renderHud();
+      } else {
+        S.residents[h.port] = Math.min(TUNE.residents, (S.residents[h.port] || 0) + 1);
+        refillWaiting();
+      }
+    }
+  }
+  S.hops = S.hops.filter((h) => !h.done);
+  if (S.endIn !== undefined) {
+    S.endIn -= dt;
+    if (S.endIn <= 0) {
+      S.endIn = undefined;
+      endVoyage();
+    }
+    return;
+  }
+  if (S.mode !== 'docked' || S.dock) return;
+  S.boardIn = (S.boardIn || 0) - dt;
+  if (S.boardIn > 0) return;
+  // The lighthouse keeper boards first and sails alone: the last passage is theirs. Others board
+  // while there's a seat, unless the keeper is aboard.
+  const seats = holdRoom() - S.hops.filter((h) => h.on).length;
+  const keeperAboard = S.hold.some((c) => c.kind === 'charter') || S.hops.some((h) => h.on && h.c.kind === 'charter');
+  const here = S.waiting.filter((x) => x.at === S.portAt);
+  const w = here.find((x) => x.c.kind === 'charter') || (keeperAboard ? null : here[0]);
+  if (w && seats > 0) {
+    S.waiting.splice(S.waiting.indexOf(w), 1);
+    S.hops.push({ c: w.c, port: S.portAt, on: true, t: 0 });
+    S.respawnAt[S.portAt] = S.clock + TUNE.respawn;
+    S.boardIn = 0.45;
+  }
 }
 
 function castOff() {
@@ -367,6 +445,9 @@ function castOff() {
   b.v = r.top * 0.35;
   S.armed[S.portAt] = false;
   S.paid = null;
+  // Anyone still mid-hop finishes it: aboard if they were boarding, ashore if they were leaving.
+  for (const h of S.hops) h.t = TUNE.hopTime;
+  stepDocked(0);
   showScreen(null);
 }
 
@@ -376,7 +457,11 @@ function castOff() {
 function fairWind() {
   const y = S.world.ports[0];
   const l = S.world.lighthouse;
-  const bearing = Math.atan2(l.ry - y.ry, l.rx - y.rx);
+  // Along the galleon's actual way out: the deep-water route's first ten tiles, which is where a
+  // square-rigger has least room to beat (the route may start away from the lighthouse itself).
+  const route = routePath(S.world.deep, y.rx, y.ry, l.rx, l.ry);
+  const ahead = route ? route[Math.min(route.length - 1, 10)] : { x: l.rx, y: l.ry };
+  const bearing = Math.atan2(ahead.y - y.ry, ahead.x - y.rx);
   const a = wrap(bearing + Math.PI / 4);
   const b = wrap(bearing - Math.PI / 4);
   // The nearer of the two broad reaches to the wind that's blowing.
@@ -489,11 +574,16 @@ function step(dt) {
     return;
   }
   S.clock += dt;
-  for (const c of S.hold) if (c.kind === 'mail' && c.left > 0) c.left = Math.max(0, c.left - dt);
-  for (const cr of S.crates) if (cr.c.kind === 'mail' && cr.c.left > 0) cr.c.left = Math.max(0, cr.c.left - dt);
   stepWind(dt);
+  S.refillT = (S.refillT || 0) - dt;
+  if (S.refillT <= 0) {
+    S.refillT = 1;
+    refillWaiting();
+  }
+  for (const w of S.waiting) w.t += dt;
   if (S.mode === 'docked') {
     stepDockGlide(dt);
+    stepDocked(dt);
   } else if (S.mode === 'sail') {
     stepBoat(dt);
   }
@@ -502,6 +592,30 @@ function step(dt) {
 
 function stepWind(dt) {
   const w = S.wind;
+  // The last passage: the wind follows the galleon home, keeping the next stretch of its route
+  // on a broad reach. It swings slowly (the vane shows it), never more than 15° a second.
+  if (w.fair && w.turnT === 0 && w.next === null && S.mode === 'sail' && S.boat) {
+    S.fairT = (S.fairT || 0) - dt;
+    if (S.fairT <= 0) {
+      S.fairT = 2;
+      const b = S.boat;
+      const l = S.world.lighthouse;
+      const from = nearestNav(S.world.deep, b.x, b.y);
+      const route = routePath(S.world.deep, from.x, from.y, l.rx, l.ry);
+      if (route && route.length > 2) {
+        const ahead = route[Math.min(route.length - 1, 8)];
+        const bearing = Math.atan2(ahead.y - b.y, ahead.x - b.x);
+        const a = wrap(bearing + Math.PI / 4);
+        const c = wrap(bearing - Math.PI / 4);
+        w.fairGoal = Math.abs(wrap(a - w.dir)) <= Math.abs(wrap(c - w.dir)) ? a : c;
+      }
+    }
+    if (w.fairGoal !== undefined) {
+      const d = wrap(w.fairGoal - w.dir);
+      const step = (15 * Math.PI) / 180 * dt;
+      w.dir = Math.abs(d) <= step ? w.fairGoal : wrap(w.dir + Math.sign(d) * step);
+    }
+  }
   if (w.next !== null && S.clock >= w.shiftAt && w.turnT === 0) {
     w.from = w.dir;
     w.turnT = 1e-6;
@@ -529,7 +643,76 @@ function stepWind(dt) {
   }
 }
 
+// --- Traffic: boats with their own errands -----------------------------------------------------
+// A tug, a motorboat, a fishing rowboat and a container ship sail between the ports on engines or
+// oars (the wind doesn't trouble them), stop at each quay for a while, and go on to another.
+const TRAFFIC = [
+  { sprite: 'traffic23', speed: 0.9, pause: 5 },
+  { sprite: 'traffic19', speed: 1.5, pause: 3 },
+  { sprite: 'traffic29', speed: 0.6, pause: 7 },
+  { sprite: 'traffic6', speed: 0.75, pause: 8, big: true },
+];
+function makeTraffic() {
+  const w = S.world;
+  const r = rng(hashSeed('traffic:' + S.seed));
+  S.traffic = TRAFFIC.slice(0, TUNE.traffic).map((kind, k) => {
+    const at = w.ports[(k + 1) % w.ports.length];
+    const t = { ...kind, id: k, rand: r, at: at.id, x: at.rx, y: at.ry, h: 0, path: null, i: 0, wait: r() * 6 };
+    nextLeg(t);
+    // Spread them out along their first leg, so the sea is busy from the first frame.
+    if (t.path) {
+      t.i = Math.floor(r() * t.path.length * 0.8);
+      t.x = t.path[t.i].x;
+      t.y = t.path[t.i].y;
+      t.wait = 0;
+    }
+    return t;
+  });
+}
+function nextLeg(t) {
+  const w = S.world;
+  const others = w.ports.filter((p) => p.id !== t.at);
+  const to = others[Math.floor(t.rand() * others.length)];
+  const from = placeById(t.at);
+  t.path = routePath(w.deep, t.x, t.y, to.rx, to.ry) || routePath(w.deep, from.rx, from.ry, to.rx, to.ry);
+  t.to = to.id;
+  t.i = 0;
+}
+function stepTraffic(dt) {
+  for (const t of S.traffic) {
+    if (t.wait > 0) {
+      t.wait -= dt;
+      if (t.wait <= 0) nextLeg(t);
+      continue;
+    }
+    if (!t.path || t.i >= t.path.length) {
+      t.at = t.to;
+      t.wait = t.pause;
+      continue;
+    }
+    const tgt = t.path[t.i];
+    const dx = tgt.x - t.x;
+    const dy = tgt.y - t.y;
+    const d = Math.hypot(dx, dy);
+    const v = t.speed * dt;
+    if (d <= v) {
+      t.x = tgt.x;
+      t.y = tgt.y;
+      t.i++;
+    } else {
+      t.x += (dx / d) * v;
+      t.y += (dy / d) * v;
+    }
+    if (d > 0.01) t.h = Math.atan2(dy, dx);
+    if (Math.random() < dt * 8) {
+      S.wakes.push({ x: t.x - Math.cos(t.h) * 0.4, y: t.y - Math.sin(t.h) * 0.4, h: t.h, age: 0, v: Math.min(1, t.speed / 1.2) });
+      if (S.wakes.length > 140) S.wakes.shift();
+    }
+  }
+}
+
 function driftSea(dt) {
+  stepTraffic(dt);
   const dx = Math.cos(S.wind.dir) * TUNE.gustDrift;
   const dy = Math.sin(S.wind.dir) * TUNE.gustDrift;
   for (const g of S.gusts) {
@@ -702,10 +885,35 @@ function stepBoat(dt) {
     b.v = r.top * 0.2;
     play('bump');
     shake(0.25);
-    if (S.hold.length) spill();
+    // The dinghy pitches its passengers into the water; the galleon is big enough to keep them.
+    if (S.hold.length && !S.owned.galleon) spill();
     fxText(b.x, b.y, 'Crunch!', '#ffffff');
   }
-  // Crates to pick up.
+  // Other boats: a gentle shove apart, never damage.
+  for (const t of S.traffic) {
+    const d = Math.hypot(b.x - t.x, b.y - t.y);
+    const min = rad + (t.big ? 0.9 : 0.45);
+    if (d < min && d > 1e-6) {
+      // Shoved apart, and round: head-on, the shove turns sideways, so the boat slides past.
+      const push = (min - d) * 0.5;
+      const ax = (b.x - t.x) / d;
+      const ay = (b.y - t.y) / d;
+      const headOn = -(ax * Math.cos(b.h) + ay * Math.sin(b.h));
+      const side = ax * -Math.sin(b.h) + ay * Math.cos(b.h) >= 0 ? 1 : -1;
+      const slide = Math.max(0, headOn) * b.v * dt * 1.2;
+      const nx = b.x + ax * push - Math.sin(b.h) * side * slide;
+      const ny = b.y + ay * push + Math.cos(b.h) * side * slide;
+      if (!solid(nx, ny)) {
+        b.x = nx;
+        b.y = ny;
+      }
+      if (!t.bumped || S.clock - t.bumped > 1.5) {
+        t.bumped = S.clock;
+        play('bump', { gain: 0.35, rate: 1.3 });
+      }
+    }
+  }
+  // People in the water to pick up.
   for (const cr of S.crates.slice()) {
     if (Math.hypot(cr.x - b.x, cr.y - b.y) < 0.55 + rad * 0.5 && holdRoom() > 0) {
       S.crates.splice(S.crates.indexOf(cr), 1);
@@ -718,11 +926,7 @@ function stepBoat(dt) {
   for (const p of [...S.world.ports, S.world.lighthouse]) {
     const d = Math.hypot(p.rx - b.x, p.ry - b.y);
     if (d > TUNE.ringRearm + (S.owned.galleon ? 1.0 : 0)) S.armed[p.id] = true;
-    const charter = S.hold.some((c) => c.kind === 'charter');
-    if (p.id === 'lighthouse' && !charter) continue;
-    // With the Grand Charter aboard, the voyage is heading home: no stopping at ports on the way,
-    // except to deliver what's aboard for them.
-    if (charter && p.id !== 'lighthouse' && !S.hold.some((c) => c.to === p.id)) continue;
+    if (!wantsDock(p)) continue;
     if (d < ringR() && S.armed[p.id] && b.knock <= 0) {
       S.mode = 'docked';
       S.dock = { t: 0, fromX: b.x, fromY: b.y, fromH: b.h, port: p };
@@ -861,90 +1065,43 @@ function hudBump() {
   el.classList.add('bump');
 }
 
+// Small pictures, no words: the next thing the shipyard sells, and the lighthouse at the end.
+const ICONS = {
+  keel: '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 17h30l-5 7H10z" fill="#c9553f"/><path d="M17 24h7l-2 11h-3z" fill="#2f6f9f"/><path d="M20 4v13" stroke="#6b4a2b" stroke-width="2"/><path d="M21 5l9 11h-9z" fill="#fbf6ea"/></svg>',
+  spinnaker: '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 27h28l-4 6H9z" fill="#2f6f9f"/><path d="M15 6v21" stroke="#6b4a2b" stroke-width="2"/><path d="M16 7c14 1 19 10 13 19H16z" fill="#e8604c"/><path d="M16 7c8 3 10 10 7 19h-7z" fill="#fbf6ea"/></svg>',
+  galleon: '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M3 26h34l-5 8H9z" fill="#9c6b3c"/><path d="M10 26V8M20 26V5M30 26V9" stroke="#6b4a2b" stroke-width="2"/><path d="M5 10h10l-1 12H6zM15 7h10l-1 16h-8zM25 11h10l-1 11h-8z" fill="#fbf6ea"/></svg>',
+  lighthouse: '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M15 36l2-24h6l2 24z" fill="#fbf6ea"/><path d="M15.7 28h8.6l.4 4h-9.4zM16.6 18h6.8l.4 4h-7.6z" fill="#e8604c"/><path d="M14 12h12l-2-5h-8z" fill="#2f3a44"/><circle cx="20" cy="9" r="2.4" fill="#ffd23f"/></svg>',
+};
+
 function renderHud() {
   $('[data-coins]').textContent = S.coins;
+  // Seats: one per passenger the boat can carry, filled in their coat's colour.
   const hold = $('[data-hold]');
   const cap = currentRig().cargo;
   const parts = [];
   for (let k = 0; k < cap; k++) {
     const c = S.hold[k];
-    if (!c) {
-      parts.push('<span class="slot"></span>');
-      continue;
-    }
-    let ring = '';
-    if (c.kind === 'mail') {
-      const f = c.left / c.window;
-      ring = `<svg class="ring" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="none" stroke="${f > 0 ? '#fff' : 'transparent'}" stroke-width="3" stroke-dasharray="${(f * 100.5).toFixed(1)} 200" /></svg>`;
-    }
-    parts.push(`<span class="slot full ${c.kind}" style="--c:${c.colour}">${ring}</span>`);
+    parts.push(c ? `<span class="slot full" style="--c:${c.colour}"></span>` : '<span class="slot"></span>');
   }
   hold.innerHTML = parts.join('');
+  // The goal: the next thing to buy, filling as the coins come in; then the lighthouse.
+  const what = nextBuy();
+  const goal = $('[data-goal]');
+  const f = what ? Math.min(1, S.coins / TUNE.prices[what]) : 1;
+  goal.dataset.goal = what || 'lighthouse';
+  goal.classList.toggle('ready', !!what && f >= 1);
+  goal.setAttribute('aria-label', what ? `Next: the ${what}, ${S.coins} of ${TUNE.prices[what]} coins` : 'Next: the lighthouse');
+  goal.innerHTML = `${ICONS[what || 'lighthouse']}<svg class="ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="20" fill="none" stroke="rgb(255 255 255 / 25%)" stroke-width="3"/><circle cx="22" cy="22" r="20" fill="none" stroke="#ffd23f" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(f * 125.7).toFixed(1)} 200"/></svg>`;
 }
 
-function offerLabel(c) {
-  if (c.kind === 'charter') return 'The Grand Charter';
-  if (c.kind === 'mail') return `Mail · ${c.window} s`;
-  return 'Goods';
-}
-
-function renderPort() {
-  if (S.mode !== 'docked') return;
-  const port = placeById(S.portAt);
-  $('[data-port-name]').textContent = port.name;
-  $('[data-port-flag]').style.setProperty('--c', port.colour);
-  const paid = $('[data-paid]');
-  if (S.paid) {
-    paid.hidden = false;
-    paid.textContent = `+${S.paid.amount} coins`;
-  } else paid.hidden = true;
-  const offers = $('[data-offers]');
-  offers.innerHTML = '';
-  const room = holdRoom();
-  const list = S.offers[S.portAt] || [];
-  if (S.portAt === 0 && S.owned.galleon && !S.hold.some((c) => c.kind === 'charter')) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'offer charter';
-    btn.dataset.charter = '';
-    btn.setAttribute('aria-disabled', String(room <= 0));
-    btn.innerHTML = `<span class="swatch" style="--c:#fff"></span><span class="to">The Lighthouse<span class="kind">The Grand Charter: the voyage's end</span></span><span class="pay">★</span>`;
-    btn.addEventListener('click', () => takeCharter());
-    offers.appendChild(btn);
-  }
-  for (const c of list) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'offer';
-    btn.dataset.offer = c.id;
-    btn.setAttribute('aria-disabled', String(room <= 0));
-    btn.innerHTML = `<span class="swatch" style="--c:${c.colour}"></span><span class="to">${c.name}<span class="kind">${offerLabel(c)}</span></span><span class="pay">${c.pay}</span>`;
-    btn.addEventListener('click', () => takeOffer(c));
-    offers.appendChild(btn);
-  }
-  const yard = $('[data-yard]');
-  yard.hidden = S.portAt !== 0 || S.owned.galleon;
-  if (S.portAt === 0 && !S.owned.galleon) {
-    const items = [
-      ['keel', 'Keel'],
-      ['spinnaker', 'Spinnaker'],
-      ['galleon', 'Galleon'],
-    ];
-    yard.innerHTML = '';
-    yard.style.gridTemplateColumns = `repeat(${items.length}, 1fr)`;
-    for (const [what, label] of items) {
-      const owned = S.owned[what];
-      const can = !owned && S.coins >= TUNE.prices[what];
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'buy' + (owned ? ' owned' : '');
-      btn.dataset.buy = what;
-      btn.setAttribute('aria-disabled', String(!can));
-      btn.innerHTML = `<span class="what">${label}</span><span class="price">${owned ? 'Yours' : TUNE.prices[what]}</span>`;
-      btn.addEventListener('click', () => buy(what));
-      yard.appendChild(btn);
-    }
-  }
+// At the shipyard, when you can afford it: one button, the picture of what's next and its price.
+function renderBuy() {
+  const what = nextBuy();
+  const btn = $('[data-buy]');
+  if (!what) return;
+  btn.dataset.buy = what;
+  btn.setAttribute('aria-label', `Buy the ${what} for ${TUNE.prices[what]} coins`);
+  btn.innerHTML = `${ICONS[what]}<span class="price"><span class="coin-icon" aria-hidden="true"></span>${TUNE.prices[what]}</span>`;
 }
 
 // --- Drawing ----------------------------------------------------------------------------------
@@ -1136,50 +1293,41 @@ function ellipse(x, y, r, fill, stroke, lw) {
   }
 }
 
-// One soft dark disc, drawn once, stretched into each gust's ellipse.
-let gustBlob = null;
-function blob() {
-  if (gustBlob) return gustBlob;
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const g = c.getContext('2d');
-  const grad = g.createRadialGradient(64, 64, 13, 64, 64, 64);
-  grad.addColorStop(0, 'rgba(18,70,120,1)');
-  grad.addColorStop(0.7, 'rgba(18,70,120,0.8)');
-  grad.addColorStop(1, 'rgba(18,70,120,0)');
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 128, 128);
-  gustBlob = c;
-  return c;
-}
-
+// A gust is wind you can see on the water: a patch of ruffled sea, stretched along the wind and
+// soft at its edges, made of short dark ripples lying across the wind with a few bright glints,
+// all drifting downwind. A strong gust is denser and darker. No outline, no disc.
 function drawGusts() {
-  const img = blob();
+  const wd = S.wind.dir;
+  const along = { x: Math.cos(wd), y: Math.sin(wd) };
+  const across = { x: -along.y, y: along.x };
+  const sa = iso.gridDirToScreen(across.x, across.y);
+  ctx.lineCap = 'round';
   for (const g of S.gusts) {
     const k = gustNow(g);
     if (k <= 0) continue;
     const strong = g.g >= 1.4;
-    const c = iso.toScreen(g.x, g.y);
-    const rx = g.r * iso.tileW * 0.7071;
-    const ry = g.r * iso.tileH * 0.7071;
-    ctx.globalAlpha = (strong ? 0.32 : 0.22) * k;
-    ctx.drawImage(img, c.x - rx, c.y - ry, rx * 2, ry * 2);
-    ctx.globalAlpha = 1;
-    // Cat's paws: little dark ripples scattered inside, moving.
-    const n = Math.round(g.r * 5);
-    ctx.strokeStyle = `rgba(16,58,100,${0.45 * k})`;
-    ctx.lineWidth = 1.4;
+    const n = Math.round(g.r * g.r * (strong ? 9 : 6));
     for (let m = 0; m < n; m++) {
+      // A fixed scatter per gust (golden-angle spiral), squeezed across the wind.
       const ang = g.seed + m * 2.39996;
-      const rr = Math.sqrt((m + 0.5) / n) * g.r * 0.85;
-      const px = g.x + Math.cos(ang) * rr;
-      const py = g.y + Math.sin(ang) * rr;
-      const p = iso.toScreen(px, py);
-      const wob = Math.sin(S.t * 6 + m) * 1.5;
+      const rr = Math.sqrt((m + 0.5) / n);
+      const u = Math.cos(ang) * rr * g.r * 1.35; // along the wind: longer
+      const v = Math.sin(ang) * rr * g.r * 0.8; // across: narrower
+      const edge = 1 - rr * rr;
+      const x = g.x + along.x * u + across.x * v;
+      const y = g.y + along.y * u + across.y * v;
+      const p = iso.toScreen(x, y);
+      // Each ripple flickers in and out on its own beat, like wind catching the surface.
+      const beat = 0.5 + 0.5 * Math.sin(S.t * 5 + m * 1.7 + g.seed);
+      const a = k * edge * (0.25 + 0.55 * beat) * (strong ? 1 : 0.7);
+      if (a < 0.03) continue;
+      const len = 3 + beat * 3;
+      const bright = m % 7 === 0;
+      ctx.strokeStyle = bright ? `rgba(255,255,255,${a * 0.8})` : `rgba(20,72,118,${a})`;
+      ctx.lineWidth = bright ? 1.2 : 1.6;
       ctx.beginPath();
-      ctx.moveTo(p.x - 5, p.y + wob * 0.3);
-      ctx.lineTo(p.x - 1, p.y - 1.5);
-      ctx.lineTo(p.x + 4, p.y + wob * 0.3);
+      ctx.moveTo(p.x - sa.x * len, p.y - sa.y * len);
+      ctx.lineTo(p.x + sa.x * len, p.y + sa.y * len);
       ctx.stroke();
     }
   }
@@ -1305,9 +1453,10 @@ function drawJetty(p) {
   quad(P(a0, w, z), P(a1, w, z), P(a1, w, z - 3), P(a0, w, z - 3), '#9b6b3c');
 }
 
-function drawFlag(x, y, z, colour, size, t, big) {
+function drawFlag(x, y, z, colour, size, t, big, shape = 'square') {
   const base = iso.toScreen(x, y, z);
-  const hgt = size * (big ? 1.5 : 1);
+  // A destination's flag stands tall, rising to its height as the passenger boards.
+  const hgt = size * (big ? 2.1 : 1);
   ctx.strokeStyle = '#5b4a3a';
   ctx.lineWidth = big ? 2.5 : 2;
   ctx.beginPath();
@@ -1315,22 +1464,10 @@ function drawFlag(x, y, z, colour, size, t, big) {
   ctx.lineTo(base.x, base.y - hgt);
   ctx.stroke();
   const sd = iso.gridDirToScreen(Math.cos(S.wind.dir), Math.sin(S.wind.dir));
-  const len = (big ? 22 : 13) * (0.75 + 0.25 * Math.abs(sd.x));
   const fx = Math.sign(sd.x) || 1;
-  const wave = Math.sin(t * 8 + x) * 2.5;
-  ctx.fillStyle = colour;
-  ctx.beginPath();
-  ctx.moveTo(base.x, base.y - hgt);
-  ctx.quadraticCurveTo(base.x + fx * len * 0.5, base.y - hgt - wave, base.x + fx * len, base.y - hgt + 3 + wave * 0.5);
-  ctx.lineTo(base.x + fx * len * 0.95, base.y - hgt + (big ? 13 : 8));
-  ctx.quadraticCurveTo(base.x + fx * len * 0.5, base.y - hgt + (big ? 12 : 8) - wave, base.x, base.y - hgt + (big ? 14 : 9));
-  ctx.closePath();
-  ctx.fill();
-  if (big) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
+  const w = (big ? 26 : 13) * (0.75 + 0.25 * Math.abs(sd.x));
+  const h = big ? 17 : 9;
+  flagCloth(ctx, base.x, base.y - hgt, w, h, shape, colour, fx, Math.sin(t * 8 + x) * (big ? 2.5 : 1.5));
 }
 
 function drawLighthouse(p, t) {
@@ -1421,10 +1558,10 @@ function collectProps(items, range) {
     });
   }
   // Ports: jetty, houses and flag; the ring on the water.
-  const dests = new Set(S.hold.map((c) => c.to));
+  const marked = markedPorts();
   for (const p of [...w.ports, w.lighthouse]) {
     if (!inView(p.qx, p.qy, 6)) continue;
-    const isDest = dests.has(p.id);
+    const isDest = marked.has(p.id);
     items.push({ depth: iso.depth(p.qx, p.qy, 0.5), draw: () => drawJetty(p) });
     if (p.id !== 'lighthouse') {
       const [di, dj] = p.dir;
@@ -1442,7 +1579,7 @@ function collectProps(items, range) {
       }
     } else items.push({ depth: onTile(p.island.x, p.island.y, 1), draw: () => drawLighthouse(p, S.t) });
     const fz = LIFT[tileAt(w, p.qx, p.qy)] || 4;
-    items.push({ depth: iso.depth(p.qx, p.qy, 2), draw: () => drawFlag(p.qx, p.qy, fz, p.colour, 30, S.t, isDest) });
+    items.push({ depth: iso.depth(p.qx, p.qy, 2), draw: () => drawFlag(p.qx, p.qy, fz, p.colour, 30, S.t, isDest, shapeOf(p.id)) });
   }
   // The galleon waits at the shipyard until it's bought, with its price.
   const yard = w.ports[0];
@@ -1470,21 +1607,92 @@ function collectProps(items, range) {
     const name = ['boat28_0', 'boat25_0', 'boat26_2', 'boat23_0'][k];
     items.push({ depth: iso.depth(x, y, 1), draw: () => sprite(name, x, y, 0.42, Math.sin(S.t * 1.7 + k) * 0.8) });
   });
-  // Floating crates.
+  // Passengers knocked overboard, treading water and waving.
   for (const cr of S.crates) {
     items.push({
       depth: iso.depth(cr.x, cr.y, 1),
       draw: () => {
-        const bob = Math.sin(cr.t * 3) * 1.5;
-        ellipse(cr.x, cr.y, 0.35, 'rgba(255,255,255,0.25)');
-        const p = iso.toScreen(cr.x, cr.y, 4 + bob);
-        ctx.fillStyle = cr.c.kind === 'mail' ? '#f6f1e3' : '#b98245';
-        ctx.strokeStyle = cr.c.colour;
-        ctx.lineWidth = 2;
-        ctx.fillRect(p.x - 6, p.y - 6, 12, 10);
-        ctx.strokeRect(p.x - 6, p.y - 6, 12, 10);
+        const p = iso.toScreen(cr.x, cr.y, 0);
+        drawPerson(ctx, p.x, p.y, { coat: cr.c.coat, skin: cr.c.id, t: cr.t, swim: true });
       },
     });
+  }
+  for (const t of S.traffic) {
+    if (!inView(t.x, t.y, 3)) continue;
+    items.push({
+      depth: iso.depth(t.x, t.y, 1),
+      draw: () => sprite(`${t.sprite}_${(iso.facing(Math.cos(t.h), Math.sin(t.h)) + 3) % 8}`, t.x, t.y, 0.42, Math.sin(S.t * 1.6 + t.id) * 0.8),
+    });
+  }
+  collectPeople(items, inView);
+}
+
+// The people of the ports: passengers waiting on the jetties, those hopping aboard or ashore, and
+// those you've brought, who stay on the quay.
+const JETTY_Z = 3;
+function collectPeople(items, inView) {
+  const w = S.world;
+  const perPort = {};
+  for (const wt of S.waiting) {
+    const p = placeById(wt.at);
+    const k = (perPort[wt.at] = (perPort[wt.at] || 0) + 1) - 1;
+    const spot = jettySpot(p, k);
+    if (!inView(spot.x, spot.y, 3)) continue;
+    const toward = iso.gridDirToScreen(p.dir[0], p.dir[1]);
+    items.push({
+      depth: iso.depth(spot.x, spot.y, 1.2),
+      draw: () => {
+        const q = iso.toScreen(spot.x, spot.y, JETTY_Z);
+        // A soft pulse under their feet: someone's waiting here.
+        const k2 = (wt.t * 0.8) % 1;
+        ctx.strokeStyle = `rgba(255,255,255,${0.6 * (1 - k2)})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(q.x, q.y, 5 + k2 * 9, (5 + k2 * 9) * 0.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        drawPerson(ctx, q.x, q.y, { coat: wt.c.coat, skin: wt.c.id, t: wt.t + wt.c.id, wave: 0.85, flag: { colour: wt.c.colour, shape: wt.c.shape }, bags: wt.c.kind === 'charter' ? 0 : wt.c.bags, face: toward.x >= 0 ? 1 : -1 });
+      },
+    });
+  }
+  // Hopping between the jetty and the boat: an arc.
+  for (const h of S.hops) {
+    const p = placeById(h.port);
+    const spot = jettySpot(p);
+    const b = S.boat;
+    const f = Math.max(0, Math.min(1, h.t / TUNE.hopTime));
+    const [ax, ay, bx, by] = h.on ? [spot.x, spot.y, b.x, b.y] : [b.x, b.y, spot.x, spot.y];
+    const x = ax + (bx - ax) * f;
+    const y = ay + (by - ay) * f;
+    items.push({
+      depth: iso.depth(x, y, 1.6),
+      draw: () => {
+        const q = iso.toScreen(x, y, JETTY_Z + Math.sin(f * Math.PI) * 14);
+        drawPerson(ctx, q.x, q.y, { coat: h.c.coat, skin: h.c.id, t: S.t, wave: h.on ? 0 : 1, face: bx > ax ? 1 : -1 });
+      },
+    });
+  }
+  // On the quays: everyone you've brought, standing about, turning to watch the boat come in.
+  for (const p of [...w.ports, w.lighthouse]) {
+    const n = S.residents[p.id] || 0;
+    if (!n || !inView(p.qx, p.qy, 4)) continue;
+    const [di, dj] = p.dir;
+    for (let k = 0; k < n; k++) {
+      const a = (k - (n - 1) / 2) * 0.55;
+      const x = p.qx - di * (0.25 + (k % 2) * 0.3) - dj * a;
+      const y = p.qy - dj * (0.25 + (k % 2) * 0.3) + di * a;
+      if (tileAt(w, x, y) < SAND) continue;
+      const z = LIFT[tileAt(w, x, y)];
+      const seed = p.id === 'lighthouse' ? 7 : p.id * 5 + k;
+      items.push({
+        depth: onTile(x, y, 1.1 + k * 0.01),
+        draw: () => {
+          const q = iso.toScreen(x, y, z);
+          const bq = iso.toScreen(S.boat.x, S.boat.y);
+          const near = S.mode === 'docked' && S.portAt === p.id;
+          drawPerson(ctx, q.x, q.y, { coat: COATS[(seed * 3) % COATS.length], skin: seed, t: S.t + seed * 1.7, wave: near ? 0.6 : 0.05, face: bq.x >= q.x ? 1 : -1, scale: 0.92 });
+        },
+      });
+    }
   }
 }
 
@@ -1517,6 +1725,12 @@ function drawPlayer() {
     let h = b.h;
     if (b.knock > 0) h += b.knock * 3;
     drawGalleon(b.x, b.y, h, 1, Math.sin(S.t * 1.5) * 1.2);
+    // Passengers on deck, along the ship's middle.
+    S.hold.forEach((c, k) => {
+      const f = (k - (S.hold.length - 1) / 2) * 0.45;
+      const q = iso.toScreen(b.x + Math.cos(b.h) * f, b.y + Math.sin(b.h) * f, 20);
+      drawPerson(ctx, q.x, q.y, { coat: c.coat, skin: c.id, t: S.t + c.id, wave: 0.2, scale: 0.9 });
+    });
     return;
   }
   const sd = iso.gridDirToScreen(Math.cos(S.wind.dir), Math.sin(S.wind.dir));
@@ -1620,15 +1834,23 @@ function drawWedge(alpha) {
 }
 
 function drawRings() {
-  const dests = new Set(S.hold.map((c) => c.to));
+  const dests = markedPorts();
   for (const p of [...S.world.ports, S.world.lighthouse]) {
     if (p.id === 'lighthouse' && !dests.has('lighthouse')) continue;
     const dest = dests.has(p.id);
     const pulse = dest ? 0.5 + 0.5 * Math.sin(S.t * 4) : 0;
     ctx.setLineDash(dest ? [] : [6, 6]);
-    ellipse(p.rx, p.ry, ringR(), dest ? hexA(p.colour, 0.16 + 0.1 * pulse) : null, hexA(p.colour === '#d9d4c7' ? '#ffffff' : p.colour, dest ? 0.9 : 0.55), dest ? 3 : 2);
+    ellipse(p.rx, p.ry, ringR(), dest ? hexA(p.colour, 0.16 + 0.1 * pulse) : null, hexA(p.colour, dest ? 0.9 : 0.55), dest ? 3 : 2);
     ctx.setLineDash([]);
   }
+}
+
+// The places marked on the sea right now: where your passengers are going (their flags raised,
+// rings filled, arrows at the screen's edge), and the shipyard when you can afford what's next.
+function markedPorts() {
+  const m = new Set(S.hold.map((c) => c.to));
+  if (canBuyNext() && !(S.mode === 'docked' && S.portAt === 0)) m.add(0);
+  return m;
 }
 
 // The galleon's bow reaches the shallows by the jetty before its middle is in the dinghy's ring.
@@ -1683,7 +1905,10 @@ function drawOverlay() {
   // Chevrons to destinations off screen.
   if (S.mode === 'sail' || S.mode === 'docked') {
     const seen = new Set();
-    for (const c of S.hold) {
+    // The shipyard, in gold, when you can afford what it sells next.
+    const marks = S.hold.slice();
+    if (canBuyNext() && !(S.mode === 'docked' && S.portAt === 0)) marks.push({ to: 0, colour: '#ffd23f' });
+    for (const c of marks) {
       if (seen.has(c.to)) continue;
       seen.add(c.to);
       const p = placeById(c.to);
@@ -1702,7 +1927,7 @@ function drawOverlay() {
       ctx.save();
       ctx.translate(ex, ey);
       ctx.rotate(a);
-      ctx.fillStyle = hexA(c.colour === '#d9d4c7' ? '#ffffff' : c.colour, 0.95);
+      ctx.fillStyle = hexA(c.colour, 0.95);
       ctx.strokeStyle = 'rgba(15,42,63,0.6)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -1714,6 +1939,44 @@ function drawOverlay() {
       ctx.fill();
       ctx.stroke();
       ctx.restore();
+    }
+  }
+  // A ghost finger, until you first steer: it drags from the middle of the screen towards where
+  // your passenger is going, and the boat would follow. A gesture, not a tip.
+  if (S.mode === 'docked' && S.hold.length && !S.hops.length && !everSteered()) {
+    const c = S.hold[0];
+    const p = placeById(c.to);
+    const sp = iso.toScreen(p.rx, p.ry);
+    const v = cam.toView(sp.x, sp.y);
+    const bp = iso.toScreen(S.boat.x, S.boat.y);
+    const bv = cam.toView(bp.x, bp.y);
+    let dx = v.x - bv.x;
+    let dy = v.y - bv.y;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    const f = (S.t % 2.2) / 1.6;
+    if (f <= 1) {
+      const e = 1 - (1 - f) ** 2;
+      const x0 = w / 2 - dx * 50;
+      const y0 = h * 0.62 - dy * 50;
+      const x = x0 + dx * 100 * e;
+      const y = y0 + dy * 100 * e;
+      const a = Math.sin(f * Math.PI);
+      ctx.strokeStyle = `rgba(255,255,255,${0.5 * a})`;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${0.75 * a})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(15,42,63,${0.35 * a})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
   }
   // Where the finger went down, and the line to it now.
@@ -1765,7 +2028,7 @@ function drawMinimap(x, y, size) {
   ctx.fill();
   ctx.drawImage(miniCache.canvas, x, y, size, size / 2 + 2);
   const at = (gx, gy) => ({ x: x + ox + (gx - gy) * sx, y: y + (gx + gy) * sx * 0.5 });
-  const dests = new Set(S.hold.map((c) => c.to));
+  const dests = markedPorts();
   for (const p of [...w.ports, w.lighthouse]) {
     const q = at(p.rx, p.ry);
     ctx.fillStyle = p.colour;
@@ -1777,6 +2040,15 @@ function drawMinimap(x, y, size) {
     ctx.stroke();
   }
   if (S.boat) {
+    // Someone waiting: a little white dot by their port.
+    for (const wt of S.waiting) {
+      const p = placeById(wt.at);
+      const r = at(p.qx, p.qy);
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(r.x + 3, r.y - 3, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const q = at(S.boat.x, S.boat.y);
     ctx.fillStyle = '#fff';
     ctx.beginPath();
@@ -1876,7 +2148,7 @@ function draw() {
     // Drift slowly over the sea behind the cards.
     target.x += Math.sin(S.t * 0.07) * 160;
     target.y += Math.cos(S.t * 0.05) * 80 + 60;
-  } else if (S.mode === 'docked') target.y += cam.h * 0.18 / cam.zoom; // the sheet covers the bottom
+  }
   cam.follow(target, 0.08);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = C.deep;
@@ -1915,6 +2187,27 @@ function draw() {
 }
 
 // --- Input -------------------------------------------------------------------------------------------
+// Once you've steered, the ghost finger never shows again (in this browser).
+const STEERED_KEY = 'high-seas-steered';
+let steered = null;
+function everSteered() {
+  if (steered === null) {
+    try {
+      steered = localStorage.getItem(STEERED_KEY) === '1';
+    } catch {
+      steered = false;
+    }
+  }
+  return steered;
+}
+function markSteered() {
+  if (steered) return;
+  steered = true;
+  try {
+    localStorage.setItem(STEERED_KEY, '1');
+  } catch {}
+}
+
 function steerFrom(p) {
   if (S.mode === 'docked' && S.dock === null) castOff();
   if (S.mode !== 'sail') return;
@@ -1922,6 +2215,7 @@ function steerFrom(p) {
   const len = Math.hypot(p.dx, p.dy);
   S.steer = { x0: p.x - p.dx, y0: p.y - p.dy, x: p.x, y: p.y, active: len > TUNE.dragDead };
   if (len <= TUNE.dragDead || b.knock > 0 || b.bump > 0) return;
+  markSteered();
   const g = iso.screenDirToGrid(p.dx, p.dy);
   const want = Math.atan2(g.y, g.x);
   const r = currentRig();
@@ -2001,7 +2295,7 @@ $('[data-new-sea]').addEventListener('click', () => {
   history.replaceState(null, '', '#' + S.seed);
   showStart();
 });
-$('[data-cast]').addEventListener('click', () => castOff());
+$('[data-buy]').addEventListener('click', () => buy());
 $('[data-resume]').addEventListener('click', () => resume());
 $('[data-again]').addEventListener('click', () => {
   S.seed = newSeed();
@@ -2036,7 +2330,7 @@ function showStart() {
 let pausedFrom = null;
 function pause() {
   if (S.mode !== 'sail' && S.mode !== 'docked') return;
-  pausedFrom = { mode: S.mode, screen: S.mode === 'docked' ? 'port' : null };
+  pausedFrom = { mode: S.mode, screen: screens.buy.hidden ? null : 'buy' };
   S.mode = 'paused';
   S.steer = null;
   S.keys.left = S.keys.right = false;
@@ -2049,7 +2343,7 @@ function resume() {
   showScreen(pausedFrom.screen);
   pausedFrom = null;
   sound.unlock();
-  renderPort();
+  renderBuy();
 }
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
@@ -2090,8 +2384,15 @@ const api = {
   step: (dt) => step(dt),
   startVoyage,
   castOff,
-  takeOffer,
-  takeCharter,
+  spawnWaiting,
+  refillWaiting,
+  wantsDock,
+  nextBuy,
+  renderHud,
+  marked: () => [...markedPorts()],
+  routePath,
+  shapeOf,
+  hintShown: () => S.mode === 'docked' && S.hold.length > 0 && !S.hops.length && !everSteered(),
   buy,
   gustAt,
   spawnGusts,

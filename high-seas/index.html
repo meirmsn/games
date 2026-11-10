@@ -19,7 +19,8 @@
 
     <div class="hud" data-hud hidden>
       <div class="coins" aria-label="Coins"><span class="coin-icon" aria-hidden="true"></span><strong data-coins>0</strong></div>
-      <div class="hold" data-hold aria-label="Cargo aboard"></div>
+      <div class="hold" data-hold aria-label="Passengers aboard"></div>
+      <div class="goal" data-goal role="img"></div>
     </div>
 
     <button class="mute" type="button" data-mute aria-pressed="false" aria-label="Mute">
@@ -35,15 +36,8 @@
       <button class="link" type="button" data-new-sea>A different sea</button>
     </section>
 
-    <section class="sheet" data-screen="port" hidden>
-      <header class="sheet-head">
-        <span class="port-flag" data-port-flag></span>
-        <h2 data-port-name>Port</h2>
-        <button class="cast" type="button" data-cast>Cast off</button>
-      </header>
-      <p class="paid" data-paid hidden></p>
-      <div class="offers" data-offers></div>
-      <div class="yard" data-yard hidden></div>
+    <section class="buy-card" data-screen="buy" hidden>
+      <button class="buy" type="button" data-buy aria-label="Buy"></button>
     </section>
 
     <section class="card" data-screen="pause" hidden>
