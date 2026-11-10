@@ -1,4 +1,4 @@
-// End-to-end tests for Shooting Gallery (specs/shooting-gallery.md). Run: scripts/check-slow.sh.
+// End-to-end tests for Splat Gallery (specs/splat-gallery.md). Run: scripts/check-slow.sh.
 // The game exposes window.__gallery: its state, step() to advance the simulation without drawing,
 // makeTarget() to place a target, and the aim. A test that sets `manual` owns the clock: the page's
 // frames only draw.
@@ -43,7 +43,7 @@ async function open(opts = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
-  await page.goto(BASE + 'shooting-gallery/');
+  await page.goto(BASE + 'splat-gallery/');
   await page.waitForFunction(() => window.__gallery);
   return { context, page, errors };
 }
@@ -113,7 +113,7 @@ const steps = (page, seconds) =>
   }, seconds);
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
-test('shooting-gallery AC-1: the booth moves behind the start card; Start begins round 1 with the slingshot, no gun and no crosshair', async () => {
+test('splat-gallery AC-1: the booth moves behind the start card; Start begins round 1 with the slingshot, no gun and no crosshair', async () => {
   const { context, page, errors } = await open();
   assert.ok(await page.locator('[data-screen="start"]').isVisible());
   const before = await page.evaluate(() => window.__gallery.targets().map((t) => [t.id, t.x]));
@@ -137,7 +137,7 @@ test('shooting-gallery AC-1: the booth moves behind the start card; Start begins
   await context.close();
 });
 
-test('shooting-gallery AC-2: a pull lands the ball by a separable, linear rule at any height; the pouch follows the pull', async () => {
+test('splat-gallery AC-2: a pull lands the ball by a separable, linear rule at any height; the pouch follows the pull', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
@@ -182,7 +182,7 @@ test('shooting-gallery AC-2: a pull lands the ball by a separable, linear rule a
   await context.close();
 });
 
-test('shooting-gallery AC-3: on touch, a pull from the counter stretches the slingshot and letting go fires; a short pull or a touch on the lanes does nothing', async () => {
+test('splat-gallery AC-3: on touch, a pull from the counter stretches the slingshot and letting go fires; a short pull or a touch on the lanes does nothing', async () => {
   const { context, page } = await open({ hasTouch: true });
   await ready(page);
   const cdp = await context.newCDPSession(page);
@@ -216,7 +216,7 @@ test('shooting-gallery AC-3: on touch, a pull from the counter stretches the sli
   await context.close();
 });
 
-test('shooting-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go', async () => {
+test('splat-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go', async () => {
   const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
   await ready(page);
   const k = await page.evaluate(() => window.__gallery.stage().k);
@@ -250,7 +250,7 @@ test('shooting-gallery AC-4: the mouse pulls and releases the slingshot; the arr
   await context.close();
 });
 
-test('shooting-gallery AC-5: the ball flies 0.18 s just above the counter up to 0.45 s at the top, and is judged when it lands', async () => {
+test('splat-gallery AC-5: the ball flies 0.18 s just above the counter up to 0.45 s at the top, and is judged when it lands', async () => {
   const { context, page } = await open();
   await ready(page);
   const times = await page.evaluate(() => [window.__gallery.flightTime(window.__gallery.L.C), window.__gallery.flightTime(window.__gallery.L.T)]);
@@ -264,7 +264,7 @@ test('shooting-gallery AC-5: the ball flies 0.18 s just above the counter up to 
   await context.close();
 });
 
-test('shooting-gallery AC-6: hits score 10 a pip, 1 near to 3 far; a bullseye doubles and returns a ball; the gold duck scores 100 and refills', async () => {
+test('splat-gallery AC-6: hits score 10 a pip, 1 near to 3 far; a bullseye doubles and returns a ball; the gold duck scores 100 and refills', async () => {
   const { context, page } = await open();
   await ready(page);
   const s0 = await state(page);
@@ -301,7 +301,7 @@ test('shooting-gallery AC-6: hits score 10 a pip, 1 near to 3 far; a bullseye do
   await context.close();
 });
 
-test('shooting-gallery AC-7: each shot is the next colour; splats land on targets or stay on the scenery, settling to 80% after 1 s, 70 at most', async () => {
+test('splat-gallery AC-7: each shot is the next colour; splats land on targets or stay on the scenery, settling to 80% after 1 s, 70 at most', async () => {
   const { context, page } = await open();
   await ready(page);
   const colours = await page.evaluate(() => {
@@ -347,7 +347,7 @@ test('shooting-gallery AC-7: each shot is the next colour; splats land on target
   await context.close();
 });
 
-test('shooting-gallery AC-8: the frontmost thing takes the shot: a strip before its targets, a hidden pop-up is safe, a back blocks', async () => {
+test('splat-gallery AC-8: the frontmost thing takes the shot: a strip before its targets, a hidden pop-up is safe, a back blocks', async () => {
   const { context, page } = await open();
   await ready(page, 4);
   const r = await page.evaluate(() => {
@@ -379,7 +379,7 @@ test('shooting-gallery AC-8: the frontmost thing takes the shot: a strip before 
   await context.close();
 });
 
-test('shooting-gallery AC-9: the hopper holds 6, spends one a shot, refills one every 0.6 s; an empty hopper fires nothing', async () => {
+test('splat-gallery AC-9: the hopper holds 6, spends one a shot, refills one every 0.6 s; an empty hopper fires nothing', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
@@ -400,7 +400,7 @@ test('shooting-gallery AC-9: the hopper holds 6, spends one a shot, refills one 
   await context.close();
 });
 
-test('shooting-gallery AC-10: when the time runs out, a met quota goes on to the next round and an unmet one ends the run', async () => {
+test('splat-gallery AC-10: when the time runs out, a met quota goes on to the next round and an unmet one ends the run', async () => {
   const { context, page } = await open();
   await ready(page);
   await page.evaluate(() => {
@@ -432,7 +432,7 @@ test('shooting-gallery AC-10: when the time runs out, a met quota goes on to the
   await context.close();
 });
 
-test('shooting-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3 far and gold); closing time doubles; never more than ×8', async () => {
+test('splat-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3 far and gold); closing time doubles; never more than ×8', async () => {
   const { context, page } = await open();
   await ready(page, 2);
   const m = await page.evaluate(() => {
@@ -451,7 +451,7 @@ test('shooting-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3
   await context.close();
 });
 
-test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the galop, faster targets, free shots for points only, the timer stopped; none comes without it', async () => {
+test('splat-gallery AC-12: hitting the frenzy target starts the frenzy: the galop, faster targets, free shots for points only, the timer stopped; none comes without it', async () => {
   const { context, page } = await open();
   await ready(page, 2, { assist: 0.5 });
   // Without the target, no frenzy comes.
@@ -512,7 +512,7 @@ test('shooting-gallery AC-12: hitting the frenzy target starts the frenzy: the g
   await context.close();
 });
 
-test('shooting-gallery AC-13: rounds bring in their elements as in the table', async () => {
+test('splat-gallery AC-13: rounds bring in their elements as in the table', async () => {
   const { context, page } = await open();
   const seen = await page.evaluate(() => {
     const g = window.__gallery;
@@ -551,7 +551,7 @@ test('shooting-gallery AC-13: rounds bring in their elements as in the table', a
   await context.close();
 });
 
-test('shooting-gallery AC-14: the layout follows the screen; turning mid-run freezes play under a veil; turning back resumes; Restart starts over in the new layout', async () => {
+test('splat-gallery AC-14: the layout follows the screen; turning mid-run freezes play under a veil; turning back resumes; Restart starts over in the new layout', async () => {
   const { context, page } = await open({ viewport: LANDSCAPE });
   assert.deepEqual(await page.evaluate(() => [window.__gallery.stage().orient, window.__gallery.L.n]), ['landscape', 3]);
   // On the start card, the booth just lays itself out again.
@@ -599,7 +599,7 @@ const hide = (page) =>
     document.dispatchEvent(new Event('visibilitychange'));
   });
 
-test('shooting-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in', async () => {
+test('splat-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in', async () => {
   const { context, page } = await open({ hasTouch: true });
   await hide(page);
   assert.ok(await page.locator('[data-screen="pause"]').isHidden(), 'no pause card on the start card');
@@ -621,7 +621,7 @@ test('shooting-gallery AC-15: hiding the page pauses a round; the resuming tap n
   await context.close();
 });
 
-test('shooting-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in round 6', async () => {
+test('splat-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in round 6', async () => {
   const { context, page } = await open();
   assert.equal(await page.evaluate(() => window.__gallery.memory.assist), 0.3, 'a new player');
   await ready(page, 2, { assist: 1 });
@@ -654,7 +654,7 @@ test('shooting-gallery AC-16: the assist grows only the body, starts at 0.3, ris
   await context.close();
 });
 
-test('shooting-gallery AC-17: the best score is kept across reloads', async () => {
+test('splat-gallery AC-17: the best score is kept across reloads', async () => {
   const { context, page } = await open();
   await ready(page);
   await page.evaluate(() => {
@@ -670,7 +670,7 @@ test('shooting-gallery AC-17: the best score is kept across reloads', async () =
   await context.close();
 });
 
-test('shooting-gallery AC-18: each state shows only its own card, banner and HUD', async () => {
+test('splat-gallery AC-18: each state shows only its own card, banner and HUD', async () => {
   const { context, page } = await open();
   const ui = () => page.evaluate(() => window.__gallery.ui());
   const row = (u) => [u.start, u.over, u.pause, u.turned, u.banner, u.hud, u.pips, u.timer];
@@ -736,7 +736,7 @@ test('shooting-gallery AC-18: each state shows only its own card, banner and HUD
   await L.context.close();
 });
 
-test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota, the frenzy target and the time running out have their sounds', async () => {
+test('splat-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota, the frenzy target and the time running out have their sounds', async () => {
   const { context, page } = await open();
   await page.click('[data-play]');
   assert.ok(await page.evaluate(() => window.__gallery.heard.includes('round')));
@@ -790,10 +790,10 @@ test('shooting-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hoppe
   await context.close();
 });
 
-test('shooting-gallery AC-21: the gallery plays offline once it has been played', async () => {
+test('splat-gallery AC-21: the gallery plays offline once it has been played', async () => {
   const context = await browser.newContext({ viewport: PORTRAIT });
   const page = await context.newPage();
-  await page.goto(BASE + 'shooting-gallery/');
+  await page.goto(BASE + 'splat-gallery/');
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
   await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
   await page.reload(); // controlled now: this load caches the game's files
@@ -807,7 +807,7 @@ test('shooting-gallery AC-21: the gallery plays offline once it has been played'
   await context.close();
 });
 
-test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, the timer’s digits beat the score’s, far targets are at least 44 px, and the counter holds no target', async () => {
+test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, the timer’s digits beat the score’s, far targets are at least 44 px, and the counter holds no target', async () => {
   for (const viewport of [PORTRAIT, { width: 360, height: 640 }, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await page.click('[data-play]');
@@ -848,7 +848,7 @@ test('shooting-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits
   }
 });
 
-test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, a rung hand bell at 10 s, a climbing bell at 5 s and a klaxon at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
+test('splat-gallery AC-23: the timer counts whole seconds in bulbs; a chime at half time, a rung hand bell at 10 s, a climbing bell at 5 s and a klaxon at 3, 2 and 1, warming to yellow, orange and red; in a frenzy it flashes yellow and dark', async () => {
   const { context, page } = await open();
   await ready(page);
   const ui = () => page.evaluate(() => window.__gallery.ui());
@@ -912,7 +912,7 @@ test('shooting-gallery AC-23: the timer counts whole seconds in bulbs; a chime a
   await context.close();
 });
 
-test('shooting-gallery AC-24: a frenzy target comes 4–10 s in and again 16–22 s if missed; easy in round 1, harder in round 2, hard from round 3', async () => {
+test('splat-gallery AC-24: a frenzy target comes 4–10 s in and again 16–22 s if missed; easy in round 1, harder in round 2, hard from round 3', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const g = window.__gallery;
@@ -962,7 +962,7 @@ test('shooting-gallery AC-24: a frenzy target comes 4–10 s in and again 16–2
   await context.close();
 });
 
-test('shooting-gallery AC-25: every target stands on a stick and rocks about its foot; a shot is judged where it is drawn', async () => {
+test('splat-gallery AC-25: every target stands on a stick and rocks about its foot; a shot is judged where it is drawn', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
@@ -1028,7 +1028,7 @@ test('shooting-gallery AC-25: every target stands on a stick and rocks about its
   await context.close();
 });
 
-test('shooting-gallery AC-26: there is no ruler beside the slingshot; a dotted arc covers only the first fifth of the flight', async () => {
+test('splat-gallery AC-26: there is no ruler beside the slingshot; a dotted arc covers only the first fifth of the flight', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
@@ -1075,7 +1075,7 @@ test('shooting-gallery AC-26: there is no ruler beside the slingshot; a dotted a
   await context.close();
 });
 
-test('shooting-gallery AC-27: in every lane a length of stick shows between a target and its strip', async () => {
+test('splat-gallery AC-27: in every lane a length of stick shows between a target and its strip', async () => {
   for (const viewport of [PORTRAIT, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await ready(page);
@@ -1094,7 +1094,7 @@ test('shooting-gallery AC-27: in every lane a length of stick shows between a ta
   }
 });
 
-test('shooting-gallery AC-28: a frenzy lights a chasing marquee of big bulbs along the top and sides', async () => {
+test('splat-gallery AC-28: a frenzy lights a chasing marquee of big bulbs along the top and sides', async () => {
   const { context, page } = await open();
   await ready(page, 2);
   const r = await page.evaluate(() => {
@@ -1130,7 +1130,7 @@ test('shooting-gallery AC-28: a frenzy lights a chasing marquee of big bulbs alo
   await context.close();
 });
 
-test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is the loudest', async () => {
+test('splat-gallery AC-29: the cards are wooden signs, and the 10 s chime is the loudest', async () => {
   const { context, page } = await open();
   const bg = (sel) => page.locator(sel).evaluate((el) => getComputedStyle(el).backgroundImage);
   assert.match(await bg('[data-screen="start"]'), /wood\.png/);
@@ -1184,7 +1184,7 @@ test('shooting-gallery AC-29: the cards are wooden signs, and the 10 s chime is 
   await context.close();
 });
 
-test('shooting-gallery AC-30: a hit target is pulled straight down with its stick, at once and gathering speed, out of sight behind its strip within 0.45 s', async () => {
+test('splat-gallery AC-30: a hit target is pulled straight down with its stick, at once and gathering speed, out of sight behind its strip within 0.45 s', async () => {
   const { context, page } = await open();
   await ready(page);
   const t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
@@ -1236,7 +1236,7 @@ test('shooting-gallery AC-30: a hit target is pulled straight down with its stic
   await context.close();
 });
 
-test('shooting-gallery AC-31: paint on the water or grass shows only below its crest, never hanging in the air above the edge', async () => {
+test('splat-gallery AC-31: paint on the water or grass shows only below its crest, never hanging in the air above the edge', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1284,7 +1284,7 @@ test('shooting-gallery AC-31: paint on the water or grass shows only below its c
   await context.close();
 });
 
-test('shooting-gallery AC-32: a target’s stick stays in the background: its tones are soft, far less contrasting than the target', async () => {
+test('splat-gallery AC-32: a target’s stick stays in the background: its tones are soft, far less contrasting than the target', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1318,7 +1318,7 @@ test('shooting-gallery AC-32: a target’s stick stays in the background: its to
   await context.close();
 });
 
-test('shooting-gallery AC-33: the score, the signs and the cards are lettered in Rye, a fairground woodtype, with worn paint', async () => {
+test('splat-gallery AC-33: the score, the signs and the cards are lettered in Rye, a fairground woodtype, with worn paint', async () => {
   const { context, page } = await open();
   await page.evaluate(() => document.fonts.load('20px Rye'));
   const css = await page.evaluate(() => {
@@ -1353,7 +1353,7 @@ test('shooting-gallery AC-33: the score, the signs and the cards are lettered in
   await context.close();
 });
 
-test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which wears marquee bulbs in its white border; the alarms stand out without blaring; the quota’s brass is textured', async () => {
+test('splat-gallery AC-34: no pink lights in a frenzy or on its target, which wears marquee bulbs in its white border; the alarms stand out without blaring; the quota’s brass is textured', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1500,7 +1500,7 @@ test('shooting-gallery AC-34: no pink lights in a frenzy or on its target, which
   await context.close();
 });
 
-test('shooting-gallery AC-35: the slingshot answers only while the clock runs: once time is up it can’t be pulled or fired, and a pull held as time runs out is dropped', async () => {
+test('splat-gallery AC-35: the slingshot answers only while the clock runs: once time is up it can’t be pulled or fired, and a pull held as time runs out is dropped', async () => {
   const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
   await ready(page);
   // A pull held as the time runs out is dropped, and letting go fires nothing.
@@ -1554,7 +1554,7 @@ test('shooting-gallery AC-35: the slingshot answers only while the clock runs: o
   await context.close();
 });
 
-test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy’s galop plays at least twice as loud as the waltz', async () => {
+test('splat-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy’s galop plays at least twice as loud as the waltz', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(() => {
@@ -1613,7 +1613,7 @@ test('shooting-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the fre
   await context.close();
 });
 
-test('shooting-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a frenzy opens with a snare roll, and its galop carries drums', async () => {
+test('splat-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a frenzy opens with a snare roll, and its galop carries drums', async () => {
   const { context, page } = await open();
   await ready(page);
   // How far a still-speed target crosses in a second, with the clock at each mark.
@@ -1686,7 +1686,7 @@ test('shooting-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a fr
   await context.close();
 });
 
-test('shooting-gallery AC-38: no two games run alike: each round draws which way every lane runs, and the frenzy target’s time, lane and side', async () => {
+test('splat-gallery AC-38: no two games run alike: each round draws which way every lane runs, and the frenzy target’s time, lane and side', async () => {
   const { context, page } = await open();
   const r = await page.evaluate(() => {
     const g = window.__gallery;
@@ -1733,7 +1733,7 @@ test('shooting-gallery AC-38: no two games run alike: each round draws which way
   await context.close();
 });
 
-test('shooting-gallery AC-39: the paintballs are flat, one colour each; the slingshot’s bands are flat strips of red rubber', async () => {
+test('splat-gallery AC-39: the paintballs are flat, one colour each; the slingshot’s bands are flat strips of red rubber', async () => {
   const { context, page } = await open();
   await ready(page);
   const r = await page.evaluate(async () => {
@@ -1781,5 +1781,32 @@ test('shooting-gallery AC-39: the paintballs are flat, one colour each; the slin
     const [R, G, B] = s.px;
     assert.ok(R > 2 * G && R > 2 * B && R < 200, `red rubber at the band's middle, not the old brown: ${s.px}`);
   }
+  await context.close();
+});
+
+test('splat-gallery AC-40: the game is named Splat Gallery on its page, its share tags and the landing tile, never "shooting"; an old best carries over', async () => {
+  const context = await browser.newContext({ viewport: PORTRAIT });
+  await context.addInitScript(FAKE_AUDIO);
+  await context.addInitScript(() => {
+    if (!localStorage.getItem('shooting-gallery')) localStorage.setItem('shooting-gallery', JSON.stringify({ best: { portrait: 4321 } }));
+  });
+  const page = await context.newPage();
+  await page.goto(BASE + 'splat-gallery/');
+  await page.waitForFunction(() => window.__gallery);
+  assert.equal(await page.title(), 'Splat Gallery');
+  const meta = (sel) => page.locator(sel).getAttribute('content');
+  assert.equal(await meta('meta[property="og:title"]'), 'Splat Gallery');
+  assert.equal(await meta('meta[name="twitter:title"]'), 'Splat Gallery');
+  assert.equal(await meta('meta[property="og:url"]'), 'https://games.meirmsn.dev/splat-gallery/');
+  assert.equal(await meta('meta[property="og:image"]'), 'https://games.meirmsn.dev/assets/previews/splat-gallery.png');
+  assert.equal(await meta('meta[name="twitter:image"]'), 'https://games.meirmsn.dev/assets/previews/splat-gallery.png');
+  assert.equal((await fetch(BASE + 'assets/previews/splat-gallery.png')).status, 200);
+  assert.doesNotMatch(await page.content(), /shooting/i, 'the game page never says "shooting"');
+  assert.equal(await page.evaluate(() => window.__gallery.memory.best.portrait), 4321, 'a best saved before the rename shows');
+  await page.goto(BASE);
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Splat Gallery' }) });
+  assert.equal(await tile.getAttribute('href'), 'splat-gallery/');
+  assert.equal(await tile.locator('img').getAttribute('src'), 'assets/tiles/splat-gallery.png');
+  assert.doesNotMatch(await page.content(), /shooting/i, 'the landing page never says "shooting"');
   await context.close();
 });
