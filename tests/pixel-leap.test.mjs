@@ -1349,7 +1349,8 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
       const c = document.getElementById('view');
       const U = L.view.U;
       const x0 = Math.round((st.next + 1 - L.cam.x) * U);
-      const y0 = Math.round((st.ground[st.next + 1] - 0.5 - L.cam.y) * U);
+      // The ground's top tile: drawn art, steadier than a sky of gradients and twinkling stars.
+      const y0 = Math.round((st.ground[st.next + 1] - L.cam.y) * U);
       const d = c.getContext('2d').getImageData(x0, y0, U, U).data;
       let soft = 0;
       for (let y = 0; y < U; y++) {
