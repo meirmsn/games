@@ -1,4 +1,4 @@
-// Shooting Gallery: a fairground paintball booth (specs/shooting-gallery.md).
+// Splat Gallery: a fairground paintball booth (specs/splat-gallery.md).
 //
 // The booth is drawn on one canvas in logical units. Portrait stacks 5 lanes, landscape 3, from the
 // far lane (small, worth the most) to the near one. Each lane is a strip of water or grass with its
@@ -113,6 +113,8 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 // ---------- Memory: the bests and the hidden assist ----------
 
+// The bests' key keeps the game's first name, so bests saved before it was renamed Splat Gallery
+// (specs/splat-gallery.md) carry over. No player sees it.
 const STORE = 'shooting-gallery';
 function load() {
   try {

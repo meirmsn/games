@@ -15,7 +15,7 @@ const W = 1200;
 const H = 630;
 
 // The collage's six, in reading order (the owner may swap them).
-const COLLAGE = ['reef', 'googly-faces', 'orbit', 'runes', 'shooting-gallery', 'walk-on-red'];
+const COLLAGE = ['reef', 'googly-faces', 'orbit', 'runes', 'splat-gallery', 'walk-on-red'];
 const SITE_NAME = 'Game explorations';
 
 // Playable games: the landing page's linked tiles (a "coming soon" card is an <article>, no link).

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Builds shooting-gallery/img/splats.png from the Kenney Splat Pack (CC0): its 36 white splat
+"""Builds splat-gallery/img/splats.png from the Kenney Splat Pack (CC0): its 36 white splat
 shapes at 128 px, in a 12 × 3 grid. The game tints each one to the paint's colour as it lands.
 The pack lives in the private assets repo; pass its folder:
-  python3 scripts/shooting-gallery/build-splats.py "<games-private>/kenney-all-in-1/2D assets/Splat Pack"
+  python3 scripts/splat-gallery/build-splats.py "<games-private>/kenney-all-in-1/2D assets/Splat Pack"
 """
 import os
 import sys
@@ -19,6 +19,6 @@ for i in range(N):
     alpha = im.getchannel('A').resize((CELL, CELL), Image.LANCZOS)
     cell = Image.merge('LA', (Image.new('L', (CELL, CELL), 255), alpha))
     sheet.paste(cell, ((i % COLS) * CELL, (i // COLS) * CELL))
-out = os.path.join(os.path.dirname(__file__), '..', '..', 'shooting-gallery', 'img', 'splats.png')
+out = os.path.join(os.path.dirname(__file__), '..', '..', 'splat-gallery', 'img', 'splats.png')
 sheet.save(out, optimize=True)
 print('wrote', os.path.relpath(out), f'{N} splats')

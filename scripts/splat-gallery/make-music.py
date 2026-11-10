@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synthesises Shooting Gallery's two carnival tunes into shooting-gallery/sounds/:
+"""Synthesises Splat Gallery's two carnival tunes into splat-gallery/sounds/:
 
   music.mp3   a calliope waltz (3/4, oom-pah-pah), the booth's music
   frenzy.mp3  a fast galop (2/4), for frenzy, driven by a marching drum kit
@@ -8,7 +8,7 @@
 Both tunes are original. A calliope is a row of steam whistles: here each note is a few detuned
 pipes (a sine with a little second and third harmonic and some breath), with a fast tremolo.
 The bass is a soft tuba-like thump; the "pah" chords are short pipe stabs.
-Run: python3 scripts/shooting-gallery/make-music.py   (needs numpy and ffmpeg)
+Run: python3 scripts/splat-gallery/make-music.py   (needs numpy and ffmpeg)
 """
 import os
 import subprocess
@@ -18,7 +18,7 @@ import wave
 import numpy as np
 
 SR = 44100
-OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'shooting-gallery', 'sounds')
+OUT = os.path.join(os.path.dirname(__file__), '..', '..', 'splat-gallery', 'sounds')
 NAMES = {'C': 0, 'C#': 1, 'D': 2, 'D#': 3, 'E': 4, 'F': 5, 'F#': 6, 'G': 7, 'G#': 8, 'A': 9, 'A#': 10, 'B': 11}
 
 
