@@ -496,11 +496,11 @@ item.
   | # | World (Kenney pack) | Style | Its own mechanic | Its kind of challenge |
   | --- | --- | --- | --- | --- |
   | 1 | Meadow (Pixel Platformer) | pixel | stomping walkers, springs | a gentle mix, to learn (built) |
-  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights |
+  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights (built) |
   | 3 | Candy (Platformer Assets Candy) | smooth | jelly bounces, crumbling cookies, slimes | tricky timing (built) |
-  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding |
-  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb |
-  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded |
+  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding (built) |
+  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb (built) |
+  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded (built) |
   | 7 | Castle (Platformer Pack Medieval) | smooth | a key opens the gate; crushers drop on a rhythm | puzzle-like situations |
   | 8 | Ice (Platformer Assets Ice; may replace today's pixel Frost) | smooth | slippery ice, snowballs rolling down slopes | precision on small ledges |
   | 9 | Sea (Platformer Pack Nautical) | smooth | swimming: you float, each tap a stroke; currents | a different control |
@@ -508,8 +508,8 @@ item.
   | 11 | Scribble (Scribble Platformer) | line art | platforms that draw themselves as you near | trust: jump before the ground is there |
   | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top |
 
-  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (next):
-  Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
+  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (this
+  change): Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
   Ice, Sea, and Ink's darkness. **Batch 4:** Scribble and Sky, then the journey's end. After each
   batch ships, the next batch's session is suggested.
 - Music: the owner will generate music for each world (and the two crossing sounds) from prompts

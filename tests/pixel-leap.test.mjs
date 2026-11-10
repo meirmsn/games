@@ -1097,6 +1097,7 @@ const BOT = `(opts) => {
     if (hold > 0) L.input.keys.add('jump');
     L.sync();
     hold -= 1 / 120;
+    if (opts.snap && Math.round(t * 120) % Math.round(opts.snap * 120) === 0) opts.onSnap(t);
     if (opts.trace && p.x > opts.trace[0] && p.x < opts.trace[1] && Math.round(t * 120) % 6 === 0) opts.tr.push([+p.x.toFixed(2), +p.y.toFixed(2), +p.vy.toFixed(1), p.ground ? 'g' : '', run, hold > 0 ? 'J' : '']);
     const coins = L.game.coins;
     const before = L.game.lives;
