@@ -786,6 +786,8 @@ test('edge-gestures AC-5: Pixel Leap keeps its deck as it was: with iPhone inset
       const gap = viewport.height - insets.bottom - (b.y + b.height);
       assert.ok(Math.abs(gap - 14) < 0.5, `${label}: the ${name} stands 14 px above the safe area (${gap})`);
     }
+    // As before #27, the pad starts at max(24 px, the left inset), with no 20 px for the left strip.
+    assert.ok(Math.abs(pad.x - Math.max(24, insets.left)) < 0.5, `${label}: the pad starts at ${pad.x}`);
     // Presses and holds aren't swipes: one that starts low on a key, inside the bottom strip, acts.
     const st = () => page.evaluate(() => ({ right: window.__leap.input.right, jump: window.__leap.input.jump }));
     const low = pad.y + pad.height - 6;
