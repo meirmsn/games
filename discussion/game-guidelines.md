@@ -76,7 +76,7 @@ challenge is mostly speed and spawn count, so later levels get harder rather tha
 
 Answer each in a line: hook; verb; a typical 5-second choice; how it teaches; the three clocks; what
 an expert does differently; why the tenth play differs from the first; short- or long-form;
-orientation; where each gesture starts, and that none the edge-strip rule forbids starts there; what a
+orientation; where each gesture starts, and that none starts where the edge-strip rule forbids; what a
 failure costs; what stands in for save games; the riskiest technical part and
 how to prove it first. An answer that could describe any game fails. Then attack it: the strongest
 case that it's dull after five minutes, unfair, unreadable on a phone, too big for one change, or

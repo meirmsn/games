@@ -92,7 +92,10 @@ design; this change moves two control bars up and adds no colours, type or compo
   pushed." So a control must clear the bottom strip when using it takes a quick sideways swipe (app
   switching) or any swipe down (Reachability); presses, holds and slow adjusting slides may sit in
   it. The left-edge and top strips keep the rule as it was. Pixel Leap's deck goes back to how it
-  was before #27 (keys 14 px above the inset, no guard: they are pressed and held). Orbit's bar, a
+  was before #27 (keys 14 px above the inset, no guard: they are pressed and held). The owner's
+  "doesn't need the safe space" covers every strip, so in landscape the pad again starts at the
+  left inset, in the left strip: a press there, and the short slide within the pad, are not a back
+  swipe from the edge. Orbit's bar, a
   slow slide, sits at half the gap #27 gave it: its foot (inset + 40 px) / 2 above the screen's
   edge (37 px on a home-screen iPhone, 20 px with no inset; the owner chose "Half the whole gap"
   over 20 px above the safe area or the pre-#27 26 px), with no guard; the probes row and the hint
