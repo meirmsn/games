@@ -458,10 +458,10 @@ item.
   four new worlds is so far only Farm's, else its sound set's loop) and draws from its own pack: Farm's and
   Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
   pack's — `tests/pixel-leap.test.mjs`.
-
 - **AC-32** A world with the owner's music plays its bed and, over it, one of its three accents
   after every 15–40 s of play, all three in turn but never the same twice running; paused, the bed
   stops and no accent comes; muting mutes the bed — `tests/pixel-leap.test.mjs`.
+
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
