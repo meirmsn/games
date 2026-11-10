@@ -149,12 +149,13 @@ goes now, and the people waiting start copying him.
 - **Three clocks:** each hop and each passing car (seconds); a new level with one new thing every
   half minute, the lights changing and everyone crossing between them (minutes); the best total and
   three stars a level to win (return).
-- **Expert vs beginner:** a beginner waits for gaps and gets few seconds, or dashes and gets hit; an
+- **Expert vs beginner:** a beginner waits for gaps and gets few seconds, or dashes, gets hit and
+  runs out of lives; an
   expert reads the traffic, waits on the kerb or the island for a gap the whole line fits through,
   then runs the lanes in one go.
 - **Tenth play vs first:** the stars you're missing, and judging gaps long enough for your followers.
-- **Form:** an arcade run of 21 levels, about 12 to 15 minutes (owner, 2026-11-09: "maybe 21");
-  each level is half a minute, so it stops cleanly between any two.
+- **Form:** an arcade run of 21 levels, about 12 to 15 minutes (owner, 2026-11-09: "maybe 21"), or
+  until the third hit; each level is half a minute, so it stops cleanly between any two.
 - **Orientation:** portrait, everywhere: the view is the zebra crossing, edge to edge, the same
   shape on a phone, a phone held sideways and a desktop.
 - **What a failure costs:** a hit costs a life and sends him back to the start (several seconds);
@@ -272,15 +273,22 @@ goes now, and the people waiting start copying him.
   was hit (owner, 2026-11-09: "it doesn't matter when they hit you. You should start from the
   beginning"). Stepping into a vehicle counts.
 - **Lives:** a run starts with 3 lives, shown in the HUD as three pixel hearts in the walk light's
-  red, beside the level's progress bar; a lost life is an empty heart. Being hit by a vehicle costs
+  red, on the progress bar's line to its right (the bar gets shorter; the HUD keeps its width and
+  the points their fixed space); a lost life is an empty heart. Being hit by a vehicle costs
   one: with lives left, the hit goes on as above (down 1.2 s, then back to the start, the walk
-  light still counting down). The hit that takes the last one knocks him down just the same, and
-  after the 1.2 s the run ends on the Game Over card. Only he has lives: a follower hit, and the
+  light still counting down). The hit that takes the last one wins over everything else: at that
+  moment the walk light stops counting, so it can't turn green under him; he lies where he was hit,
+  his followers wait where they are, the traffic drives on, the HUD stays; after the 1.2 s the run
+  ends on the Game Over card, with no going back to the start. Hiding the page during those 1.2 s
+  pauses them like any other moment, and they carry on after the tap. Only he has lives: a follower hit, and the
   walk light turning green before he's across, cost none. Lives don't come back during a run, and
   every new run starts with 3 (owner, 2026-11-10: "it should have 3 lives … when you get run over,
   you lose 1 … when you lose the 3, you're done. It's game over"; this replaces "There are no
   lives"). Rejected: the level starting again after a hit (the walk light's clock running on is
   the hit's cost already, as before), and lives refilled each level (a lost life would mean little).
+  The heading, the heart's look and the sound are Claude's choices (2026-11-10).
+  With 3 lives a player tapping straight up without looking (hit 3 to 10 times a level, below) is
+  out of lives on level 2; the hidden assist still eases the next run.
 - **Stars:** a level's score against its best possible (all its seconds × everyone across): 12% for
   one star, 28% for two, 45% for three. The best stars per level and the best total are kept.
 - **Traffic from the first second:** every level starts with every lane already full of traffic,
@@ -318,7 +326,8 @@ goes now, and the people waiting start copying him.
   21. **Grand Avenue:** three followers, the densest, sirens, 34 s.
   After level 21 the run ends with its total, the stars and the best, on the card headed
   "Across!"; out of lives, the same card is headed "Game over" and shows the total so far, the stars
-  won so far and the best, which counts that run. Either way, Play again leads to the start card,
+  won so far and the best, which counts that run; the hidden assist is kept as after any run, and
+  in place of the closing jingle the same jingle plays lower and slower. Either way, Play again leads to the start card,
   whose Start begins a new run on level 1 with 3 lives.
 - **Tuning, measured with a scripted player** (reading traffic perfectly, waiting on a kerb or
   island until the whole block of lanes ahead stays clear for him and the time his followers need,
@@ -404,8 +413,8 @@ goes now, and the people waiting start copying him.
   `tests/walk-on-red.test.mjs`.
 - **AC-11** A siren warns 2.5 s before it comes; a car it comes up behind pulls a little aside,
   and back once it has passed — `tests/walk-on-red.test.mjs`.
-- **AC-12** After level 21 the run ends with the game-over card showing the total, the stars and the
-  best; Play again leads back to the start card — `tests/walk-on-red.test.mjs`.
+- **AC-12** After level 21 the run ends with the game-over card, headed "Across!", showing the
+  total, the stars and the best; Play again leads back to the start card — `tests/walk-on-red.test.mjs`.
 - **AC-13** A hit raises the hidden assist and a follower across lowers it; a higher assist slows
   traffic; a new player's first run starts at 0.4 and a later run at 60% of the last run's —
   `tests/walk-on-red.test.mjs`.
@@ -451,9 +460,11 @@ goes now, and the people waiting start copying him.
 - **AC-28** A run starts with 3 lives, shown in the HUD as 3 hearts, and a hit empties one; a
   follower hit and the walk light turning green before he's across cost none; the next level keeps
   the lives left; a new run has 3 again — `tests/walk-on-red.test.mjs`.
-- **AC-29** The hit that takes the third life knocks him down, then ends the run: the game-over card,
-  headed "Game over", shows the total so far, the stars and the best (which counts it), with the
-  closing jingle; Play again leads to the start card, and Start begins level 1 with 3 lives —
+- **AC-29** The hit that takes the third life knocks him down where he was and stops the walk light,
+  even with under 1.2 s left on it; 1.2 s later, with no return to the start, the run ends: the
+  game-over card, headed "Game over", shows the total so far, the stars and the best (which counts
+  it), with the closing jingle played lower; Play again leads to the start card, and Start begins
+  level 1 with 3 lives —
   `tests/walk-on-red.test.mjs`.
 
 ## Core flow
@@ -476,6 +487,7 @@ goes now, and the people waiting start copying him.
 | Green: everyone crosses | hidden | hidden | hidden | shown | the score table, or "Try again" |
 | Tally | hidden | hidden | hidden | shown | the score table, or "Try again" |
 | Paused (returned from hidden) | hidden | shown | hidden | shown | as before |
+| Down on the last life (1.2 s) | hidden | hidden | hidden | shown | as before |
 | Game over (after level 21, or out of lives) | hidden | hidden | shown, "Across!" or "Game over", with the total, the stars and the best | hidden | hidden |
 
 ## Out of scope
