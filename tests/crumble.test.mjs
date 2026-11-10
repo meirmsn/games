@@ -774,6 +774,37 @@ test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with bl
   await context.close();
 });
 
+// The cause behind crumble AC-13's flake: a busy machine runs fewer frames in a given time. With the
+// CPU 10× slower, the portrait hold and the landscape resume still behave, because the checks wait on
+// frames and on the game's state, never on milliseconds.
+test('ci-flakes AC-5: the portrait hold and the landscape resume hold with frames coming slowly (CPU 10× slower)', async () => {
+  const { context, page } = await open({ viewport: { width: 390, height: 844 } });
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 10 });
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    c.store.taught = true;
+    c.startBattle(0);
+    c.fire(0, 'shell', 1.2, 0.9);
+  });
+  const x0 = await page.evaluate(() => window.__crumble.game.projectile.x);
+  await realFrames(page, 30);
+  assert.equal(await page.evaluate(() => window.__crumble.game.projectile.x), x0, 'the shell holds');
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    c.game.projectile = null;
+    c.game.shots = 1;
+    c.startTurn(1);
+  });
+  const t0 = await page.evaluate(() => window.__crumble.game.timer);
+  await realFrames(page, 60);
+  assert.equal(await page.evaluate(() => window.__crumble.game.timer), t0, "the CPU's timer holds");
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForFunction(() => window.__crumble.game.phase !== 'cpu', null, { timeout: 20000 });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  await context.close();
+});
+
 test('crumble AC-13, ci-flakes AC-4: portrait shows the turn card and pauses a battle; landscape plays; the HUD fits 640×360', async () => {
   const { context, page } = await open({ viewport: { width: 390, height: 844 } });
   assert.equal(await page.isVisible('[data-rotate]'), true);

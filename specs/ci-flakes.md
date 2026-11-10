@@ -67,8 +67,10 @@ that the owner said "yes to both" in chat on 2026-11-10.
   folder.)
 - **AC-2** On the old code, five runs of `scripts/check-slow.sh` started together on one machine show
   at least one `ERR_CONNECTION_REFUSED`, failed bind or `open()` timeout. On the new code, five such
-  runs show none. A frame-timing failure under that load is reported separately and doesn't count.
-  — verified by review: the PR shows the command and each run's result, before and after.
+  runs show none. A timing failure under that load is reported separately and doesn't count.
+  — verified by review: run `for i in 1 2 3 4 5; do scripts/check-slow.sh >/tmp/slow$i.log 2>&1 &
+  done; wait; grep -c ERR_CONNECTION_REFUSED /tmp/slow*.log` on `main` and on this branch; the PR
+  shows each run's result.
 - **AC-3** Orbit's first-fire hint test owns the game's clock from the first frame: it opens the page
   with `window.__orbitManual` set by an init script, so no real frame adds to the hint's 4 s, on the
   first visit or after the reload. The rest of what Orbit's item 22 checks is unchanged.
@@ -76,11 +78,13 @@ that the owner said "yes to both" in chat on 2026-11-10.
   never on a fixed time:
   - in portrait, after 30 and then 60 real frames, the shell holds and the CPU's timer hasn't moved;
   - in landscape, it waits (up to 10 s) for the CPU to leave its turn.
-- **AC-5** The fixes hold under the conditions that broke them, and still catch what they protect.
-  — verified by review: the PR shows each run, made with local, uncommitted probes:
-  - Orbit's test with 1.5 s between load and taking the clock fails on `main` and passes here.
-  - Crumble's pause test at a 10× CPU slowdown fails on `main` ("play goes on") and passes here.
-  - With the portrait hold removed from the game, it fails here.
+- **AC-5** The fixes hold under the conditions that broke them, as committed tests:
+  - Orbit, with the flag set before the first frame: after about 1.5 s of the page's own frames (a
+    slow load), the game is manual, its idle time is 0 and the hint is hidden. Without the game's
+    one-line change it fails.
+  - Crumble, with the CPU 10× slower: in portrait the shell and the CPU's timer hold over 30 and 60
+    real frames, and in landscape the CPU leaves its turn (waiting up to 20 s). With the portrait
+    hold removed from the game, it fails.
 - **AC-6** Outside `tests/`, the only files that change are `specs/ci-flakes.md`, `FINDINGS.md` and
   one line of `orbit/game.js` (it reads `window.__orbitManual`). — verified by review: the PR's diff.
 
