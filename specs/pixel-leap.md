@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: "Go" 2026-11-10; batch 4: pending
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: "Go" 2026-11-10; batch 4: "go" 2026-11-10
 
 ## Intent
 
@@ -455,7 +455,8 @@ item.
   Ink's sky is now flat and its far pillars dotted, so not even the light shows a third colour.
   Rejected: a light that shrinks over time (a timer
   again).
-- **Batch 4: twelve levels, in this order** (proposed, for the go): 1 Meadow (pixel, 18), 2 Ice
+- **Batch 4: twelve levels, in this order** (owner, 2026-11-10, "go" on the proposal: line art for
+  Scribble, the game-over rule kept, the additions below kept): 1 Meadow (pixel, 18), 2 Ice
   (smooth), 3 Farm (pixel), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7 Pico
   (pixel, 8), 8 Sea (smooth), 9 Ink (two colours, 16), 10 Castle (smooth), 11 Scribble (line art),
   12 Sky (smooth). Both new packs are vector, so no order of them after Castle alternates pixel and
@@ -543,7 +544,7 @@ item.
   the same monster, as after a game over). Nothing says more worlds are coming, and the old "end of
   the road, for now" title is gone. Rejected: a cutscene with text (the game has none) and an endless mode after Sky (scope;
   the owner asked for an end).
-- **Added beyond the request, for the go:** Scribble's slimes redrawn as line art, its boiling
+- **Added beyond the request, kept at the go:** Scribble's slimes redrawn as line art, its boiling
   line and the pen-scratch crossing; Sky's spikies, wings and cracked ledges; the summit and the
   twelve-monster gallery; lives left on the end card.
 - **The map holds twelve cells and the summit.** Portrait keeps three across, now in four rows;
@@ -551,8 +552,9 @@ item.
   to five for ten). A cell keeps at least 1.6 tiles across. The summit is a small pad past the
   last cell, as the start is before the first: in portrait above Sky's cell at the top row's end,
   in landscape past it at the right of the top row, below the HUD.
-- **Sound and music for batch 4:** Scribble and Sky use Candy's soft sound set and loop until the
-  owner's music; the owner's beds and accents for Industrial, Mushroom, Pico, Sea, Ink and Castle
+- **Sound and music for batch 4:** Scribble and Sky use Candy's soft sound set; their music is the
+  owner's (owner, 2026-11-10, sending Scribble's and Sky's beds and accents before the go), levelled
+  and cut as batch 2's; the owner's beds and accents for Industrial, Mushroom, Pico, Sea, Ink and Castle
   are wired as batch 2 did (`bed: true`, `sounds/<id>-bed.mp3`, `<id>-a1..3.mp3`) as they arrive.
   ElevenLabs prompts for Scribble's and Sky's bed (2:00) and accents (0:30, three phrases) go to
   the owner in the chat. The hidden assist never changes sketch tiles' drawing, Sky's bounce, its
@@ -775,8 +777,8 @@ item.
   monster; no text on the page says more worlds are coming or "for now";
   Play again starts level 1 with 3 lives — `tests/pixel-leap.test.mjs`.
 - **AC-47** Scribble's ground, sketch tiles and ticks are the Scribble pack's tiles and Sky's
-  ledges, springs, wings, flyers and spikies the Jumper Pack's; both play Candy's soft loop until
-  the owner's own music arrives; each world whose bed is in `pixel-leap/sounds/` is marked `bed:
+  ledges, springs, wings, flyers and spikies the Jumper Pack's; both play the owner's bed and
+  accents; each world whose bed is in `pixel-leap/sounds/` is marked `bed:
   true` and plays it — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
