@@ -56,7 +56,7 @@ const ALL = [
         ['flat', 4], ['step', -1], ['flat', 3], ['spikes', 3], ['flat', 4], ['heart', 2, 1], ['flat', 3],
         ['walker', 3], ['flat', 7], ['arc', 4], ['pit', 4], ['flat', 3], ['step', 1], ['flat', 2], ['spikes', 1],
         ['flat', 3], ['walker', 1], ['flat', 5],
-        // A glimpse of Frost, and the door.
+        // A glimpse of Ice, and the door.
         ['next'], ['flat', 4], ['portal'], ['flat', 6],
       ],
     ],
