@@ -145,7 +145,7 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
-  // The field sits below the buttons (12 + 44 + 10 px) and above the bottom edge strip.
+  // The field sits below the buttons (12 + 44 + 10 px) and above the booster bar's room.
   const top = insets.top + 66;
   const bottom = barFoot() + BAR_SPACE; // the booster bar sits below the field
   const side = 8;
