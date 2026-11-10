@@ -3,33 +3,23 @@
 // drawing), so these tests can set up a situation and check what the rules do with it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { chromium } from 'playwright';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS, STRIP } from './insets.mjs';
 
-// Its own port range: the test files run in parallel, and a shared range can collide.
-const PORT = 9100 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open(opts = {}) {
@@ -446,25 +436,35 @@ test('reef AC-12: The Deep is dark, with a glow around the player', async () => 
     const r = window.__reef;
     r.game.depth = 6;
     r.dive();
-  });
-  await steps(page, 150); // through the dive into The Deep
-  await page.evaluate(() => {
-    const r = window.__reef;
+    // Through the dive into The Deep (2.3 s); bounded, so a dive that never ends fails the depth check.
+    for (let i = 0; i < 600 && r.game.mode === 'dive'; i++) r.step(1 / 60);
     r.npcs().length = 0;
+    r.eels().length = 0;
     r.game.spawnIn = 999;
+    r.game.eelIn = 999;
     r.player.x = r.world().W * 0.7;
     r.player.y = r.world().H * 0.4;
     r.player.invul = 0;
   });
-  await page.waitForTimeout(300); // let frames draw
+  // Frames only draw (manual), so two frames show this state.
+  await page.evaluate(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))));
+  // The Deep has small lights of its own, drifting anywhere: bubbles (the dive's last ones are still
+  // rising), whose bright outlines show through the darkness, and glowing snow. One on a single
+  // sampled pixel lit "far away". So each point is the median brightness of a 40 x 40 patch of
+  // water: the darkness and the glow fill the patch, while the biggest bubble (about 14 across) or a
+  // flake covers far less than half of it.
   const lum = await page.evaluate(() => {
     const r = window.__reef;
     const c = document.getElementById('sea');
     const g = c.getContext('2d');
     const k = c.width / r.world().W;
-    const at = (x, y) => {
-      const d = g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data;
-      return d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11;
+    const at = (x, y, half = 20) => {
+      const s = Math.round(half * 2 * k);
+      const d = g.getImageData(Math.round((x - half) * k), Math.round((y - half) * k), s, s).data;
+      const v = [];
+      for (let i = 0; i < d.length; i += 4) v.push(d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11);
+      v.sort((a, b) => a - b);
+      return v[v.length >> 1];
     };
     const y = r.player.y;
     return { depth: r.game.depth, near: at(r.player.x - 70, y), far: at(r.player.x - 420, y) };

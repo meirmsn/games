@@ -3,33 +3,25 @@
 // drawing), so these tests can set up a situation and check what the rules do with it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { statSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-// Its own port range: the test files run in parallel, and a shared range can collide.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
-const ROOT = new URL('..', import.meta.url).pathname;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], { cwd: ROOT, stdio: 'ignore' });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ path = 'crumble/', audio = false, ...opts } = {}) {
@@ -43,6 +35,18 @@ async function open({ path = 'crumble/', audio = false, ...opts } = {}) {
   await page.waitForFunction(() => window.__crumble);
   return { context, page, errors };
 }
+
+// Wait until the page has run `n` animation frames of its own.
+const realFrames = (page, n) =>
+  page.evaluate(
+    (n) =>
+      new Promise((done) => {
+        let k = 0;
+        const tick = () => (++k >= n ? done() : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      }),
+    n
+  );
 
 // Start a battle on battlefield `field` (0-based) with the test owning the clock, on the player's turn.
 async function battle(page, field = 0, { taught = true } = {}) {
@@ -770,7 +774,38 @@ test('crumble AC-12: the frame holds at 844×390, DPR 2, CPU 4× slower, with bl
   await context.close();
 });
 
-test('crumble AC-13: portrait shows the turn card and pauses a battle; landscape plays; the HUD fits 640×360', async () => {
+// The cause behind crumble AC-13's flake: a busy machine runs fewer frames in a given time. With the
+// CPU 10× slower, the portrait hold and the landscape resume still behave, because the checks wait on
+// frames and on the game's state, never on milliseconds.
+test('ci-flakes AC-5: the portrait hold and the landscape resume hold with frames coming slowly (CPU 10× slower)', async () => {
+  const { context, page } = await open({ viewport: { width: 390, height: 844 } });
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 10 });
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    c.store.taught = true;
+    c.startBattle(0);
+    c.fire(0, 'shell', 1.2, 0.9);
+  });
+  const x0 = await page.evaluate(() => window.__crumble.game.projectile.x);
+  await realFrames(page, 30);
+  assert.equal(await page.evaluate(() => window.__crumble.game.projectile.x), x0, 'the shell holds');
+  await page.evaluate(() => {
+    const c = window.__crumble;
+    c.game.projectile = null;
+    c.game.shots = 1;
+    c.startTurn(1);
+  });
+  const t0 = await page.evaluate(() => window.__crumble.game.timer);
+  await realFrames(page, 60);
+  assert.equal(await page.evaluate(() => window.__crumble.game.timer), t0, "the CPU's timer holds");
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForFunction(() => window.__crumble.game.phase !== 'cpu', null, { timeout: 20000 });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  await context.close();
+});
+
+test('crumble AC-13, ci-flakes AC-4: portrait shows the turn card and pauses a battle; landscape plays; the HUD fits 640×360', async () => {
   const { context, page } = await open({ viewport: { width: 390, height: 844 } });
   assert.equal(await page.isVisible('[data-rotate]'), true);
   await page.evaluate(() => {
@@ -779,8 +814,10 @@ test('crumble AC-13: portrait shows the turn card and pauses a battle; landscape
     c.startBattle(0);
     c.fire(0, 'shell', 1.2, 0.9);
   });
+  // Wait on the page's real frames, not on milliseconds: a busy machine runs fewer frames in a given
+  // time, and the hold lives in the frame loop.
   const x0 = await page.evaluate(() => window.__crumble.game.projectile.x);
-  await page.waitForTimeout(500);
+  await realFrames(page, 30);
   assert.equal(await page.evaluate(() => window.__crumble.game.projectile.x), x0, 'the shell holds');
   await page.evaluate(() => {
     const c = window.__crumble;
@@ -788,12 +825,14 @@ test('crumble AC-13: portrait shows the turn card and pauses a battle; landscape
     c.game.shots = 1;
     c.startTurn(1);
   });
-  await page.waitForTimeout(1300);
-  assert.equal(await page.evaluate(() => window.__crumble.game.phase), 'cpu', "the CPU's timer holds");
+  const t0 = await page.evaluate(() => window.__crumble.game.timer);
+  await realFrames(page, 60);
+  assert.equal(await page.evaluate(() => window.__crumble.game.phase), 'cpu', "the CPU's turn holds");
+  assert.equal(await page.evaluate(() => window.__crumble.game.timer), t0, "the CPU's timer holds");
   await page.setViewportSize({ width: 844, height: 390 });
   assert.equal(await page.isVisible('[data-rotate]'), false);
-  await page.waitForTimeout(1300);
-  assert.notEqual(await page.evaluate(() => window.__crumble.game.phase), 'cpu', 'play goes on');
+  // The CPU fires once its plan is ready and its timer passes the delay: wait for that, not a time.
+  await page.waitForFunction(() => window.__crumble.game.phase !== 'cpu', null, { timeout: 10000 });
 
   await page.setViewportSize({ width: 640, height: 360 });
   await page.evaluate(() => {

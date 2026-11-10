@@ -4,34 +4,24 @@
 // manual = true stops the page's own frames from advancing it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { serve } from './serve.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-// Its own port range: the test files run in parallel.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ hash = '', viewport = { width: 390, height: 844 }, init = [], hasTouch = true } = {}) {
@@ -896,8 +886,28 @@ test('orbit AC-29: stardust shows at three brightnesses: this jump full, the nex
   await context.close();
 });
 
-test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
-  const { context, page } = await open();
+// The race behind orbit AC-22's flake: the game's frames run while the page loads, before a test takes
+// the clock. With window.__orbitManual set before the first frame, real frames only draw.
+test('ci-flakes AC-5: with the flag set before the first frame, real frames add no idle time and show no hint', async () => {
+  const { context, page } = await open({ init: [() => (window.__orbitManual = true)] });
+  // About 1.5 s of the page's own frames, as on a slow load (a busy machine runs fewer; any number works).
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        let k = 0;
+        const tick = () => (++k >= 90 ? done() : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      })
+  );
+  const r = await page.evaluate(() => ({ manual: window.__orbit.manual, idle: window.__orbit.game.idleAge, hint: !document.querySelector('[data-hint]').hidden }));
+  assert.deepEqual(r, { manual: true, idle: 0, hint: false });
+  await context.close();
+});
+
+test('orbit AC-22, ci-flakes AC-3: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
+  // The test owns the clock from the first frame: real frames never add to the 4 s of idling, however
+  // slowly the page loads (the init script runs again on the reload below).
+  const { context, page } = await open({ init: [() => (window.__orbitManual = true)] });
   await manual(page);
   const hint = () => page.evaluate(() => !document.querySelector('[data-hint]').hidden);
   await frames(page, 60 * 3);

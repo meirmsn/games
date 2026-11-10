@@ -4,7 +4,7 @@
 // checks (AC-9) run in Node, on the same rules the page uses.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { chromium } from 'playwright';
 import { simulateInsets, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -13,29 +13,19 @@ import { LEVELS, CHAPTERS } from '../runes/levels.js';
 import { runesMatter } from '../scripts/runes/generate.mjs';
 import { greedy } from '../scripts/runes/lab.mjs';
 
-// Its own port range: the test files run in parallel, and a shared range can collide.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 // Levels open one at a time, so unless a test sets up its own storage, every level starts solved
