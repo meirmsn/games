@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: pending
 
 ## Intent
 
@@ -40,6 +40,24 @@ crowded with bad guys, including flying ones that swoop; stomp chains pay extra.
 stays: an easy opening then the real threat, the same physics, bad guys 1.5 tiles, hearts and three
 lives, the glimpse before each door, the map showing every world, and the layout checks of AC-21,
 extended to each new mechanic. The journey grows from four levels to eight, about 12–16 minutes.
+
+### Batch 3: Castle, Ice, Sea and Ink's darkness
+
+The owner's words for this batch (2026-11-10): "Add **Castle** (Platformer Pack Medieval: a key opens
+the gate, crushers drop on a rhythm), **Ice** (Platformer Assets Ice: slippery ice, snowballs
+rolling down slopes), **Sea** (Platformer Pack Nautical: swimming, each tap a stroke, currents), and
+**Ink's darkness** (only a circle of light around the monster). Place them so pixel and smooth keep
+alternating where they can, or better if play shows a better order; Ice may replace today's pixel
+Frost (the lineup says so; ask the owner). Each world needs its own mechanic and its own kind of
+challenge, not just a new skin … **Castle:** puzzle-like situations: a key opens the gate; crushers
+drop on a rhythm. **Ice:** precision on small ledges: slippery ice; snowballs rolling down slopes.
+**Sea:** a different control: swimming, you float and each tap is a stroke; currents. **Ink's
+darkness:** the unknown: only a circle of light around the monster, with its ghosts and drips."
+Every rule above stays: an easy opening then the real threat, the same physics (Sea's swimming is
+the one new control, its numbers in tiles), bad guys 1.5 tiles, hearts and three lives with game
+over back to level 1, the glimpse before each door, the map showing every world, and the layout
+checks of AC-21, extended to each new mechanic. The journey grows to ten levels, about 16–20
+minutes.
 
 ### Concept check (the guidelines' questions)
 
@@ -339,6 +357,61 @@ item.
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
   can't hold eight.
+- **Batch 3: ten levels, in this order** (proposed; the owner's answer on Frost goes here at the
+  go): 1 Meadow (pixel, 18), 2 Farm (pixel, 18), 3 Ice (smooth, 70; it takes Frost's place, and
+  Frost's ears), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7 Pico (pixel, 8), 8
+  Castle (smooth, 70), 9 Ink (two colours, 16, now dark), 10 Sea (smooth, 70). Ice replaces Frost
+  because two ice worlds would be the same mechanic twice, the owner's "different skin" note; it
+  keeps Frost's slot, its prize and the owner's Frost music (a cold, glassy bed fits Ice). The
+  order keeps every shipped world's place and breaks the pixel/smooth alternation only twice
+  (Meadow–Farm, Ice–Candy), as few as any order that keeps the Meadow first; Castle sits between
+  Pico and Ink so Ink's darkness comes late, and Sea, a new control, is the last world for now.
+  Rejected: reordering the shipped worlds for perfect alternation (Meadow, Candy, Farm, …), which
+  moves Candy's tricky timing to level 2. The three new worlds are vector packs with no characters
+  of their own, so their bad guys come from the New Platformer Pack (as Candy's and Mushroom's
+  slimes do): Castle's mice, Ice's snails, Sea's fish; Castle's key, gate bars and Sea's urchins come
+  from it too where the world's own pack has none. All three use Candy's soft sound set and loop
+  until the owner's music (Ice: the Frost bed and accents). Best times move to version 4. The hidden
+  assist never changes crushers, snowballs, currents, fish or the swim. Bad guys stay 1.5 tiles,
+  including fish; a snowball is 1.2 tiles across (a rolling hazard, not a bad guy).
+- **Castle: keys, gates and crushers, in puzzle-like situations.** A gate is the pack's portcullis,
+  3 tiles tall with wall above it to the top of the level, so it can't be jumped. It is solid until
+  the monster touches it while holding a key; then it rises and stays open, and the key is used.
+  Any key opens any gate; keys held show in the HUD; a life lost resets them with the level. Each
+  gate's key is in the stretch before it, never on the straight run to it: up a climb of ledges,
+  back behind you, or at the end of a side passage, so reaching a gate without its key means going
+  back to find it. There are at least three gates. A crusher is a 2-tile-wide stone block hung on a
+  chain: it waits up (1.4 s, shaking for its last 0.4 s), drops to the floor in 0.2 s, stays down
+  0.6 s and rises in 1.0 s, a 3.2 s rhythm; crushers in a row are offset so a gap opens and runs
+  along them. Touching a crusher while it falls or is down (or rising, below 1.4 tiles off the floor) is a hit; it is never
+  a surface. Rejected: crushers that pin you against the floor (a death with no way to read it on a
+  phone) and switches far from their doors (too slow to read without text).
+- **Ice: precision on small ledges, slippery ice, snowballs down slopes.** Two grounds: snow
+  (tundra) grips like grass; ice (the pack's ice blocks) keeps you sliding as Frost's ice did (from
+  top speed you slide about 2.3 tiles to a stop). At least 10 ledges 1–2 tiles long over pits, most
+  of them ice, so a landing must be placed. Slopes: the pack's 45° snow hills; the monster runs up
+  and down them without jumping. A snow pile at a slope's top sends a snowball every 2.5 s (each
+  pile its own phase): it rolls down, gathering speed to at most 6 tiles/s, carries on along the flat
+  and shatters at a wall, a gate or the edge of a pit. A snowball hurts; it can't be stomped, only
+  jumped. Ice's bad guys are snails (stompable, slow). The ears are on a high ice ledge in plain
+  view from the main path.
+- **Sea: swimming.** The level starts on a beach and goes under the water in basins. In the water
+  the monster floats: it sinks slowly (at most 1.5 tiles/s), each jump press is a stroke that lifts
+  it about 2 tiles (holding jump doesn't lift it further), it swims sideways at up to 4 tiles/s, and
+  a stroke with its head near the surface leaps it out, high enough for a ledge 2 tiles above the
+  water. Out of the water it runs and jumps as everywhere. Currents are bands of water that carry
+  the monster at 3 tiles/s their way (left, right, up or down), drawn as streaming bubbles; at
+  least three places use them, with you or against you. Its bad guys are fish swimming back and
+  forth (hurt at a touch; you can't stomp in water), and urchins (spikes) on the floor and ledges.
+  The water's floor is solid: in Sea a life is lost only by hits. Rejected: an air meter (a second
+  thing to watch on a phone, and the owner asked for a different control, not a timer).
+- **Ink's darkness: the unknown.** Ink is dark outside a circle of light around the monster, 4 tiles
+  across its radius, its edge dithered in Ink's two colours (no third colour). Lamps along the way
+  light a small pool around them, more often in the opening. What would be unseen gives itself away
+  in the dark, so every hazard is still seen a second before you must commit: ghosts' eyes, a
+  drip's glint, spikes' tips and a pit's edge glimmer at any distance. The glimpse of the next world
+  and the door are lit: the way out of the dark. Rejected: a light that shrinks over time (a timer
+  again).
 
 ## Acceptance items
 
@@ -368,15 +441,15 @@ item.
   held; landing on a spiky walker hurts instead — `tests/pixel-leap.test.mjs`.
 - **AC-9** A heart picked up adds a heart (at most two) and a coin; with two held, a heart shows as a
   coin and adds only a coin; the HUD shows the lives and hearts held — `tests/pixel-leap.test.mjs`.
-- **AC-10** Taking Frost's ears adds them to the monster and lets it float: falling with jump
+- **AC-10** Taking Ice's ears adds them to the monster and lets it float: falling with jump
   held is at most 40% as fast as without — `tests/pixel-leap.test.mjs`.
 - **AC-11** In Candy a jelly gumdrop bounces the monster higher than a full jump, a cookie crumbles
-  about 0.5 s after it's landed on and comes back after 3 s, a spring in the Meadow launches, Frost's
+  about 0.5 s after it's landed on and comes back after 3 s, a spring in the Meadow launches, Ice's
   ice keeps the monster sliding further than the Meadow's grass, and an Ink drip falls as the
   monster comes near and hurts — `tests/pixel-leap.test.mjs`.
 - **AC-12** Reaching a level's door shows the world map, with no numbers card, heading from that
-  level's cell to the next; the map then leaps into the next level's world, which from Frost to
-  Candy goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
+  level's cell to the next; the map then leaps into the next level's world, which from Farm to
+  Ice goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
   the monster's ears kept and its time at 0 — `tests/pixel-leap.test.mjs`.
 - **AC-13** At 360×640 and 390×844 in portrait, at pixel ratios 1, 2 and 3, the view shows at least
   12 tiles across and the tile is a whole multiple of 18 canvas pixels, the deck doesn't overlap the
@@ -394,10 +467,10 @@ item.
 - **AC-16** After two lives lost the coyote time and buffer grow (to at most double), enemies keep
   their speed, the assist survives a game over, and clearing a level resets it —
   `tests/pixel-leap.test.mjs`.
-- **AC-17** Each level is its own world, in this order: Meadow, Farm, Frost, Candy, Industrial,
-  Mushroom, Pico, Ink; best times are kept under version 3 of the levels; each level's last
-  stretch, from its `next` column, is drawn in the next world's style; the UI is pixel-styled in
-  pixel worlds and smooth in Candy and Mushroom; the best time per level is kept — `tests/pixel-leap.test.mjs`.
+- **AC-17** Each level is its own world, in this order: Meadow, Farm, Ice, Candy, Industrial,
+  Mushroom, Pico, Castle, Ink, Sea; best times are kept under version 4 of the levels; each level's
+  last stretch, from its `next` column, is drawn in the next world's style; the UI is pixel-styled in
+  pixel worlds and smooth in Ice, Candy, Mushroom, Castle and Sea; the best time per level is kept — `tests/pixel-leap.test.mjs`.
 - **AC-18** Jumping in the Meadow plays the Meadow's jump sound and in Candy Candy's, and each world
   starts its own music — `tests/pixel-leap.test.mjs`.
 - **AC-19** Pixel Leap plays offline once it has been played, every world included, though only
@@ -416,15 +489,15 @@ item.
 - **AC-22** At 390×844, a 20 s run's update and draw take under 8 ms per frame on average in the test
   browser, and the simulation moves the same at 60 and 120 frames per second —
   `tests/pixel-leap.test.mjs`.
-- **AC-23** The glimpse before Frost's door is drawn smooth, the one before Candy's door in
-  Industrial's 18-px pixels and the one before Pico's door in Ink's; stepping into a glimpse that
+- **AC-23** The glimpse before Farm's door is drawn smooth, the one before Candy's door in
+  Industrial's 18-px pixels and the one before Castle's door in Ink's; stepping into a glimpse that
   changes the style plays the rising (into smooth) or falling (out of smooth) sound and draws the
   monster at in-between resolutions, then in the new style, and stepping from the Meadow into Farm's
   glimpse changes nothing — `tests/pixel-leap.test.mjs`.
 - **AC-24** The map at the start lights only the first world's cell and carves the others dark, and
   heads from the start to level 1; through the Meadow's door it heads from the Meadow to Farm with
   both lit; a tap skips ahead to the step into the world; at 360×640 and 390×844 in portrait and
-  1024×700 in landscape, all eight cells and the start are on screen, no two cells overlap and each
+  1024×700 in landscape, all ten cells and the start are on screen, no two cells overlap and each
   name is at least 12 CSS px tall — `tests/pixel-leap.test.mjs`.
 
 - **AC-25** Farm has at least 14 separate platforms (a platform: a run of ledge or block tiles side
@@ -461,15 +534,54 @@ item.
 - **AC-32** A world with the owner's music plays its bed and, over it, one of its three accents
   after every 15–40 s of play, all three in turn but never the same twice running; paused, the bed
   stops and no accent comes; muting mutes the bed — `tests/pixel-leap.test.mjs`.
+- **AC-33** In Castle, a gate stops the monster until it touches the gate holding a key; then the
+  gate opens and stays open, the key is used and the HUD's key count drops by one; a key picked up
+  shows in the HUD; a life lost brings back the level's keys and shuts its gates. The level has at
+  least three gates, each with a key before it and after the gate before it, and no key is on the
+  ground route to its gate: each is at least 3 tiles above the ground under it, or to the left of
+  where the level first comes within 4 tiles of its gate; a scripted run that never picks up a key stops at the first gate —
+  `tests/pixel-leap.test.mjs`.
+- **AC-34** A Castle crusher waits up 1.4 s (shaking for the last 0.4), drops to the floor in 0.2 s,
+  stays 0.6 s and rises in 1.0 s, again every 3.2 s (each within 0.05 s); touching it while it falls,
+  is down, or is rising with its bottom under 1.4 tiles above the floor costs a heart or a life, and
+  standing under it while it waits up costs nothing; crushers next to each other start at different
+  points of the rhythm; the level has at least five — `tests/pixel-leap.test.mjs`.
+- **AC-35** In Ice, letting go at top speed on ice slides the monster at least 2 tiles before it
+  stops, and on snow less than 1; the monster runs up a slope to its top and down it without
+  jumping, its feet on the slope; a snow pile sends a snowball every 2.5 s (±0.1) that rolls down its
+  slope no faster than 6 tiles/s, along the flat, and is gone at a wall or a pit's edge; a snowball
+  hurts and can't be stomped; the level has at least 10 ledges 1–2 tiles long over pits, at least 6
+  of them ice, and at least 3 snow piles — `tests/pixel-leap.test.mjs`.
+- **AC-36** In Sea, in the water and pressing nothing, the monster sinks no faster than 1.5 tiles/s;
+  one tap lifts it 1.5–2.5 tiles and holding jump lifts it no further than a tap; it swims sideways
+  at no more than 4 tiles/s; a stroke with its head within a tile of the surface by a ledge 2 tiles
+  above the water lands it on the ledge; in a current, pressing nothing, it is carried 3 tiles/s
+  (±0.3) the current's way; a fish hurts at a touch, also from above; the level has at least three
+  currents and starts on dry land — `tests/pixel-leap.test.mjs`.
+- **AC-37** In Ink, screen pixels more than 5 tiles from the monster are Ink's dark colour except
+  for glimmers (each within half a tile of a ghost, a drip, a spike, a pit's edge, a lamp or the
+  door), those within 3.5 tiles show the level, and every pixel is still one of Ink's two colours;
+  each ghost, drip, spike run and pit edge draws a glimmer in the dark; the glimpse of Sea and the
+  door are drawn lit — `tests/pixel-leap.test.mjs`.
+- **AC-38** In AC-21's layout checks, also: no crusher, snow pile, current, fish or urchin within 7
+  tiles of a level's start (a snow pile counted at the foot of its slope); each crusher's drop, from
+  its top to the floor, is clear of solid tiles; no snowball's path from its pile to where it
+  shatters crosses the start; each Castle key is reachable before its gate and the door is behind
+  the last gate; and no setting of the hidden assist changes a crusher's, snowball's, current's,
+  fish's or the swim's speed — `tests/pixel-leap.test.mjs`.
+- **AC-39** Each batch-3 world draws from its own pack and plays its music: Castle's ground and
+  gates are the Medieval pack's tiles, Ice's its snow and ice, Sea's its sand, water and wood; Ice
+  plays the owner's Frost bed, Castle and Sea Candy's soft loop until their own arrive; the world
+  map shows all ten — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
 2. Change parts or Shuffle, then Go.
 3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Farm.
-4. Back on the map, walk on through Farm, Frost, Candy (redrawn smooth), Industrial, Mushroom
-   (smooth), Pico (16 colours) and Ink (two colours), with three lives and up to two hearts; the
-   run's statistics show at its end.
+4. Back on the map, walk on through Farm, Ice (redrawn smooth), Candy, Industrial, Mushroom
+   (smooth), Pico (16 colours), Castle, Ink (two colours, in the dark) and Sea (swimming), with
+   three lives and up to two hearts; the run's statistics show at its end.
 
 ## States
 
@@ -481,7 +593,7 @@ item.
 | Paused (page hidden or blurred, a resize, P or Escape) | hidden | shown, still | shown | hidden |
 | Leaping to the next world | hidden | view shown, changing resolution | hidden | hidden |
 | Game over (the third life lost) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
-| End of the slice (after Ink) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
+| End of the slice (after Sea) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
 
 ## Out of scope
 
@@ -511,8 +623,8 @@ item.
   | 11 | Scribble (Scribble Platformer) | line art | platforms that draw themselves as you near | trust: jump before the ground is there |
   | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top |
 
-  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (this
-  change): Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
+  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stayed as a world through batch 2; batch
+  3 proposes Ice in its place (see Decisions). **Batch 2:** Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
   Ice, Sea, and Ink's darkness. **Batch 4:** Scribble and Sky, then the journey's end. After each
   batch ships, the next batch's session is suggested.
 - Music: the owner will generate music for each world (and the two crossing sounds) from prompts
