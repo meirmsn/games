@@ -1,6 +1,6 @@
 # Gotta Go! (walk-on-red): a lane-crossing game on the Pixel Vehicle Pack
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09; for the close-up tile and a new name, the owner's request "can you make a zoom … towards the top where the WCs and … a little bit of walkway" 2026-11-09, and the name: the owner chose "Gotta Go!" 2026-11-10
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; for this concept, the owner chose "Build Red Man (Recommended)" 2026-11-09; after playing it, the owner chose "Walk on their own" and "Their points" 2026-11-09; for the close-up tile and a new name, the owner's request "can you make a zoom … towards the top where the WCs and … a little bit of walkway" 2026-11-09, and the name: the owner chose "Gotta Go!" 2026-11-10; for lives, pending
 
 ## Intent
 
@@ -125,6 +125,10 @@ Hold It!, Gotta Go! and Potty Dash, the owner chose "Gotta Go!" (2026-11-10). Th
 landing-page tile a close-up of the far end of the crossing and renames the game Gotta Go! wherever
 its name shows: the tile's title, the game page's title, description and start card, the README,
 and the code's header comments.
+Then the owner asked, on 2026-11-10: "On the Gotta Go game, it should have 3 lives, and then when you
+get run over, you lose 1, and then when you lose the 3, you're done. It's game over." This change
+gives a run 3 lives, shown in the HUD; being run over costs one, and losing the third ends the run on
+a Game Over card that leads to a new run.
 This spec is the game after those changes.
 
 **Hook:** he really needs the loo, and the toilet is across the street; the walk light is red, so he
@@ -153,8 +157,9 @@ goes now, and the people waiting start copying him.
   each level is half a minute, so it stops cleanly between any two.
 - **Orientation:** portrait, everywhere: the view is the zebra crossing, edge to edge, the same
   shape on a phone, a phone held sideways and a desktop.
-- **What a failure costs:** a hit sends him back to the start (several seconds); a follower hit costs their share of the points;
-  too slow costs the level's points and a replay of that level (about 30 s). No lives.
+- **What a failure costs:** a hit costs a life and sends him back to the start (several seconds);
+  the third ends the run; a follower hit costs their share of the points; too slow costs the
+  level's points and a replay of that level (about 30 s), but no life.
 - **Save-game stand-in:** the best total, the best stars per level and the hidden assist, in
   localStorage.
 - **Riskiest technical part:** lights that the cars visibly obey, and a crossing that is really clear
@@ -266,7 +271,16 @@ goes now, and the people waiting start copying him.
   and a horn), then he starts again from the beginning, at his place on the near kerb, wherever he
   was hit (owner, 2026-11-09: "it doesn't matter when they hit you. You should start from the
   beginning"). Stepping into a vehicle counts.
-  There are no lives.
+- **Lives:** a run starts with 3 lives, shown in the HUD as three pixel hearts in the walk light's
+  red, beside the level's progress bar; a lost life is an empty heart. Being hit by a vehicle costs
+  one: with lives left, the hit goes on as above (down 1.2 s, then back to the start, the walk
+  light still counting down). The hit that takes the last one knocks him down just the same, and
+  after the 1.2 s the run ends on the Game Over card. Only he has lives: a follower hit, and the
+  walk light turning green before he's across, cost none. Lives don't come back during a run, and
+  every new run starts with 3 (owner, 2026-11-10: "it should have 3 lives … when you get run over,
+  you lose 1 … when you lose the 3, you're done. It's game over"; this replaces "There are no
+  lives"). Rejected: the level starting again after a hit (the walk light's clock running on is
+  the hit's cost already, as before), and lives refilled each level (a lost life would mean little).
 - **Stars:** a level's score against its best possible (all its seconds × everyone across): 12% for
   one star, 28% for two, 45% for three. The best stars per level and the best total are kept.
 - **Traffic from the first second:** every level starts with every lane already full of traffic,
@@ -302,7 +316,10 @@ goes now, and the people waiting start copying him.
   19. **Freight Route:** three followers, trucks and buses, sirens.
   20. **Late Shift:** three followers, night, three lanes in a row, the fastest.
   21. **Grand Avenue:** three followers, the densest, sirens, 34 s.
-  After level 21 the run ends with its total, the stars and the best.
+  After level 21 the run ends with its total, the stars and the best, on the card headed
+  "Across!"; out of lives, the same card is headed "Game over" and shows the total so far, the stars
+  won so far and the best, which counts that run. Either way, Play again leads to the start card,
+  whose Start begins a new run on level 1 with 3 lives.
 - **Tuning, measured with a scripted player** (reading traffic perfectly, waiting on a kerb or
   island until the whole block of lanes ahead stays clear for him and the time his followers need,
   then running it a lane every 0.2 s, sidestepping to find a gap; over 6 seeds a level): levels 1–7
@@ -379,8 +396,8 @@ goes now, and the people waiting start copying him.
   `tests/walk-on-red.test.mjs`.
 - **AC-8** A follower hit by a vehicle tumbles and is gone, and no longer counts; the level
   carries on — `tests/walk-on-red.test.mjs`.
-- **AC-9** A vehicle hitting the player knocks him down and sends him back to the start, on the
-  near kerb at his starting column — `tests/walk-on-red.test.mjs`.
+- **AC-9** A vehicle hitting the player while he has a life to spare knocks him down and sends him
+  back to the start, on the near kerb at his starting column, with one life fewer — `tests/walk-on-red.test.mjs`.
 - **AC-10** The 21 levels are as in the decisions: nobody follows on levels 1–7, one follower on
   8–10, two on 11–14, three from 15; an island from level 3; sirens from level 4; heavy vehicles from
   level 5 —
@@ -431,6 +448,13 @@ goes now, and the people waiting start copying him.
   no vehicle in it — verified by review: serve the site and run the script, which stops if the view
   isn't at 6×, he isn't mid-hop, his drop of sweat isn't showing or a vehicle is on the street; the
   committed `assets/tiles/walk-on-red.png` looks the same as what it makes.
+- **AC-28** A run starts with 3 lives, shown in the HUD as 3 hearts, and a hit empties one; a
+  follower hit and the walk light turning green before he's across cost none; the next level keeps
+  the lives left; a new run has 3 again — `tests/walk-on-red.test.mjs`.
+- **AC-29** The hit that takes the third life knocks him down, then ends the run: the game-over card,
+  headed "Game over", shows the total so far, the stars and the best (which counts it), with the
+  closing jingle; Play again leads to the start card, and Start begins level 1 with 3 lives —
+  `tests/walk-on-red.test.mjs`.
 
 ## Core flow
 
@@ -440,11 +464,11 @@ goes now, and the people waiting start copying him.
 4. Reach the porta-potty: the door closes, a flush, a chime; the street fast-forwards as the seconds
    count into points and the lights change; everyone crosses on green, the tally shows, the next
    level starts.
-5. After level 21, see the total and the stars, and play again.
+5. Hit three times, or after level 21, see the total and the stars, and play again.
 
 ## States
 
-| State | Start card | Paused card | Game-over card | HUD (level, total) | Banner |
+| State | Start card | Paused card | Game-over card | HUD (level, lives, total) | Banner |
 | ----- | ---------- | ----------- | -------------- | ------------------------- | ------ |
 | Start (traffic drives behind) | shown | hidden | hidden | hidden | hidden |
 | Playing (walk light red) | hidden | hidden | hidden | shown | the level's name, for a moment |
@@ -452,11 +476,12 @@ goes now, and the people waiting start copying him.
 | Green: everyone crosses | hidden | hidden | hidden | shown | the score table, or "Try again" |
 | Tally | hidden | hidden | hidden | shown | the score table, or "Try again" |
 | Paused (returned from hidden) | hidden | shown | hidden | shown | as before |
-| Game over | hidden | hidden | shown, with the total, the stars and the best | hidden | hidden |
+| Game over (after level 21, or out of lives) | hidden | hidden | shown, "Across!" or "Game over", with the total, the stars and the best | hidden | hidden |
 
 ## Out of scope
 
 - A daily traffic seed ("Today's street"), a level select or continuing a run, and more than 21
   levels.
 - Leaderboards, accounts, choosing your character.
+- Winning lives back, or lives carried from one run to the next.
 - Music settings beyond the site-wide mute.
