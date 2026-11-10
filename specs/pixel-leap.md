@@ -352,7 +352,9 @@ item.
   by an audio element from a copy fetched as the page loads, so it is cached for offline play like
   everything else but never decoded whole: eight two-minute tracks decoded would take hundreds of
   megabytes on a phone. The accents count only while playing; pausing stops the bed, and the
-  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive.
+  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive. Sea's
+  and Castle's arrived on 2026-11-10 (owner, after batch 3 merged, sending the files made from the
+  prompts in the chat), and play their own bed and accents.
 - **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
   portrait, going up the screen; four across in landscape), so all eight and the start fit on any
   screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
@@ -602,8 +604,8 @@ item.
   fish's or the swim's speed — `tests/pixel-leap.test.mjs`.
 - **AC-39** Each batch-3 world draws from its own pack and plays its music: Castle's ground and
   gates are the Medieval pack's tiles, Ice's its snow and ice, Sea's its sand, water and wood; Ice
-  plays the owner's Frost bed, Castle and Sea Candy's soft loop until their own arrive; the world
-  map shows all ten — `tests/pixel-leap.test.mjs`.
+  plays the owner's Frost bed, and Sea and Castle the owner's own beds (changed after the go: the
+  owner sent them, 2026-11-10); the world map shows all ten — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 

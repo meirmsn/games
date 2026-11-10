@@ -283,6 +283,7 @@ const ALL = [
   },
   {
     id: 'sea',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Sea',
     res: 70, // the Platformer Pack Nautical, vector
     pack: 'sea',
@@ -314,6 +315,7 @@ const ALL = [
   },
   {
     id: 'castle',
+    bed: true, // the owner's music: a long bed, with short accents over it at random
     name: 'Castle',
     res: 70, // the Platformer Pack Medieval, vector
     pack: 'castle',
