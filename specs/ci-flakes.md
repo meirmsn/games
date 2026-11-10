@@ -1,4 +1,4 @@
-# Flaky slow-tier tests stop blocking deploys
+# The slow tests stop colliding on ports and stop waiting on the clock
 
 **Go:** "go, option A, and install gitleaks" (owner, 2026-11-10)
 
@@ -41,15 +41,23 @@ that the owner said "yes to both" in chat on 2026-11-10.
 - Orbit's first-fire hint test (item 22 of `specs/orbit.md`) failed under load because the game's own frames run while the page loads, before the
   test takes the clock; their idle time reached the hint's 4 s early. The game now reads
   `window.__orbitManual` at start, and the test sets it before the first frame. This is one line of
-  Orbit's game code. (Owner, 2026-11-10: "yes to both", after an adversarial review picked it over
-  resetting the idle timer in the test.)
+  Orbit's game code. (Owner, in this session, 2026-11-10: "yes to both", answering two questions: whether to allow this
+  one-line Orbit change, which the brief ruled out, and whether to reword Crumble's item 12 (below).
+  That is not the "yes to both" the Intent quotes, which the queue manager relayed for the original
+  two-flake scope. An adversarial review picked this fix over resetting the idle timer in the test.)
 - Crumble's portrait-pause test (item 13 of `specs/crumble.md`) failed under load because it waited 1.3 s of real time for the CPU's 0.7 s turn,
   while a busy machine runs fewer frames in that time. It now waits on the page's frames and on the
   game's state, not on milliseconds.
 - Crumble's frame-timing test (item 12 of `specs/crumble.md`) gets its own change, with its own
-  spec: a CPU-time budget read from a Chromium trace. The reviewer takes one spec per change, and
-  that one changes what item 12 promises (the owner's "yes to both", 2026-11-10). Here it stays as it
-  is on `main`.
+  spec: a CPU-time budget read from a Chromium trace. The owner approved rewording item 12 that
+  way, in this session's "yes to both" (2026-11-10, see above). Splitting it into its own PR was
+  Claude's decision, not the owner's: the reviewer takes one spec per change, and that change edits
+  `specs/crumble.md`. Here the test stays as it is on `main`.
+- Reef's darkness test (F-8) failed in this change's one local full run, from a cause not yet found. Finding
+  it is a separate change, which the owner asked for in this session (2026-11-10: "do one and start a
+  new session ... so that two starts happening in parallel"). It isn't retried here.
+- The PR's own `slow` run is checked once the PR is open. The PR is sent as ready to the merge queue
+  only when it is green.
 
 ## Acceptance items
 
@@ -73,11 +81,11 @@ that the owner said "yes to both" in chat on 2026-11-10.
   - Orbit's test with 1.5 s between load and taking the clock fails on `main` and passes here.
   - Crumble's pause test at a 10× CPU slowdown fails on `main` ("play goes on") and passes here.
   - With the portrait hold removed from the game, it fails here.
-- **AC-6** The PR's `slow` run passes, run once. — verified by review: the PR's checks.
-- **AC-7** Outside `tests/`, the only files that change are `specs/ci-flakes.md`, `FINDINGS.md` and
+- **AC-6** Outside `tests/`, the only files that change are `specs/ci-flakes.md`, `FINDINGS.md` and
   one line of `orbit/game.js` (it reads `window.__orbitManual`). — verified by review: the PR's diff.
 
 ## Out of scope
 
-- Crumble's frame-timing test: its own change (see Decisions).
+- Crumble's frame-timing test, and the Reef darkness test (F-8): each is its own change (see
+  Decisions). So the slow tier can still fail from those two until they land.
 - Other tests that wait on real time and haven't failed: logged in `FINDINGS.md`.
