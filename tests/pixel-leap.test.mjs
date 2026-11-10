@@ -459,6 +459,7 @@ test('pixel-leap AC-7: a hit costs a heart if held, else a life and the level re
   assert.deepEqual(r.fall, { lives: 1, shields: 2 });
   assert.deepEqual(r.over, { mode: 'tally', lives: 0 });
   assert.equal((await page.locator('[data-tally-title]').textContent()).trim(), 'Game over');
+  assert.equal(await page.locator('[data-tally-lives-row]').isVisible(), false, 'no lives left row after a game over');
   assert.equal(await page.locator('[data-rebuild]').isVisible(), true);
   await page.click('[data-leap]');
   await untilPlay(page, true);
