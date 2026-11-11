@@ -12,6 +12,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Done (`specs/slow-tests-pixel-leap.md`) |
+| R-8 | 2026-11-11 | Tests check what a player sees, and a red slow run is explained, not re-run | Open |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
@@ -178,3 +179,30 @@ scaled by the rate (the owner's adversarial review). Guards that hold frames bac
 idle, or stall frames without CPU, fail the old waits. No game code changed. An unmarked test file
 that calls `waitForTimeout` now fails the fast tier. The whole suite's proof is in the PR; F-33 is
 closed. The causes per test are in the spec's Decisions.
+
+## R-8: Tests check what a player sees, and a red slow run is explained, not re-run
+
+Asked 2026-11-11, in chat, after R-7's whole-suite proof:
+
+```text
+I wonder if we need to have those tests so specific and so reliable. And if yes, if we're missing the bigger picture on what actually is a good test. Or are we testing the 1 in 10 million type of thing?
+```
+
+Then, on the adversarial review's answer and Claude's recommendation:
+
+```text
+Let's not do the nightly stress. The rest go with your recommendation.
+```
+
+### Claude's notes
+
+The recommendation, from the review recorded in `specs/slow-tests-pixel-leap.md`, without the
+nightly stress run:
+
+- One CI run of the slow tier, no retries (as since `specs/ci-flakes.md`).
+- A red slow run on `main` gets a `FINDINGS.md` row with its cause before anyone re-runs it.
+- One guard test per kind of wait (frames held back, frames stalled, a request held), not one per
+  fixed test; trim the per-test guards the seven slices added.
+- Tests check each game's promises, what a player sees, rather than tuning numbers (Googly Faces'
+  1.8× dot swell, its 0.05 eye-radii pupil move); start with a short `specs/googly-faces.md`, since
+  Googly Faces has none.
