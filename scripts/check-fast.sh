@@ -64,6 +64,8 @@ fi
 part python3 scripts/check-links.py
 # Every playable game and the landing page share with their own 1200×630 picture (no browser).
 part node --test tests/social-previews.test.mjs
+# A test file marked `// clock-checked` explains every fixed wait it keeps (specs/slow-tests-harness.md).
+part node --test tests/clock-check.test.mjs
 # Stricter than the secret scan's registry check: this repo's lockfile resolves only from npmjs.
 lockfile_npmjs_only() {
   if grep -o '"resolved": "[^"]*"' package-lock.json | grep -v '"https://registry.npmjs.org/'; then
