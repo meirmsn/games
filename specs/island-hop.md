@@ -88,7 +88,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   starts in the left-edge or top strip. Games use `shared/safe-zone.js` to ignore such starts", and a
   control that takes "any swipe down sits clear of the bottom strip". The stick takes a swipe in any
   direction, so it ignores starts in the bottom strip too. Recorded when `main` came in, so the owner
-  can check it (Claude, 2026-11-11).
+  can check it (Claude, 2026-11-11). The owner agreed for Island Hop (2026-11-11: "ok", to "OK the
+  edge-strip rule for Island Hop").
 - The map is hand-made, not generated: a 60 × 60 grid as text rows in `island-hop/map.js`, the
   islands staggered down the grid's diagonal so the archipelago runs top to bottom on a portrait
   screen. Five islands: two large (about 16 × 12, with a road loop, 3 berths and 2–3 parked cars
@@ -138,7 +139,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   the gold medal time (par × 1.1)"): with the spec's speeds on the 60 × 60 map, the gold routes take
   75, 83 and 91 s; the old bands (80–140, 100–170, 130–220 s) could be reached only by padding (an
   adversarial review measured far starts, nine stops and forced relay chains), and would have put a
-  player's run on mission 6 past 3½ minutes.
+  player's run on mission 6 past 3½ minutes. Confirmed in the owner's own words (2026-11-11: "sounds
+  good", to "confirm the mission 4–6 bands and the stricter planning check").
 - Pickups: you can carry any number; each rides above the person's head (and in the boat or car) until
   delivered, and can't be lost. Walking onto an ordered stop before its pickup doesn't tick it: its
   beam pulses and the pickup's icon flashes on the HUD.
@@ -232,8 +234,11 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   traffic or buoys), and the Tiles Base, Tiles Buildings, Tiles City, Tiles Vehicles and Nature pieces
   the map uses come from the atlas that `scripts/island-hop/build-assets.py` builds —
   `tests/island-hop.test.mjs`.
-- **AC-20** A timed playtest at 390×844 shows each mission's autopilot time against its band and the
-  frame rate on the largest island — verified by review: the playtest's figures in the PR.
+- **AC-20** A timed playtest at 390×844: each mission's autopilot time is inside its band, and Port
+  Town draws at 50 frames a second or more while the autopilot drives there; `node
+  scripts/island-hop/playtest.mjs` prints the same figures — `tests/island-hop.test.mjs`. (Was
+  "verified by review: the playtest's figures in the PR", which no one but the builder could check;
+  owner, 2026-11-11: "yes", to "turn the timed playtest into a real test".)
 
 ## Core flow
 

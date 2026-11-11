@@ -512,6 +512,48 @@ test('island-hop AC-16: the same moves cover the same distance at 60 and 120 fra
 
 // --- The page (Chromium) ----------------------------------------------------------------------------------------
 
+test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in its band, and Port Town drawn at 50 fps or more at 390×844', async () => {
+  const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
+  for (const [i, m] of MISSIONS.entries()) {
+    const s = runPilot(i, m.gold);
+    const [lo, hi] = BANDS[i];
+    assert.ok(s.phase === 'done' && s.clock >= lo && s.clock <= hi, `mission ${i + 1}: ${s.clock.toFixed(1)} s in ${lo}–${hi}`);
+  }
+  const { context, page } = await open({ deviceScaleFactor: 2 });
+  // Mission 2's gold route: in Port Town from about 20 s, on foot and then by car round the ring road.
+  await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    __hop.step(21);
+    __hop.manual = false;
+  });
+  await page.waitForTimeout(500);
+  // The frame rate over two-second windows; the best of three, so one busy moment on a shared CI
+  // machine isn't read as the game's own speed.
+  const rates = [];
+  for (let k = 0; k < 3; k++)
+    rates.push(
+      await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            let n = 0;
+            const t0 = performance.now();
+            const tick = () => {
+              n++;
+              if (performance.now() - t0 < 2000) requestAnimationFrame(tick);
+              else resolve((n * 1000) / (performance.now() - t0));
+            };
+            requestAnimationFrame(tick);
+          })
+      )
+    );
+  const where = await page.evaluate(() => ({ x: __hop.state.person.x, y: __hop.state.person.y }));
+  assert.ok(where.x > 7 && where.x < 25 && where.y > 1 && where.y < 15, `in Port Town: ${JSON.stringify(where)}`);
+  assert.ok(Math.max(...rates) >= 50, `frames a second: ${rates.map((r) => r.toFixed(1))}`);
+  await context.close();
+});
+
 test('island-hop AC-4: the page opens on the moving archipelago behind the mission card; Go flies over the stops in about 3 s at 0:00, then the boat is yours and the clock starts on the first move', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.isVisible('[data-screen="start"]'), true);
