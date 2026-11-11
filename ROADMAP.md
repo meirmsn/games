@@ -48,7 +48,8 @@ The split is the one the adversarial review produced. This slice is the harness,
 - Each later slice gets its own spec (`specs/slow-tests-<slice>.md`, numbered from AC-1), in
   place of the split's reserved section and AC range in `specs/ci-flakes.md`: `spec-check.py` allows
   no gaps or sub-headings in a spec's items and one Go line, so parallel slices would collide there
-  (`specs/slow-tests-harness.md` says why; for the owner to confirm). Googly Faces' guard tests go
+  (`specs/slow-tests-harness.md` says why; the owner's go on that spec, "go" on 2026-11-11,
+  approved it). Googly Faces' guard tests go
   in R-4's spec and the landing page's in R-5's.
 - Proof: a hanging file gets killed, and a throttled guard fails on the old code.
 
@@ -73,9 +74,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 2(a) of 7, after R-1, in parallel with R-3, R-4, R-5 and R-6; R-7 follows.
+Slice 2 of 7, after R-1, in parallel with R-3, R-4, R-5 and R-6; R-7 follows.
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-walk-on-red.md`, numbered from AC-1.
 
 `tests/walk-on-red.test.mjs`: 21 `waitForTimeout` calls; `manual` is set late in `startEmpty`; game
 timers at `walk-on-red/game.js` ~482 and ~987 (a game-code change needs the owner's OK).
@@ -94,9 +97,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 2(b) of 7, after R-1, in parallel with R-2, R-4, R-5 and R-6; R-7 follows.
+Slice 3 of 7, after R-1, in parallel with R-2, R-4, R-5 and R-6; R-7 follows.
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-splat-gallery.md`, numbered from AC-1.
 
 `tests/splat-gallery.test.mjs`: 21 waits; the 400 ms `setTimeout(checkTurn)` at
 `splat-gallery/game.js` ~2358 (a game-code change needs the owner's OK).
@@ -115,9 +120,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 2(c) of 7, after R-1, in parallel with R-2, R-3, R-5 and R-6; R-7 follows.
+Slice 4 of 7, after R-1, in parallel with R-2, R-3, R-5 and R-6; R-7 follows.
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-crumble-googly.md`, numbered from AC-1.
 
 20 waits across both files; Googly's `setTimeout`s at `googly-faces/game.js` ~389, 390, 688 and
 698 (a game-code change needs the owner's OK); tight `waitForFunction` timeouts at
@@ -137,9 +144,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 2(d) of 7, after R-1, in parallel with R-2, R-3, R-4 and R-6; R-7 follows.
+Slice 5 of 7, after R-1, in parallel with R-2, R-3, R-4 and R-6; R-7 follows.
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-pwa-site.md`, numbered from AC-1.
 
 `tests/pwa-updates.test.mjs` and `tests/site.test.mjs`: 12 waits. The "nothing happened" waits
 either wait for the version check's response or keep a `// safe: negative bound` comment.
@@ -158,9 +167,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 2(e) of 7, after R-1, in parallel with R-2, R-3, R-4 and R-5; R-7 follows.
+Slice 6 of 7, after R-1, in parallel with R-2, R-3, R-4 and R-5; R-7 follows.
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-orbit-reef-runes.md`, numbered from AC-1.
 
 Reef's F-37 and F-8 (game-code changes need the owner's OK); Runes AC-15's ghost runs on
 `performance.now()` (likewise), and runes AC-1 compares two screenshots 300 ms apart.
@@ -179,9 +190,11 @@ The split, approved 2026-11-11, in chat:
 Do an adversarial review about the split and pick whatever makes sense.
 ```
 
-Slice 3 of 7, last: after R-1 to R-6 and Pixel Leap's AC-40 fix (meirmsn/games#36, merged).
+Slice 7 of 7, last: after R-1 to R-6 and Pixel Leap's AC-40 fix (meirmsn/games#36, merged).
 
 ### Claude's notes
+
+Its spec: `specs/slow-tests-pixel-leap.md`, numbered from AC-1.
 
 `pixel-leap AC-22` moves to CPU time from a trace (F-32), checked to hold up under throttle; the
 single-pixel read at `tests/pixel-leap.test.mjs` ~951; 4 waits. This slice, or whichever merges
