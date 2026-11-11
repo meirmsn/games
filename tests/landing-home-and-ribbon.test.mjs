@@ -177,6 +177,17 @@ test('landing-home-and-ribbon AC-2: back on the landing page after tapping a gam
   await ribbon(page).waitFor();
 });
 
+test('landing-home-and-ribbon AC-2: the ribbon is on the landing page only: never on a game page, even when it is due', async (t) => {
+  const { page, errors } = await open({ visits: 2 }, t);
+  await ribbon(page).waitFor(); // due: shown on the landing page
+  for (const path of ['tests/fixtures/game/', 'reef/']) {
+    await page.goto(BASE + path);
+    await page.waitForLoadState('load');
+    assert.equal(await page.locator('[data-ribbon], [data-add-dialog]').count(), 0, `no ribbon or dialog on ${path}`);
+  }
+  assert.deepEqual(errors, []);
+});
+
 for (const [w, h] of [
   [320, 568],
   [390, 844],
