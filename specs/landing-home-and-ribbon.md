@@ -43,6 +43,9 @@ the design. No game page changes.
   "Don't show again" or installing, and never while the Update notice shows: the notice hides it, and
   it comes back when the notice goes. An open dialog stays open if the notice appears. A first look at
   the site stays clean.
+- **Decided after the merge (#49), by the owner (2026-11-11):** a ctrl-, cmd- or shift-click on a
+  tile, which opens the game in a new tab, counts as tapping a game: "I think it's good that if they
+  control click, it still counts as if they open the game to play." As built.
 - **What tapping it does:** it opens a small dialog (`<dialog>`, opened with `showModal()`, Escape
   closes it, focus returns to the ribbon) whose advice fits the device, worked out by one small
   function from the browser's signals:
