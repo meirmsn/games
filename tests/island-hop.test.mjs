@@ -996,9 +996,13 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
       const from = __hop.played.length;
       const n0 = window.__played.length;
       __hop.autopilot('gold');
-      __hop.step(80);
+      const looping = new Set();
+      for (let t = 0; t < 80; t += 0.5) {
+        __hop.step(0.5);
+        for (const l of __hop.loops) looping.add(l);
+      }
       __hop.autopilot(null);
-      return { names: __hop.played.slice(from), sounded: window.__played.length - n0 };
+      return { names: __hop.played.slice(from), sounded: window.__played.length - n0, looping: [...looping] };
     });
   const loud = await scenario();
   for (const n of ['creak', 'door', 'chime', 'jingle']) assert.ok(loud.names.includes(n), `${n} in ${loud.names}`);
@@ -1032,6 +1036,7 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
   await page.click('[data-mute]');
   const quiet = await scenario();
   assert.equal(quiet.sounded, 0, 'nothing reaches the speakers while muted');
+  assert.deepEqual(quiet.looping, [], 'no loop runs at all while muted');
   await context.close();
 });
 
