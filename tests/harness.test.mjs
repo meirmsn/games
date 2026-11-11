@@ -217,8 +217,15 @@ test('slow-tests-harness AC-10: realFrames waits on frames and fails on a page t
     paused.evaluate(() => 0).catch(() => {}); // runs into the pause
     const t0 = Date.now();
     // The test's own bound, so a realFrames that waits on the page fails here instead of hanging.
-    const late = new Promise((_, no) => setTimeout(() => no(new Error('realFrames hung on a paused page')), scaled(1000) + 4000));
-    await assert.rejects(Promise.race([realFrames(paused, 5, { timeout: 1000 }), late]), /realFrames: 5 animation frames/);
+    let guard;
+    const late = new Promise((_, no) => {
+      guard = setTimeout(() => no(new Error('realFrames hung on a paused page')), scaled(1000) + 4000);
+    });
+    try {
+      await assert.rejects(Promise.race([realFrames(paused, 5, { timeout: 1000 }), late]), /realFrames: 5 animation frames/);
+    } finally {
+      clearTimeout(guard);
+    }
     assert.ok(Date.now() - t0 < scaled(1000) + 4000, `a paused page: failed in ${Date.now() - t0} ms`);
   } finally {
     await browser.close();
