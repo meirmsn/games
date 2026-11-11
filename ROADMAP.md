@@ -148,6 +148,38 @@ Reef's F-37 and F-8 (game-code changes need the owner's OK); Runes AC-15's ghost
 Done: each test's cause is in the spec's Decisions. F-8 is fixed in Reef's frame loop (approved); F-37
 is kept (not approved); Runes' ghost is fixed in its test only.
 
+## R-7: Slow tests run once: Pixel Leap's tests, and the whole suite's proof
+
+The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
+
+```text
+we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
+```
+
+The split, which the owner delegated on 2026-11-11, in chat:
+
+```text
+Do an adversarial review about the split and pick whatever makes sense.
+```
+
+Slice 7 of 7, last: after R-1 to R-6 and Pixel Leap's AC-40 fix (meirmsn/games#36, merged).
+
+### Claude's notes
+
+Its spec: `specs/slow-tests-pixel-leap.md`, numbered from AC-1.
+
+`pixel-leap AC-22` moves to CPU time from a trace (F-32), checked to hold up under throttle; the
+single-pixel read at `tests/pixel-leap.test.mjs` ~951; 4 waits. This slice, or whichever merges
+last, carries the whole-suite proof (five `scripts/check-slow.sh` runs started together, plus one
+at 10× CPU throttle, with zero failures) and closes F-33.
+
+Done 2026-11-11: every wait now waits on frames, the game's state or a signal, and the file is
+marked `// clock-checked`; the frame budget is CPU time from a trace, under the throttle, its budget
+scaled by the rate (the owner's adversarial review). Guards that hold frames back while the page is
+idle, or stall frames without CPU, fail the old waits. No game code changed. An unmarked test file
+that calls `waitForTimeout` now fails the fast tier. The whole suite's proof is in the PR; F-33 is
+closed. The causes per test are in the spec's Decisions.
+
 ## R-8: Tests check what a player sees, and a red slow run is explained, not re-run
 
 Asked 2026-11-11, in chat, after R-7's whole-suite proof:
