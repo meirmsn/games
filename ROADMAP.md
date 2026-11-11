@@ -3,63 +3,18 @@
 What the owner decided will happen, in their words. The table's order is the priority: the top
 `Open` entry is next. What Claude noticed but nobody decided is in `FINDINGS.md`.
 
-| ID  | Added      | What                                                                        | Status |
-| --- | ---------- | --------------------------------------------------------------------------- | ------ |
-| R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Open   |
-| R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open   |
-| R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Open   |
-| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open   |
-| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open   |
-| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open   |
-| R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open   |
+| ID  | Added      | What                                                                        | Status                               |
+| --- | ---------- | --------------------------------------------------------------------------- | ------------------------------------ |
+| R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Done (`specs/slow-tests-harness.md`) |
+| R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open                                 |
+| R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Open                                 |
+| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open                                 |
+| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open                                 |
+| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
+| R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
-
-## R-1: Slow tests run once: the harness
-
-The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
-
-```text
-we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
-```
-
-The split, which the owner delegated on 2026-11-11, in chat:
-
-```text
-Do an adversarial review about the split and pick whatever makes sense.
-```
-
-Slice 1 of 7. The others: R-2, R-3, R-4, R-5, R-6 (in parallel, after this one merges), then R-7.
-
-### Claude's notes
-
-The owner delegated the split; the slices here are the ones the adversarial review the owner asked
-for produced, picked on that delegation. This slice is the harness, on its own:
-
-- F-34 first, since one hang voids every proof: a per-file `--test-timeout` in
-  `scripts/check-slow.sh` (Node 22), and pwa-updates' hang sources (`page.evaluate` on `caches` and
-  service-worker promises with no timeout; `server.close()` not dropping keep-alive sockets).
-- F-38 and F-39 in `tests/serve.mjs` and `tests/serve.test.mjs`.
-- `tests/clock.mjs`: `realFrames`, a wait-until-state helper, and a `newContext()` wrapper that
-  throttles every page's CPU when an env var is set (the pattern of `ci-flakes AC-5` in
-  `tests/crumble.test.mjs`); a one-line `open()` change in every test file.
-- A fast check driven by a per-file `// clock-checked` marker: in a marked file, every
-  `waitForTimeout` needs a one-line `// safe: …` comment.
-- Each later slice gets its own spec (`specs/slow-tests-<slice>.md`, numbered from AC-1), in
-  place of the split's reserved section and AC range in `specs/ci-flakes.md`: `spec-check.py` allows
-  no gaps or sub-headings in a spec's items and one Go line, so parallel slices would collide there
-  (`specs/slow-tests-harness.md` says why; the owner's go on that spec, "go" on 2026-11-11,
-  approved it). Googly Faces' guard tests go
-  in R-4's spec and the landing page's in R-5's.
-- Proof: a hanging file gets killed, and a throttled guard fails on the old code.
-
-Each later slice records the cause per test in its spec, not just which calls changed, proves its
-guard test fails on the old code, passes its files 5× in parallel and once at 10× CPU throttle,
-and passes the rest of the suite once. Cause patterns to look for, per test: fixed
-`waitForTimeout` waits; `manual` set after real frames ran; frame-loop state read before a frame
-ran; one pixel or one instant sampled; wall-clock timing asserts (F-32); float boundaries in step
-arithmetic; real-time `setTimeout`s in game code that `manual` doesn't stop (F-37).
 
 ## R-2: Slow tests run once: Walk on Red's tests
 
