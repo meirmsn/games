@@ -58,8 +58,21 @@ spec changes.
   the round test waits on the play-again button and the game's state, not on them; the wave skips a
   face that has ducked away (`phase === 'out'`), which every face has done once Play again starts a
   new round. Crumble's `setTimeout`s (the whoosh after a shot, `crumble/game.js` ~518, and the
-  banner, ~1682) decide no test either: no test checks the whoosh or the banner. So no owner's OK
-  is asked for. (Claude, 2026-11-11)
+  banner, ~1682) decide no test either: no test checks the whoosh or the banner. (Claude,
+  2026-11-11)
+- **The game-code verdict: no game change.** The owner delegated game-code OKs to an adversarial
+  review run by the coordinator session ("You should do an adversarial review to get the answer to
+  your questions.", owner, 2026-11-11), so its verdict stands as the owner's. Its verdict for R-4,
+  2026-11-11, in its words:
+
+  > **Googly's `setTimeout`s at googly-faces/game.js:389 and 390 (delayed giggle and flourish) and
+  > :688 and :698 (the party row and its waves): NOT APPROVED, test-only.** The sound tests check
+  > `>= 1` and `> count` (tests/googly-faces.test.mjs:97, 116), which late sounds can't break. The
+  > muted check (:133) holds as long as `play()` checks mute when it runs. The only party test
+  > checks `state === 'party'` and the Play again button (:225). Googly has no `manual` mode, so
+  > route its waits through `waitFor` on state. If party faces need a check, `waitFor` a count of
+  > `f.party` faces. **Crumble:** no game change was asked for. Its tight `waitForFunction`
+  > time-outs (~147, ~1018) and its own `realFrames` move to the shared helpers, as briefed.
 
 ### The cause, test by test: `tests/crumble.test.mjs`
 
