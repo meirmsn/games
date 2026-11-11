@@ -120,9 +120,18 @@ arriving, the game's state, or a count of the page's own frames.
   > hangs while it's paused.
 
   The fixes above follow it. Where it says "wait until `game.T` passes the value needed" (624, 638),
-  624 departs from its words: it waits until the round is in play, which is what its 1400 ms was
-  for (the intro is 1.2 s of game time, `splat-gallery/game.js` ~1340), not for a value of `T`. 638
-  waits until `T` passes `t0`, as it says. No test of the 0.4 s hold itself is added: no test asks for one. (Claude, 2026-11-11)
+  638 waits until `T` passes `t0`, as it says. 624 waits until the round is in play
+  (`game.mode === 'play'`), not on a value of `T`. The owner sent that departure to a review
+  ("Do an adversarial review to figure it out.", owner, 2026-11-11). The review's finding, which
+  stands as the owner's decision: `game.T` is never reset by `startRun` and advances through the
+  intro (`splat-gallery/game.js` ~1330), so no fixed value of it marks the end of the 1.2 s intro
+  (~1340); waiting on the mode is that same check, stated directly. Nothing later in the test needs
+  more than that, and "mid-run" plainly means play. (Review, 2026-11-11)
+- **The turning test's last check proves nothing; it is logged, not fixed.** It asserts that
+  `memory.best` has both a `landscape` and a `portrait` key ("each layout keeps its own best"), but
+  both keys exist from the start (`splat-gallery/game.js` ~136), and `memory.best` is written only
+  at game over (~626), which the test never reaches. It isn't a timing cause, so it goes to
+  `FINDINGS.md`. (Review, 2026-11-11) No test of the 0.4 s hold itself is added: no test asks for one. (Claude, 2026-11-11)
 - **The frame step's missing lower bound is the coordinator's finding, not this slice's fix.** The
   verdict also noted that `Math.min(0.05, (now - last) / 1000)` (~2427) has no lower bound, the same
   cause as Reef's F-8, and logs it as a finding: "fix it only if one of your tests proves it does
