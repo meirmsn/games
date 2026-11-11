@@ -95,6 +95,12 @@ follow-up docs PR (R-9), not here: see AC-12.
   adds no pips, as today, so it sends nothing; a paid ball still in flight when a frenzy starts adds
   its pips and sends its "+N", as today. The "+N" freezes under the pause and the orientation veil,
   greyed with the rest of the HUD.~~ Dropped by the owner's change above.
+- **Changed by the owner, 2026-11-11, after the PR opened: time to read the sign.** Their words:
+  "There's not enough time to read the pro tips, but I think, but I'm concerned that if we leave more
+  time, well, maybe it's just a little more time, just give enough time to read it." The round's
+  intro (the sign up, the booth still, the clock stopped) goes from 1.2 s to 2.2 s (`ROUND_INTRO`),
+  the sign fading 0.1 s after: about a second more, for its four lines, without touching the round's
+  30 s.
 - **The banner's goal line:** the round's opening banner gets a third line, "**N to clear**" (N the
   quota), under the round's name; `banner()` gains a third field and its sign grows to hold it. Not
   "hit N": a hit can be worth 1, 2, 3 or 5.
@@ -158,7 +164,9 @@ follow-up docs PR (R-9), not here: see AC-12.
   free (frenzy) ball neither counts nor swells the board.
 - **AC-6** (changed by the owner, 2026-11-11: "put like a pro tip there about like you know further
   target count more") Each round's opening banner reads "Round N", then its name, then "Q to clear"
-  with Q its quota, then "Tip: far targets count more".
+  with Q its quota, then "Tip: far targets count more"; (changed by the owner, 2026-11-11: "There's
+  not enough time to read the pro tips ... just give enough time to read it") the sign holds the booth
+  still, the round's clock stopped, for 2.2 s (it was 1.2 s), and is gone 0.1 s into play.
 - **AC-7** Round 1 schedules no tiny target; rounds 2 and 3 schedule one each; rounds 4, 5 and 6
   schedule two each, between 6 and 24 s of `game.elapsed`, at least 6 s apart.
 - **AC-8** A tiny target pops up in the farthest lane, never turns, at 0.6 of a far target's size and

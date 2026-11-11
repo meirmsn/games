@@ -735,7 +735,7 @@ async function turningCheck(o = {}) {
   assert.ok(await page.locator('[data-screen="turned"]').isHidden());
   await page.click('[data-play]');
   await page.evaluate(() => (window.__gallery.game.assist = 0.42));
-  // Mid-run means in play: past the round's 1.2 s intro.
+  // Mid-run means in play: past the round's intro (its sign, 2.2 s).
   await waitFor(page, () => window.__gallery.game.mode === 'play', null, { what: 'the round in play after its intro' });
   // Turned mid-run: the veil, play frozen.
   await page.setViewportSize(LANDSCAPE);
@@ -883,7 +883,8 @@ async function statesCheck(o = {}) {
   let u = await ui();
   assert.deepEqual(row(u), [false, false, false, false, 'Round 1', true, 'shown', 'running'], 'round intro');
   assert.equal(u.bannerSub, 'Warm-up');
-  await steps(page, 1.4);
+  // Past the intro and its sign (splat-gallery-goal-and-tiny-target AC-6: 2.2 s, then 0.1 s more).
+  await steps(page, (await page.evaluate(() => window.__gallery.ROUND_INTRO)) + 0.2);
   assert.deepEqual(row(await ui()), [false, false, false, false, null, true, 'shown', 'running'], 'playing');
   await page.evaluate(() => window.__gallery.pause());
   assert.deepEqual(row(await ui()), [false, false, true, false, null, true, 'shown', 'running'], 'paused');
@@ -2216,7 +2217,7 @@ test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points 
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "Q to clear" and the tip that far targets count more', async () => {
+test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "Q to clear" and the tip that far targets count more, held 2.2 s to read', async () => {
   const { context, page } = await open();
   const banners = await page.evaluate(() => {
     const g = window.__gallery;
@@ -2231,6 +2232,20 @@ test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "
     return out;
   });
   banners.forEach(([text, sub, goalLine, tip, name, quota], i) => assert.deepEqual([text, sub, goalLine, tip], [`Round ${i + 1}`, name, `${quota} to clear`, 'Tip: far targets count more']));
+  // Long enough to read: 2.2 s with the booth still and the clock stopped, the sign fading just after.
+  const t = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.startRound(3);
+    const at = (s) => {
+      for (let i = 0; i < Math.round(s * 60); i++) g.step(1 / 60);
+      return { mode: g.game.mode, time: g.game.time, banner: g.ui().banner };
+    };
+    return { intro: g.ROUND_INTRO, before: at(2.15), after: at(0.1), gone: at(0.1) };
+  });
+  assert.equal(t.intro, 2.2);
+  assert.deepEqual(t.before, { mode: 'intro', time: 30, banner: 'Round 3' }, 'still up, the clock stopped, at 2.15 s');
+  assert.equal(t.after.mode, 'play', 'play starts at 2.2 s');
+  assert.equal(t.gone.banner, null, 'the sign is gone by 2.35 s');
   await context.close();
 });
 

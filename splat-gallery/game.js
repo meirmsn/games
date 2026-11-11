@@ -93,6 +93,10 @@ const TINY = { pips: 5, base: 250, upFor: 1.4, scale: 0.6, minPx: 30, from: 6, t
 // The tip under each round's goal (the owner, 2026-11-11: "you can put like a pro tip there about
 // like you know further target count more").
 const TIP = 'Tip: far targets count more';
+// How long a round's opening sign holds the booth still, its clock stopped: long enough to read its
+// four lines (the owner, 2026-11-11: "just give enough time to read it"; it was 1.2 s). The sign
+// fades out just after.
+const ROUND_INTRO = 2.2;
 
 // The bullseye of each target face: its painted centre with the ring around it, as a share of the
 // sprite's half-width (measured from the pack's art).
@@ -621,7 +625,7 @@ function startRound(n) {
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
   game.modeT = 0;
-  banner(`Round ${n}`, cfg.name, 1.3, false, `${cfg.quota} to clear`, TIP);
+  banner(`Round ${n}`, cfg.name, ROUND_INTRO + 0.1, false, `${cfg.quota} to clear`, TIP);
   sfx('round');
   if (n === 1) {
     // A big, slow target crosses the middle of the nearest lane, where a short straight pull lands.
@@ -1395,7 +1399,7 @@ function update(dt) {
   game.goalPulse = Math.max(0, game.goalPulse - dt * 3);
   for (const d of decor) if (d.v) d.x = d.x + d.v * dt > SW + 80 ? -80 : d.x + d.v * dt;
 
-  if (game.mode === 'intro' && game.modeT >= 1.2) {
+  if (game.mode === 'intro' && game.modeT >= ROUND_INTRO) {
     game.mode = 'play';
     game.modeT = 0;
   }
@@ -2598,7 +2602,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
