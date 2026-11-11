@@ -180,7 +180,7 @@ test('slow-tests-harness AC-9: every browser test file starts Chromium with laun
   }
 });
 
-test('slow-tests-harness AC-10: realFrames waits on frames and fails on a page that runs none; waitFor waits on state and fails naming what', async () => {
+test('slow-tests-harness AC-10: realFrames waits on frames and fails on a page that runs none or is paused; waitFor waits on state and fails naming what', async () => {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
@@ -206,6 +206,20 @@ test('slow-tests-harness AC-10: realFrames waits on frames and fails on a page t
     const start = Date.now();
     await assert.rejects(realFrames(page, 5, { timeout: 1000 }), /realFrames: 5 animation frames/);
     assert.ok(Date.now() - start < scaled(1000) + 4000);
+    // A page whose script is paused, as a frozen page's is: it runs no frames and no timers, and
+    // its evaluate never returns, so only a bound kept in Node can end the wait. (CDP's freeze
+    // won't freeze a visible page; pausing in the debugger stands in for it.)
+    const paused = await browser.newPage();
+    await paused.goto(server.base);
+    const cdp = await paused.context().newCDPSession(paused);
+    await cdp.send('Debugger.enable');
+    await cdp.send('Debugger.pause');
+    paused.evaluate(() => 0).catch(() => {}); // runs into the pause
+    const t0 = Date.now();
+    // The test's own bound, so a realFrames that waits on the page fails here instead of hanging.
+    const late = new Promise((_, no) => setTimeout(() => no(new Error('realFrames hung on a paused page')), scaled(1000) + 4000));
+    await assert.rejects(Promise.race([realFrames(paused, 5, { timeout: 1000 }), late]), /realFrames: 5 animation frames/);
+    assert.ok(Date.now() - t0 < scaled(1000) + 4000, `a paused page: failed in ${Date.now() - t0} ms`);
   } finally {
     await browser.close();
   }

@@ -60,16 +60,21 @@ cause; this one gives them what they need to do it and to prove it:
   after its tests pass, until the new per-file limit stops it. Seen with a half-sent request made by
   the `slow-tests-harness AC-4` test, not with the browser; so it is a way the old file could hang,
   not proof of what hung. The new `close()` drops such connections. (Claude, 2026-11-11)
-- **AC-10 says "a page that runs no frames", not "a hidden page" (changed after the go, 2026-11-11).**
-  Headless Chromium keeps every page visible. All of these were tried with Playwright 1.63, and
-  every page stayed visible and kept running frames: a page behind another tab, a background target
-  made through CDP, a minimised window, launching without Playwright's backgrounding flags, and
-  CDP's freeze. So the test makes a page whose `requestAnimationFrame` never calls back. The item
-  now says what that test shows. Its point is unchanged: `realFrames` fails within its time-out
-  instead of waiting for ever, a bound kept in Node, so it doesn't matter why the frames stopped.
-  The owner delegated the call: "You should do an adversarial review to get the answer to your
-  questions." (2026-11-11). That review chose to reword the item rather than keep its words with a
-  Decision beside them, because otherwise the item would claim what its test never shows. (F-42)
+- **AC-10 names a page that runs no frames and a page whose script is paused, not "a hidden page"
+  (changed after the go, 2026-11-11).** Headless Chromium keeps every page visible. All of these
+  were tried with Playwright 1.63, and every page stayed visible and kept running frames: a page
+  behind another tab, a background target made through CDP, a minimised window, launching without
+  Playwright's backgrounding flags, and CDP's freeze. So the test covers both things a hidden or
+  frozen page does to a wait:
+  - a page whose `requestAnimationFrame` never calls back stands in for a hidden page;
+  - a page paused in the debugger stands in for a frozen page. Its timers and `evaluate` never run,
+    so only a bound kept in Node ends the wait. A `realFrames` whose time-out moved into the page
+    fails this case (tried in this change).
+  An adversarial review the owner asked for chose these words: "You should do an adversarial
+  review to get the answer to your questions." (2026-11-11). A second one, asked for on the
+  wording itself, proposed the paused-page case: "Make an adversarial review of this proposal. And
+  if it sounds good, then I give you an okay." (2026-11-11). This settles what F-42 recorded, and
+  F-42 is removed.
 - **The CPU throttle is applied by `launch()` in `tests/clock.mjs`, not by each file's `open()`.**
   The split named a `newContext()` wrapper and a one-line `open()` change per file, but 11 contexts
   in 7 files are made with `browser.newContext()` outside `open()` (Crumble, Googly Faces, PWA
@@ -157,10 +162,11 @@ cause; this one gives them what they need to do it and to prove it:
   `newContext` and `newPage` as Playwright's own.
 - **AC-9** No test file calls `chromium.launch(`, `browser.newPage(`, or `launchPersistentContext`
   outside `tests/clock.mjs`: every browser test file starts Chromium with `launch()`.
-- **AC-10** `realFrames(page, n)` resolves after `n` of the page's animation frames and fails, within
-  its time-out, on a page that runs no frames (as a hidden or frozen page doesn't); `waitFor`
-  resolves once its condition holds and, when it never does, fails within its time-out (times the
-  throttle rate) with a message naming `what`.
+- **AC-10** `realFrames(page, n)` resolves after `n` of the page's animation frames and fails within
+  its time-out, a bound kept in Node, on a page that runs no frames (as a hidden page doesn't) and
+  on one whose script is paused (as a frozen page's is); `waitFor` resolves once its condition
+  holds and, when it never does, fails within its time-out (times the throttle rate) with a message
+  naming `what`.
 - **AC-11** The `// clock-checked` check fails a marked file with a `waitForTimeout(` that has no
   `// safe: <reason>` on its line or the line above, passes a marked file where each has one,
   doesn't fail unmarked files, and runs in `scripts/check-fast.sh`.
