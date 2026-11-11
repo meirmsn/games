@@ -1,10 +1,15 @@
 // End-to-end tests for Gotta Go! (walk-on-red/). Run: scripts/check-slow.sh.
 // The game exposes window.__walkOnRed (its state, put() to place the player, and a step(dt) that
 // advances the simulation), so these tests set up a situation and check what the rules do with it.
+// With `manual` on, the test owns the clock: the page's frames only draw. Waits are on the input
+// being handled, the game's state or the page's frames, never a fixed time
+// (specs/slow-tests-walk-on-red.md).
+// clock-checked
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { serve } from './serve.mjs';
-import { launch } from './clock.mjs';
+import { launch, realFrames, waitFor, within } from './clock.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -22,8 +27,28 @@ after(async () => {
   server?.close();
 });
 
-async function open(opts = {}) {
+// The guard's page (slow-tests-walk-on-red AC-3): every animation frame takes at least 300 ms, as on
+// a crowded runner. Its own callback is registered before any page script and re-registered first
+// thing each frame, so it runs first; it spins once a frame, not once a callback.
+const STARVE = () => {
+  const raf = window.requestAnimationFrame.bind(window);
+  let spunAt = -1;
+  const spin = (t) => {
+    if (t === spunAt) return;
+    spunAt = t;
+    const end = performance.now() + 300;
+    while (performance.now() < end);
+  };
+  const first = (t) => {
+    raf(first);
+    spin(t);
+  };
+  raf(first);
+};
+
+async function open({ starve = false, ...opts } = {}) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, ...opts });
+  if (starve) await context.addInitScript(STARVE);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -48,6 +73,26 @@ const run = (page, seconds) =>
   page.evaluate((seconds) => {
     for (let i = 0; i < Math.round(seconds * 60); i++) window.__walkOnRed.step(1 / 60);
   }, seconds);
+
+// Counts the inputs the page has handled: a lifted finger or mouse button on the street, or a key.
+// Added once the page has loaded, in the bubble phase, so each runs after the game's own handler.
+const countInputs = (page) =>
+  page.evaluate(() => {
+    window.__inputs = 0;
+    const count = () => window.__inputs++;
+    const street = document.getElementById('street');
+    street.addEventListener('pointerup', count);
+    street.addEventListener('pointercancel', count);
+    addEventListener('keydown', count);
+  });
+
+// With the real loop on: waits until the page has handled `n` inputs and the player has landed. The
+// game takes a queued hop in the same update that lands the last one, so a landed player has none
+// queued.
+const handled = (page, n) =>
+  waitFor(page, (n) => window.__inputs >= n && window.__walkOnRed.player.tw >= 1, n, {
+    what: `${n} inputs handled and the player landed`,
+  });
 
 // A hop from input, then long enough for it to land.
 const hop = async (page, dir) => {
@@ -112,9 +157,9 @@ const hearts = (page) =>
     };
   });
 
-test('walk-on-red AC-1: traffic drives behind the start card; Start begins level 1 alone with 30 s of red', async () => {
+test('walk-on-red AC-1: traffic drives behind the start card; Start begins level 1 alone with 30 s of red [slow-tests-walk-on-red AC-4]', async () => {
   const { context, page, errors } = await open();
-  await page.waitForTimeout(500);
+  // showStart() filled the street before window.__walkOnRed was set.
   const s = await page.evaluate(() => {
     const t = window.__walkOnRed;
     return {
@@ -129,26 +174,42 @@ test('walk-on-red AC-1: traffic drives behind the start card; Start begins level
   assert.ok(s.start);
   assert.ok(s.vehicles >= 3, 'traffic is driving');
   assert.ok(s.waiting >= 4, 'people wait at the kerb');
-  await page.waitForTimeout(300);
+  await realFrames(page, 2);
   const moved = await page.evaluate(() => window.__walkOnRed.vehicles().map((v) => v.s));
   assert.ok(moved.some((v, i) => s.s0[i] !== undefined && v !== s.s0[i]), 'the vehicles move');
+  // Read in the click, after the game's own listener: the state Start left, before any frame runs.
+  await page.evaluate(() =>
+    document.querySelector('[data-play]').addEventListener(
+      'click',
+      () => {
+        const t = window.__walkOnRed;
+        window.__atStart = { mode: t.game.mode, level: t.game.level, name: t.LEVELS[t.game.level].name, red: Math.ceil(t.game.red), copiers: t.copiers().length, row: t.player.row, bottom: t.layout().bottom };
+      },
+      { once: true }
+    )
+  );
   await page.click('[data-play]');
-  const after = await page.evaluate(() => {
-    const t = window.__walkOnRed;
-    return { mode: t.game.mode, level: t.game.level, name: t.LEVELS[t.game.level].name, red: Math.ceil(t.game.red), copiers: t.copiers().length, row: t.player.row, bottom: t.layout().bottom };
-  });
+  const after = await page.evaluate(() => window.__atStart);
   assert.deepEqual(after, { mode: 'play', level: 0, name: 'Quiet Street', red: 30, copiers: 0, row: after.bottom, bottom: after.bottom });
   assert.deepEqual(errors, []);
   await context.close();
 });
 
-test('edge-gestures AC-8: with iPhone insets, a swipe that starts in an edge strip hops nowhere; a tap there still hops up', async () => {
-  const { context, page } = await open();
+// The checks the guard (slow-tests-walk-on-red AC-3) also runs on a starved page take the options
+// open() takes. Both keep the real loop on (`manual` off), so the game's own frames land each hop.
+async function edgeStripCheck(o = {}) {
+  const { context, page } = await open(o);
   const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__walkOnRed);
   await startEmpty(page, 1);
-  await page.evaluate(() => (window.__walkOnRed.manual = false));
+  await countInputs(page);
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.game.red = 999; // a slow run can't end the level under the test
+    t.manual = false;
+  });
   const at = () => page.evaluate(() => [window.__walkOnRed.player.col, window.__walkOnRed.player.row]);
-  const settle = () => page.waitForTimeout(200);
+  let sent = 0;
+  const settle = () => handled(page, ++sent);
   // One step up first, so a swipe down has somewhere to go.
   await touchDrag(cdp, 195, 400, 0, 0, { n: 1 });
   await settle();
@@ -173,24 +234,33 @@ test('edge-gestures AC-8: with iPhone insets, a swipe that starts in an edge str
   await settle();
   assert.deepEqual(await at(), [start[0] + 1, start[1] - 1], 'a swipe from the safe area hops right');
   await context.close();
-});
+}
 
-test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys too; the zebra’s edges and the kerbs stop him; one finger only', async () => {
-  const { context, page } = await open();
+test('edge-gestures AC-8: with iPhone insets, a swipe that starts in an edge strip hops nowhere; a tap there still hops up [slow-tests-walk-on-red AC-2]', () => edgeStripCheck());
+
+async function tapSwipeCheck(o = {}) {
+  const { context, page } = await open(o);
   await startEmpty(page, 1);
-  await page.evaluate(() => (window.__walkOnRed.manual = false));
+  await countInputs(page);
+  await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.game.red = 999; // a slow run can't end the level under the test
+    t.manual = false;
+  });
+  let sent = 0;
+  const settle = () => handled(page, ++sent);
   const at = () => page.evaluate(() => [window.__walkOnRed.player.col, window.__walkOnRed.player.row]);
   const b = await page.evaluate(() => window.__walkOnRed.layout().bottom);
   const col = await page.evaluate(() => window.__walkOnRed.PCOL);
   await page.mouse.click(195, 300);
-  await page.waitForTimeout(200);
+  await settle();
   assert.deepEqual(await at(), [col, b - 1], 'a tap hops forward');
   const swipe = async (dx, dy) => {
     await page.mouse.move(195, 400);
     await page.mouse.down();
     await page.mouse.move(195 + dx, 400 + dy, { steps: 4 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
+    await settle();
   };
   await swipe(0, 80);
   assert.deepEqual(await at(), [col, b], 'a swipe down hops back');
@@ -199,20 +269,20 @@ test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys t
   await swipe(-90, 0);
   assert.deepEqual(await at(), [col, b], 'a swipe left hops left');
   await page.keyboard.press('ArrowUp');
-  await page.waitForTimeout(200);
+  await settle();
   await page.keyboard.press('w');
-  await page.waitForTimeout(200);
+  await settle();
   await page.keyboard.press('ArrowDown');
-  await page.waitForTimeout(200);
+  await settle();
   await page.keyboard.press(' ');
-  await page.waitForTimeout(200);
+  await settle();
   assert.deepEqual(await at(), [col, b - 2]);
   await page.keyboard.press('ArrowLeft');
-  await page.waitForTimeout(200);
+  await settle();
   await page.keyboard.press('d');
-  await page.waitForTimeout(200);
+  await settle();
   await page.keyboard.press('d');
-  await page.waitForTimeout(200);
+  await settle();
   assert.deepEqual(await at(), [col + 1, b - 2], 'left and right keys');
   // The zebra's edges.
   const [c0, c1] = await page.evaluate(() => [window.__walkOnRed.CROSS_C0, window.__walkOnRed.CROSS_C1]);
@@ -222,16 +292,16 @@ test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys t
     t.player.col = c1;
   }, c1);
   await page.keyboard.press('ArrowRight');
-  await page.waitForTimeout(200);
+  await settle();
   assert.equal((await at())[0], c1, 'not past the zebra’s right edge');
   await page.evaluate((c0) => (window.__walkOnRed.player.col = c0), c0);
   await page.keyboard.press('ArrowLeft');
-  await page.waitForTimeout(200);
+  await settle();
   assert.equal((await at())[0], c0, 'not past its left edge');
   // The kerb: no hop below the near kerb.
   await page.evaluate(() => window.__walkOnRed.put(window.__walkOnRed.layout().bottom));
   await page.keyboard.press('ArrowDown');
-  await page.waitForTimeout(200);
+  await settle();
   assert.deepEqual(await at(), [c0, b]);
   // A second finger while the first is down does nothing.
   const two = await page.evaluate(() => {
@@ -248,7 +318,9 @@ test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys t
   assert.equal(two.mid, b, 'the second finger did nothing');
   assert.equal(two.end, b - 1, 'the first finger tapped');
   await context.close();
-});
+}
+
+test('walk-on-red AC-2: a tap hops forward, swipes hop back and sideways, keys too; the zebra’s edges and the kerbs stop him; one finger only [slow-tests-walk-on-red AC-2]', () => tapSwipeCheck());
 
 test('walk-on-red AC-3: the car lights go green, yellow at 4.5 s, red at 2 s, and on red no car crosses its stop line', async () => {
   const { context, page } = await open();
@@ -742,7 +814,7 @@ test('walk-on-red AC-14: hiding the page pauses; the resuming tap doesn’t hop 
     Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  await page.waitForTimeout(400);
+  await realFrames(page, 10); // real frames run, and must not advance a paused game
   const s = await page.evaluate(() => ({
     paused: window.__walkOnRed.game.paused,
     card: !document.querySelector('[data-screen="paused"]').hidden,
@@ -817,7 +889,7 @@ test('walk-on-red AC-15: the best total and the best stars per level are kept an
   await context.close();
 });
 
-test('walk-on-red AC-16: each state shows only its own card, HUD and banner', async () => {
+test('walk-on-red AC-16: each state shows only its own card, HUD and banner [slow-tests-walk-on-red AC-5]', async () => {
   const { context, page } = await open();
   const shown = () =>
     page.evaluate(() => {
@@ -837,9 +909,19 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner', as
       return t.game.mode;
     }, mode);
   assert.deepEqual(await shown(), { start: true, paused: false, over: false, hud: false, banner: null });
-  await startEmpty(page, 0);
-  assert.deepEqual(await shown(), { start: false, paused: false, over: false, hud: true, banner: 'Quiet Street' }, 'the level’s name just after Start');
-  await page.waitForTimeout(1800);
+  // startEmpty(page, 0), with the banner read in the same evaluate: its 1.6 s timer can't have run.
+  const banner = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    t.seed(7);
+    t.startGame(0);
+    t.manual = true;
+    t.clearTraffic();
+    return document.querySelector('[data-banner]').hidden ? null : document.querySelector('[data-banner-name]').textContent;
+  });
+  assert.equal(banner, 'Quiet Street', 'the level’s name just after Start');
+  const { banner: _, ...cards } = await shown(); // the banner was read above, with the start
+  assert.deepEqual(cards, { start: false, paused: false, over: false, hud: true });
+  await waitFor(page, () => document.querySelector('[data-banner]').hidden, null, { what: 'the level’s name banner hidden after Start' });
   assert.equal((await shown()).banner, null, 'then it goes');
   // Paused while playing.
   await page.evaluate(() => window.__walkOnRed.pause());
@@ -859,7 +941,6 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner', as
   assert.equal(await stage('ff'), 'ff');
   assert.deepEqual(await shown(), across, 'fast-forward');
   assert.equal(await until('green'), 'green');
-  await page.waitForTimeout(100);
   const green = await shown();
   assert.match(green.banner, /^\+\d+$/, 'the score table over the green light');
   assert.deepEqual({ ...green, banner: null }, { start: false, paused: false, over: false, hud: true, banner: null });
@@ -876,13 +957,21 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner', as
   await context.close();
 });
 
-test('walk-on-red AC-17: the game works offline once it has been played', async () => {
+test('walk-on-red AC-17: the game works offline once it has been played [slow-tests-walk-on-red AC-6]', async () => {
   const { context, page } = await open();
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'the service worker ready');
   await page.reload();
   await page.waitForFunction(() => window.__walkOnRed);
-  await page.waitForLoadState('networkidle');
+  // The service worker writes each file into its cache after answering for it, which no load state
+  // shows: wait until the files the game needs offline are there.
+  await within(
+    page.evaluate(async () => {
+      const urls = [location.href, new URL('game.js', location.href).href, new URL('img/vehicles.png', location.href).href];
+      while (!(await Promise.all(urls.map((u) => caches.match(u)))).every(Boolean)) await new Promise((r) => setTimeout(r, 50));
+    }),
+    'the page, game.js and img/vehicles.png cached'
+  );
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__walkOnRed);
@@ -891,7 +980,7 @@ test('walk-on-red AC-17: the game works offline once it has been played', async 
   await context.close();
 });
 
-test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, one width, it fits, and a turn only rescales', async () => {
+test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, one width, it fits, and a turn only rescales [slow-tests-walk-on-red AC-7]', async () => {
   for (const [w, h, minPerson] of [
     [390, 844, 36],
     [360, 640, 36],
@@ -920,7 +1009,7 @@ test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, 
     const { context, page } = await open({ viewport: { width: 1280, height: 720 } });
     const w0 = await page.evaluate(() => window.__walkOnRed.view.width);
     await page.click('[data-play]');
-    await page.waitForTimeout(300);
+    await realFrames(page, 2); // a frame drawn since Start's resize() cleared the canvas
     const d = await page.evaluate(() => {
       const t = window.__walkOnRed;
       const c = document.getElementById('street');
@@ -953,7 +1042,8 @@ test('walk-on-red AC-18: the view is the crossing edge to edge on every screen, 
   const before = await state();
   for (const [w, h] of [[414, 896], [896, 414], [390, 844]]) {
     await page.setViewportSize({ width: w, height: h });
-    await page.waitForTimeout(100);
+    await waitFor(page, (w) => innerWidth === w, w, { what: `the window ${w} px wide` });
+    await realFrames(page, 2); // the resize event runs before the next frame's callbacks
     assert.equal(await state(), before, `turned to ${w}×${h}: nothing changed`);
   }
   await context.close();
@@ -1006,7 +1096,7 @@ test('walk-on-red AC-20: what the level is worth while playing, ×2 as a followe
   const { context, page } = await open();
   await startEmpty(page, 7);
   await page.evaluate(() => (window.__walkOnRed.manual = false));
-  await page.waitForTimeout(200);
+  await realFrames(page, 2); // drawn, with the walk light counting down
   const label = await page.evaluate(() => {
     const t = window.__walkOnRed;
     return { text: t.drawn.payout, clear: t.drawn.payoutClear, red: Math.ceil(t.game.red), countdown: t.drawn.countdown };
@@ -1208,7 +1298,7 @@ test('walk-on-red AC-26: the game is called Gotta Go!, and nothing the player se
   await context.close();
 });
 
-test('walk-on-red AC-28: a run has 3 lives in the HUD; a hit empties one, a follower hit or running out of time none; the next level keeps them; a new run has 3', async () => {
+test('walk-on-red AC-28: a run has 3 lives in the HUD; a hit empties one, a follower hit or running out of time none; the next level keeps them; a new run has 3 [slow-tests-walk-on-red AC-7]', async () => {
   const { context, page } = await open();
   await startEmpty(page, 2);
   assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true });
@@ -1240,7 +1330,8 @@ test('walk-on-red AC-28: a run has 3 lives in the HUD; a hit empties one, a foll
   assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true }, 'a new run has 3');
   // The hearts fit at 360 px and the HUD keeps one width.
   await page.setViewportSize({ width: 360, height: 640 });
-  await run(page, 0.1);
+  await waitFor(page, () => innerWidth === 360, null, { what: 'the window 360 px wide' });
+  await realFrames(page, 2); // the game's resize() has set the HUD's width
   const fit = await page.evaluate(() => {
     const hud = document.querySelector('[data-hud]').getBoundingClientRect();
     const l = document.querySelector('[data-lives]').getBoundingClientRect();
@@ -1322,4 +1413,30 @@ test('walk-on-red AC-29: the third hit stops the level, he stays down, then Game
   await run(page, 0.1);
   assert.equal((await hearts(page)).full, 3);
   await context.close();
+});
+
+test('slow-tests-walk-on-red AC-3: on a page whose every animation frame takes at least 300 ms, the tap-and-swipe checks still pass', async () => {
+  const { context, page } = await open({ starve: true });
+  // Read when each callback runs, not its frame's time stamp, which can be earlier than that on a
+  // busy machine: each reading comes after the next frame's spin, so they are over 300 ms apart.
+  const gaps = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        const at = [];
+        const tick = () => (at.push(performance.now()), at.length > 6 ? done(at.slice(1).map((x, i) => x - at[i])) : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      })
+  );
+  await context.close();
+  assert.ok(Math.min(...gaps) >= 300, `the starved page's frames are at least 300 ms apart: ${gaps.map(Math.round)}`);
+  await tapSwipeCheck({ starve: true });
+});
+
+test('slow-tests-walk-on-red AC-1: this file is marked clock-checked and has no fixed wait', () => {
+  const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n');
+  assert.ok(lines.slice(0, 10).some((l) => /^\s*\/\/\s*clock-checked\b/.test(l)), 'marked in its first 10 lines');
+  assert.deepEqual(
+    lines.filter((l) => /waitForTimeout\(/.test(l) && !/^\s*\/\//.test(l)),
+    []
+  );
 });
