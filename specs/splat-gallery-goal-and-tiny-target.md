@@ -1,6 +1,6 @@
 # Splat Gallery: a "to go" board that makes the round's goal clear, and a tiny high-value target
 
-**Go:** "go" 2026-11-11, confirming once in rounds 2–3 and twice in 4–6, and the tiny target held back during a frenzy
+**Go:** "go" 2026-11-11 (to the summary that asked them to confirm the two calls marked "to confirm at the go")
 
 ## Intent
 
@@ -64,7 +64,7 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   "hit N": a hit can be worth 1, 2, 3 or 5.
 - **The tiny target: where and when.** A new target kind, `tiny`. From round 2 on: **once** in rounds
   2 and 3, **twice** in rounds 4, 5 and 6 (the owner said "once or twice per round"; Claude chose that
-  it grows with the rounds: **to confirm at the go**). Each is due at a random `game.elapsed` between
+  it grows with the rounds; confirmed by the go, 2026-11-11). Each is due at a random `game.elapsed` between
   6 and 24 s, at least 6 s apart. It pops up in the **farthest lane** (lane 0), never turns, stays up
   **1.4 s** at full speed whatever happens (a pop-up stays 1.8), and goes down unhit. It comes only at
   a spot no live target in lane 0 is within its width plus a target's width of; if there's none, it
@@ -75,7 +75,7 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   left (`game.time < 2`). One already up when a frenzy starts stays up its full 1.4 s (it isn't
   sped up with the rest). The owner leaned to "shouldn't show up during frenzy" but hedged ("I don't
   know"); Claude picked holding it back because frenzy balls are free and add no pips, so a tiny hit
-  there would miss the quota, the point of it: **to confirm at the go**.
+  there would miss the quota, the point of it; confirmed by the go, 2026-11-11.
 - **The tiny target: how it looks.** Smaller than a far-lane target: 0.6 of its size, and never under
   30 CSS px wide (the far lane's other targets keep the 44 px floor of `specs/splat-gallery.md`, which this
   change amends for the tiny one). A red-and-white target face (`target_red1`) with a gold rim drawn
