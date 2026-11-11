@@ -383,6 +383,39 @@ test('pwa-updates AC-2 / slow-tests-pwa-site AC-5 / slow-tests-pwa-site AC-6: wi
   await s.close();
 });
 
+test('landing-home-and-ribbon AC-4: the add-to-home-screen ribbon hides while the Update notice shows, an open dialog staying open, and comes back when the notice goes', async (t) => {
+  const s = await site(t);
+  const one = await s.page(); // the first visit
+  await controlled(one);
+  const two = await s.page(); // a later visit: the ribbon's due
+  await controlled(two);
+  const ribbon = two.locator('[data-ribbon]');
+  await ribbon.waitFor({ timeout: scaled(10000) });
+  // Two has the ribbon's dialog open when its notice appears.
+  await ribbon.locator('button').click();
+  const dialog = two.locator('[data-add-dialog]');
+  await dialog.waitFor({ state: 'visible' });
+  setVersion(s.dir, 'test-2'); // only the worker changes
+  await one.reload();
+  await notice(one).waitFor({ state: 'visible', timeout: scaled(10000) });
+  assert.equal(await one.locator('[data-ribbon]').isVisible(), false, 'no ribbon beside the notice');
+  await two.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await notice(two).waitFor({ state: 'visible', timeout: scaled(10000) });
+  await ribbon.waitFor({ state: 'hidden' });
+  assert.equal(await dialog.isVisible(), true, 'the open dialog stays open');
+  await two.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await ribbon.isVisible(), false, 'still hidden while the notice shows');
+  // One applies the update; two's notice goes, and its ribbon comes back.
+  await notice(one).getByRole('button', { name: 'Update' }).click();
+  await notice(two).waitFor({ state: 'hidden', timeout: scaled(10000) });
+  await ribbon.waitFor({ state: 'visible' });
+  await s.close();
+});
+
 test("pwa-updates AC-11 / slow-tests-pwa-site AC-5: with sw.js unchanged, a change to the landing page's own files shows the notice once it's back on screen; Update reloads into it", async (t) => {
   const s = await site(t);
   const page = await s.page();
