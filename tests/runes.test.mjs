@@ -5,7 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch } from './clock.mjs';
 import { simulateInsets, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import * as R from '../runes/rules.js';
@@ -20,7 +20,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

@@ -3,7 +3,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -16,7 +16,7 @@ before(async () => {
   server = await serve();
   BASE = server.base;
   GAME = BASE + 'googly-faces/';
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

@@ -4,7 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch } from './clock.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS, STRIP } from './insets.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -14,7 +14,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

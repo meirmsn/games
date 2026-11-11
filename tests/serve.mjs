@@ -7,9 +7,10 @@ import { spawn } from 'node:child_process';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
-// Resolves to { base, port, close } once the server is listening; rejects if it exits or doesn't
-// report a port within `timeout` ms.
-export function serve({ root = ROOT, timeout = 10000 } = {}) {
+// Resolves to { base, port, pid, close } once the server is listening; rejects if it exits or doesn't
+// report a port within `timeout` ms. If python exits later, before close(), `onCrash` is told why, so
+// the file's connection errors that follow have a named cause (F-39, specs/slow-tests-harness.md).
+export function serve({ root = ROOT, timeout = 10000, onCrash = (why) => console.error(why) } = {}) {
   const child = spawn('python3', ['-u', '-m', 'http.server', '--bind', '127.0.0.1', '0'], {
     cwd: root,
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -34,7 +35,15 @@ export function serve({ root = ROOT, timeout = 10000 } = {}) {
       child.stdout.off('data', onData);
       child.stdout.resume(); // keep draining, so the server never blocks on a full pipe
       const port = Number(m[1]);
-      resolve({ port, base: `http://127.0.0.1:${port}/`, close: () => child.kill() });
+      let closing = false;
+      child.on('exit', (code, signal) => {
+        if (!closing) onCrash(`tests/serve.mjs: python3 exited (${signal ?? code}) while serving port ${port}`);
+      });
+      const close = () => {
+        closing = true; // before the kill, so its exit isn't reported
+        child.kill();
+      };
+      resolve({ port, pid: child.pid, base: `http://127.0.0.1:${port}/`, close });
     });
   });
 }
