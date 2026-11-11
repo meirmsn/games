@@ -73,8 +73,9 @@ cause; this one gives them what they need to do it and to prove it:
   An adversarial review the owner asked for chose these words: "You should do an adversarial
   review to get the answer to your questions." (2026-11-11). A second one, asked for on the
   wording itself, proposed the paused-page case: "Make an adversarial review of this proposal. And
-  if it sounds good, then I give you an okay." (2026-11-11). This settles what F-42 recorded, and
-  F-42 is removed.
+  if it sounds good, then I give you an okay." (2026-11-11). Shown the reviewed wording and the
+  paused-page test, the owner said: "ok" (2026-11-11). This settles what F-42 recorded, and F-42 is
+  removed.
 - **The CPU throttle is applied by `launch()` in `tests/clock.mjs`, not by each file's `open()`.**
   The split named a `newContext()` wrapper and a one-line `open()` change per file, but 11 contexts
   in 7 files are made with `browser.newContext()` outside `open()` (Crumble, Googly Faces, PWA
