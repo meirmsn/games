@@ -110,7 +110,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   roads, fiddly on a phone (adversarial review, 2026-11-10).
 - Transitions are automatic and take about 0.3 s, with no buttons:
   - A boat heading toward a free berth, within 1.5 tiles and under half its top speed, is pulled in and
-    docks; the person steps onto the jetty. Sailing past at speed doesn't dock. Moored decoration boats
+    docks; the person steps onto the jetty. So does a boat under half its top speed touching a free
+    jetty from any side (owner, 2026-11-11: "You should allow getting out of the boat when touching the
+    dog from anywhere, not just from the front"). Sailing past at speed doesn't dock. Moored decoration boats
     never sit on berths; a berth holds one of your boats, and one holding a boat can't be docked at
     (marinas have two berths).
   - Walking onto a berth holding one of your boats boards it. Your boats each stay where you left them,
@@ -118,7 +120,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   - Walking into a parked car gets in. Letting go of the stick with the car within 1 tile of a car
     park, a jetty or a stop's door gets out; anywhere else, the car just stops. A car stays where you
     leave it.
-  - Walking onto a stop's doormat ticks it.
+  - Walking onto a stop's doormat ticks it, and so does walking up to its building from any side
+    (within 0.15 tiles of its walls); the doormat stays as a hint. (Owner, 2026-11-11: "when I go to
+    the building that had the, the emoji, nothing happens. So I'm not sure how it's supposed to work,
+    but we need to make it easy. Maybe just touching the building".)
 - The boats you sail: the motorboat (the start, all-round), the speedboat (at the marina on the second
   large island: fast in open water, too deep for the lagoon), and the rowboat (at a small island:
   slow, but it fits the lagoon and passes under the footbridge). Switching boats is docking yours at a
@@ -195,11 +200,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   takes the branch the stick points at; a boat nosed into a cliff gets free in under 2 s —
   `tests/island-hop.test.mjs`.
 - **AC-7** A boat heading slowly toward a free berth within 1.5 tiles docks and the person steps
-  ashore; sailing past at speed doesn't; a berth holding a boat can't be docked at; walking onto a
+  ashore, and so does a slow boat touching a free jetty from any side; sailing past at speed doesn't; a berth holding a boat can't be docked at; walking onto a
   berth holding one of your boats boards it; after leaving the rowboat in the lagoon the motorboat is
   still at its berth and boards; walking into a parked car gets in; letting go with the car within
   1 tile of a car park, jetty or door gets out and the car stays there — `tests/island-hop.test.mjs`.
-- **AC-8** Walking onto a stop's doormat ticks it with a chime and a split; an ordered stop isn't
+- **AC-8** Walking onto a stop's doormat, or up to its building from any side, ticks it with a chime
+  and a split; an ordered stop isn't
   ticked before its pickup, and its beam pulses and the pickup's icon flashes; pickups ride with you
   until delivered; the last stop finishes the mission — `tests/island-hop.test.mjs`.
 - **AC-9** Docking at a marina and walking onto its other berth swaps boats; the speedboat can't enter

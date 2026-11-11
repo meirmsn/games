@@ -50,7 +50,7 @@ export const MISSIONS = [
       { walk: 'A' },
       { walk: 'F' },
     ],
-    par: 42.1,
+    par: 41.5,
   },
   {
     name: 'Two towns',
@@ -90,7 +90,7 @@ export const MISSIONS = [
       { walk: 'G' },
       { walk: 'J' },
     ],
-    par: 63,
+    par: 62.4,
   },
   {
     name: 'Fresh fish',
@@ -143,7 +143,7 @@ export const MISSIONS = [
       { sail: 'portS' },
       { walk: 'F' },
     ],
-    par: 75.4,
+    par: 74.8,
   },
   {
     name: 'The keeper’s lamp',
@@ -181,7 +181,7 @@ export const MISSIONS = [
       { walk: 'Z' },
       { walk: 'Y' },
     ],
-    par: 83.4,
+    par: 82.7,
   },
   {
     name: 'Turtle supper',

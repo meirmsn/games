@@ -23,7 +23,7 @@ export const RULES = {
   accel: 1.1, // seconds from still to top speed
   brake: 0.7, // seconds from top speed to still
   spin: 120, // degrees: a stick further than this from the bow turns the boat on the spot
-  dock: { range: 1.5, slow: 0.5 }, // within 1.5 tiles of a free berth, under half top speed
+  dock: { range: 1.5, slow: 0.5, touch: 0.35 }, // under half top speed: within 1.5 tiles of a free berth heading in, or touching its jetty
   transition: 0.3,
   bump: 0.6, // seconds held still after hitting a rock or traffic
   personR: 0.2,
@@ -354,9 +354,10 @@ function tryDock(s, b) {
       if (d > RULES.dock.range + 0.5) b.left = null;
       else continue;
     }
-    if (d > RULES.dock.range) continue;
-    const toward = d < 0.6 || (Math.cos(b.h) * (c.x - b.x) + Math.sin(b.h) * (c.y - b.y)) / d > 0.3;
-    if (!toward) continue;
+    // Heading slowly into the berth, or touching its jetty from any side.
+    const toward = d <= RULES.dock.range && (d < 0.6 || (Math.cos(b.h) * (c.x - b.x) + Math.sin(b.h) * (c.y - b.y)) / d > 0.3);
+    const touching = br.planks.some((t) => Math.hypot(Math.max(t.x - b.x, 0, b.x - (t.x + 1)), Math.max(t.y - b.y, 0, b.y - (t.y + 1))) <= spec.radius + RULES.dock.touch);
+    if (!toward && !touching) continue;
     s.trans = { kind: 'dock', t: 0, boat: b.id, berth: br.id, from: { x: b.x, y: b.y, h: b.h } };
     b.v = 0;
     return;
@@ -393,8 +394,16 @@ function walkStep(s, g, dt) {
   }
   arrive(s);
 }
-// What walking onto a tile does: a stop's mat ticks it, a berth with your boat boards it, a parked
-// car gets you in.
+// Touching a stop: standing on its doormat, or within a step of its building's walls.
+export const STOP_TOUCH = 0.15; // tiles between the person's edge and the wall
+export function touchesStop(p, stop) {
+  if (Math.floor(p.x) === stop.mat.x && Math.floor(p.y) === stop.mat.y) return true;
+  const dx = Math.max(stop.x - p.x, 0, p.x - (stop.x + 1));
+  const dy = Math.max(stop.y - p.y, 0, p.y - (stop.y + 1));
+  return Math.hypot(dx, dy) <= RULES.personR + STOP_TOUCH;
+}
+// What walking does: a stop's doormat or building ticks it, a berth with your boat boards it, a
+// parked car gets you in.
 function arrive(s) {
   const p = s.person;
   const key = `${Math.floor(p.x)},${Math.floor(p.y)}`;
@@ -409,20 +418,22 @@ function arrive(s) {
     return;
   }
   p.nearCar = near;
-  if (!entered) return;
-  const berthId = WORLD.jettyEnds[key];
-  if (berthId) {
-    const boat = s.boats.find((b) => b.berth === berthId);
+  if (entered) {
+    const berthId = WORLD.jettyEnds[key];
+    const boat = berthId && s.boats.find((b) => b.berth === berthId);
     if (boat) {
       s.trans = { kind: 'board', t: 0, boat: boat.id, from: { x: p.x, y: p.y } };
       return;
     }
   }
+  // A stop: walking onto its doormat, or up to its building from any side.
+  const touching = new Set(s.stops.filter((st) => touchesStop(p, WORLD.stops[st.at])).map((st) => st.at));
+  const was = p.touching || new Set();
+  p.touching = touching;
   for (const st of s.stops) {
-    const stop = WORLD.stops[st.at];
-    if (st.done || `${stop.mat.x},${stop.mat.y}` !== key) continue;
+    if (st.done || !touching.has(st.at)) continue;
     if (!canTick(s, st)) {
-      s.events.push({ type: 'locked', stop: s.stops.indexOf(st), needs: st.needs });
+      if (!was.has(st.at)) s.events.push({ type: 'locked', stop: s.stops.indexOf(st), needs: st.needs });
       continue;
     }
     st.done = true;

@@ -308,6 +308,26 @@ test('island-hop AC-7: a slow boat heading for a free berth docks; one sailing p
   }
 });
 
+test('island-hop AC-7: a slow boat touching a free jetty from any side docks, not only heading into the berth', () => {
+  // Port Town's east jetty runs along x from the shore, (24,11) and (25,11), to its berth at (26,11).
+  const br = WORLD.berthById.portE;
+  for (const [x, y, h, stick] of [
+    [24.5, 12.75, 270, gridToStick(0, -1, 0.3)], // alongside, from the +y side, by the shore end
+    [25.5, 10.25, 90, gridToStick(0, 1, 0.3)], // alongside, from the -y side
+  ]) {
+    const s = play(0);
+    const b = afloat(s, 'motor', x, y, h, 0.6);
+    run(s, 1, stick);
+    assert.equal(s.mode, 'walk', `docked from ${x},${y}`);
+    assert.equal(b.berth, br.id);
+  }
+  // Fast along the same side: no dock.
+  const s = play(0);
+  afloat(s, 'motor', 22.5, 12.75, 0, 3.5);
+  run(s, 0.6, gridToStick(1, 0));
+  assert.equal(s.mode, 'boat', 'sailing past at speed');
+});
+
 test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board; a parked car gets you in and lets you out by a car park, jetty or door, and stays there', () => {
   // You came to Lagoon Isle by motorboat (moored at Port Town's west berth), took the rowboat out into
   // the channel and docked it back; the motorboat is still at its berth and boards.
@@ -401,6 +421,26 @@ test('island-hop AC-8: a doormat ticks its stop; an ordered stop waits for its p
 });
 
 // --- Boats, the lagoon, bumps (Node) ------------------------------------------------------------------------------
+
+test('island-hop AC-8: walking up to a stop\'s building from any side ticks it, not only its doormat', () => {
+  // The town hall D stands at (20,7), with a house on its -x side; its doormat is at (21,7). Walk
+  // into its open walls.
+  for (const [x, y, gx, gy] of [
+    [20.5, 8.5, 0, -1], // from the +y side, below it
+    [20.5, 6.5, 0, 1], // from the -y side
+  ]) {
+    const s = play(0);
+    ashore(s, x, y);
+    run(s, 1, gridToStick(gx, gy));
+    assert.equal(s.stops.find((st) => st.at === 'D').done, true, `ticked from ${x},${y}`);
+    assert.equal(events(s, 'stop').length, 1);
+  }
+  // Passing near, not touching: nothing.
+  const s = play(0);
+  ashore(s, 19.5, 8.5);
+  run(s, 0.3, gridToStick(-1, 0));
+  assert.equal(s.stops.find((st) => st.at === 'D').done, false);
+});
 
 test('island-hop AC-9: at the marina, walking onto the other berth swaps boats; the speedboat can\'t enter the lagoon and the rowboat can; a rock or traffic stops you for 0.6 s and never fails the mission', () => {
   // Dock the motorboat at the marina's free berth; walk to the speedboat's berth.
