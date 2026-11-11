@@ -13,6 +13,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Done (`specs/slow-tests-pixel-leap.md`) |
 | R-8 | 2026-11-11 | Tests check what a player sees, and a red slow run is explained, not re-run | Open |
+| R-9 | 2026-11-11 | Splat Gallery's main spec describes the count board and the tiny target | Open |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
@@ -206,3 +207,22 @@ nightly stress run:
 - Tests check each game's promises, what a player sees, rather than tuning numbers (Googly Faces'
   1.8× dot swell, its 0.05 eye-radii pupil move); start with a short `specs/googly-faces.md`, since
   Googly Faces has none.
+
+## R-9: Splat Gallery's main spec describes the count board and the tiny target
+
+Asked 2026-11-11, in chat, when the reviewer wouldn't review a PR touching two spec files
+(`specs/splat-gallery-goal-and-tiny-target.md` and `specs/splat-gallery.md`):
+
+```text
+Main spec in a follow-up (Recommended)
+```
+
+The option it picked read: "Take the specs/splat-gallery.md edits out of this PR and drop AC-12 from
+it; right after this merges, a small docs-only PR brings the game's main spec up to date."
+
+### Claude's notes
+
+The edits are those taken out of the count-board PR: a decisions section on the count board and the
+gauge's removal, the tiny target under the rounds table and in scoring, the banner's goal line, and
+its AC-22's 44 px far-target floor exempting the tiny target (at least 30 px). The test AC-12 had
+(`splat-gallery-goal-and-tiny-target AC-12`) comes back with them.

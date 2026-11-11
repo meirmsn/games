@@ -39,26 +39,6 @@ Where they differ from the decisions below, these win.
   in the precached list, which `sw.js` says needs a bump. It empties each visitor's offline copy of
   every game once (F-10); the old address's copy would otherwise stay cached for good.
 
-### A count board and a tiny target (owner, 2026-11-11)
-
-From `specs/splat-gallery-goal-and-tiny-target.md`, where the details and acceptance items are. The
-owner found "0 / 18" on the counter didn't say it was the goal to clear the round, and it counted
-pips, not hits.
-
-- **The count board.** A second bulb board at the top right, left of the sound button, built like
-  the timer with **bottle-green** bulbs (none of the timer's colours; "make it like the green that is
-  analog, which is not that bright"). It counts **up** the pips scored this round ("So that you're
-  adding"), and under its digits the quota's brass bar fills toward the quota ("maybe the bar could
-  be filling below it"): gold in the bonus, its groove flashing red when the time runs out short.
-  Each paid hit sends a green "+N" (its pips) flying from where the ball landed to the board in
-  0.45 s, and the board climbs and swells when it arrives. At the quota the board gets a gold brass
-  rim and keeps counting. It is as wide as the timer where there's room beside a 99,999 score,
-  narrower where there isn't.
-- **No gauge on the counter.** The bar that was there moved to the board ("Remove it"); the counter
-  holds the round's sign, the hopper under it, and the slingshot.
-- **The round's banner** has a third line, its goal: "18 to clear".
-- **The tiny target**, from round 2: see the rounds and scoring below.
-
 ### The owner's fourteenth playtest (owner, 2026-11-10)
 
 Where they differ from the playtests below, these win.
@@ -240,7 +220,7 @@ the analog look and a few details. Where they differ from the decisions further 
   (`bg_wood`, and `img/wood.png` for the page's cards), square-cut with bevelled edges, nail heads
   and a drop shadow, its lettering painted on: the timer's board (a black panel behind the bulbs),
   the score, the round's name, the quota (a brass bar sliding in a wooden groove, a notch for every
-  pip; since 2026-11-11 under the count board's digits, with no notches), the count board, the hopper (a carved tray with a cup for each ball), the round banners and the "Bonus!" and
+  pip), the hopper (a carved tray with a cup for each ball), the round banners and the "Bonus!" and
   "Frenzy!" signs, and the start, over, pause and turn cards, whose buttons are painted red boards.
 - **A better slingshot.** "the lines are too straight and you can see like weird edges." Its limbs
   curve and taper along their length; all their outlines are drawn before the wood, so the joins
@@ -435,22 +415,12 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   | 5 | Gold rush | two gold ducks, everything a quarter faster | 30 | 50 → 90 |
   | 6 | Closing time | everything at once, all points ×2, the lamps lit | 34 | 50 → 90 |
 
-  From round 2 a **tiny target** pops up in the farthest lane: once in rounds 2 and 3, twice in
-  rounds 4 to 6, each due 6–24 s into the round (on the round's own clock, which stops in a frenzy),
-  6 s apart. It is 0.6 of a far target, never under 30 CSS px, a red-and-white face with a gold rim
-  and a turning sparkle, rings a bright ding as it rises, never turns, and stays up 1.4 s, a frenzy
-  or not. It never rises in a frenzy (one due then comes when it ends), nor with under 2 s left, nor
-  where a live farthest-lane target is within its width plus that target's; then it tries again
-  0.25 s later (owner, 2026-11-11; `specs/splat-gallery-goal-and-tiny-target.md`).
-
   The first target of round 1 is a big one crossing the middle of the nearest lane slowly, where a
   short, straight pull lands, so a first-timer hits within seconds.
 - **Scoring.** A hit is worth pips by depth: the nearest lane 1, the middle lanes 2, the farthest
   3 (in landscape: 1, 2, 3); points are 10 per pip. A bullseye (a target's painted centre and the
   ring around it, or the painted target on a target-duck; plain ducks have none) scores ×2 and puts
-  a ball back. The gold duck is worth 100 points and 2 pips and refills the hopper. The tiny target
-  is worth 250 points and 5 pips, the most of any, and takes every multiplier (×3 in the bonus, like
-  the farthest lane). Meeting the
+  a ball back. The gold duck is worth 100 points and 2 pips and refills the hopper. Meeting the
   quota before the timer ends starts the **Bonus**: the rest of the round scores ×1 in the nearest
   lane, ×2 in the middle lanes and ×3 in the farthest and on the gold duck, so the choice is the safe
   near target or the far one. Frenzy scores ×2 and doesn't stack with the bonus (the higher counts).
@@ -469,7 +439,7 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   0.05 with each hit, ignores frenzy shots, starts at 0.3 for a new player, is kept in localStorage,
   and is off in round 6.
 - **No written tips.** The start card shows Start and the best; each round opens with its name on a
-  banner, with its goal under it ("18 to clear", in the count board's green); mid-play banners ("Bonus!", "Frenzy!") are slim pills on the counter, where nothing can
+  banner; mid-play banners ("Bonus!", "Frenzy!") are slim pills on the counter, where nothing can
   be hit.
 - **Interruptible.** Hiding the page during a round (its intro, play, a frenzy or the moment between
   rounds) pauses play and music under a "Tap to go on" card; the tap that resumes counts in 1 s,
@@ -571,7 +541,7 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-21** The game plays offline once it has been played — `tests/splat-gallery.test.mjs`.
 - **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the slingshot, the
   hopper, the pips and the timer fit without scrolling, the timer's digits are larger than the
-  score's, the far targets (except the tiny target, at least 30 px) are at least 44 px wide, and the counter, where the thumb works, holds no
+  score's, the far targets are at least 44 px wide, and the counter, where the thumb works, holds no
   target — `tests/splat-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
   half time it chimes and swells; at 10 s a hand bell rings and its bulbs turn yellow; at 5 s a bell

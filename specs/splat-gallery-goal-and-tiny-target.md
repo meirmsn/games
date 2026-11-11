@@ -27,7 +27,8 @@ A finding behind the first part: the quota counts **pips** (far lane 3, middle 2
 The surface is Splat Gallery's booth (customer-facing), drawn on its canvas: the HUD under the
 valance, the counter's gauge, the round banner and the targets. There is no `DESIGN.md`, so the
 baseline is the design: the booth's own pieces (`plank`, `painted`, `bulbDigit`, `brass`) and its
-bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to match.
+bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are brought up to date in a
+follow-up docs PR (R-9), not here: see AC-12.
 
 ## Decisions
 
@@ -99,7 +100,7 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   know"); Claude picked holding it back because frenzy balls are free and add no pips, so a tiny hit
   there would miss the quota, the point of it; confirmed by the go, 2026-11-11.
 - **The tiny target: how it looks.** Smaller than a far-lane target: 0.6 of its size, and never under
-  30 CSS px wide (the far lane's other targets keep the 44 px floor of `specs/splat-gallery.md`, which this
+  30 CSS px wide (the far lane's other targets keep the 44 px floor of `specs/splat-gallery.md`, which R-9's follow-up
   change amends for the tiny one). A red-and-white target face (`target_red1`) with a gold rim drawn
   around it and a small sparkle, so it reads as special and isn't mistaken for the frenzy target
   (`target_colored`) or a gold duck. It rings a bright "ting" as it rises (the existing `ding` at rate
@@ -154,9 +155,11 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   scores 500 and gives a ball back; in the bonus a body hit scores 750; a bullseye in round 6's bonus
   scores 2,000 (the ×8 cap).
 - **AC-11** A free (frenzy) ball hitting a tiny target scores 250 × 2 for a body hit and adds no pips.
-- **AC-12** (changed by the owner, 2026-11-11, as AC-4) `specs/splat-gallery.md` describes the board
-  with its bar, the gauge's removal, the banner's goal line and the tiny target in its rules, scoring
-  and HUD sections, and its 44 px far-target floor exempts the tiny target.
+- **AC-12** Dropped from this change by the owner, 2026-11-11: the reviewer reviews one spec file per
+  change, so asked how to unblock this PR, they chose "Main spec in a follow-up" (take the
+  `specs/splat-gallery.md` edits out and drop AC-12; a docs-only PR brings it up to date after this
+  merges, R-9 on the roadmap). This change leaves `specs/splat-gallery.md` as it is on `main` —
+  verified by review: the PR's diff doesn't touch `specs/splat-gallery.md`.
 
 ## Core flow
 

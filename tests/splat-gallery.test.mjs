@@ -2443,8 +2443,3 @@ test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny t
   assert.equal((await goal(page)).flying, 0);
   await context.close();
 });
-
-test('splat-gallery-goal-and-tiny-target AC-12: the game spec describes the count board and its bar, the gauge gone, the goal line and the tiny target, and exempts it from the 44 px floor', () => {
-  const doc = readFileSync(new URL('../specs/splat-gallery.md', import.meta.url), 'utf8');
-  for (const words of [/count board/i, /bottle-green/i, /counts \*\*up\*\*/, /No gauge on the counter/, /to clear/, /tiny target/i, /250 points/, /5 pips/, /except the tiny target/i]) assert.match(doc, words);
-});
