@@ -1005,6 +1005,28 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
   // The car's engine runs while you drive; the sea plays afloat and the island's breeze ashore.
   for (const n of ['loop:motor', 'loop:land']) assert.ok(loud.names.includes(n), `${n} in ${loud.names}`);
   assert.ok(await page.evaluate(() => __hop.played.includes('loop:sea')), 'the sea plays afloat');
+  // Sampled through a whole run: the car's engine runs the whole time in the car, the sea only
+  // afloat and the breeze only ashore.
+  const samples = await page.evaluate(() => {
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    const out = [];
+    for (let t = 0; t < 80 && __hop.state.phase === 'play'; t += 0.1) {
+      __hop.step(0.1);
+      if (__hop.state.phase === 'play') out.push({ mode: __hop.state.mode, loops: __hop.loops });
+    }
+    __hop.autopilot(null);
+    return out;
+  });
+  const modes = new Set(samples.map((s) => s.mode));
+  for (const m of ['boat', 'car']) assert.ok(modes.has(m), `the run goes by ${m}: ${[...modes]}`);
+  assert.ok(modes.size >= 3, `the run also goes on foot: ${[...modes]}`);
+  for (const { mode, loops } of samples) {
+    const at = `${mode}: ${loops}`;
+    assert.equal(loops.includes('motor'), mode === 'car', `car engine iff in the car (${at})`);
+    assert.equal(loops.includes('sea'), mode === 'boat', `sea iff afloat (${at})`);
+    assert.equal(loops.includes('land'), mode !== 'boat', `breeze iff ashore (${at})`);
+  }
   assert.ok(loud.sounded >= 8, `${loud.sounded} sounds reached the speakers`);
   await page.click('[data-again]');
   await page.click('[data-mute]');

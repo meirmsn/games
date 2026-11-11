@@ -1049,6 +1049,9 @@ window.__hop = {
     return fps;
   },
   played,
+  get loops() {
+    return Object.keys(loops).filter((k) => loops[k]);
+  },
   ITEMS,
   set manual(v) {
     manual = !!v;
