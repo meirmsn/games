@@ -11,7 +11,7 @@ import http from 'node:http';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, normalize } from 'node:path';
-import { chromium } from 'playwright';
+import { launch, within } from './clock.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const TYPES = {
@@ -26,7 +26,7 @@ const TYPES = {
 let browser;
 
 before(async () => {
-  browser = await chromium.launch();
+  browser = await launch();
 });
 after(async () => {
   await browser?.close();
@@ -114,37 +114,46 @@ async function site({ legacy = false } = {}) {
       await page.goto(base + path);
       return page;
     },
+    // Drops keep-alive connections, so the server closes now and the file can exit
+    // (specs/slow-tests-harness.md).
     async close() {
       await context.close();
-      server.close();
+      server.closeAllConnections();
+      await new Promise((r) => server.close(r));
     },
   };
 }
 
+// An in-page promise on the caches or the service worker, which can stay pending for ever
+// (`page.evaluate` has no time-out): fails, naming `what`, after 10 s (specs/slow-tests-harness.md).
+const inPage = (page, fn, what, arg) => within(page.evaluate(fn, arg), what);
+
 // Wait for a service worker to control the page (reloading once if needed), or fail in 10 s.
 async function controlled(page) {
-  const ok = await page.evaluate(() =>
-    Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 10000))])
+  const ok = await inPage(
+    page,
+    () => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 10000))]),
+    'navigator.serviceWorker.ready',
+    undefined
   );
   assert.ok(ok, 'service worker registered');
-  if (!(await page.evaluate(() => !!navigator.serviceWorker.controller))) await page.reload();
+  if (!(await inPage(page, () => !!navigator.serviceWorker.controller, 'the controller'))) await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 });
 }
 
-// Poll in the page until fn (a page function) is true, or fail after 10 s.
+// Poll until fn (a page function, often on the caches or the service worker) is true, or fail after
+// 100 checks 100 ms apart. Each check is bounded on its own: one that never settles fails, naming
+// `what`, instead of hanging the file (specs/slow-tests-harness.md).
 async function until(page, fn, arg, what) {
-  const ok = await page.evaluate(
-    async ({ src, arg }) => {
-      const f = eval(src);
-      for (let i = 0; i < 100; i++) {
-        if (await f(arg)) return true;
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      return false;
-    },
-    { src: fn.toString(), arg }
-  );
-  assert.ok(ok, what);
+  for (let i = 0; i < 100; i++) {
+    const ok = await inPage(page, ({ src, arg }) => eval(src)(arg), `${what} (a check that never settled)`, {
+      src: fn.toString(),
+      arg,
+    });
+    if (ok) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.fail(what);
 }
 
 const marks = (page) =>
@@ -214,7 +223,7 @@ test('pwa-updates AC-2 / pwa-updates AC-4: Update reloads the landing page once 
   assert.equal(navigations, 1, 'reloaded exactly once');
   assert.deepEqual(await marks(page), { page: '2', script: '2' }, 'after Update');
   assert.equal(await notice(page).isVisible(), false, 'notice gone');
-  const keys = await page.evaluate(() => caches.keys());
+  const keys = await inPage(page, () => caches.keys(), 'caches.keys()');
   assert.ok(keys.includes('games-shell-test-2'), `the new version runs (${keys})`);
   assert.ok(!keys.includes('games-shell-test-1'), 'the old shell cache is gone');
   await s.close();
@@ -230,7 +239,7 @@ test('pwa-updates AC-3: a game open in another tab never reloads or shows the no
   game.on('framenavigated', (f) => f === game.mainFrame() && navigations++);
   deploy(s, '2', ['alpha']);
   // The browser checks for an update from the game page too: the new worker installs and waits.
-  await game.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update()));
+  await inPage(game, () => navigator.serviceWorker.getRegistration().then((r) => r.update()), 'the worker update');
   await until(game, () => navigator.serviceWorker.getRegistration().then((r) => !!r.waiting), null, 'a new worker waits');
   await game.waitForTimeout(500);
   assert.equal(await game.locator('[data-update]').count(), 0, 'no notice in the game');
@@ -290,7 +299,7 @@ test("pwa-updates AC-11: with sw.js unchanged, a change to the landing page's ow
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await notice(page).waitFor({ state: 'visible', timeout: 10000 });
-  assert.equal(await page.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => !!r.waiting)), false, 'no new worker');
+  assert.equal(await inPage(page, () => navigator.serviceWorker.getRegistration().then((r) => !!r.waiting), 'the registration'), false, 'no new worker');
   let navigations = 0;
   page.on('framenavigated', (f) => f === page.mainFrame() && navigations++);
   await notice(page).getByRole('button', { name: 'Update' }).click();
@@ -383,7 +392,7 @@ test("pwa-updates AC-6 / pwa-updates AC-8: a version bump that changes one game 
   await landing.goto(s.base);
   assert.equal(await landing.locator('.tiles > li').count(), tiles, 'the landing page, offline, every tile');
   assert.deepEqual(await marks(landing), { page: '2', script: '2' });
-  const keys = await landing.evaluate(() => caches.keys());
+  const keys = await inPage(landing, () => caches.keys(), 'caches.keys()');
   assert.ok(keys.includes('games-game-alpha') && keys.includes('games-game-beta'), `per-game caches (${keys})`);
   await s.close();
 });
@@ -396,9 +405,9 @@ test('pwa-updates AC-7: the upgrade from the old worker is silent, keeps a playe
   await played(landing);
   await landing.waitForLoadState('networkidle');
   await landing.goto(s.base);
-  assert.ok((await landing.evaluate(() => caches.keys())).includes('games-v5'), 'the old cache');
+  assert.ok((await inPage(landing, () => caches.keys(), 'caches.keys()')).includes('games-v5'), 'the old cache');
   setVersion(s.dir, 'test-2'); // the new worker is deployed
-  await landing.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => r.update()));
+  await inPage(landing, () => navigator.serviceWorker.getRegistration().then((r) => r.update()), 'the worker update');
   await until(
     landing,
     () => caches.keys().then((k) => !k.includes('games-v5') && k.includes('games-game-alpha') && k.includes('games-shell-test-2')),
@@ -406,7 +415,7 @@ test('pwa-updates AC-7: the upgrade from the old worker is silent, keeps a playe
     'moved into the new caches, old cache deleted'
   );
   assert.equal(
-    await landing.evaluate(() => navigator.serviceWorker.getRegistration().then((r) => !r.waiting && !!r.active)),
+    await inPage(landing, () => navigator.serviceWorker.getRegistration().then((r) => !r.waiting && !!r.active), 'the registration'),
     true,
     'took over without waiting for Update'
   );
@@ -473,4 +482,21 @@ test('pwa-updates AC-10: a game opened straight from a link is cached into its o
   await game.reload();
   await played(game);
   await s.close();
+});
+
+test('slow-tests-harness AC-4: the test server closes within 2 s while a keep-alive connection is still open', async () => {
+  const s = await site();
+  const page = await s.page();
+  await page.waitForLoadState('load');
+  // A client that keeps its connection open after the response, as a browser's idle socket does.
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  await new Promise((resolve, reject) =>
+    http.get(s.base + 'manifest.webmanifest', { agent }, (res) => res.resume().on('end', resolve)).on('error', reject)
+  );
+  const start = Date.now();
+  await within(s.close(), 'the server closing', 2000);
+  assert.ok(Date.now() - start < 2000, `closed in ${Date.now() - start} ms`);
+  // Closed, not just returned: a new connection is refused.
+  await assert.rejects(fetch(s.base), 'the server no longer accepts connections');
+  agent.destroy();
 });
