@@ -2096,7 +2096,9 @@ let manual = false; // tests drive the simulation themselves with step(); frames
 const drawn = { hud: false, wash: 0, marks: [], lifePop: 1 }; // what the last frame drew, for tests
 function frameLoop(now) {
   if (!running) return;
-  const raw = Math.min(0.05, (now - last) / 1000 || 0);
+  // Never below 0: a frame stamped before `last` (one already pending while start-up ran) would run
+  // time backwards, and the waiting pulse's radius with it (specs/slow-tests-orbit-reef-runes.md).
+  const raw = Math.min(0.05, Math.max(0, (now - last) / 1000 || 0));
   last = now;
   let dt = raw;
   if (game.slowmo > 0) {

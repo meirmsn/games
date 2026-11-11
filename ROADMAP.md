@@ -10,7 +10,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Done                                 |
 | R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Done (`slow-tests-crumble-googly`)   |
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
-| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
+| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
@@ -139,6 +139,9 @@ Its spec: `specs/slow-tests-orbit-reef-runes.md`, numbered from AC-1.
 
 Reef's F-37 and F-8 (game-code changes need the owner's OK); Runes AC-15's ghost runs on
 `performance.now()` (likewise), and runes AC-1 compares two screenshots 300 ms apart.
+
+Done: each test's cause is in the spec's Decisions. F-8 is fixed in Reef's frame loop (approved); F-37
+is kept (not approved); Runes' ghost is fixed in its test only.
 
 ## R-7: Slow tests run once: Pixel Leap's tests, and the whole suite's proof
 
