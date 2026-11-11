@@ -59,6 +59,7 @@ function syncMute() {
 muteBtn.addEventListener('click', () => {
   sound.muted = !sound.muted;
   syncMute();
+  syncMusic(0);
 });
 syncMute();
 const loops = { sea: null, land: null, engine: null, motor: null };
@@ -73,6 +74,61 @@ function loopOn(name, on, gain = 1) {
     loops[name] = null;
   }
 }
+
+// The music: the owner's two tracks, the sea's afloat and the island's ashore (owner, 2026-11-11:
+// "We're missing background music in here"), crossfading as you dock or set off. Each plays from
+// an <audio> element fed a copy fetched as the page loads, so it's cached for offline play and
+// never decoded whole. It starts on the first tap or key (a browser plays nothing before one), and
+// stops while muted, paused or hidden, carrying on where it was.
+const MUSIC_VOLUME = 0.3;
+const MUSIC_FADE = 0.8; // seconds for a full crossfade
+const music = {};
+for (const name of ['sea', 'land']) {
+  const el = new Audio();
+  el.loop = true;
+  el.preload = 'auto';
+  el.volume = 0;
+  const url = `sounds/music-${name}.mp3`;
+  fetch(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((b) => {
+      el.src = b ? URL.createObjectURL(b) : url;
+    })
+    .catch(() => {
+      el.src = url;
+    });
+  music[name] = { el, level: 0, on: false };
+}
+let musicAllowed = false; // a tap or key has let it play
+function syncMusic(dt) {
+  const go = musicAllowed && !sound.muted && !paused && !document.hidden && !!world;
+  const want = world && world.mode === 'boat' ? 'sea' : 'land';
+  for (const [name, m] of Object.entries(music)) {
+    const target = go && name === want ? 1 : 0;
+    const step = dt / MUSIC_FADE;
+    m.level = go ? (target > m.level ? Math.min(target, m.level + step) : Math.max(target, m.level - step)) : 0;
+    m.el.volume = m.level * MUSIC_VOLUME;
+    const on = go && m.level > 0;
+    if (on && !m.on && m.el.src) {
+      played.push(`music:${name}`); // for tests: which track started
+      const p = m.el.play();
+      if (p && p.catch) p.catch(() => {});
+      m.on = true;
+    } else if (!on && m.on) {
+      m.el.pause();
+      m.on = false;
+    }
+  }
+}
+for (const type of ['pointerdown', 'keydown'])
+  addEventListener(
+    type,
+    () => {
+      musicAllowed = true;
+      syncMusic(0);
+    },
+    { capture: true }
+  );
 
 const atlas = new Image();
 atlas.src = 'img/atlas.png';
@@ -401,6 +457,7 @@ document.addEventListener('visibilitychange', () => {
     syncKeys();
     show('pause');
   }
+  syncMusic(0); // no frames come while hidden: stop the music now
 });
 
 // The map button shows the whole archipelago while held; the clock keeps running.
@@ -1018,6 +1075,7 @@ function advance(dt) {
     }
     syncLoops();
   }
+  syncMusic(dt);
   updateCamera(dt);
 }
 
@@ -1049,6 +1107,9 @@ window.__hop = {
   },
   get people() {
     return peopleDrawn;
+  },
+  get music() {
+    return Object.fromEntries(Object.entries(music).map(([k, m]) => [k, { level: m.level, playing: !m.el.paused, ready: !!m.el.src }]));
   },
   get order() {
     return drawOrder.slice();
@@ -1086,6 +1147,7 @@ window.__hop = {
       rulesStep(world, dt, input);
       handleEvents();
       syncLoops();
+      syncMusic(dt);
       updateCamera(dt);
       if (world.phase === 'done') break;
     }

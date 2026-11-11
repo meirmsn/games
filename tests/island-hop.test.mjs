@@ -1143,6 +1143,64 @@ test('island-hop AC-22: a boat in front of a building on the shore is drawn over
   await context.close();
 });
 
+test('island-hop AC-23: the sea\'s music plays afloat and the island\'s ashore, crossfading; none plays before a tap, while muted or while the page is hidden', async () => {
+  const { context, page } = await open({ audio: true });
+  await waitFor(page, () => __hop.music.sea.ready && __hop.music.land.ready, null, { what: 'both tracks fetched' });
+  const tracks = () => page.evaluate(() => __hop.music);
+  // Before any tap, nothing plays.
+  await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    __hop.step(1);
+  });
+  let m = await tracks();
+  assert.deepEqual([m.sea.level, m.land.level, m.sea.playing, m.land.playing], [0, 0, false, false], 'silent before a tap');
+  // A tap lets it play: afloat, the sea's track fades in.
+  await page.mouse.click(195, 600);
+  await page.evaluate(() => __hop.step(1));
+  m = await tracks();
+  assert.deepEqual([m.sea.level, m.land.level], [1, 0], 'afloat: the sea');
+  assert.ok(await page.evaluate(() => __hop.played.includes('music:sea')), 'the sea track started');
+  // Ashore on Palm Key, the moment mission 2's gold route docks there: the island's track fades in.
+  await page.evaluate(() => {
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    for (let t = 0; t < 30 && __hop.state.mode !== 'walk'; t += 0.1) __hop.step(0.1);
+    __hop.autopilot(null);
+  });
+  assert.equal(await page.evaluate(() => __hop.state.mode), 'walk');
+  await page.evaluate(() => __hop.step(0.4));
+  m = await tracks();
+  assert.ok(m.land.level > 0 && m.land.level < 1 && m.sea.level > 0 && m.sea.level < 1, `crossfading: ${JSON.stringify(m)}`);
+  await page.evaluate(() => __hop.step(1));
+  m = await tracks();
+  assert.deepEqual([m.sea.level, m.land.level], [0, 1], 'ashore: the island');
+  assert.ok(await page.evaluate(() => __hop.played.includes('music:land')), 'the island track started');
+  // Muted: nothing plays; unmuted, it comes back.
+  await page.click('[data-mute]');
+  m = await tracks();
+  assert.deepEqual([m.sea.level, m.land.level, m.sea.playing, m.land.playing], [0, 0, false, false], 'muted: silent');
+  await page.click('[data-mute]');
+  await page.evaluate(() => __hop.step(1));
+  assert.equal((await tracks()).land.level, 1, 'unmuted: back');
+  // Hidden: it stops at once.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  m = await tracks();
+  assert.deepEqual([m.sea.level, m.land.level, m.sea.playing, m.land.playing], [0, 0, false, false], 'hidden: silent');
+  await context.close();
+});
+
+test('island-hop AC-23: the two tracks are the owner\'s, 64 kbps and about 2½ minutes each', () => {
+  for (const name of ['sea', 'land']) {
+    const bytes = readFileSync(new URL(`../island-hop/sounds/music-${name}.mp3`, import.meta.url)).length;
+    // 64 kbps for 150 s is 1.2 MB.
+    assert.ok(bytes > 1.1e6 && bytes < 1.3e6, `music-${name}.mp3 is ${bytes} bytes`);
+  }
+});
+
 test('island-hop AC-16: on a 390×844 phone nothing scrolls, every button is 44 px or more, the canvas is at most 2×, and a building covering the person fades', async () => {
   const { context, page } = await open({ deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   const sizes = () =>

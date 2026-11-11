@@ -188,6 +188,16 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   medal jingle at the finish (owner, 2026-11-11: "there should be like sound effect when you're in
   the car, and definitely should be different sound when you are in the island than when you are in
   the water"). While muted, no loop runs at all.
+- Music: the owner's two tracks, made with ElevenLabs Music from prompts Claude wrote, one played
+  afloat and one ashore (on foot or in a car), crossfading over 0.8 s as you dock or set off (owner,
+  2026-11-11: "We're missing background music in here", and "definitely, we need music for the when
+  you're in the water versus when you are on the island"). Each loops quietly under the sounds from
+  an `<audio>` element fed a copy fetched as the page loads, so it plays offline and is never decoded
+  whole. It starts on the first tap or key, as browsers require, and stops while muted, paused or
+  hidden. `scripts/island-hop/make-music.sh` evens their loudness and makes them 64 kbps stereo
+  (about 1.2 MB each). The island's track is to be swapped for a faster one (owner, 2026-11-11: "The
+  music on the island is too slow. I think it should be much faster. I feel more like a bustling
+  city, or like you're running an errand but you're hasty"); until then the first take plays.
 - Interruptible: hiding the page pauses the mission, the clock and a fly-over in progress; it resumes
   on a tap.
 - The game exposes `window.__hop` (its state, `start(mission)`, and a `step(dt)` that advances
@@ -277,6 +287,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-22** A boat in front of a building on the shore is drawn over it, and the land in front of a
   boat behind an island is drawn over the boat — `tests/island-hop.test.mjs`. (Added after the go;
   the owner's words on the island's edge above.)
+- **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
+  plays before a tap, while muted or while the page is hidden; each track is about 2½ minutes at
+  64 kbps — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
 
 ## Core flow
 
