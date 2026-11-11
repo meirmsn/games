@@ -7,7 +7,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | --- | ---------- | --------------------------------------------------------------------------- | ------------------------------------ |
 | R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Done (`specs/slow-tests-harness.md`) |
 | R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open                                 |
-| R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Open                                 |
+| R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Done                                 |
 | R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open                                 |
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
@@ -61,6 +61,10 @@ Its spec: `specs/slow-tests-splat-gallery.md`, numbered from AC-1.
 
 `tests/splat-gallery.test.mjs`: 21 waits; the 400 ms `setTimeout(checkTurn)` at
 `splat-gallery/game.js` ~2358 (a game-code change needs the owner's OK).
+
+Done 2026-11-11: every wait now waits on the input, the game's state or frames, and the file is
+marked `// clock-checked`; no game code changed (the review kept the 400 ms turn hold, test-only).
+The causes per test are in the spec's Decisions.
 
 ## R-4: Slow tests run once: Crumble's and Googly Faces' tests
 

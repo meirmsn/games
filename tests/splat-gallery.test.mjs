@@ -994,7 +994,7 @@ test('splat-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, 
   await context.close();
 });
 
-test('splat-gallery AC-21: the gallery plays offline once it has been played [slow-tests-splat-gallery AC-5, AC-7]', async () => {
+test('splat-gallery AC-21: the gallery plays offline once it has been played [slow-tests-splat-gallery AC-5, slow-tests-splat-gallery AC-7]', async () => {
   const context = await browser.newContext({ viewport: PORTRAIT });
   const page = await context.newPage();
   await page.goto(BASE + 'splat-gallery/');
