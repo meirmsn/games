@@ -24,7 +24,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -34,7 +34,8 @@ Slice 1 of 7. The others: R-2, R-3, R-4, R-5, R-6 (in parallel, after this one m
 
 ### Claude's notes
 
-The split is the one the adversarial review produced. This slice is the harness, on its own:
+The owner delegated the split; the slices here are the ones the adversarial review the owner asked
+for produced, picked on that delegation. This slice is the harness, on its own:
 
 - F-34 first, since one hang voids every proof: a per-file `--test-timeout` in
   `scripts/check-slow.sh` (Node 22), and pwa-updates' hang sources (`page.evaluate` on `caches` and
@@ -68,7 +69,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -91,7 +92,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -114,7 +115,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -138,7 +139,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -161,7 +162,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
@@ -184,7 +185,7 @@ The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
 we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
 ```
 
-The split, approved 2026-11-11, in chat:
+The split, which the owner delegated on 2026-11-11, in chat:
 
 ```text
 Do an adversarial review about the split and pick whatever makes sense.
