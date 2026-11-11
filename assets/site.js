@@ -169,7 +169,7 @@ const ribbon = (() => {
   });
   // Focus goes back to the ribbon, also where a tap doesn't focus a button (Safari).
   dialog.addEventListener('close', () => {
-    if (!el.hidden) band.focus();
+    if (!el.hidden) band.focus({ preventScroll: true });
   });
   dialog.querySelector('[data-not-now]').addEventListener('click', () => {
     update({ until: Date.now() + PAUSE });

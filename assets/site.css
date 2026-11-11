@@ -290,7 +290,8 @@ body.has-update {
 
 /* The add-to-home-screen ribbon (specs/landing-home-and-ribbon.md): a band at 45° across the
  * bottom-right corner, above the safe area. Its corner box clips the band's ends at the screen's
- * edges; the band is the tap target. The band is 13rem long on its inner edge, so its centre sits
+ * edges with clip-path, not overflow: an overflow box can scroll, and a tap or focus() scrolling the
+ * band into view inside it would slide the band out of the corner. The band is the tap target. The band is 13rem long on its inner edge, so its centre sits
  * (13rem - 44 px) / 2√2 (about 58 px) in from each edge: that inset is the calc() repeated below. */
 .ribbon {
   position: fixed;
@@ -299,7 +300,7 @@ body.has-update {
   bottom: env(safe-area-inset-bottom);
   width: calc(2 * ((13rem - var(--tap)) / 2.8284) + var(--tap));
   height: calc(2 * ((13rem - var(--tap)) / 2.8284) + var(--tap));
-  overflow: hidden;
+  clip-path: inset(0);
   pointer-events: none;
 }
 
@@ -355,6 +356,13 @@ body.has-ribbon {
 
 .add-dialog .advice p {
   margin: 0 0 var(--space-4);
+}
+
+/* Install is the big, centred choice, well apart from the two below it. */
+.add-dialog [data-install-here] {
+  width: 100%;
+  min-height: calc(var(--tap) + var(--space-2));
+  font-size: 1.0625rem;
 }
 
 .add-dialog .share {

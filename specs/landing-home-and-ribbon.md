@@ -55,6 +55,13 @@ the design. No game page changes.
   - Desktop Safari: "Choose File, then Add to Dock".
   - Any other desktop: "Press ⌘D to bookmark this site" on a Mac, "Press Ctrl+D" elsewhere.
   The dialog has "Not now" (closes; the ribbon stays away for 7 days) and "Don't show again".
+- **Changed after the go, by the owner (2026-11-11), on the PR's screenshots:** "Maybe make the first
+  button that don't show again, and then on the not now, the one on the right, to make it easier to
+  tap for a right-handed, and also that install button, maybe make it larger and center so that you
+  don't hit the not now or don't show again by mistake." So "Don't show again" sits left and "Not
+  now" right, and Install spans the dialog's width, taller than the two below it. The same message
+  showed the ribbon sliding out of its corner while the dialog was open; that was a bug (its corner
+  box could scroll), fixed, not a spec change.
 - The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
   "Quiet card colours", "After a week"); rejected: the bold accent band, and returning on the next visit.
 - **How the device cases are tested:** in Playwright's Chromium, by the signals the function reads:

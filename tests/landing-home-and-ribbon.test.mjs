@@ -371,6 +371,44 @@ for (const [name, opts, kind, words] of [
   });
 }
 
+test('landing-home-and-ribbon AC-2: the ribbon stays in its corner when tapped, while its dialog is open, and after it closes', async (t) => {
+  const { page } = await open({ visits: 2, ...{ viewport: { width: 390, height: 664 }, isMobile: true } }, t);
+  await ribbon(page).waitFor();
+  // Where the band is, and whether its corner box has anything to scroll (it must not: a tap or
+  // focus() scrolling the band into view inside the box slid it out of the corner).
+  const where = () =>
+    page.evaluate(() => {
+      const box = document.querySelector('[data-ribbon]');
+      const r = box.querySelector('button').getBoundingClientRect();
+      return { x: r.x, y: r.y, scroll: [box.scrollLeft, box.scrollTop] };
+    });
+  const at = await where();
+  assert.deepEqual(at.scroll, [0, 0]);
+  await openDialog(page);
+  assert.deepEqual(await where(), at, 'unmoved with the dialog open');
+  await page.keyboard.press('Escape');
+  await dialog(page).waitFor({ state: 'hidden' });
+  assert.deepEqual(await where(), at, 'unmoved after the dialog closes and focus returns');
+  await band(page).focus();
+  assert.deepEqual(await where(), at, 'unmoved when focused');
+});
+
+test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Don\'t show again" is on the left and "Not now" on the right; Install is larger, centred above them', async (t) => {
+  const { page } = await open({ visits: 2 }, t);
+  await offerInstall(page);
+  await openDialog(page);
+  const never = await dialog(page).getByRole('button', { name: "Don't show again" }).boundingBox();
+  const notNow = await dialog(page).getByRole('button', { name: 'Not now' }).boundingBox();
+  const install = await dialog(page).getByRole('button', { name: 'Install' }).boundingBox();
+  const box = await dialog(page).boundingBox();
+  assert.ok(never.x + never.width <= notNow.x, '"Don\'t show again" left of "Not now"');
+  assert.ok(install.height > notNow.height, `Install is taller (${install.height} vs ${notNow.height})`);
+  assert.ok(install.width > never.width + notNow.width, 'Install is wider than both together');
+  const centre = install.x + install.width / 2 - (box.x + box.width / 2);
+  assert.ok(Math.abs(centre) <= 1, `Install is centred (off by ${centre} px)`);
+  assert.ok(install.y + install.height <= Math.min(never.y, notNow.y) - 16, 'well apart from the two below it');
+});
+
 test('landing-home-and-ribbon AC-7: Escape closes the dialog and returns focus to the ribbon', async (t) => {
   const { page } = await open({ visits: 2 }, t);
   await band(page).focus();
