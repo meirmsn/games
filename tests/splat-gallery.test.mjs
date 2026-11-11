@@ -2043,16 +2043,18 @@ const STARVED = [
 
 test('slow-tests-splat-gallery AC-9: on a page whose every animation frame takes at least 150 ms, the frame-paced checks still pass', async (t) => {
   const { context, page } = await open({ starve: true });
+  // Read when each callback runs, not its frame's time stamp, which can be earlier than that on a
+  // busy machine: each reading comes after the next frame's spin, so they are over 150 ms apart.
   const gaps = await page.evaluate(
     () =>
       new Promise((done) => {
         const at = [];
-        const tick = (now) => (at.push(now), at.length > 6 ? done(at.slice(1).map((x, i) => x - at[i])) : requestAnimationFrame(tick));
+        const tick = () => (at.push(performance.now()), at.length > 6 ? done(at.slice(1).map((x, i) => x - at[i])) : requestAnimationFrame(tick));
         requestAnimationFrame(tick);
       })
   );
   await context.close();
-  assert.ok(Math.min(...gaps) >= 140, `the starved page's frames are at least 150 ms apart: ${gaps.map(Math.round)}`);
+  assert.ok(Math.min(...gaps) >= 150, `the starved page's frames are at least 150 ms apart: ${gaps.map(Math.round)}`);
   for (const [name, check] of STARVED) await t.test(name, () => check({ starve: true }));
 });
 
