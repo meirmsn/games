@@ -36,12 +36,12 @@ try {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
   await page.goto(`http://127.0.0.1:${PORT}/island-hop/`);
   await page.waitForFunction(() => window.__hop);
-  // Mission 2's gold route: docked in Port Town by about 22 s, then by car round the ring road.
+  // Mission 2's gold route: docked in Port Town by about 32 s, then on foot and by car.
   await page.evaluate(() => {
     __hop.manual = true;
     __hop.start(1, { fly: false });
     __hop.autopilot('gold');
-    __hop.step(21);
+    __hop.step(33);
     __hop.manual = false;
   });
   await page.waitForTimeout(1500);

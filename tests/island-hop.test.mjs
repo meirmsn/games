@@ -32,6 +32,8 @@ import {
   medalFor,
   medalTimes,
   trafficAt,
+  leisureAt,
+  obstaclesAt,
   TRAFFIC_R,
 } from '../island-hop/rules.js';
 
@@ -400,7 +402,7 @@ test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at
   }
   // Cars.
   {
-    const s = play(1);
+    const s = play(3); // Fresh fish: the bakery (A) is a stop, and the south car park has a car
     const car = s.cars.find((c) => c.id === 'portS'); // at (12,13), Port Town's south car park
     ashore(s, 14.5, 13.5);
     run(s, 2, toward({ x: 14.5, y: 13.5 }, car));
@@ -547,6 +549,79 @@ test('island-hop AC-9: at the marina, walking onto the other berth swaps boats; 
   }
 });
 
+test('island-hop AC-9: you glide round moored and leisure boats and buoys, never held, even head on; sailing away from a rock you touch isn\'t held', () => {
+  // Head on into the big moored boat at (20,31): eased round it and past, never held.
+  {
+    const s = play(0);
+    const m = WORLD.obstacles.find((o) => o.kind === 'moored' && o.r > 0.5);
+    const b = afloat(s, 'motor', m.x - 3, m.y, 0);
+    let held = false;
+    run(s, 4, (st) => {
+      if (youBoat(st).hold > 0) held = true;
+      return gridToStick(1, 0);
+    });
+    assert.equal(held, false, 'never held');
+    assert.ok(b.x > m.x + 1, `past it: x ${b.x.toFixed(2)}`);
+    assert.equal(events(s, 'bump').filter((e) => !e.soft).length, 0, 'no hard bump');
+  }
+  // A leisure boat: met head on where it will be, the same.
+  {
+    const s = play(0);
+    s.tt = 3.8;
+    const l = leisureAt(1, 5); // east of Port Town, heading +y along x = 29: where you'll cross its course
+    const b = afloat(s, 'motor', l.x + 2.5, l.y, 180);
+    let held = false;
+    let touched = false;
+    run(s, 3, (st) => {
+      if (youBoat(st).hold > 0) held = true;
+      const o = obstaclesAt(st).find((ob) => ob.kind === 'leisure' && Math.hypot(ob.x - b.x, ob.y - b.y) < ob.r + 0.5);
+      if (o) touched = true;
+      return gridToStick(-1, 0);
+    });
+    assert.ok(touched, 'met the leisure boat');
+    assert.equal(held, false, 'never held');
+  }
+  // A buoy, head on.
+  {
+    const s = play(0);
+    const bu = WORLD.obstacles.find((o) => o.kind === 'buoy' && o.x > 30);
+    const b = afloat(s, 'motor', bu.x - 2.5, bu.y, 0);
+    let held = false;
+    run(s, 3, (st) => {
+      if (youBoat(st).hold > 0) held = true;
+      return gridToStick(1, 0);
+    });
+    assert.equal(held, false, 'never held');
+    assert.ok(b.x > bu.x + 0.5, `past it: x ${b.x.toFixed(2)}`);
+  }
+  // Touching a rock and sailing away: not held.
+  {
+    const s = play(5);
+    const rock = WORLD.obstacles.find((o) => o.kind === 'rock');
+    const b = afloat(s, 'motor', rock.x - (rock.r + RULES.boats.motor.radius - 0.05), rock.y, 180, 1);
+    run(s, 1, gridToStick(-1, 0));
+    assert.equal(events(s, 'bump').length, 0, 'no bump');
+    assert.ok(b.x < rock.x - 2, `sailed away: x ${b.x.toFixed(2)}`);
+  }
+});
+
+test('island-hop AC-21: in every mission at least six small leisure boats sail, on water, never on land', async () => {
+  for (const [i] of MISSIONS.entries()) {
+    const s = createMission(i, { phase: 'play' });
+    const at0 = obstaclesAt(s).filter((o) => o.kind === 'leisure');
+    run(s, 2);
+    const at1 = obstaclesAt(s).filter((o) => o.kind === 'leisure');
+    assert.ok(at0.length >= 6, `mission ${i + 1}: ${at0.length} leisure boats`);
+    const moved = at1.filter((o, k) => Math.hypot(o.x - at0[k].x, o.y - at0[k].y) > 1).length;
+    assert.equal(moved, at0.length, `mission ${i + 1}: all of them moving`);
+  }
+  for (let k = 0; k < 6; k++)
+    for (let t = 0; t < 120; t += 0.25) {
+      const p = leisureAt(k, t);
+      assert.ok(navigable('motor', tileAt(p.x, p.y)), `leisure boat ${k} on water at ${t} s`);
+    }
+});
+
 // --- Pars and the gold routes (Node) ----------------------------------------------------------------------------
 
 test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, lands in its band and on its par; another order of its stops is slower than gold', () => {
@@ -602,12 +677,12 @@ test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in it
   }
   // It measures speed, so it runs at the CPU's own speed, never under the test throttle.
   const { context, page } = await open({ deviceScaleFactor: 2, throttle: false });
-  // Mission 2's gold route: in Port Town from about 20 s, on foot and then by car round the ring road.
+  // Mission 2's gold route: in Port Town from about 32 s, on foot and then by car.
   await page.evaluate(() => {
     __hop.manual = true;
     __hop.start(1, { fly: false });
     __hop.autopilot('gold');
-    __hop.step(21);
+    __hop.step(33);
     __hop.manual = false;
   });
   await realFrames(page, 30);
@@ -814,7 +889,7 @@ test('island-hop AC-8: walking onto an ordered stop too soon pulses its beam and
   await context.close();
 });
 
-test('island-hop AC-10: the finish shows the time, the medal, the pars, the best and both routes; it opens the next mission; best, medal and ghost persist and the ghost runs next time; another map version\'s runs are thrown away', async () => {
+test('island-hop AC-10: the finish shows the time, the medal, the pars, the best and both routes; it opens the next mission; best and medal persist, and no ghost is kept or drawn; another map version\'s runs are thrown away', async () => {
   const { context, page } = await open();
   await page.evaluate(() => {
     __hop.manual = true;
@@ -839,13 +914,13 @@ test('island-hop AC-10: the finish shows the time, the medal, the pars, the best
   assert.equal(fin.view.finished, true, 'routes drawn');
   assert.equal(fin.mem.open, 1, 'mission 2 is open');
   assert.equal(fin.mem.best[0].medal, 'gold');
-  assert.ok(fin.mem.best[0].ghost.length > 50);
+  assert.equal(fin.mem.best[0].ghost, undefined, 'no ghost is kept');
   const routes = await page.evaluate(() => {
     // The finish keeps your route and the gold route to draw over the map.
     return __hop.view.finished;
   });
   assert.ok(routes);
-  // A reload keeps it all; the ghost moves on the next run.
+  // A reload keeps it all; the next run has no ghost: only you are drawn as a person.
   await page.reload();
   await page.waitForFunction(() => window.__hop);
   assert.match(await page.textContent('[data-card-best]'), /Best 0:\d\d\.\d 🥇/);
@@ -857,11 +932,11 @@ test('island-hop AC-10: the finish shows the time, the medal, the pars, the best
   });
   const g1 = await page.evaluate(() => __hop.state.clock);
   assert.ok(g1 > 0);
-  const ghostMoves = await page.evaluate(() => {
-    const m = __hop.mem.best[0].ghost;
-    return Math.hypot(m[10][0] - m[0][0], m[10][1] - m[0][1]) > 0.5;
+  const people = await page.evaluate(() => {
+    __hop.draw();
+    return __hop.people;
   });
-  assert.ok(ghostMoves, 'the ghost has a route to run');
+  assert.equal(people, 0, 'afloat, no person is drawn: no ghost walks or sails beside you');
   await context.close();
   // Runs saved against another version of the map are thrown away.
   const old = await open({ mem: { map: MAP_VERSION - 1, open: 3, best: { 0: { time: 1, medal: 'gold', splits: [], ghost: [] } } } });
@@ -1037,6 +1112,34 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
   const quiet = await scenario();
   assert.equal(quiet.sounded, 0, 'nothing reaches the speakers while muted');
   assert.deepEqual(quiet.looping, [], 'no loop runs at all while muted');
+  await context.close();
+});
+
+test('island-hop AC-22: a boat in front of a building on the shore is drawn over it, and the land in front of a boat behind an island is drawn over the boat', async () => {
+  const { context, page } = await open();
+  const orderAt = (x, y, hDeg) =>
+    page.evaluate(
+      ([x, y, h]) => {
+        __hop.manual = true;
+        __hop.start(0, { fly: false });
+        const b = __hop.state.boats[0];
+        for (let k = 0; k < 240; k++) {
+          Object.assign(b, { x, y, h, v: 0 });
+          __hop.step(1 / 60); // the camera settles on the boat
+        }
+        __hop.draw();
+        return __hop.order;
+      },
+      [x, y, (hDeg * Math.PI) / 180]
+    );
+  // Off Port Town's south shore, in front of the ice cream kiosk (17,13).
+  const front = await orderAt(18, 14.4, 90);
+  assert.ok(front.includes('building:17,13'), 'the kiosk is drawn');
+  assert.ok(front.indexOf('boat:motor') > front.indexOf('building:17,13'), `the boat after the kiosk: ${front.join(' ')}`);
+  // Off its north shore, behind the car park (15,2): the land is drawn again over the boat.
+  const behind = await orderAt(15, 1.6, 0);
+  const at = behind.indexOf('boat:motor');
+  assert.ok(at >= 0 && behind.indexOf('ground:15,2', at) > at, `the north shore over the boat: ${behind.join(' ')}`);
   await context.close();
 });
 

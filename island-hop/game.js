@@ -1,11 +1,11 @@
 // Island Hop: the page. Draws the archipelago that rules.js runs, feeds it the stick (a drag
 // anywhere, or the arrow keys and WASD), and keeps the cards, the HUD, the sounds and the small
-// memory (each mission's best time, medal, splits and ghost, and the missions opened).
+// memory (each mission's best time, medal and splits, and the missions opened).
 import { mountShell } from '../shared/game-shell.js';
 import { createCamera, sortByDepth } from '../shared/iso.js';
 import { isEdgeStart } from '../shared/safe-zone.js';
 import { ATLAS } from './atlas.js';
-import { ROWS, MOORED, BUOYS, SEA_ROCKS, TRAFFIC, YOUR_BOATS } from './map.js';
+import { ROWS, MOORED, BUOYS, SEA_ROCKS, TRAFFIC, LEISURE, YOUR_BOATS } from './map.js';
 import {
   RULES,
   MISSIONS,
@@ -22,6 +22,7 @@ import {
   isShallow,
   isBuilding,
   trafficAt,
+  leisureAt,
   medalFor,
   medalTimes,
   runPilot,
@@ -76,7 +77,7 @@ function loopOn(name, on, gain = 1) {
 const atlas = new Image();
 atlas.src = 'img/atlas.png';
 
-// --- Small memory: per mission, the best time, its medal, splits and ghost ------------------------------
+// --- Small memory: per mission, the best time, its medal and splits ----------------------------------------
 const SAVE_SLOT = 'island-hop.v1';
 function readMem() {
   const blank = { map: MAP_VERSION, open: 0, best: {} };
@@ -311,7 +312,6 @@ function showCard(i) {
   finishView = null;
   snapCamera();
 }
-let ghost = null; // the best run's positions, every 0.2 s
 let pilot = null; // tests and the demo can let the autopilot drive
 // The goal, big and clear, when the mission hands you control.
 let bannerT = 0;
@@ -326,7 +326,6 @@ function showBanner() {
 function start(i, { fly = true } = {}) {
   missionIndex = i;
   world = createMission(i, { phase: fly ? 'fly' : 'play' });
-  ghost = mem.best[i]?.ghost || null;
   paused = false;
   pointer = null;
   finishView = null;
@@ -347,7 +346,7 @@ function finish() {
   const medal = medalFor(i, time);
   const prev = mem.best[i];
   const better = !prev || time < prev.time;
-  if (better) mem.best[i] = { time, medal, splits: world.ticked.map(([, c]) => Math.round(c * 100) / 100), ghost: world.ghost };
+  if (better) mem.best[i] = { time, medal, splits: world.ticked.map(([, c]) => Math.round(c * 100) / 100) };
   mem.open = Math.max(mem.open, Math.min(MISSIONS.length - 1, i + 1));
   mem.map = MAP_VERSION;
   saveMem();
@@ -376,7 +375,7 @@ function finish() {
   show('finish');
   // The gold route, flown by the autopilot, beside yours.
   const goldRun = runPilot(i, MISSIONS[i].gold, { fly: false });
-  finishView = { route: world.ghost.slice(), gold: goldRun.ghost };
+  finishView = { route: world.trail.slice(), gold: goldRun.trail };
 }
 $('[data-start]').addEventListener('click', () => start(missionIndex));
 $('[data-prev]').addEventListener('click', () => showCard(missionIndex - 1));
@@ -561,29 +560,27 @@ let prevPos = null;
 // --- Drawing -------------------------------------------------------------------------------------------------
 let clock = 0; // animation time
 const PERSON_H = 30; // iso px: about a third of a tile tall
-function drawPerson(x, y, z, alpha = 1, ghostly = false) {
+function drawPerson(x, y, z) {
   const p = iso.toScreen(x, y, z);
+  peopleDrawn++;
   ctx.save();
-  ctx.globalAlpha *= alpha;
-  if (!ghostly) {
-    // The bright ring under them.
-    ctx.strokeStyle = '#fff36b';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y, 15, 7.5, 0, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  const bob = world.mode === 'walk' && !ghostly ? Math.abs(Math.sin(clock * 10)) * 1.5 : 0;
-  ctx.fillStyle = ghostly ? '#ffffff' : '#ff5e9a';
+  // The bright ring under them.
+  ctx.strokeStyle = '#fff36b';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y, 15, 7.5, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  const bob = world.mode === 'walk' ? Math.abs(Math.sin(clock * 10)) * 1.5 : 0;
+  ctx.fillStyle = '#ff5e9a';
   ctx.beginPath();
   ctx.roundRect(p.x - 7, p.y - PERSON_H + 11 - bob, 14, 19, 5);
   ctx.fill();
-  ctx.fillStyle = ghostly ? '#ffffff' : '#ffd8b0';
+  ctx.fillStyle = '#ffd8b0';
   ctx.beginPath();
   ctx.arc(p.x, p.y - PERSON_H + 5 - bob, 7, 0, Math.PI * 2);
   ctx.fill();
   // Pickups ride above the head.
-  if (!ghostly && world.carrying.length) {
+  if (world.carrying.length) {
     ctx.font = '14px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
@@ -658,6 +655,8 @@ function diamond(x, y, z, fill) {
   ctx.fill();
 }
 const drawn = new Set(); // sprite names drawn this frame, for tests
+let peopleDrawn = 0; // people drawn this frame, for tests: you, and never a ghost
+const drawOrder = []; // for tests: buildings, your boats and ground drawn again in front of a boat, in order
 function spr(name, sx, sy, scale, alpha) {
   drawn.add(name);
   sprite(name, sx, sy, scale, alpha);
@@ -671,6 +670,8 @@ function drawBoat(craft, x, y, h, alpha = 1) {
 
 function draw() {
   drawn.clear();
+  peopleDrawn = 0;
+  drawOrder.length = 0;
   arrowsNow = [];
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = SEA;
@@ -712,6 +713,7 @@ function draw() {
     }
   // 3. Everything that stands, back to front: land blocks, buildings, trees, boats, cars, you.
   const items = [];
+  const ground = new Map(); // land tiles' ground, by "x,y", to draw again in front of a boat
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const c = ROWS[y][x];
@@ -720,32 +722,38 @@ function draw() {
       const depth = iso.depth(x + 0.5, y + 0.5);
       if (isBuilding(c)) {
         const name = buildingSprite(x, y);
-        items.push({ depth, stand: true, building: true, box: spriteBox(name, p.x, p.y), draw: (a) => spr(name, p.x, p.y, 1, a) });
+        items.push({ depth, stand: true, building: true, tag: `building:${x},${y}`, box: spriteBox(name, p.x, p.y), draw: (a) => spr(name, p.x, p.y, 1, a) });
         continue;
       }
       const g = groundSprite(x, y);
-      items.push({ depth, draw: () => spr(g, p.x, p.y) });
-      if (c === 'm') {
-        items.push({ depth: depth + 0.001, draw: () => diamondMat(x, y) });
-      }
+      const drawGround = () => {
+        spr(g, p.x, p.y);
+        if (c === 'm') diamondMat(x, y);
+      };
+      ground.set(`${x},${y}`, { depth, draw: drawGround });
+      items.push({ depth, ground: true, draw: drawGround });
       if (c === 'T' && !coarse) {
         const t = treeSprite(x, y);
         items.push({ depth: depth + 0.01, stand: true, building: true, box: spriteBox(t, p.x, p.y), draw: (a) => spr(t, p.x, p.y, 1, a) });
       }
     }
-  for (const m of MOORED) items.push({ depth: iso.depth(m.x, m.y), draw: () => drawBoat(m.craft, m.x, m.y, frameHeading(m.frame)) });
+  for (const m of MOORED) items.push({ sea: m, depth: iso.depth(m.x, m.y), draw: () => drawBoat(m.craft, m.x, m.y, frameHeading(m.frame)) });
   for (const b of BUOYS) {
     const bob = Math.sin(clock * 2 + b.x) * 1.5;
-    items.push({ depth: iso.depth(b.x, b.y), draw: () => spr('craft27_1', iso.toScreen(b.x, b.y).x, iso.toScreen(b.x, b.y).y + 4 + bob) });
+    items.push({ sea: b, depth: iso.depth(b.x, b.y), draw: () => spr('craft27_1', iso.toScreen(b.x, b.y).x, iso.toScreen(b.x, b.y).y + 4 + bob) });
   }
-  for (const rk of SEA_ROCKS) items.push({ depth: iso.depth(rk.x, rk.y), draw: () => spr('rock' + rk.rock, iso.toScreen(rk.x, rk.y).x, iso.toScreen(rk.x, rk.y).y + 6) });
+  for (const rk of SEA_ROCKS) items.push({ sea: rk, depth: iso.depth(rk.x, rk.y), draw: () => spr('rock' + rk.rock, iso.toScreen(rk.x, rk.y).x, iso.toScreen(rk.x, rk.y).y + 6) });
+  for (const [i, l] of LEISURE.entries()) {
+    const t = leisureAt(i, world.tt);
+    items.push({ sea: t, depth: iso.depth(t.x, t.y), draw: () => drawBoat(l.craft, t.x, t.y, t.h) });
+  }
   for (const id of world.traffic) {
     const t = trafficAt(id, world.tt);
-    items.push({ depth: iso.depth(t.x, t.y), draw: () => drawBoat(TRAFFIC[id].craft, t.x, t.y, t.h) });
+    items.push({ sea: t, depth: iso.depth(t.x, t.y), draw: () => drawBoat(TRAFFIC[id].craft, t.x, t.y, t.h) });
   }
   const tr = world.trans;
   for (const b of world.boats) {
-    items.push({ depth: iso.depth(b.x, b.y), draw: () => drawBoat(YOUR_BOATS[b.kind].craft, b.x, b.y, b.h) });
+    items.push({ sea: b, tag: `boat:${b.kind}`, depth: iso.depth(b.x, b.y), draw: () => drawBoat(YOUR_BOATS[b.kind].craft, b.x, b.y, b.h) });
   }
   for (const c of world.cars) {
     const p = iso.toScreen(c.x, c.y, LAND_Z);
@@ -766,13 +774,12 @@ function draw() {
     personBox = { x: sp.x, y: sp.y - PERSON_H / 2 };
     items.push({ depth: personDepth, stand: true, draw: () => drawPerson(p.x, p.y, z) });
   }
-  // The ghost of the best run.
-  const gp = ghostAt();
-  if (gp) items.push({ depth: iso.depth(gp.x, gp.y), stand: !!gp.z, draw: () => drawPerson(gp.x, gp.y, gp.z, 0.45, true) });
-  // Two passes: first the ground and everything at sea level, back to front (so a cliff in front
-  // hides a boat behind it); then what stands on the land (buildings, trees, cars, you), back to
-  // front, so a flat ground tile in front never cuts across the person's feet.
-  const order = [...sortByDepth(items.filter((it) => !it.stand)), ...sortByDepth(items.filter((it) => it.stand))];
+  // Two passes: first the land's ground, back to front; then everything else (buildings, trees,
+  // cars, you, and everything at sea), back to front, so a flat ground tile in front never cuts
+  // across the person's feet, and a boat in front of a building on the shore covers it. After each
+  // thing at sea, the land tiles truly in front of it (not behind it on either axis) are drawn
+  // again, so a cliff in front still hides a boat behind the island.
+  const order = [...sortByDepth(items.filter((it) => it.ground)), ...sortByDepth(items.filter((it) => !it.ground))];
   for (const it of order) {
     // A building drawn after you whose shape covers you fades to 35%.
     let a = 1;
@@ -784,6 +791,20 @@ function draw() {
       }
     }
     it.draw(a);
+    if (it.tag) drawOrder.push(it.tag);
+    if (it.sea) {
+      const { x: sx, y: sy } = it.sea;
+      for (let dy = 0; dy <= 2; dy++)
+        for (let dx = 0; dx <= 2; dx++) {
+          const tx = Math.floor(sx) + dx;
+          const ty = Math.floor(sy) + dy;
+          const g = ground.get(`${tx},${ty}`);
+          if (g && tx >= sx - 0.3 && ty >= sy - 0.3) {
+            g.draw();
+            if (it.tag) drawOrder.push(`ground:${tx},${ty}`);
+          }
+        }
+    }
   }
   // 4. The open stops' beams, over everything.
   if (world.phase !== 'card') drawBeams();
@@ -939,19 +960,6 @@ function drawStick() {
   ctx.fill();
   ctx.restore();
 }
-function ghostAt() {
-  if (!ghost || !world.started || world.phase !== 'play') return null;
-  const f = world.clock / RULES.ghostEvery;
-  const i = Math.floor(f);
-  if (i >= ghost.length - 1) return null;
-  const a = ghost[i];
-  const b = ghost[i + 1];
-  const k = f - i;
-  const x = a[0] + (b[0] - a[0]) * k;
-  const y = a[1] + (b[1] - a[1]) * k;
-  return { x, y, z: isLand(ch(Math.floor(x), Math.floor(y))) ? LAND_Z : 0 };
-}
-
 // The loops: the boat's engine while it moves; in the car its engine, moving or not; afloat the sea,
 // ashore the island's breeze.
 function syncLoops() {
@@ -1038,6 +1046,12 @@ window.__hop = {
   },
   get drawn() {
     return [...drawn];
+  },
+  get people() {
+    return peopleDrawn;
+  },
+  get order() {
+    return drawOrder.slice();
   },
   get faded() {
     return fadedNow;

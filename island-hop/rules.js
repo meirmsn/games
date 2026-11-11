@@ -6,7 +6,7 @@
 // Coordinates are shared/iso.js grid terms in tiles: tile (i, j) covers [i, i+1) × [j, j+1); +x runs
 // down-right on screen, +y down-left. The stick is in screen terms ({ x, y }, length 0..1).
 import { createIso } from '../shared/iso.js';
-import { ROWS, BERTHS, CARS, PLACES, YOUR_BOATS, MOORED, BUOYS, SEA_ROCKS, TRAFFIC, MAP_VERSION } from './map.js';
+import { ROWS, BERTHS, CARS, PLACES, YOUR_BOATS, MOORED, BUOYS, SEA_ROCKS, TRAFFIC, LEISURE, MAP_VERSION } from './map.js';
 import { MISSIONS } from './missions.js';
 
 const D = Math.PI / 180;
@@ -31,8 +31,8 @@ export const RULES = {
   outReach: 1.05, // a car stopped within 1 tile of a car park, jetty or door lets you out
   dead: 0.15, // stick lengths under this are no input
   flyover: 3,
-  ghostEvery: 0.2,
-  ghostMax: 1200,
+  trailEvery: 0.2, // your route, for the finish's map: a point every 0.2 s
+  trailMax: 1200,
   dt: 1 / 120, // the rules step at a fixed 120 Hz, whatever the frame rate
   medals: { gold: 1.1, silver: 1.1 * 1.35, bronze: 1.1 * 1.8 },
 };
@@ -94,8 +94,8 @@ export const WORLD = (() => {
     }
   const berthById = Object.fromEntries(berths.map((b) => [b.id, b]));
   const obstacles = [
-    ...MOORED.map((m) => ({ kind: 'moored', x: m.x, y: m.y, r: [3, 4, 7].includes(m.craft) ? 0.85 : 0.55 })),
-    ...BUOYS.map((b) => ({ kind: 'buoy', x: b.x, y: b.y, r: 0.3 })),
+    ...MOORED.map((m) => ({ kind: 'moored', x: m.x, y: m.y, r: [3, 4, 7].includes(m.craft) ? 0.6 : 0.38 })),
+    ...BUOYS.map((b) => ({ kind: 'buoy', x: b.x, y: b.y, r: 0.22 })),
     ...SEA_ROCKS.map((r) => ({ kind: 'rock', x: r.x, y: r.y, r: 0.45 })),
   ];
   return { stops, berths, berthById, jettyEnds, parks, jetties, obstacles };
@@ -114,7 +114,13 @@ function pathLength(p, loop) {
   return L;
 }
 export function trafficAt(id, t) {
-  const tr = TRAFFIC[id];
+  return { id, ...routeAt(TRAFFIC[id], t) };
+}
+// The leisure boats: where each is at traffic time t.
+export function leisureAt(i, t) {
+  return routeAt(LEISURE[i], t);
+}
+function routeAt(tr, t) {
   const p = tr.path;
   const L = pathLength(p, tr.loop);
   let s = (tr.speed * t) % (tr.loop ? L : 2 * L);
@@ -131,7 +137,7 @@ export function trafficAt(id, t) {
     if (s <= len || i === n - 1) {
       const k = Math.min(1, s / len);
       const h = Math.atan2(b[1] - a[1], b[0] - a[0]) + (back ? Math.PI : 0);
-      return { id, x: a[0] + (b[0] - a[0]) * k, y: a[1] + (b[1] - a[1]) * k, h };
+      return { x: a[0] + (b[0] - a[0]) * k, y: a[1] + (b[1] - a[1]) * k, h };
     }
     s -= len;
   }
@@ -193,8 +199,8 @@ export function createMission(index, { phase = 'fly' } = {}) {
     ticked: [], // [stop index, clock] in the order ticked
     traffic: (m.traffic || ['ferry']).slice(),
     trans: null,
-    ghost: [],
-    ghostT: 0,
+    trail: [],
+    trailT: 0,
     events: [],
     stepAcc: 0,
     walkT: 0,
@@ -256,12 +262,12 @@ function tick(s, dt, stick) {
   }
   if (s.started) {
     s.clock += dt;
-    s.ghostT += dt;
-    if (s.ghostT >= RULES.ghostEvery - 1e-9) {
-      s.ghostT -= RULES.ghostEvery;
-      if (s.ghost.length < RULES.ghostMax) {
+    s.trailT += dt;
+    if (s.trailT >= RULES.trailEvery - 1e-9) {
+      s.trailT -= RULES.trailEvery;
+      if (s.trail.length < RULES.trailMax) {
         const p = youAt(s);
-        s.ghost.push([Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
+        s.trail.push([Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100]);
       }
     }
   }
@@ -316,20 +322,39 @@ function sailStep(s, b, g, dt) {
       b.v = 0; // nosed into the coast: stopped, never stuck (it can always turn away)
     }
   }
-  // Rocks, moored boats, buoys and traffic bump you: stopped and held, pushed clear.
+  // Moored and leisure boats and buoys you glide round: pushed clear, slowed, never held. Rocks and traffic
+  // bump you: stopped and held, pushed clear; only when you're heading into them, so you can
+  // always sail away from one you touch.
   for (const o of obstaclesAt(s)) {
     const d = Math.hypot(b.x - o.x, b.y - o.y);
     const r = o.r + spec.radius;
     if (d < r) {
       const ux = d > 1e-6 ? (b.x - o.x) / d : -Math.cos(b.h);
       const uy = d > 1e-6 ? (b.y - o.y) / d : -Math.sin(b.h);
+      const closing = -(Math.cos(b.h) * ux + Math.sin(b.h) * uy) * b.v; // speed toward it
       const px = o.x + ux * (r + 0.02);
       const py = o.y + uy * (r + 0.02);
       if (boatFits(b.kind, px, py)) {
         b.x = px;
         b.y = py;
       }
-      if (b.v > 0.2 || o.kind === 'traffic') {
+      if (o.kind === 'moored' || o.kind === 'leisure' || o.kind === 'buoy') {
+        if (closing > 1.2) {
+          b.v *= 0.5; // a knock at speed: once, then you're slow enough to glide
+          s.events.push({ type: 'bump', what: o.kind, x: b.x, y: b.y, soft: true });
+        } else if (closing > 0) b.v *= 0.9;
+        // Slide along its side, the way you're heading (head on: to its right), so you ease round it.
+        if (closing > 0) {
+          const along = Math.cos(b.h) * -uy + Math.sin(b.h) * ux;
+          const side = along < -1e-3 ? -1 : 1;
+          const sx = b.x + -uy * side * b.v * dt;
+          const sy = b.y + ux * side * b.v * dt;
+          if (boatFits(b.kind, sx, sy)) {
+            b.x = sx;
+            b.y = sy;
+          }
+        }
+      } else if (closing > 0.2 || (o.kind === 'traffic' && b.v <= 0.2 && d < r - 0.05)) {
         b.v = 0;
         b.hold = RULES.bump;
         s.events.push({ type: 'bump', what: o.kind, id: o.id, x: b.x, y: b.y });
@@ -340,6 +365,10 @@ function sailStep(s, b, g, dt) {
 }
 export function obstaclesAt(s) {
   const list = WORLD.obstacles.slice();
+  for (const [i, l] of LEISURE.entries()) {
+    const p = leisureAt(i, s.tt);
+    list.push({ kind: 'leisure', x: p.x, y: p.y, r: [3, 4, 7].includes(l.craft) ? 0.6 : 0.38 });
+  }
   for (const id of s.traffic) {
     const p = trafficAt(id, s.tt);
     list.push({ kind: 'traffic', id, x: p.x, y: p.y, r: TRAFFIC_R[id] });

@@ -43,18 +43,19 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   the beginning of the game, you should say very big and clear, collect as fast as possible so that
   you know that this is what you're trying to do").
 - **Three clocks:** seconds: a dock, a car door, a stop ticked with a chime. Minutes: each mission adds
-  a car, a second island, a pickup in order, a second boat, then traffic. Back: a best time and a
-  medal per mission, splits against the best, and a ghost of your best run.
+  a second island and a car, a second town, a pickup in order, a second boat, then traffic. Back: a
+  best time and a medal per mission, and splits against the best. No ghost of the best run is kept or
+  drawn (owner, 2026-11-11: "I'm not sure what the phantom is. Don't show that phantom. There's no need. It gets confusing to know what it is and don't try to fix it").
 - **What an expert does differently:** plans the order before moving, docks where the car is, leaves
   cars where the next leg needs them, takes the rowboat through the lagoon, finishes under gold. After
   each run the gold route is drawn over theirs, so the next run is a better plan, not faster thumbs.
-- **Why the tenth play differs:** six missions over one map with many routes; the ghost and splits
-  push toward gold.
+- **Why the tenth play differs:** six missions over one map with many routes; the splits and the gold
+  route drawn at each finish push toward gold.
 - **Form:** short-form, missions of about half a minute to 3½ minutes. **Orientation:** portrait (the archipelago
   runs top to bottom on screen); landscape on desktop works the same.
 - **What a failure costs:** nothing but time. Rocks and traffic bump you and cost about a second. A
   mission can be restarted any time.
-- **Save games:** none: the best time, medal and ghost per mission in localStorage, the mission in
+- **Save games:** none: the best time and medal per mission in localStorage, the mission in
   the address (`#m=3`).
 - **Riskiest technical part:** the island art from Kenney's tiles (terrain, roads, buildings) with a
   person and a car moving among tall buildings, depth-sorted and readable at 60 fps on a phone. Proved
@@ -76,8 +77,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
     buildings. Isometric Tiles City: a few plaza and car-park pieces. Isometric Tiles Vehicles: the
     cars, at their 8 flat headings (the ramp frames are unused), scaled to about half a tile long.
   - Isometric Watercraft: all 29 (28 boats and the buoy) at 8 headings, scaled so the motorboat spans
-    about 1.5 tiles: three you sail, and every other one drawn in the world, moored in a harbour or
-    sailing as traffic, the buoys marking channels (owner: "I would say all the boats").
+    about 1.5 tiles: three you sail, and every other one drawn in the world, moored in a harbour,
+    sailing as traffic or out for fun, the buoys marking channels (owner: "I would say all the
+    boats").
   - Isometric Nature: trees and rocks, scaled from its 180 px tile to 132. Jetties are drawn in code
     from planks (no pack has one); the person is drawn in code, about a third of a tile tall.
   - Rejected: Isometric Modular Roads and Buildings (plain cream blocks to assemble, no cars), and the
@@ -138,13 +140,18 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   slow, but it fits the lagoon and passes under the footbridge). Switching boats is docking yours at a
   marina and walking onto the other's berth. Traffic (a ferry and tugs on fixed loops, a container
   ship crossing a lane) and rocks bump you: your speed drops to nothing and you're held for 0.6 s
-  (about a second lost), never a failure.
+  (about a second lost), never a failure; only heading into one bumps you, so sailing away from one
+  you touch is never held. Moored boats, the leisure boats and buoys never hold you: you're pushed
+  clear and slide along their side the way you're heading, slowed, so you ease round them even head
+  on; a knock at speed halves your speed once (owner, 2026-11-11: "there is some weirdness when driving around on the boat. I get stuck when getting near other boats, even though it doesn't seem like it should be stuck"). Six small leisure
+  boats sail slow loops round the open water in every mission, clear of the lanes, rocks and moored
+  boats (owner, 2026-11-11: "You should also make all the other boats, not move all of them, but there's too little movement. I see only one moving and the rest are not. I think you can do more. Some of the smaller boats are moving there recreationally and stuff to feel more alive").
 - Missions, six, hand-made in `island-hop/missions.js`. Each lists its stops (2–6, most in any order,
   some ordered: a pickup, then its delivery), where each boat and car starts, and its gold route as
   hand-written waypoints (the order of stops, the berths and the vehicles). Starting or restarting a
   mission resets the clock, the stops, any pickup, and every boat and car; nothing carries over from
   another mission. Target lengths, as bands for the autopilot's gold route: 1, one island on foot
-  (25–50 s); 2, a car (40–75 s); 3, two islands (60–110 s); 4, a pickup in order (65–120 s); 5, a
+  (25–50 s); 2, two islands, two stops on each, and a car (40–75 s) (owner, 2026-11-11: "on level 2, there should be already not that many things, but split between two islands, because it's not fun that it's suddenly a lot in one island. I think it's more fun if you had it in two different islands, 4 items total, like 2 and 2 maybe or something, and then eventually add more items, but that's on an upper level"); 3, two towns, six stops (60–110 s); 4, a pickup in order (65–120 s); 5, a
   second boat (75–130 s); 6, everything, with traffic (80–140 s), so a player's run (about 1.2–2× the
   autopilot) stays within about 3½ minutes. Each mission's other order of its stops is slower than its
   gold time (par × 1.1), so planning pays. Any finish opens the next mission. Changed after the go
@@ -161,17 +168,19 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - The clock counts up from the first move (owner, 2026-11-10: "Count up, beat par"). Par per mission:
   gold is the autopilot's gold-route time × 1.1, silver gold × 1.35, bronze gold × 1.8. The HUD shows
   the clock (0:00 until the first move), the stops left as icons, a restart button, and at each stop a
-  split against the best (green ahead, red behind). The best run is a ghost (its position every
-  0.2 s, at most 1,200 points, in localStorage) that moves beside you. Bests, medals and ghosts are
-  saved with the map's version, and thrown away when it changes. At the finish, your route and the
-  gold route are drawn over the map, with the medal and best.
+  split against the best (green ahead, red behind). There's no ghost of the best run (the owner's
+  words above). Bests and medals are saved with the map's version (it counts the missions too), and
+  thrown away when it changes. At the finish, your route (your position every 0.2 s, at most 1,200
+  points) and the gold route are drawn over the map, with the medal and best.
 - The camera follows, leading 25% of the view in the direction of travel and sitting 15% above centre
   (the thumb is low), zoomed per mode by tiles shown across the screen's width (boat 14, car 11,
   walking 7), easing over 0.5 s. A 48 px map button shows the whole archipelago with the open stops
   while held; the clock keeps running. Rejected: pinch zoom, which fights the stick's finger
   (adversarial review, 2026-11-10).
 - Readability: the person has a bright ring under them; a building drawn after the person whose
-  bounds cover them fades to 35%. Stops are tall beams in their own colour with their icon on top;
+  bounds cover them fades to 35%. The land's ground is drawn first; then everything else back to
+  front, so a boat in front of a building on the shore is drawn over it, and after each boat the land
+  tiles in front of it are drawn again, so an island hides a boat behind it (owner, 2026-11-11: "when I get close to the edge of an island, visually, if it's the bottom left edge, I can see the boat behind, weird visual, it seems like it to be on top or below the island"). Stops are tall beams in their own colour with their icon on top;
   off-screen ones get an edge arrow with the icon and the distance.
 - Sound, through the shared sound module and the site-wide mute, MP3: the sea's ambience afloat and an
   island breeze ashore, a boat engine hum while it moves, footsteps, a car door and an engine that
@@ -187,8 +196,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   SHELL list swaps Beacon's image for it and its VERSION goes up.
 - One PR, as the owner chose, built in this order so the riskiest part lands first: the depth-sort
   proof on one island, then the map and movement, missions 1–3, the boats, missions 4–6. If time runs
-  short, these go first (each the owner's to approve): the container ship and tugs (the ferry stays),
-  the gold-route overlay (the medal and best stay), the ghost (the splits stay).
+  short, these go first (each the owner's to approve): the container ship and tugs (the ferry stays)
+  and the gold-route overlay (the medal and best stay).
 
 ## Acceptance items
 
@@ -226,11 +235,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   until delivered; the last stop finishes the mission — `tests/island-hop.test.mjs`.
 - **AC-9** Docking at a marina and walking onto its other berth swaps boats; the speedboat can't enter
   the lagoon and the rowboat can; bumping a rock or traffic stops the boat for 0.6 s and never fails
-  the mission — `tests/island-hop.test.mjs`.
+  the mission; moored and leisure boats and buoys never hold you, even met head on, and you sail on
+  past them; sailing away from a rock you touch isn't held — `tests/island-hop.test.mjs`.
 - **AC-10** The finish shows the time, the medal against gold, silver and bronze, the best, and the
-  run's route beside the gold route; any finish opens the next mission; the best, medal and ghost
-  persist over a reload and the ghost moves on the next run; saved runs from another map version are
-  thrown away — `tests/island-hop.test.mjs`.
+  run's route beside the gold route; any finish opens the next mission; the best and medal persist
+  over a reload, and no ghost is kept or drawn; saved runs from another map version are thrown away
+  — `tests/island-hop.test.mjs`.
 - **AC-11** For each of the six missions the autopilot following its gold route finishes it in a time
   inside the mission's band, and at least one other ordering of its stops is slower than its gold time
   (par × 1.1) —
@@ -254,7 +264,7 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   before `main` added Crumble; owner, 2026-11-11: "Can you bring the latest main?") —
   `tests/site.test.mjs`.
 - **AC-19** The art is Kenney's: all 29 Watercraft sprites are drawn in the world (sailed, moored,
-  traffic or buoys), and the Tiles Base, Tiles Buildings, Tiles City, Tiles Vehicles and Nature pieces
+  traffic, leisure or buoys), and the Tiles Base, Tiles Buildings, Tiles City, Tiles Vehicles and Nature pieces
   the map uses come from the atlas that `scripts/island-hop/build-assets.py` builds —
   `tests/island-hop.test.mjs`.
 - **AC-20** A timed playtest at 390×844: each mission's autopilot time is inside its band, and Port
@@ -262,6 +272,11 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   scripts/island-hop/playtest.mjs` prints the same figures — `tests/island-hop.test.mjs`. (Was
   "verified by review: the playtest's figures in the PR", which no one but the builder could check;
   owner, 2026-11-11: "yes", to "turn the timed playtest into a real test".)
+- **AC-21** In every mission at least six small leisure boats sail, always on water —
+  `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the boats above.)
+- **AC-22** A boat in front of a building on the shore is drawn over it, and the land in front of a
+  boat behind an island is drawn over the boat — `tests/island-hop.test.mjs`. (Added after the go;
+  the owner's words on the island's edge above.)
 
 ## Core flow
 

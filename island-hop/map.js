@@ -8,10 +8,10 @@
 //   = jetty         b berth (deep water)                 d berth (shallow: only the rowboat)
 //   A–Z (not H, P, R, T): a stop's building; its doormat is the m on its +x or +y side.
 //
-// Bump MAP_VERSION whenever the map changes: saved bests, medals and ghosts from another version are
+// Bump MAP_VERSION whenever the map or a mission changes: saved bests and medals from another version are
 // thrown away.
 
-export const MAP_VERSION = 1;
+export const MAP_VERSION = 2;
 
 export const ROWS = [
   '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
@@ -142,19 +142,13 @@ export const MOORED = [
   { craft: 25, x: 33, y: 1.2, frame: 7 },
   { craft: 26, x: 35.5, y: 1.2, frame: 3 },
   { craft: 8, x: 38, y: 1.2, frame: 7 },
-  { craft: 9, x: 40.5, y: 1.2, frame: 3 },
   { craft: 3, x: 20, y: 31, frame: 1 },
   { craft: 7, x: 19.5, y: 36, frame: 5 },
-  { craft: 13, x: 26.5, y: 24.5, frame: 1 },
   { craft: 14, x: 24.6, y: 25.4, frame: 1 },
-  { craft: 15, x: 22.7, y: 26.3, frame: 1 },
   { craft: 16, x: 20.8, y: 27.2, frame: 5 },
-  { craft: 17, x: 42, y: 13, frame: 3 },
   { craft: 18, x: 42, y: 15.5, frame: 7 },
-  { craft: 19, x: 42, y: 18, frame: 3 },
   { craft: 29, x: 1.2, y: 18.5, frame: 1 },
   { craft: 20, x: 1.2, y: 20.8, frame: 5 },
-  { craft: 22, x: 51, y: 50, frame: 1 },
   { craft: 10, x: 51, y: 53.5, frame: 5 },
   { craft: 11, x: 26.2, y: 4, frame: 1 },
   { craft: 4, x: 26.6, y: 7.5, frame: 5 },
@@ -177,6 +171,18 @@ export const BUOYS = [
   { x: 49.6, y: 46.4 },
   { x: 36.4, y: 59 },
   { x: 49.6, y: 59 },
+];
+
+// Small boats out for fun, on slow loops round the open water in every mission, so the sea feels
+// alive. You glide round them, as round a moored boat (owner, 2026-11-11: "Some of the smaller boats
+// are moving there recreationally and stuff to feel more alive").
+export const LEISURE = [
+  { craft: 13, speed: 1.1, loop: true, path: [[3, 24], [12, 24], [12, 29.5], [3, 29.5]] },
+  { craft: 17, speed: 1.3, loop: true, path: [[25, 14], [29, 14], [29, 19.5], [25, 19.5]] },
+  { craft: 15, speed: 1.0, loop: true, path: [[3, 34], [13, 34], [13, 41], [3, 41]] },
+  { craft: 22, speed: 1.2, loop: true, path: [[53, 47], [57, 47], [57, 57], [53, 57]] },
+  { craft: 9, speed: 1.4, loop: true, path: [[48, 2], [57, 2], [57, 7], [48, 7]] },
+  { craft: 19, speed: 0.9, loop: true, path: [[46, 25], [54, 25], [54, 38], [46, 38]] },
 ];
 
 // Traffic on fixed routes, in tiles and tiles a second: a loop goes round; a lane goes back and forth.
