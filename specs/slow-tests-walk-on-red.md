@@ -67,22 +67,38 @@ the game's frames or state (`tests/clock.mjs`), or steps the game itself. No gam
     read. Their HUD reads wait for drawn frames in the page (`requestAnimationFrame`). The step
     arithmetic (`i < 60 * 1.4` and the like) is the same in every run (pattern 6 isn't flaky
     here). No cause; they are checked and left as they are.
-- **`startEmpty` turns `manual` on before `startGame`,** not after (pattern 2). In the old order
-  both ran in one evaluate, so no frame could run between them and no test failed from it; the new
-  order says what the helper means without relying on that. (Claude, 2026-11-11)
-- **The two game timers stay as they are; no game-code change is needed.** `showBanner`'s 1.6 s
-  (~987): the test waits on the banner instead (above). `arrive`'s 250 ms (~482), which walks a
-  copier who is across to the porta-potty queue: every test that steps a copier across does so
-  inside one evaluate, where no timer can run, and none reads where the copier stands afterwards,
-  so it changes no result. That the tests never see that walk is recorded in `FINDINGS.md`.
-  (Claude, 2026-11-11)
+- **`startEmpty` stays as it is (pattern 2 isn't a cause here).** The split's note said `manual`
+  is set late in `startEmpty`; it sets `startGame` and `manual = true` in one synchronous
+  `page.evaluate` (`tests/walk-on-red.test.mjs` ~37 to ~45), so no frame can run between them. The
+  coordinator's verdict below says the same. (Claude, 2026-11-11)
+- **The two game timers stay as they are: the fixes are test-only.** The owner gave game-code OKs
+  over to an adversarial review run by the coordinator session ("You should do an adversarial
+  review to get the answer to your questions.", 2026-11-11, as relayed in its verdict). Its
+  verdict for this slice, 2026-11-11, stands as the owner's decision: "Timers at
+  walk-on-red/game.js:482 (250 ms queue walk) and :987 (1600 ms banner): NOT APPROVED, test-only.
+  Moving the queue walk to game time would make followers queue 20× sooner during fast-forward
+  (`t.FF`), which a player would see. The banner's risk is the test, not the game: [the cards test]'s
+  `waitForTimeout(1800)` leaves only a 200 ms margin (tests/walk-on-red.test.mjs:842). Use
+  `waitFor(banner hidden)`, and read "just after Start" in the same `evaluate` as `startEmpty`."
+  It also said the tests at ~148 and ~181 "should wait on the player's col/row, not `settle()`
+  200 ms"; they wait on every input having been handled and the hop having landed (above), which
+  includes the player's col and row and also covers the checks where he must not move, where no
+  change of col or row could be waited for. `arrive`'s 250 ms timer changes no result: every test
+  that steps a copier across does it inside one evaluate, where no timer can run, and none reads
+  where the copier stands afterwards. That the tests never see that walk is recorded in
+  `FINDINGS.md`. (Coordinator's verdict as the owner's, 2026-11-11; Claude, 2026-11-11)
 - **The guard reproduces fewer frames, not a slower CPU.** On `main`, the file passes with
   `TEST_CPU_THROTTLE=10` (28 of 28, tried in this session): the game's frames are cheap, so a 10×
   slower CPU still runs them at full rate. What a busy runner does to these tests is run fewer
   frames, so the guard makes each frame slow: an init script makes every animation frame of the
-  page take at least 150 ms (about 6 frames a second), which also delays the page's timers and
-  input as a busy main thread does. Rejected: a higher CPU throttle, which slows frames only by
-  chance. (Claude, 2026-11-11)
+  page take at least 300 ms, which also delays the page's timers and input as a busy main thread
+  does. Tried in this session on `main`'s file: at 150 ms a frame the tap-and-swipe test still
+  passes, since Playwright's key, mouse and touch calls themselves wait for frames (a key press
+  returned with its hop 0.83 landed), and only the third frame of a hop has to fall in the 200 ms
+  wait; at 300 ms a frame it fails (a key sent mid-hop is queued, the next overwrites it, and he
+  ends a row off). The edge-strip test still passed at 300 ms, since its 4-step drags span several
+  frames; the guard runs it too, as the same bet. Rejected: a higher CPU throttle, which slows
+  frames only by chance. (Claude, 2026-11-11)
 - **The guard test runs the edge-strip and tap-and-swipe checks themselves** on a
   starved page: each test's body is a function the test and the guard both call, so the guard
   can't drift from the tests it guards. (Claude, 2026-11-11)
@@ -95,7 +111,7 @@ the game's frames or state (`tests/clock.mjs`), or steps the game itself. No gam
   after the page has handled every input sent so far and the player's hop has landed, with the
   game's own frame loop running the hops (`manual` off).
 - **AC-3** A guard test runs the edge-strip and tap-and-swipe checks on a page whose
-  every animation frame takes at least 150 ms, and passes. The same checks with `main`'s 200 ms
+  every animation frame takes at least 300 ms, and passes. The same checks with `main`'s 200 ms
   waits fail on that page. — verified by review: the PR shows the guard run on `main`'s checks
   failing.
 - **AC-4** The start-card test reads the mode, level, walk light, followers and row in a
@@ -103,13 +119,12 @@ the game's frames or state (`tests/clock.mjs`), or steps the game itself. No gam
   and the test's next step can't change them.
 - **AC-5** The cards test waits until the level's name banner is hidden, failing with
   a message naming it if it isn't within its time-out; it doesn't wait a fixed time for it.
-- **AC-6** `startEmpty` turns `manual` on before it starts the level.
-- **AC-7** In the offline test, the wait for the service worker to be ready fails,
+- **AC-6** In the offline test, the wait for the service worker to be ready fails,
   naming it, if it isn't ready within its time-out.
-- **AC-8** `tests/walk-on-red.test.mjs` passes 5 times in parallel, and once with
+- **AC-7** `tests/walk-on-red.test.mjs` passes 5 times in parallel, and once with
   `TEST_CPU_THROTTLE=10`, and the rest of the slow suite passes once. — verified by review: the
   PR shows the runs' summaries.
-- **AC-9** No game code changes: outside `tests/walk-on-red.test.mjs`, the change touches only this
+- **AC-8** No game code changes: outside `tests/walk-on-red.test.mjs`, the change touches only this
   spec, `ROADMAP.md` (R-2's row and section) and `FINDINGS.md` (rows this slice adds). —
   verified by review: the PR's diff.
 
