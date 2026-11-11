@@ -79,6 +79,14 @@ const FF = 20; // once he's in the loo, the game runs this many times faster, th
 const DOOR_T = 1.8; // in the loo: the door shuts, a flush, a chime, then the fast-forward
 const HONK_GAP = 10; // art px: a car this close to you, coming, honks
 const DOWN_T = 1.2; // a hit player lies flat this long
+// The heart a hit costs, over his head while he's down: full, then an X across it, then the empty
+// container the HUD shows; the HUD's heart empties as this one does, so the two change together.
+const HEART_X = 0.3;
+const HEART_EMPTY = 0.6;
+const HEART_FADE = 0.9;
+const HEART_END = 1.1;
+// The HUD heart's 7×6 pixels (walk-on-red/index.html's path).
+const HEART = ['0110110', '1111111', '1111111', '0111110', '0011100', '0001000'];
 const LIVES = 3; // a run's lives: a hit costs one, and the last one lost ends the run
 const GREEN_T = 3.6; // the green light's crossing, at normal speed, under the level's score table
 const TALLY_T = 1.4; // the table stays this much longer after the crossing
@@ -320,6 +328,7 @@ function setupLevel(idx) {
   vehicles = [];
   people = [];
   popups = [];
+  game.heart = null;
   game.red = s.red;
   game.levelScore = 0;
   game.failed = false;
@@ -640,6 +649,8 @@ function honk() {
 function hitPlayer() {
   player.down = DOWN_T;
   game.lives = Math.max(0, game.lives - 1);
+  // Just above his head (he's 15 px tall as he falls), centred on him; it stays put.
+  game.heart = { t: 0, x: colX(player.col), y: cellFeet(player.col, player.row).y - 17 };
   // The last life: the level stops here (the walk light can't run out under him), and once he has
   // lain down the run ends.
   if (game.lives === 0) game.mode = 'out';
@@ -998,6 +1009,7 @@ function update(dt) {
   if (game.grace > 0) game.grace -= dt;
   for (const pp of popups) pp.t += dt;
   popups = popups.filter((pp) => pp.t < (pp.long ? 1.8 : 1.1));
+  if (game.heart && (game.heart.t += dt) >= HEART_END) game.heart = null;
   // Once he's in the loo, the whole game runs FF times over, step by step, with its usual rules.
   const n = fastForward() ? FF : 1;
   for (let i = 0; i < n; i++) {
@@ -1692,7 +1704,62 @@ function pixLabel(text, cx, y, color, k = 1) {
 }
 
 // Pop-ups ("!", "×2", "+28") and, once he's across, the points counting up, in the same pixels.
+const heartBeat = () => {
+  const h = game.heart;
+  if (!h) return null;
+  return h.t < HEART_X ? 'full' : h.t < HEART_EMPTY ? 'x' : 'empty';
+};
+// The lives the HUD shows: the one being lost still counts until the heart over him turns empty.
+const livesShown = () => game.lives + (game.heart && game.heart.t < HEART_EMPTY ? 1 : 0);
+
+// The lost heart, in street pixels (2 per art pixel), with the pop-ups' one-pixel dark outline.
+function drawHeart() {
+  const beat = TILE ? null : heartBeat();
+  drawn.heart = beat;
+  drawn.heartBox = null;
+  if (!beat) return;
+  const h = game.heart;
+  const W = 14;
+  const H = 12;
+  const x = Math.max(2, Math.min(LW - W - 2, Math.round(px(h.x) - W / 2)));
+  const y = Math.max(2, Math.min(LH - H - 2, py(h.y) - H));
+  const on = (i, j) => i >= 0 && j >= 0 && i < W && j < H && HEART[j >> 1][i >> 1] === '1';
+  const g = lctx;
+  g.globalAlpha = h.t < HEART_FADE ? 1 : Math.max(0, (HEART_END - h.t) / (HEART_END - HEART_FADE));
+  // The outline: every pixel next to the heart.
+  g.fillStyle = '#14161f';
+  for (let j = -1; j <= H; j++) for (let i = -1; i <= W; i++) if (!on(i, j) && (on(i - 1, j) || on(i + 1, j) || on(i, j - 1) || on(i, j + 1))) g.fillRect(x + i, y + j, 1, 1);
+  const edge = (i, j) => !on(i - 1, j) || !on(i + 1, j) || !on(i, j - 1) || !on(i, j + 1);
+  for (let j = 0; j < H; j++)
+    for (let i = 0; i < W; i++) {
+      if (!on(i, j)) continue;
+      g.fillStyle = beat === 'empty' ? (edge(i, j) ? '#c9ccd6' : '#1b1e29') : '#ff4b4b';
+      if (beat === 'empty') g.globalAlpha = Math.min(g.globalAlpha, 0.8);
+      g.fillRect(x + i, y + j, 1, 1);
+    }
+  if (beat === 'x') {
+    // A white X across the heart, two pixels thick, outlined.
+    const cross = (c) => {
+      g.fillStyle = c;
+      for (let k = 0; k < 10; k++) {
+        g.fillRect(x + 2 + k, y + 1 + k, 2, 1);
+        g.fillRect(x + 10 - k, y + 1 + k, 2, 1);
+      }
+    };
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      g.save();
+      g.translate(dx, dy);
+      cross('#14161f');
+      g.restore();
+    }
+    cross('#ffffff');
+  }
+  g.globalAlpha = 1;
+  drawn.heartBox = { x, y, w: W, h: H, LW, LH };
+}
+
 function drawPopups() {
+  drawHeart();
   for (const pp of popups) {
     const life = pp.long ? 1.8 : 1.1;
     lctx.globalAlpha = Math.max(0, Math.min(1, (life - pp.t) * 2.5));
@@ -1986,14 +2053,15 @@ const drawn = { payout: null };
 let hudCache = '';
 function syncHud() {
   const shown = game.score + (['finish', 'wait'].includes(game.mode) ? game.levelScore : 0);
-  const key = `${shown}|${game.level}|${game.mode}|${game.lives}`;
+  const lives = livesShown();
+  const key = `${shown}|${game.level}|${game.mode}|${lives}`;
   if (key === hudCache) return;
   hudCache = key;
   const green = game.mode === 'green' || game.mode === 'tally';
   ui.score.textContent = String(shown);
   ui.streetName.textContent = `${game.level + 1} · ${street().name}`;
-  ui.lives.querySelectorAll('svg').forEach((h, i) => h.classList.toggle('lost', i >= game.lives));
-  ui.lives.setAttribute('aria-label', `${game.lives} ${game.lives === 1 ? 'life' : 'lives'} left`);
+  ui.lives.querySelectorAll('svg').forEach((h, i) => h.classList.toggle('lost', i >= lives));
+  ui.lives.setAttribute('aria-label', `${lives} ${lives === 1 ? 'life' : 'lives'} left`);
   ui.quotaFill.style.width = `${((game.level + (green ? 1 : 0)) / LEVELS_N) * 100}%`;
 }
 
@@ -2092,6 +2160,13 @@ sheet.decode().then(
       copiers: () => people.filter((p) => p.kind !== 'crowd'),
       vehicles: () => vehicles,
       popups: () => popups,
+      heart: () => game.heart && { ...game.heart, beat: heartBeat() },
+      low,
+      px,
+      py,
+      HEART_X,
+      HEART_EMPTY,
+      HEART_END,
       jiggle: (p) => urgentJiggle(p, false),
       carLight,
       crossingClear,
