@@ -175,6 +175,8 @@ spec item each one carries.
   test file calls `waitForTimeout` without a `// safe:` reason. Anything new this slice notices and
   doesn't fix is a row of its own: the game's `frameWork` that nothing reads after this
   change, and Crumble's frame budget, which the 10× run doesn't reach.
+- **Changed after the go: F-32 is closed too.** It is the frame budget's wall-clock limit, which this
+  change replaces. Asked whether this PR should remove its row as well: "yes" (owner, 2026-11-11).
 - **The `// clock-checked` check fails an unmarked file that waits.**
   `tests/clock-check.test.mjs` now only lists an unmarked file that calls `waitForTimeout`. Once
   R-2 and this slice are in, no such file is left, so the check can fail one instead: a new fixed
@@ -221,7 +223,7 @@ spec item each one carries.
   marked `// clock-checked`, and every test file passes it.
 - **AC-11** Outside `tests/pixel-leap.test.mjs` and `tests/clock-check.test.mjs`, the only files
   that change are `specs/slow-tests-pixel-leap.md`, `ROADMAP.md` (R-7's row and section) and
-  `FINDINGS.md` (F-33, and rows this slice adds). No game code changes. — verified by review: the
+  `FINDINGS.md` (F-32 and F-33, and rows this slice adds). No game code changes. — verified by review: the
   PR's diff.
 
 ## Out of scope
