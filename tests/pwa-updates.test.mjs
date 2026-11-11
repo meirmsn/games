@@ -210,8 +210,8 @@ function navigations(page) {
 }
 
 // Waits until `cache` holds each of `keys` (relative to the site's root, matched as the offline step
-// will match them). With `mark`, each page (`…/`) must be that version's (data-mark) and each script
-// (`….js`) too (scriptMark), since an older copy may already be there.
+// will match them). With `mark`, each page (`…/`) must be that version's (data-mark), and so must the
+// scripts that carry a mark here (`site.js`, each game's `game.js`), since an older copy may be there.
 const inCache = (page, cache, keys, mark = null) =>
   until(
     page,
@@ -221,7 +221,7 @@ const inCache = (page, cache, keys, mark = null) =>
         const r = await c.match(new URL(k, root).href);
         if (!r) return false;
         if (mark && k.endsWith('/') && !(await r.text()).includes(`data-mark="${mark}"`)) return false;
-        if (mark && k.endsWith('.js') && !(await r.text()).includes(`scriptMark = '${mark}'`)) return false;
+        if (mark && /(^|\/)(site|game)\.js$/.test(k) && !(await r.text()).includes(`scriptMark = '${mark}'`)) return false;
       }
       return true;
     },
@@ -229,6 +229,13 @@ const inCache = (page, cache, keys, mark = null) =>
     `${cache} holds ${keys.join(', ')}${mark ? ` at mark ${mark}` : ''}`
   );
 const gameFiles = (g) => [`${g}/`, `${g}/game.js`, `${g}/game.css`, `${g}/art.png`, `${g}/sounds/hit.mp3`];
+// The landing page's files, as sw.js precaches them (its SHELL list), so an offline landing page is
+// checked against what it will really load.
+const shellFiles = () => {
+  const list = readFileSync(join(ROOT, 'sw.js'), 'utf8').match(/^const SHELL = \[([\s\S]*?)\];$/m);
+  assert.ok(list, "sw.js's SHELL list");
+  return [...list[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+};
 
 const marks = (page) =>
   page.evaluate(() => ({ page: document.documentElement.dataset.mark, script: document.documentElement.dataset.scriptMark }));
@@ -465,10 +472,11 @@ test("pwa-updates AC-6 / pwa-updates AC-8 / slow-tests-pwa-site AC-7: a version 
   deploy(s, '2', ['beta']);
   await landing.reload();
   await notice(landing).waitFor({ state: 'visible', timeout: scaled(10000) });
+  const reloads = navigations(landing);
   await notice(landing).getByRole('button', { name: 'Update' }).click();
-  await landing.waitForFunction(() => document.readyState === 'complete' && navigator.serviceWorker.controller);
-  await until(landing, () => caches.keys().then((k) => k.includes('games-shell-test-2')), null, 'updated');
-  await landing.waitForLoadState('networkidle');
+  await reloads.reached(1, 'the reload after Update');
+  // The offline landing page comes from the new shell cache: the new page and script, and the rest.
+  await inCache(landing, 'games-shell-test-2', shellFiles(), '2');
   const tiles = await landing.locator('.tiles > li').count();
   assert.ok(tiles > 0);
   // Beta is played online on the new version; alpha isn't opened online again.
