@@ -78,26 +78,33 @@ test('slow-tests-harness AC-3: pwa-updates waits on the caches and the service w
   }
 });
 
-// A fixed piece of script; returns how long it took in the page.
-const work = (page) =>
-  page.evaluate(() => {
-    const t0 = performance.now();
+// How long a fixed piece of script takes on the page's main thread, by Chromium's own count
+// (`ThreadTime`, from CDP's Performance metrics). A busy machine stretches a page's wall time but
+// not its thread time, while the CPU throttle stretches both, so this compares pages fairly however
+// crowded the machine is (F-41). The work is long (tens of ms at full speed): Chromium throttles in
+// time slices, and a short piece can slip through one.
+async function threadTime(page) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Performance.enable');
+  const now = async () => (await cdp.send('Performance.getMetrics')).metrics.find((m) => m.name === 'ThreadTime').value;
+  const t0 = await now();
+  await page.evaluate(() => {
     let x = 0;
     for (let i = 0; i < 3e7; i++) x += Math.sqrt(i);
-    return performance.now() - t0 + (x < 0 ? 1 : 0);
+    return x;
   });
-// How many times slower `page` runs the script than `base` (a page at full speed), from their total
-// times over five runs taken in turns, so a change in the machine's load hits both alike. Chromium
-// throttles in time slices, so a short piece of work can slip through one at full speed: each run
-// is long enough (tens of ms at full speed) to span many slices.
+  const t = (await now()) - t0;
+  await cdp.detach();
+  return t;
+}
+// How many times slower `page` runs the script than `base` (a page at full speed): the largest of
+// five runs of each, taken in turns. On a crowded machine Chromium's throttle has gaps, so one run of
+// a throttled page can go almost at full speed, while a page without the throttle never measures much
+// above 1×: the largest run says whether the throttle is on (F-41).
 async function slowdown(page, base) {
-  let b = 0;
-  let t = 0;
-  for (let i = 0; i < 5; i++) {
-    b += await work(base);
-    t += await work(page);
-  }
-  return t / b;
+  let most = 0;
+  for (let i = 0; i < 5; i++) most = Math.max(most, (await threadTime(page)) / (await threadTime(base)));
+  return most;
 }
 
 let server;
