@@ -27,12 +27,21 @@ function checkSlow(files, env = {}) {
   return { status: r.status, out: r.stdout + r.stderr, secs: (Date.now() - start) / 1000 };
 }
 
+// How long the test runner took over `file` before it ended or stopped it: the `duration_ms` of the
+// file's top-level TAP entry. It leaves out the time bash and node take to start, which a busy
+// machine stretches (specs/slow-tests-pixel-leap.md).
+function fileMs(out, file) {
+  const m = out.match(new RegExp(`^(?:not )?ok \\d+ - ${file.replace(/[.]/g, '\\.')}\\n(?:  .*\\n)*?  duration_ms: ([\\d.]+)`, 'm'));
+  return m ? Number(m[1]) : NaN;
+}
+
 test('slow-tests-harness AC-1: a file that hangs in a test, in a hook, or never exits is stopped, named, and fails the run', () => {
   for (const f of ['hang-test', 'hang-hook', 'hang-linger']) {
     const file = `tests/fixtures/${f}.mjs`;
     const r = checkSlow([file], { SLOW_TEST_TIMEOUT_MS: '2000' });
     assert.equal(r.status, 1, `${f}: exit 1\n${r.out}`);
-    assert.ok(r.secs < 2 + 10, `${f}: stopped within the limit plus 10 s (${r.secs} s)`);
+    const ms = fileMs(r.out, file);
+    assert.ok(ms < 2000 + 10000, `${f}: stopped within the limit plus 10 s (${ms} ms in the runner, ${r.secs} s in all)`);
     assert.match(r.out, new RegExp(`check-slow: stopped at the 2000 ms limit: ${file}`), `${f} named`);
   }
   const ok = checkSlow(['tests/fixtures/passes.mjs'], { SLOW_TEST_TIMEOUT_MS: '2000' });
@@ -40,6 +49,16 @@ test('slow-tests-harness AC-1: a file that hangs in a test, in a hook, or never 
   assert.doesNotMatch(ok.out, /stopped at/);
   // With no files it runs the suite's glob, as before.
   assert.match(source('../scripts/check-slow.sh'), /files=\(tests\/\*\.test\.mjs\)/);
+});
+
+test('slow-tests-pixel-leap AC-13: a slow start before the test runner does not count against stopping a hanging file', () => {
+  // Each `node -e` that check-slow.sh runs before its runner starts 6 s late, as on a busy machine.
+  const file = 'tests/fixtures/hang-test.mjs';
+  const r = checkSlow([file], { SLOW_TEST_TIMEOUT_MS: '2000', SLOW_START_MS: '6000', NODE_OPTIONS: `--require ${ROOT}tests/fixtures/slow-start.cjs` });
+  assert.equal(r.status, 1, r.out);
+  assert.ok(r.secs > 2 + 10, `the run started late (${r.secs} s in all)`);
+  const ms = fileMs(r.out, file);
+  assert.ok(ms < 2000 + 10000, `the runner stopped it within the limit plus 10 s (${ms} ms)`);
 });
 
 test('slow-tests-harness AC-2: the limit is SLOW_TEST_TIMEOUT_MS (default 5 min) times the throttle, at most 20 min', () => {

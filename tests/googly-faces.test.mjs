@@ -187,20 +187,39 @@ async function tapAndJump(page, face) {
   return eachFrame(page, (id) => window.googly.state.faces.find((f) => f.id === id && f.hop > 10), face.id, `face ${face.id} jumping`);
 }
 
+// The tap's kick to the pupils lasts a few hundredths of a second before gravity rolls them back to
+// the rim, so one frame (the first one the face is 10 px up) can miss it when frames are slow. A
+// recorder started in the page before the tap keeps the pupils of the last frame before the face
+// reacts, and their largest move over the next 0.3 s of the game's time
+// (specs/slow-tests-pixel-leap.md).
 async function reactsAndJumps(page, face) {
-  const before = face.pupils.map((p) => ({ ...p }));
+  await page.evaluate((id) => {
+    const m = (window.__pupilMove = { base: null, from: null, moved: 0, done: false });
+    const tick = () => {
+      const f = window.googly.state.faces.find((x) => x.id === id);
+      if (f && m.from === null && f.phase !== 'react') m.base = f.pupils;
+      else if (f && m.from === null) m.from = window.__gameT;
+      if (f && m.from !== null && m.base) {
+        for (const [i, p] of f.pupils.entries()) m.moved = Math.max(m.moved, Math.hypot(p.x - m.base[i].x, p.y - m.base[i].y));
+        if (window.__gameT - m.from >= 0.3) return (m.done = true);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, face.id);
   const now = await tapAndJump(page, face);
   assert.equal(now.phase, 'react');
   assert.equal(now.mouth, 'o', 'its mouth opens');
   assert.ok(now.hop > 10, 'it jumps');
-  const moved = now.pupils.some((p, i) => Math.hypot(p.x - before[i].x, p.y - before[i].y) > 0.05);
-  assert.ok(moved, 'its pupils move');
+  await waitFor(page, () => window.__pupilMove.done, null, { what: 'the pupils after the tap', timeout: 20000 });
+  const { moved } = await page.evaluate(() => window.__pupilMove);
+  assert.ok(moved > 0.05, `its pupils move (${moved.toFixed(3)} eye radii at most)`);
   return now;
 }
 
 const BOING = [1, 2, 3, 4].map((i) => statSync(new URL(`../googly-faces/sounds/boing-${i}.mp3`, import.meta.url)).size);
 
-test('tapping a face plays a sound and makes it react', async () => {
+test('tapping a face plays a sound and makes it react (slow-tests-pixel-leap AC-15: the pupils, every frame)', async () => {
   const { context, page } = await openGame();
   const face = await readyFace(page);
   const now = await reactsAndJumps(page, face);
@@ -316,27 +335,37 @@ test('slow-tests-crumble-googly AC-9: tapping empty space is answered too, and t
   await context.close();
 });
 
+// The first dot's largest swell and its neighbour's largest push, over 0.6 s of the game's time from
+// the first frame the tap filled it. The recorder starts in the page before the tap: the swell lasts
+// about 0.3 s of game time, and frames that run before a read sent from Node, after the tap, would
+// cut its start off (specs/slow-tests-pixel-leap.md). `lag` s of the game's time are let pass after the
+// tap before the test reads the record (the guard).
+async function swellOnTap(page, face, rest, { lag = 0 } = {}) {
+  await page.evaluate((rest) => {
+    const m = (window.__pipMax = { biggest: 0, pushed: 0, from: null, done: false });
+    const tick = () => {
+      const { pips } = window.googly.state;
+      if (m.from === null && pips[0].filled) m.from = window.__gameT;
+      if (m.from !== null) {
+        m.biggest = Math.max(m.biggest, pips[0].r / rest[0].r);
+        m.pushed = Math.max(m.pushed, pips[1].x - rest[1].x);
+        if (window.__gameT - m.from >= 0.6) return (m.done = true);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, rest);
+  await tapAt(page, face.x, face.y);
+  if (lag) await gameSeconds(page, lag);
+  await waitFor(page, () => window.__pipMax.done, null, { what: 'the dot swelling', timeout: 20000 });
+  return page.evaluate(() => window.__pipMax);
+}
+
 test('the dot a tap fills swells, pushing the others aside, then settles', async () => {
   const { context, page } = await openGame({ fakeAudio: false });
   const { pips: rest } = await state(page);
   const face = await readyFace(page);
-  await tapAt(page, face.x, face.y);
-  // The largest swell and push over 0.6 s of the game's time, read on every frame.
-  const { biggest, pushed } = await eachFrame(
-    page,
-    ({ rest, until }) => {
-      const { pips } = window.googly.state;
-      const m = (window.__pipMax ??= { biggest: 0, pushed: 0 });
-      m.biggest = Math.max(m.biggest, pips[0].r / rest[0].r);
-      m.pushed = Math.max(m.pushed, pips[1].x - rest[1].x);
-      if (window.__gameT >= until) {
-        delete window.__pipMax;
-        return m;
-      }
-    },
-    { rest, until: (await gameTime(page)) + 0.6 },
-    'the dot swelling'
-  );
+  const { biggest, pushed } = await swellOnTap(page, face, rest);
   assert.ok(biggest > 1.8, `the new dot swells (${biggest.toFixed(2)}x)`);
   assert.ok(pushed > 4, `its neighbour moves aside (${pushed.toFixed(1)} px)`);
   // Then it settles: back to size and the row closed up, on 10 frames in a row.
@@ -358,6 +387,16 @@ test('the dot a tap fills swells, pushing the others aside, then settles', async
   const back = await page.locator('.shell-back').boundingBox();
   const snd = await page.locator('[data-sound-toggle]').boundingBox();
   assert.ok(rest[0].x - rest[0].r > back.x + back.width && rest[11].x + rest[11].r < snd.x);
+  await context.close();
+});
+
+test('slow-tests-pixel-leap AC-12: the dot swell is read in full when 0.5 s of the game\'s time passes between the tap and the test\'s next step', async () => {
+  const { context, page } = await openGame({ fakeAudio: false });
+  const { pips: rest } = await state(page);
+  const face = await readyFace(page);
+  const { biggest, pushed } = await swellOnTap(page, face, rest, { lag: 0.5 });
+  assert.ok(biggest > 1.8, `the new dot swells (${biggest.toFixed(2)}x)`);
+  assert.ok(pushed > 4, `its neighbour moves aside (${pushed.toFixed(1)} px)`);
   await context.close();
 });
 

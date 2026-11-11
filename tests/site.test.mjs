@@ -320,12 +320,16 @@ test('the Install button appears when the browser offers install, and hides afte
   await context.close();
 });
 
-test('a playable tile plays its sound and opens its game', async () => {
-  const context = await browser.newContext({ hasTouch: true });
-  await context.addInitScript(FAKE_AUDIO);
+// Opens the landing page with its first coming-soon tile made playable, pointing at the test game,
+// taps it and waits for the game. The landing page also asks for `/` in the background (not a
+// navigation), and that request can still be in the route's handler when the test ends, so the routes
+// are dropped, ignoring a handler still in flight, before the context closes
+// (specs/slow-tests-pixel-leap.md). `slowBackground` holds that request back 2 s (the guard).
+async function playableTile(context, { slowBackground = false } = {}) {
   const page = await context.newPage();
-  // Serve the landing page with Orbit's tile pointing at the test game.
+  // Serve the landing page with Orbit's tile pointing at the test game (no tile is coming soon now).
   await page.route(BASE, async (route) => {
+    if (slowBackground && route.request().resourceType() !== 'document') await new Promise((r) => setTimeout(r, 2000));
     const res = await route.fetch();
     const html = (await res.text()).replace('href="orbit/"', 'href="tests/fixtures/game/"');
     await route.fulfill({ response: res, body: html });
@@ -334,6 +338,20 @@ test('a playable tile plays its sound and opens its game', async () => {
   await page.waitForFunction(() => window.__decoded >= 3);
   await page.locator('a.tile[href="tests/fixtures/game/"]').click();
   await page.waitForURL(BASE + 'tests/fixtures/game/');
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+}
+
+test('a playable tile plays its sound and opens its game', async () => {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  await playableTile(context);
+  await context.close();
+});
+
+test('slow-tests-pixel-leap AC-14: a background request still in the tile test\'s route when it ends does not fail the file', async () => {
+  const context = await browser.newContext({ hasTouch: true });
+  await context.addInitScript(FAKE_AUDIO);
+  await playableTile(context, { slowBackground: true });
   await context.close();
 });
 
