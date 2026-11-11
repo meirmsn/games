@@ -1797,7 +1797,8 @@ async function musicCheck(o = {}) {
     const g = window.__gallery;
     g.game.frenzy = 0;
     g.startRound(2);
-    for (let i = 0; i < 90; i++) g.step(1 / 60);
+    // Past the round's intro (splat-gallery-goal-and-tiny-target AC-6).
+    for (let i = 0; i < Math.ceil((g.ROUND_INTRO + 0.3) * 60); i++) g.step(1 / 60);
     return { speed: g.musicSpeed(), mode: g.game.mode };
   });
   assert.deepEqual(next, { speed: 1, mode: 'play' });
