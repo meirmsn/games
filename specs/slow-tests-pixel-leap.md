@@ -194,6 +194,37 @@ spec item each one carries.
   `// safe: <reason>` on each wait); and the file's header comment says unmarked files that wait now
   fail.
 
+### The whole suite's proof, after the go
+
+- **What the first runs showed** (2026-11-11, `main` at 32e5fb5 with this branch). Alone at
+  `TEST_CPU_THROTTLE=10`, the whole suite passed, 339 of 339 in 744 s. Five `scripts/check-slow.sh`
+  started together did not: `node --test` runs three files at once, so about 15 browsers shared 4
+  CPUs (load average about 53). Each run had the same five files stopped at the 5-minute limit.
+  Raising it to 20 minutes, each run passed 331 to 334 of 339. Most failures were fixed time-outs
+  that the throttle's scaling doesn't reach at rate 1: Playwright's 30 s `page.goto`, and 10 s
+  bounds in Crumble's and Googly Faces' tests. Two were fragile in themselves: Googly Faces' dot test
+  (a swell of 1.08×, in 2 of 5 runs) and the harness's hang test (12.2 s against a 10 s allowance,
+  in 1 of 5). Pixel Leap failed in none of the ten runs.
+- **The proof's five runs each run one file at a time**, five browsers at once, the load each
+  slice was proved under. Asked, the owner chose "A" (2026-11-11), for "the same 5 runs, each running
+  one file at a time, … the brief's command and its results recorded in the PR". The first runs
+  above go in the PR.
+- **The two fragile tests are fixed in this PR**, test code only. Asked, the owner chose "B"
+  (2026-11-11), "Fix in this PR (other slices' test files; no game code)".
+  - *Googly Faces' "the dot a tap fills swells…"*: its read of the swell began with an `evaluate`
+    sent after the tap had been seen, so every frame run in between was lost. The swell lasts about
+    0.4 s of the game's time (its spring, `googly-faces/game.js` ~395 and ~997, peaks at 2.49× or
+    more at any frame rate from 20 to 120 a second), so a late start read only its tail. Now a
+    recorder starts in the page before the tap and reads every frame from the first one that
+    filled the dot. Guard: 0.5 s of game time between the tap and the next step; the old read got
+    1.05× on it, the new one passes.
+  - *The harness's "a file that hangs…"*: it timed the whole `scripts/check-slow.sh` run, bash and
+    node start-up included, against the limit plus 10 s. What it guards is how soon the runner stops
+    the file, which the runner reports as the file's `duration_ms` (about 2,004 ms for a 2,000 ms
+    limit). Now it checks that. Guard: a fixture preloaded through `NODE_OPTIONS` makes each
+    `node -e` the script runs before its runner start 6 s late; the run took 26 s with 12 s, the
+    file still stopped at 2,004 ms.
+
 ## Acceptance items
 
 - **AC-1** `tests/pixel-leap.test.mjs` has `// clock-checked` in its first 10 lines and calls no
@@ -216,15 +247,24 @@ spec item each one carries.
 - **AC-8** The guards of AC-2, AC-3, AC-5 and AC-7 each fail with their test's old wait, measure
   or `manual` in place of the new one. — verified by review: the PR records each run.
 - **AC-9** With this change, `tests/pixel-leap.test.mjs` passes 5 times in parallel and once with
-  `TEST_CPU_THROTTLE=10`; and, on `main` with R-2 (meirmsn/games#46) merged, five
-  `scripts/check-slow.sh` runs started together and one with `TEST_CPU_THROTTLE=10` alone have no
-  `not ok`. — verified by review: the PR records each run's summary.
+  `TEST_CPU_THROTTLE=10`; and, on `main` with R-2 (meirmsn/games#46) merged, five runs of the whole
+  suite started together, each running one file at a time through `scripts/check-slow.sh`, and one
+  `scripts/check-slow.sh` run with `TEST_CPU_THROTTLE=10` alone have no `not ok`. — verified by
+  review: the PR records each run's summary.
 - **AC-10** `tests/clock-check.test.mjs` fails a test file that calls `waitForTimeout(` and isn't
   marked `// clock-checked`, and every test file passes it.
-- **AC-11** Outside `tests/pixel-leap.test.mjs` and `tests/clock-check.test.mjs`, the only files
-  that change are `specs/slow-tests-pixel-leap.md`, `ROADMAP.md` (R-7's row and section) and
-  `FINDINGS.md` (F-32 and F-33, and rows this slice adds). No game code changes. — verified by review: the
-  PR's diff.
+- **AC-11** Outside `tests/pixel-leap.test.mjs`, `tests/clock-check.test.mjs`,
+  `tests/googly-faces.test.mjs` (the dot test, AC-12), `tests/harness.test.mjs` and its new fixture
+  `tests/fixtures/slow-start.cjs` (AC-13), the only files that change are
+  `specs/slow-tests-pixel-leap.md`, `ROADMAP.md` (R-7's row and section) and `FINDINGS.md` (F-32 and
+  F-33, and rows this slice adds). No game code changes. — verified by review: the PR's diff.
+- **AC-12** Googly Faces' dot test reads the dot's swell on every frame from the first frame the tap
+  filled it, through a recorder started in the page before the tap; a guard test that lets 0.5 s of
+  the game's time pass between the tap and the test's next step reads a swell over 1.8× and a push
+  over 4 px, and fails with the test's old read.
+- **AC-13** The harness's hang test checks how long the test runner took to stop each hanging file
+  (its `duration_ms`), not the whole run's wall-clock time; a guard test that starts each `node -e`
+  of `scripts/check-slow.sh` 6 s late still sees the file stopped within the limit plus 10 s.
 
 ## Out of scope
 
