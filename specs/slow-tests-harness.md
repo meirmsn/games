@@ -1,6 +1,6 @@
 # The slow tests can't hang, and every test can be run with a slow CPU
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11)
 
 ## Intent
 
@@ -102,7 +102,7 @@ cause; this one gives them what they need to do it and to prove it:
   test in its Decisions, naming tests by title or `file:line`, never as "<spec> AC-<n>" (spec-check
   reads any AC number in a spec as one of its own items). Slices edit only their own rows of
   `ROADMAP.md` and `FINDINGS.md`. `specs/ci-flakes.md` stays the record of the first change.
-  (Claude, 2026-11-11; for the owner to confirm at the go)
+  (Claude, 2026-11-11; in the spec the owner's go of 2026-11-11 approved)
 - **Each later slice's proof:** its guard test fails on the old code; its files pass 5 times in
   parallel and once with `TEST_CPU_THROTTLE=10`; the rest of the suite passes once. (Split,
   2026-11-11)
