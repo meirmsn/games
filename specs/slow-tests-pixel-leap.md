@@ -233,6 +233,29 @@ spec item each one carries.
   the test drops its routes, ignoring a handler still in flight, before it closes. Guard: the same
   test with that background request held 2 s; without the fix the file fails the same way. Asked,
   the owner said "ok" (2026-11-11).
+- **The proof's results, and the bar the owner set.** With the site fix, the five runs at once
+  (one file at a time each) passed 342 of 342 in four runs and 341 of 342 in one; the whole suite
+  alone at 10× passed 342 of 342 in 773 s. The one failure was Googly Faces' "tapping a face plays a
+  sound and makes it react", on "its pupils move". The owner asked for an adversarial review of
+  whether tests this specific and this proved are worth it ("I wonder if we need to have those tests
+  so specific and so reliable…", 2026-11-11). Its verdict: the five-whole-suites-at-once load is far
+  from anything CI sees (CI runs one suite, about three browsers at once on 4 CPUs), so it is no bar;
+  the five runs one file at a time and the 10× run are; the pupils test samples one frame and should
+  be loosened, not deleted; and, going forward, one CI run with no retries, a red slow run on `main`
+  logged with its cause before a re-run, one guard per kind of wait rather than one per test, and
+  tests written against each game's promises (Googly Faces needs a short spec). The owner: "Let's
+  not do the nightly stress. The rest go with your recommendation." (2026-11-11). So the proof is
+  the runs above, the pupils test's file proved again after its fix (5 at once, once at 10×), and
+  CI green once; the going-forward items are a roadmap entry of their own, in its own PR.
+  - *Googly Faces' "tapping a face…"*: it compared the pupils on one frame, the first the face is
+    10 px up, with the pupils read before the tap. The tap kicks the pupils (`googly-faces/game.js`
+    ~382) and gravity, 70 eye radii per s² (~126), rolls them back to the rim within a few
+    hundredths of a second; with slow frames that one frame can come after, and a small sideways
+    kick then leaves them within 0.05 of where they were. It failed once in about 16 runs at the
+    five-at-once load. Now a recorder started in the page before the tap keeps the pupils of the
+    last frame before the face reacts and their largest move over the next 0.3 s of game time; the
+    check is still a move of more than 0.05 eye radii. No guard: the old check fails only on a small
+    random kick, so no setup makes it fail on demand.
 
 ## Acceptance items
 
@@ -255,15 +278,16 @@ spec item each one carries.
   the same start.
 - **AC-8** The guards of AC-2, AC-3, AC-5 and AC-7 each fail with their test's old wait, measure
   or `manual` in place of the new one. — verified by review: the PR records each run.
-- **AC-9** With this change, `tests/pixel-leap.test.mjs` passes 5 times in parallel and once with
-  `TEST_CPU_THROTTLE=10`; and, on `main` with R-2 (meirmsn/games#46) merged, five runs of the whole
-  suite started together, each running one file at a time through `scripts/check-slow.sh`, and one
-  `scripts/check-slow.sh` run with `TEST_CPU_THROTTLE=10` alone have no `not ok`. — verified by
-  review: the PR records each run's summary.
+- **AC-9** With this change, `tests/pixel-leap.test.mjs` and each other test file this change
+  edits pass 5 times in parallel and once with `TEST_CPU_THROTTLE=10`; and, on `main` with R-2
+  (meirmsn/games#46) merged, five runs of the whole suite started together, each running one file at
+  a time through `scripts/check-slow.sh`, and one `scripts/check-slow.sh` run with
+  `TEST_CPU_THROTTLE=10` alone, are recorded, with the cause of each `not ok` fixed in this change.
+  — verified by review: the PR records each run's summary.
 - **AC-10** `tests/clock-check.test.mjs` fails a test file that calls `waitForTimeout(` and isn't
   marked `// clock-checked`, and every test file passes it.
 - **AC-11** Outside `tests/pixel-leap.test.mjs`, `tests/clock-check.test.mjs`,
-  `tests/googly-faces.test.mjs` (the dot test, AC-12), `tests/harness.test.mjs` and its new fixture
+  `tests/googly-faces.test.mjs` (the dot test, AC-12, and the tap test, AC-15), `tests/harness.test.mjs` and its new fixture
   `tests/fixtures/slow-start.cjs` (AC-13), `tests/site.test.mjs` (the playable-tile test, AC-14), the
   only files that change are
   `specs/slow-tests-pixel-leap.md`, `ROADMAP.md` (R-7's row and section) and `FINDINGS.md` (F-32 and
@@ -278,6 +302,9 @@ spec item each one carries.
 - **AC-14** The playable-tile test in `tests/site.test.mjs` drops its routes, ignoring a handler
   still in flight, before it closes its context; a guard test that holds the landing page's
   background request 2 s passes and doesn't fail the file, and fails the file without the fix.
+- **AC-15** Googly Faces' tap test checks that the pupils move more than 0.05 eye radii at some
+  frame in the 0.3 s of game time after the face reacts, against the last frame before it, recorded
+  in the page from before the tap.
 
 ## Out of scope
 

@@ -187,20 +187,39 @@ async function tapAndJump(page, face) {
   return eachFrame(page, (id) => window.googly.state.faces.find((f) => f.id === id && f.hop > 10), face.id, `face ${face.id} jumping`);
 }
 
+// The tap's kick to the pupils lasts a few hundredths of a second before gravity rolls them back to
+// the rim, so one frame (the first one the face is 10 px up) can miss it when frames are slow. A
+// recorder started in the page before the tap keeps the pupils of the last frame before the face
+// reacts, and their largest move over the next 0.3 s of the game's time
+// (specs/slow-tests-pixel-leap.md).
 async function reactsAndJumps(page, face) {
-  const before = face.pupils.map((p) => ({ ...p }));
+  await page.evaluate((id) => {
+    const m = (window.__pupilMove = { base: null, from: null, moved: 0, done: false });
+    const tick = () => {
+      const f = window.googly.state.faces.find((x) => x.id === id);
+      if (f && m.from === null && f.phase !== 'react') m.base = f.pupils;
+      else if (f && m.from === null) m.from = window.__gameT;
+      if (f && m.from !== null && m.base) {
+        for (const [i, p] of f.pupils.entries()) m.moved = Math.max(m.moved, Math.hypot(p.x - m.base[i].x, p.y - m.base[i].y));
+        if (window.__gameT - m.from >= 0.3) return (m.done = true);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, face.id);
   const now = await tapAndJump(page, face);
   assert.equal(now.phase, 'react');
   assert.equal(now.mouth, 'o', 'its mouth opens');
   assert.ok(now.hop > 10, 'it jumps');
-  const moved = now.pupils.some((p, i) => Math.hypot(p.x - before[i].x, p.y - before[i].y) > 0.05);
-  assert.ok(moved, 'its pupils move');
+  await waitFor(page, () => window.__pupilMove.done, null, { what: 'the pupils after the tap', timeout: 20000 });
+  const { moved } = await page.evaluate(() => window.__pupilMove);
+  assert.ok(moved > 0.05, `its pupils move (${moved.toFixed(3)} eye radii at most)`);
   return now;
 }
 
 const BOING = [1, 2, 3, 4].map((i) => statSync(new URL(`../googly-faces/sounds/boing-${i}.mp3`, import.meta.url)).size);
 
-test('tapping a face plays a sound and makes it react', async () => {
+test('tapping a face plays a sound and makes it react (slow-tests-pixel-leap AC-15: the pupils, every frame)', async () => {
   const { context, page } = await openGame();
   const face = await readyFace(page);
   const now = await reactsAndJumps(page, face);
