@@ -9,7 +9,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open                                 |
 | R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Open                                 |
 | R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open                                 |
-| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open                                 |
+| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
 
@@ -108,6 +108,10 @@ Its spec: `specs/slow-tests-pwa-site.md`, numbered from AC-1.
 
 `tests/pwa-updates.test.mjs` and `tests/site.test.mjs`: 12 waits. The "nothing happened" waits
 either wait for the version check's response or keep a `// safe: negative bound` comment.
+
+Done (`specs/slow-tests-pwa-site.md`): F-34's cause was a failed pwa-updates test leaving its
+server listening, so the file never exited; each test's site now closes when the test ends. Both
+files are `// clock-checked`.
 
 ## R-6: Slow tests run once: Orbit's, Reef's and Runes' tests
 
