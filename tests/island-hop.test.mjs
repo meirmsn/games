@@ -1,4 +1,5 @@
 // Tests for Island Hop. Run: scripts/check-slow.sh.
+// clock-checked: they wait on the game's state and its frames, not on time.
 // The rules live in island-hop/rules.js with no DOM, so most acceptance items run them here in Node;
 // the page's own items (cards, input, the camera, sound, layout, offline) drive the game in Chromium
 // through window.__hop.
@@ -7,7 +8,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import { serve } from './serve.mjs';
-import { launch } from './clock.mjs';
+import { launch, realFrames, waitFor } from './clock.mjs';
 import { ROWS, ISLANDS, CARS, MAP_VERSION } from '../island-hop/map.js';
 import { ATLAS } from '../island-hop/atlas.js';
 import {
@@ -592,7 +593,7 @@ test('island-hop AC-16: the same moves cover the same distance at 60 and 120 fra
 
 // --- The page (Chromium) ----------------------------------------------------------------------------------------
 
-test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in its band, and Port Town drawn at 50 fps or more at 390×844', async () => {
+test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in its band, and Port Town drawn at 50 fps or more at 390×844 (a frame stepped and drawn in 20 ms or less)', async () => {
   const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
   for (const [i, m] of MISSIONS.entries()) {
     const s = runPilot(i, m.gold);
@@ -609,29 +610,26 @@ test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in it
     __hop.step(21);
     __hop.manual = false;
   });
-  await page.waitForTimeout(500);
-  // The frame rate over two-second windows; the best of three, so one busy moment on a shared CI
-  // machine isn't read as the game's own speed.
-  const rates = [];
-  for (let k = 0; k < 3; k++)
-    rates.push(
-      await page.evaluate(
-        () =>
-          new Promise((resolve) => {
-            let n = 0;
-            const t0 = performance.now();
-            const tick = () => {
-              n++;
-              if (performance.now() - t0 < 2000) requestAnimationFrame(tick);
-              else resolve((n * 1000) / (performance.now() - t0));
-            };
-            requestAnimationFrame(tick);
-          })
-      )
-    );
+  await realFrames(page, 30);
+  // 50 frames a second leaves 20 ms a frame. Step and draw 180 frames of Port Town with the autopilot
+  // driving, timing each, and take the median: what the game itself costs, which a busy CI machine
+  // running other test files at the same time can't push off by a stray stall the way counting
+  // frames in a window can.
+  const ms = await page.evaluate(() => {
+    __hop.manual = true;
+    const times = [];
+    for (let i = 0; i < 180; i++) {
+      const t0 = performance.now();
+      __hop.step(1 / 60);
+      __hop.draw();
+      times.push(performance.now() - t0);
+    }
+    times.sort((a, b) => a - b);
+    return times[times.length >> 1];
+  });
   const where = await page.evaluate(() => ({ x: __hop.state.person.x, y: __hop.state.person.y }));
   assert.ok(where.x > 7 && where.x < 25 && where.y > 1 && where.y < 15, `in Port Town: ${JSON.stringify(where)}`);
-  assert.ok(Math.max(...rates) >= 50, `frames a second: ${rates.map((r) => r.toFixed(1))}`);
+  assert.ok(ms <= 20, `a frame of Port Town takes ${ms.toFixed(1)} ms (50 fps needs 20 or less)`);
   await context.close();
 });
 
@@ -641,23 +639,21 @@ test('island-hop AC-4: the page opens on the moving archipelago behind the missi
   const icons = await page.$$eval('[data-card-stops] li', (ls) => ls.map((l) => l.firstChild.textContent));
   assert.equal(icons.length, MISSIONS[0].stops.length);
   // The world moves behind the card: the ferry sails, the water animates.
-  const a = await page.evaluate(() => ({ t: __hop.state.t, phase: __hop.state.phase }));
-  await page.waitForTimeout(600);
-  const b = await page.evaluate(() => __hop.state.t);
+  const a = await page.evaluate(() => ({ t: __hop.state.t, tt: __hop.state.tt, phase: __hop.state.phase }));
   assert.equal(a.phase, 'card');
-  assert.ok(b > a.t + 0.3, 'the world runs behind the card');
+  await waitFor(page, (tt) => __hop.state.tt > tt + 0.3, a.tt, { what: 'the traffic sailing behind the card' });
   await page.click('[data-start]');
   assert.equal(await page.evaluate(() => __hop.state.phase), 'fly');
   assert.equal(await page.textContent('[data-clock]'), '0:00');
-  await page.waitForTimeout(1500);
+  await waitFor(page, () => __hop.state.fly >= 1.5, null, { what: '1.5 s of the fly-over' });
   assert.equal(await page.evaluate(() => __hop.state.phase), 'fly', 'still flying at 1.5 s');
   assert.equal(await page.textContent('[data-clock]'), '0:00');
   await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 3000 });
   assert.equal(await page.evaluate(() => __hop.state.mode), 'boat');
-  await page.waitForTimeout(800);
+  await realFrames(page, 45);
   assert.equal(await page.evaluate(() => __hop.state.clock), 0, 'no move, no clock');
   await page.keyboard.down('ArrowLeft');
-  await page.waitForTimeout(700);
+  await waitFor(page, () => __hop.state.clock > 0.4, null, { what: 'the clock running past 0.4 s' });
   await page.keyboard.up('ArrowLeft');
   const c = await page.evaluate(() => ({ clock: __hop.state.clock, started: __hop.state.started }));
   assert.ok(c.started && c.clock > 0.4, `the clock runs: ${c.clock}`);
@@ -720,7 +716,7 @@ test('island-hop AC-6: a drag anywhere steers; a second finger is ignored', asyn
   await page.evaluate(() => __hop.step(1.5, null));
   // __hop.step with null uses no stick: steer through the page's own pointer stick instead.
   await page.evaluate(() => { __hop.manual = false; });
-  await page.waitForTimeout(1500);
+  await waitFor(page, (y0) => { const p = __hop.state.boats.find((b) => b.id === __hop.state.you.boat); return (p.x + p.y) * 33 < y0 - 25; }, p0.y, { what: 'the boat moving up the screen' });
   await page.evaluate(() => { __hop.manual = true; });
   const p1 = await screenPos();
   assert.ok(p1.y < p0.y - 20, `moved up the screen: ${p0.y} → ${p1.y}`);
@@ -728,7 +724,7 @@ test('island-hop AC-6: a drag anywhere steers; a second finger is ignored', asyn
   await fire('pointerdown', 2, 100, 300);
   await fire('pointermove', 2, 100, 400);
   await page.evaluate(() => { __hop.manual = false; });
-  await page.waitForTimeout(1000);
+  await waitFor(page, (y1) => { const p = __hop.state.boats.find((b) => b.id === __hop.state.you.boat); return (p.x + p.y) * 33 < y1 - 25; }, p1.y, { what: 'the boat still moving up the screen' });
   await page.evaluate(() => { __hop.manual = true; });
   const p2 = await screenPos();
   assert.ok(p2.y < p1.y - 20, `still moving up: ${p1.y} → ${p2.y}`);
@@ -754,7 +750,7 @@ test('island-hop AC-6: a drag that starts in the phone\'s edge strips doesn\'t s
     await fire('pointerdown', 1, 200, y0);
     await fire('pointermove', 1, 200, y0 - 60);
     await page.evaluate(() => { __hop.manual = false; });
-    await page.waitForTimeout(600);
+    await realFrames(page, 36);
     await page.evaluate(() => { __hop.manual = true; });
     await fire('pointerup', 1, 200, y0 - 60);
     assert.equal(await page.evaluate(() => __hop.state.started), steers, `a drag from y ${y0}`);
@@ -942,24 +938,24 @@ test('island-hop AC-14: hiding the page pauses the mission, the clock and a fly-
     }, h);
   // During the fly-over.
   await page.click('[data-start]');
-  await page.waitForTimeout(500);
+  await waitFor(page, () => __hop.state.fly > 0.4, null, { what: 'the fly-over under way' });
   await hide(true);
   const f0 = await page.evaluate(() => __hop.state.fly);
-  await page.waitForTimeout(800);
+  await realFrames(page, 45);
   assert.equal(await page.evaluate(() => __hop.state.fly), f0, 'the fly-over waits');
   assert.equal(await page.isVisible('[data-screen="pause"]'), true);
   await hide(false);
-  await page.waitForTimeout(400);
+  await realFrames(page, 24);
   assert.equal(await page.evaluate(() => __hop.paused), true, 'coming back alone doesn\'t resume');
   await page.click('[data-resume]');
   await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 4000 });
   // In play, with the clock running.
   await page.keyboard.down('ArrowLeft');
-  await page.waitForTimeout(600);
+  await waitFor(page, () => __hop.state.clock > 0.3, null, { what: 'the clock running' });
   await hide(true);
   await page.keyboard.up('ArrowLeft');
   const c0 = await page.evaluate(() => __hop.state.clock);
-  await page.waitForTimeout(700);
+  await realFrames(page, 45);
   assert.equal(await page.evaluate(() => __hop.state.clock), c0, 'the clock stops');
   await hide(false);
   // Restart from the pause card: the clock, the stops, pickups and every vehicle reset.
