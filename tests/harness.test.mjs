@@ -83,14 +83,22 @@ const work = (page) =>
   page.evaluate(() => {
     const t0 = performance.now();
     let x = 0;
-    for (let i = 0; i < 3e6; i++) x += Math.sqrt(i);
+    for (let i = 0; i < 3e7; i++) x += Math.sqrt(i);
     return performance.now() - t0 + (x < 0 ? 1 : 0);
   });
-const median = async (page) => {
-  const t = [];
-  for (let i = 0; i < 5; i++) t.push(await work(page));
-  return t.sort((a, b) => a - b)[2];
-};
+// How many times slower `page` runs the script than `base` (a page at full speed), from their total
+// times over five runs taken in turns, so a change in the machine's load hits both alike. Chromium
+// throttles in time slices, so a short piece of work can slip through one at full speed: each run
+// is long enough (tens of ms at full speed) to span many slices.
+async function slowdown(page, base) {
+  let b = 0;
+  let t = 0;
+  for (let i = 0; i < 5; i++) {
+    b += await work(base);
+    t += await work(page);
+  }
+  return t / b;
+}
 
 let server;
 before(async () => {
@@ -102,10 +110,10 @@ test('slow-tests-harness AC-7: with the throttle, every page from launch() runs 
   const plain = await chromium.launch();
   const slow = await launch({ rate: 10 });
   try {
-    const base = await median(await plain.newPage());
+    const base = await plain.newPage();
     const slower = async (page, what) => {
-      const t = await median(page);
-      assert.ok(t >= 4 * base, `${what}: ${t.toFixed(1)} ms against ${base.toFixed(1)} ms at full speed`);
+      const r = await slowdown(page, base);
+      assert.ok(r >= 4, `${what}: ${r.toFixed(1)}× slower than full speed`);
     };
     const context = await slow.newContext();
     const page = await context.newPage();
@@ -124,8 +132,8 @@ test('slow-tests-harness AC-7: with the throttle, every page from launch() runs 
     await popup.__throttling;
     await slower(popup, 'a noopener popup');
     const fast = await (await slow.newContext({ throttle: false })).newPage();
-    const t = await median(fast);
-    assert.ok(t < 2.5 * base, `throttle: false runs at full speed (${t.toFixed(1)} ms against ${base.toFixed(1)} ms)`);
+    const r = await slowdown(fast, base);
+    assert.ok(r < 2.5, `throttle: false runs at full speed (${r.toFixed(1)}×)`);
   } finally {
     await plain.close();
     await slow.close();

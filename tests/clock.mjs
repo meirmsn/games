@@ -22,11 +22,32 @@ export const scaled = (ms, rate = RATE) => ms * rate;
 const PLAYWRIGHT_DEFAULT_TIMEOUT = 30000;
 
 // Slow one page's CPU through its own CDP session, kept open for the page's life (the throttle ends
-// when its session detaches).
+// when its session detaches). Set again on each navigation of its main frame: a popup is slowed while
+// it is still its opener's about:blank, and loses it when it moves to its own site's renderer.
 async function throttlePage(context, page, rate) {
-  const cdp = await context.newCDPSession(page);
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate });
-  page.__throttle = { cdp, rate };
+  let cdp = await context.newCDPSession(page);
+  const set = async () => {
+    try {
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+    } catch {
+      cdp = await context.newCDPSession(page); // the old session detached
+      await cdp.send('Emulation.setCPUThrottlingRate', { rate });
+    }
+    page.__throttle = { cdp, rate };
+  };
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) page.__throttling = set().catch(() => {});
+  });
+  // A navigation can land in a new renderer, so the test's next step waits until it is slowed too.
+  for (const name of ['goto', 'reload', 'goBack', 'goForward']) {
+    const navigate = page[name].bind(page);
+    page[name] = async (...args) => {
+      const response = await navigate(...args);
+      await page.__throttling;
+      return response;
+    };
+  }
+  await set();
 }
 
 // Chromium, with every page of every context slowed `rate` times when rate > 1. Each test file starts
