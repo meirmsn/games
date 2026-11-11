@@ -1,6 +1,6 @@
 # Gotta Go!: a hit shows the heart you just lost, over his head
 
-**Go:** pending
+**Go:** "Go." 2026-11-11, with "they should match. At the same time, remove the heart so that they visibly change together. And the timing, I don't know, maybe let's see how it feels once you build it."
 
 ## Intent
 
@@ -26,12 +26,13 @@ outline) and the game's existing white pop-up colour for the X.
   (the one pop-ups age on, so a pause stops it and fast-forward doesn't speed it): full heart
   0–0.3 s, X 0.3–0.6 s, empty container 0.6–1.1 s, fully visible to 0.9 s then fading to gone at
   1.1 s; reason: the whole story fits in the moment he's down and never delays play (Claude,
-  2026-11-11, for the owner to confirm).
+  2026-11-11); the owner left it to be tuned after playing: "maybe let's see how it feels once you
+  build it" (owner, 2026-11-11).
 - The HUD's heart empties when the one over his head turns empty (0.6 s), not at the hit, so the
   two change together; rejected: the HUD emptying at once, as now. This changes the existing
   lives test (the walk-on-red spec's twenty-eighth item), which checks the HUD 0.1 s after a hit. `game.lives` itself still drops
-  at the hit, so the last life still stops the level at once (Claude, 2026-11-11, for the owner to
-  confirm).
+  at the hit, so the last life still stops the level at once. Confirmed: "they should match. At the
+  same time, remove the heart so that they visibly change together" (owner, 2026-11-11).
 - Look: the HUD's 7×6 pixel heart, each art pixel 2×2 street pixels, with a one-pixel `#14161f`
   outline like the other pop-ups. Full: `#ff4b4b`. X: a white (`#ffffff`) diagonal cross over the
   heart's bounding box with the same dark outline, appearing at once. Empty: fill `#1b1e29` inside
