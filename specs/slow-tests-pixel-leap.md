@@ -1,6 +1,6 @@
 # Slow tests run once: Pixel Leap's tests, and the whole suite's proof
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11)
 
 ## Intent
 
