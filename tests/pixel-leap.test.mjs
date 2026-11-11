@@ -1,11 +1,16 @@
 // End-to-end tests for Pixel Leap. Run: scripts/check-slow.sh.
 // The game exposes window.__leap (its state, and step() that advances the simulation without
 // drawing), so a test can set up a moment and check what the rules do with it.
+// clock-checked: every test waits on the page's frames, the game's state or a signal, never on a
+// fixed time (specs/slow-tests-pixel-leap.md has the cause, test by test).
 import { test, before, after } from 'node:test';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
 import { devices } from 'playwright';
-import { launch } from './clock.mjs';
+import { launch, realFrames, waitFor, within, scaled } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import { simulateInsets, PORTRAIT_INSETS, LANDSCAPE_INSETS, STRIP } from './insets.mjs';
 
@@ -31,7 +36,8 @@ const W = { meadow: 0, ice: 1, farm: 2, candy: 3, industrial: 4, mushroom: 5, pi
 async function open(opts = {}, hash = '', init = null) {
   const context = await browser.newContext({ viewport: { width: 1024, height: 700 }, ...opts });
   await context.addInitScript(FAKE_AUDIO);
-  if (init) await context.addInitScript(init);
+  if (Array.isArray(init)) await context.addInitScript(...init);
+  else if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -123,7 +129,25 @@ const slide = (page, w, kind) =>
 test('pixel-leap AC-1: opens on the builder with a whole pixel monster; Go starts level 1, the Meadow; no errors', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.evaluate(() => window.__leap.game.mode), 'build');
-  await page.waitForTimeout(200);
+  await builderOpens(page);
+  assert.equal(await page.locator('[data-go]').isVisible(), true);
+  await page.click('[data-go]');
+  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map', 'Go shows the map first');
+  await untilPlay(page);
+  const s = await page.evaluate(() => {
+    const L = window.__leap;
+    return { mode: L.game.mode, world: L.game.world, stage: L.game.stage, ground: L.player.ground };
+  });
+  assert.deepEqual(s, { mode: 'play', world: 0, stage: 0, ground: true });
+  assert.equal(await page.locator('[data-screen="build"]').isVisible(), false);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+// The builder's opening: the preview, which only a frame draws (window.__leap appears before the
+// first frame), and the world moving behind it, which the real loop does.
+async function builderOpens(page) {
+  await realFrames(page, 1);
   const preview = await page.evaluate(() => {
     const c = document.querySelector('[data-preview]');
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
@@ -140,18 +164,36 @@ test('pixel-leap AC-1: opens on the builder with a whole pixel monster; Go start
   assert.equal(await page.locator('[data-screen="build"]').isVisible(), true);
   assert.equal(await page.locator('[data-hud]').isVisible(), false);
   const t0 = await page.evaluate(() => [window.__leap.game.t, window.__leap.cam.x]);
-  await page.waitForTimeout(600);
-  const t1 = await page.evaluate(() => [window.__leap.game.t, window.__leap.cam.x]);
-  assert.ok(t1[0] > t0[0] && t1[1] !== t0[1], 'the world moves behind the builder');
-  await page.click('[data-go]');
-  assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map', 'Go shows the map first');
-  await untilPlay(page);
-  const s = await page.evaluate(() => {
-    const L = window.__leap;
-    return { mode: L.game.mode, world: L.game.world, stage: L.game.stage, ground: L.player.ground };
-  });
-  assert.deepEqual(s, { mode: 'play', world: 0, stage: 0, ground: true });
-  assert.equal(await page.locator('[data-screen="build"]').isVisible(), false);
+  await waitFor(page, ([t, x]) => window.__leap.game.t > t && window.__leap.cam.x !== x, t0, { what: 'the world moving behind the builder' });
+}
+
+test('slow-tests-pixel-leap AC-1: the file is clock-checked, calls no waitForTimeout and waits for the bed with no timer', () => {
+  const src = readFileSync(new URL(import.meta.url), 'utf8');
+  assert.ok(src.split('\n').slice(0, 10).some((l) => /^\s*\/\/\s*clock-checked\b/.test(l)), 'marked in its first 10 lines');
+  const call = (name) => new RegExp(`\\.${name}\\(`);
+  const code = src.split('\n').filter((l) => !/^\s*\/\//.test(l) && !l.includes('slow-tests-pixel-leap AC-1'));
+  assert.deepEqual(code.filter((l) => call('waitForTimeout').test(l)), [], 'no waitForTimeout');
+  const at = src.lastIndexOf("test('pixel-leap AC-32:");
+  const music = src.slice(at, src.indexOf('\n});\n', at));
+  assert.ok(music.includes('await bedPlays(page'), 'the music test waits for the bed');
+  assert.doesNotMatch(music, /setTimeout\(/, 'with no in-page timer');
+});
+
+// Frames held back while the page sits idle: a machine too busy to draw. Each requestAnimationFrame
+// asks for the real one `ms` later, so the callback still gets its frame's time stamp, and the
+// test's reads in between run at once (a busy frame would hold them back too).
+const SLOW_FRAMES = (ms) => {
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (cb) => {
+    setTimeout(() => raf(cb), ms);
+    return 0;
+  };
+};
+
+test('slow-tests-pixel-leap AC-2: with frames 2 s apart, the builder still opens with its preview drawn and the world moving', async () => {
+  // throttle: false: the frames are made slow on purpose.
+  const { context, page, errors } = await open({ throttle: false }, '', [SLOW_FRAMES, 2000]);
+  await builderOpens(page);
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -833,9 +875,11 @@ test('pixel-leap AC-14: the touch deck runs and jumps, a touch keeps its half, t
     await k.page.keyboard.up(key);
   }
   const url = k.page.url();
+  // The game pauses in its keydown handler, which has run when the press returns; the shell would
+  // leave only through its dialog, which it opens in its own keydown handler, so no wait is needed.
   await k.page.keyboard.press('Escape');
-  await k.page.waitForTimeout(200);
   assert.equal(await k.page.evaluate(() => window.__leap.game.mode), 'paused');
+  assert.equal(await k.page.evaluate(() => document.querySelector('dialog[open]')), null, 'no leave dialog');
   assert.equal(k.page.url(), url, 'Escape in play pauses instead of leaving');
   await k.context.close();
 });
@@ -949,10 +993,16 @@ test('pixel-leap AC-17: twelve levels, twelve worlds, in order; each but the las
       const c = document.getElementById('view');
       const g = c.getContext('2d');
       const sx = Math.round((st.next + 2 - L.cam.x) * L.view.U);
-      const d = g.getImageData(sx, 4, 1, 1).data;
+      // The median colour of an 8 × 8 patch, so a star or a cloud there can't decide it.
+      const d = g.getImageData(sx, 4, 8, 8).data;
+      const median = (k) => {
+        const v = [];
+        for (let i = k; i < d.length; i += 4) v.push(d[i]);
+        return v.sort((a, b) => a - b)[v.length >> 1];
+      };
       const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
       const want = hex(next.sky[0]);
-      return { got: [d[0], d[1], d[2]], want, id: next.id, next: st.next < st.cols };
+      return { got: [median(0), median(1), median(2)], want, id: next.id, next: st.next < st.cols };
     }, w);
     assert.equal(sky.next, true);
     const diff = sky.got.reduce((n, v, i) => n + Math.abs(v - sky.want[i]), 0);
@@ -1025,16 +1075,37 @@ test("pixel-leap AC-18: each world plays its own jump sound and starts its own m
   await context.close();
 });
 
-test('pixel-leap AC-19: plays offline once played, every world included', async () => {
+test('pixel-leap AC-19: plays offline once played, every world included (slow-tests-pixel-leap AC-6: bounded waits on the worker and its cache)', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await within(page.evaluate(() => navigator.serviceWorker.register('../sw.js').then(() => true)), 'the service worker registering');
+  await within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'the service worker being ready');
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__leap);
-  await page.waitForLoadState('networkidle');
+  // The worker stores what it serves after responding: wait for the cache to hold the page and every
+  // same-origin file this load fetched (sounds aside: the bed is streamed), not for the network to
+  // go quiet.
+  const files = await page.evaluate(() => [
+    location.href.split('#')[0],
+    ...performance
+      .getEntriesByType('resource')
+      .map((e) => e.name)
+      .filter((u) => u.startsWith(location.origin) && !/\.(mp3|ogg|wav|m4a)(\?|$)/.test(u)),
+  ]);
+  assert.ok(files.some((u) => u.endsWith('/pixel-leap/game.js')), `the load fetched game.js (${files.length} files)`);
+  await within(
+    page.evaluate(async (files) => {
+      for (;;) {
+        const found = await Promise.all(files.map((f) => caches.match(f)));
+        if (found.every(Boolean)) return;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }, files),
+    `the cache holding the ${files.length} files the game loaded`,
+    20000
+  );
   await context.setOffline(true);
   await page.reload();
-  await page.waitForFunction(() => window.__leap, null, { timeout: 10000 });
+  await page.waitForFunction(() => window.__leap);
   await page.click('[data-go]');
   const ok = await page.evaluate(() => {
     const L = window.__leap;
@@ -1478,22 +1549,58 @@ test('pixel-leap AC-21 and pixel-leap AC-38: every level can be finished; first 
   await context.close();
 });
 
-test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the same at 60 and 120 fps', async () => {
-  // throttle: false: it measures frame time; R-7 moves it to CPU time (specs/slow-tests-harness.md).
-  const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, throttle: false });
+// The frame budget in CPU time, not wall time (F-32), as Crumble's frame budget is measured. A busy
+// machine pauses the browser now and then; the game's own frame timing (frameWork, performance.now)
+// counts those pauses, the main thread's CPU time doesn't. The run is traced (Chromium's
+// devtools.timeline): each animation-frame callback that ran the game's frameLoop has its CPU time,
+// `tdur`. It lasts 20 s of game time (game.t, which every step adds to; the level's clock restarts
+// on a lost life), the player running right with lives to spare. Returns the frames' average CPU ms.
+async function frameCpu(page, seconds = 20) {
   await goPlay(page);
   await page.evaluate(() => {
     const L = window.__leap;
-    L.frameWork.length = 0;
+    L.game.lives = 99; // no game over: every frame measured is a frame of play
     L.input.keys.add('right');
     L.sync();
   });
-  await page.waitForTimeout(20000);
-  const avg = await page.evaluate(() => {
-    const f = window.__leap.frameWork;
-    return f.reduce((a, b) => a + b, 0) / f.length;
-  });
-  assert.ok(avg < 8, `average frame work ${avg.toFixed(2)} ms`);
+  const path = join(tmpdir(), `pixel-leap-frames-${process.pid}-${Date.now()}.json`);
+  await browser.startTracing(page, { path, categories: ['devtools.timeline', 'disabled-by-default-devtools.timeline'] });
+  // Bounded like any wait: at 10 frames a second, 20 s of game time is 20 s of wall clock.
+  const mode = await within(
+    page.evaluate(
+      (seconds) =>
+        new Promise((done) => {
+          const L = window.__leap;
+          const t0 = L.game.t;
+          const tick = () => (L.game.t - t0 >= seconds ? done(L.game.mode) : requestAnimationFrame(tick));
+          requestAnimationFrame(tick);
+        }),
+      seconds
+    ),
+    `${seconds} s of play`,
+    seconds * 1000 * 6
+  );
+  await browser.stopTracing();
+  const events = JSON.parse(readFileSync(path, 'utf8')).traceEvents;
+  rmSync(path, { force: true });
+  const inside = (e, f) => e.tid === f.tid && e.ts >= f.ts && e.ts <= f.ts + f.dur;
+  const calls = events.filter((e) => e.name === 'FunctionCall' && e.ph === 'X' && e.args?.data?.functionName === 'frameLoop');
+  const frames = events.filter((e) => e.name === 'FireAnimationFrame' && e.ph === 'X' && e.tdur != null && calls.some((f) => inside(f, e)));
+  const avg = frames.reduce((a, e) => a + e.tdur, 0) / frames.length / 1000;
+  const wall = frames.reduce((a, e) => a + e.dur, 0) / frames.length / 1000;
+  return { avg, wall, frames: frames.length, mode };
+}
+
+test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the same at 60 and 120 fps (slow-tests-pixel-leap AC-4: CPU time, under the throttle)', async () => {
+  // slow-tests-pixel-leap AC-4: under the harness's throttle too. Chromium counts its throttle in the
+  // thread's CPU time, so the budget is 8 ms × the rate: 8 ms at full speed, as CI runs and as the
+  // promise says. At 10× it checks this test's waiting and tracing, not the game's speed.
+  const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+  const r = await frameCpu(page);
+  console.log(`pixel-leap AC-22: ${JSON.stringify(r)}`);
+  assert.equal(r.mode, 'play', 'the run was play throughout');
+  assert.ok(r.frames >= 100, `it ran (${r.frames} game frames)`);
+  assert.ok(r.avg < scaled(8), `average frame CPU ${r.avg.toFixed(2)} ms (budget ${scaled(8)} ms)`);
   const same = await page.evaluate(() => {
     const L = window.__leap;
     L.manual = true;
@@ -1520,6 +1627,42 @@ test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the 
   await context.close();
 });
 
+// The frame budget's guard: each frame waits 20 ms on a synchronous request, as a paused browser
+// waits, spending no CPU. The game's wall-clock frameWork counts the wait; CPU time doesn't.
+test('slow-tests-pixel-leap AC-5: frames stalled 20 ms each without CPU still pass the frame budget', async () => {
+  // throttle: false: the stall is the load here.
+  const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, throttle: false }, '', () => {
+    let due = false;
+    const tick = () => {
+      due = true;
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    const P = CanvasRenderingContext2D.prototype;
+    const fillRect = P.fillRect;
+    P.fillRect = function (...a) {
+      if (due && window.__stall) {
+        due = false; // the first fill of each frame
+        const x = new XMLHttpRequest();
+        x.open('GET', '/__stall', false);
+        x.send();
+      }
+      return fillRect.apply(this, a);
+    };
+  });
+  await context.route('**/__stall', async (route) => {
+    await new Promise((ok) => setTimeout(ok, 20));
+    await route.fulfill({ body: '' });
+  });
+  await page.evaluate(() => (window.__stall = true));
+  const r = await frameCpu(page);
+  console.log(`slow-tests-pixel-leap AC-5: ${JSON.stringify(r)}`);
+  assert.equal(r.mode, 'play');
+  assert.ok(r.wall > 20, `the frames were stalled (${r.wall.toFixed(2)} ms of wall clock each)`);
+  assert.ok(r.avg < scaled(8), `average frame CPU ${r.avg.toFixed(2)} ms`);
+  await context.close();
+});
+
 // The spec's state table: in each state, which of the builder, the deck, the paused card and the
 // tally show. The deck is hidden while building and shown (still) otherwise.
 test('pixel-leap AC-12: each state shows only what the state table says, and the end card plays again', async () => {
@@ -1541,10 +1684,11 @@ test('pixel-leap AC-12: each state shows only what the state table says, and the
     });
   const row = (builder, deck, paused, tally) => ({ builder, deck, paused, tally, view: true });
   assert.deepEqual(await seen(), row(true, false, false, false), 'building');
-  await page.click('[data-go]');
+  // The test owns the clock before Go, so no real frame runs the map first (go() leaves it alone).
   await page.evaluate(() => {
     window.__leap.manual = true;
   });
+  await page.click('[data-go]');
   assert.equal(await page.evaluate(() => window.__leap.game.mode), 'map');
   assert.deepEqual(await seen(), row(false, true, false, false), 'the map');
   await untilPlay(page, true);
@@ -1684,10 +1828,28 @@ test('pixel-leap AC-23: the glimpse is drawn by the next world’s rule, and ste
   await context.close();
 });
 
-test('pixel-leap AC-24: the map shows the start, the cells reached and the next one lit, the rest carved dark, and the monster walks the newly painted way', async () => {
-  const { context, page } = await open(PHONE);
+// Go, with the test owning the clock first, so no real frame runs the map before the test reads it
+// (go() leaves `manual` alone).
+async function goToMap(page) {
+  await page.evaluate(() => (window.__leap.manual = true));
   await page.click('[data-go]');
-  const look = (t) =>
+}
+
+test('slow-tests-pixel-leap AC-7: 200 real frames after Go leave the map where the test starts it', async () => {
+  const { context, page } = await open(PHONE);
+  await goToMap(page);
+  await realFrames(page, 200);
+  const start = await mapLook(page, 0.2);
+  assert.equal(start.mode, 'map');
+  assert.deepEqual([start.map.from, start.map.to], [-1, 0]);
+  assert.deepEqual(start.lit.slice(0, 12), [true, ...Array(11).fill(false)], 'only the first world is lit');
+  assert.ok(start.modeT < 0.25, `the map is at ${start.modeT.toFixed(2)} s`);
+  await context.close();
+});
+
+// The map test's read of the map: steps it to `t` s of the map by hand, draws it and reads which
+// cells are lit.
+const mapLook = (page, t) =>
     page.evaluate((t) => {
       const L = window.__leap;
       L.manual = true;
@@ -1703,8 +1865,13 @@ test('pixel-leap AC-24: the map shows the start, the cells reached and the next 
         const d = g.getImageData(Math.round(x), Math.round(y - U * cs * 0.4), 1, 1).data;
         return d[0] * 0.3 + d[1] * 0.59 + d[2] * 0.11;
       };
-      return { mode: L.game.mode, map: L.game.map, lit: nodes.slice(1).map((n) => lum(n.x, n.y) > 120) };
+      return { mode: L.game.mode, modeT: L.game.modeT, map: L.game.map, lit: nodes.slice(1).map((n) => lum(n.x, n.y) > 120) };
     }, t);
+
+test('pixel-leap AC-24: the map shows the start, the cells reached and the next one lit, the rest carved dark, and the monster walks the newly painted way', async () => {
+  const { context, page } = await open(PHONE);
+  await goToMap(page);
+  const look = (t) => mapLook(page, t);
   const start = await look(0.2);
   assert.equal(start.mode, 'map');
   assert.deepEqual([start.map.from, start.map.to], [-1, 0]);
@@ -2227,13 +2394,41 @@ test('pixel-leap AC-31: each new world plays its music (its own bed, else its so
   await context.close();
 });
 
+// The world's bed is fetched at startup and set on the audio element when that fetch resolves
+// (pixel-leap/game.js, music()): wait for it, not for a guess at how long the fetch takes.
+const bedPlays = (page, world) => waitFor(page, (w) => window.__leap.bed().world === w, world, { what: `${world}'s bed on the audio element` });
+
+test('slow-tests-pixel-leap AC-3: with frames 2 s apart and the bed\'s fetch held back, the Meadow\'s bed still plays', async () => {
+  // throttle: false: the frames and the fetch are made slow on purpose.
+  const context = await browser.newContext({ viewport: { width: 1024, height: 700 }, throttle: false });
+  await context.addInitScript(FAKE_AUDIO);
+  await context.addInitScript(SLOW_FRAMES, 2000);
+  // The beds are fetched at startup, so the route holds them from the first load.
+  let release;
+  const held = new Promise((ok) => (release = ok));
+  await context.route('**/sounds/*-bed.mp3', async (route) => {
+    await held;
+    await route.continue();
+  });
+  const page = await context.newPage();
+  await page.goto(BASE + 'pixel-leap/');
+  await page.waitForFunction(() => window.__leap);
+  await goPlay(page, true);
+  const playing = bedPlays(page, 'meadow');
+  await realFrames(page, 2); // the fetch is let go two slow frames later
+  release();
+  await playing;
+  assert.equal(await page.evaluate(() => window.__leap.bed().world), 'meadow');
+  await context.close();
+});
+
 test('pixel-leap AC-32: a world with the owner’s music plays its bed, with an accent over it every 15 to 40 s of play, never twice running; pause stops both', async () => {
   const { context, page } = await open();
   await goPlay(page, true);
+  await bedPlays(page, 'meadow');
   const r = await page.evaluate(async () => {
     const L = window.__leap;
     L.manual = true;
-    await new Promise((res) => setTimeout(res, 300));
     const bed = L.bed();
     // Ten minutes of play in the Meadow: when each accent comes, and which.
     const times = [];
