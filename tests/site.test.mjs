@@ -1,9 +1,11 @@
 // End-to-end tests for the landing page, the PWA and the shared game shell.
 // Run: scripts/check-slow.sh (serves the site and runs these with Playwright's Chromium).
+// clock-checked: each test waits on the signal it needs (a dialog, the cache), with no fixed waits
+// (specs/slow-tests-pwa-site.md).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { launch } from './clock.mjs';
+import { launch, scaled, within } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -21,15 +23,13 @@ after(async () => {
   server?.close();
 });
 
-// Wait for the service worker to control the page, or fail after 10 s instead of hanging.
+// Wait until the service worker is active; fails, naming it, after scaled(10000) ms instead of hanging
+// (within() keeps the bound in Node, so it scales with the throttle).
 const swReady = (page) =>
-  page.evaluate(
-    () =>
-      Promise.race([
-        navigator.serviceWorker.ready.then(() => true),
-        new Promise((r) => setTimeout(() => r(false), 10000)),
-      ])
-  );
+  within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'navigator.serviceWorker.ready');
+
+// The leave dialog is open (the shell's "Leave this level?").
+const leaveAsked = (page) => page.locator('dialog.shell-leave[open]').count().then((n) => n > 0);
 
 async function open(path = '', opts = {}) {
   const context = await browser.newContext({ hasTouch: true, ...opts });
@@ -179,7 +179,7 @@ test('crumble AC-16: the landing page shows 9 tiles, with Crumble playable after
 
 test('works offline once loaded', async () => {
   const { context, page } = await open();
-  assert.ok(await swReady(page), 'service worker registered');
+  await swReady(page);
   await page.reload(); // now controlled by the service worker
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
@@ -209,7 +209,7 @@ test("the game shell's back button returns to the landing page", async () => {
   await context.close();
 });
 
-test('runes AC-24: before leaving any game, the shell always asks "Leave this level?"; Stay keeps you there, Leave goes back', async () => {
+test('runes AC-24 / slow-tests-pwa-site AC-9: before leaving any game, the shell always asks "Leave this level?"; Stay keeps you there, Leave goes back', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   const ask = page.locator('dialog.shell-leave');
   await page.locator('.shell-back').click();
@@ -222,7 +222,8 @@ test('runes AC-24: before leaving any game, the shell always asks "Leave this le
   await ask.waitFor({ state: 'visible' });
   await page.keyboard.press('Escape');
   await ask.waitFor({ state: 'hidden' });
-  await page.waitForTimeout(200);
+  // The second Escape belongs to the open dialog: it closes it, and nothing is left pending.
+  assert.equal(await leaveAsked(page), false, 'the dialog stayed closed');
   assert.equal(page.url(), BASE + 'tests/fixtures/game/');
   // It asks every time, even straight after opening the game.
   await page.reload();
@@ -322,20 +323,25 @@ test('a playable tile plays its sound and opens its game', async () => {
   await context.close();
 });
 
-test('a game works offline once it has been played', async () => {
+test('slow-tests-pwa-site AC-7: a game works offline once it has been played', async () => {
   const { context, page } = await open();
-  assert.ok(await swReady(page), 'service worker registered');
+  await swReady(page);
   await page.goto(BASE + 'tests/fixtures/game/'); // first visit, online: cached on the way
   await page.locator('.shell-back').waitFor();
-  await page.waitForLoadState('networkidle');
+  // The worker stores the page after the page has it: wait until it is in the game's cache.
+  await page.waitForFunction(
+    (url) => caches.open('games-game-tests').then((c) => c.match(url)).then(Boolean),
+    BASE + 'tests/fixtures/game/',
+    { polling: 100, timeout: scaled(10000) }
+  );
   await context.setOffline(true);
   await page.reload();
-  await page.locator('.shell-back').waitFor({ timeout: 5000 });
+  await page.locator('.shell-back').waitFor({ timeout: scaled(5000) });
   assert.equal(await page.title(), 'Shell test game');
   await context.close();
 });
 
-test('a game can keep Escape for itself', async () => {
+test('slow-tests-pwa-site AC-9: a game can keep Escape for itself', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   await page.locator('.shell-back').waitFor();
   await page.evaluate(() =>
@@ -343,13 +349,14 @@ test('a game can keep Escape for itself', async () => {
       capture: true,
     })
   );
+  // Leaving always asks first, from the shell's keydown handler, which has run once press() returns.
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  assert.equal(await leaveAsked(page), false, 'Escape did not ask to leave');
   assert.equal(page.url(), BASE + 'tests/fixtures/game/');
   await context.close();
 });
 
-test('Escape in a text field does not leave the game', async () => {
+test('slow-tests-pwa-site AC-9: Escape in a text field does not leave the game', async () => {
   const { context, page } = await open('tests/fixtures/game/');
   await page.locator('.shell-back').waitFor();
   await page.evaluate(() => {
@@ -357,8 +364,9 @@ test('Escape in a text field does not leave the game', async () => {
     document.body.appendChild(input);
     input.focus();
   });
+  // Leaving always asks first, from the shell's keydown handler, which has run once press() returns.
   await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  assert.equal(await leaveAsked(page), false, 'Escape in the field did not ask to leave');
   assert.equal(page.url(), BASE + 'tests/fixtures/game/');
   await context.close();
 });
