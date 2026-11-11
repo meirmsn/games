@@ -408,7 +408,7 @@ test('landing-home-and-ribbon AC-2: the ribbon stays in its corner when tapped, 
   assert.deepEqual(await where(), at, 'unmoved when focused');
 });
 
-test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Don\'t show again" is on the left and "Not now" on the right; Install is larger, centred above them', async (t) => {
+test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Not now" comes first, on the left, then "Don\'t show again"; Install is larger, centred above them', async (t) => {
   const { page } = await open({ visits: 2 }, t);
   await offerInstall(page);
   await openDialog(page);
@@ -416,7 +416,7 @@ test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Don\'t show 
   const notNow = await dialog(page).getByRole('button', { name: 'Not now' }).boundingBox();
   const install = await dialog(page).getByRole('button', { name: 'Install' }).boundingBox();
   const box = await dialog(page).boundingBox();
-  assert.ok(never.x + never.width <= notNow.x, '"Don\'t show again" left of "Not now"');
+  assert.ok(notNow.x + notNow.width <= never.x, '"Not now" left of "Don\'t show again"');
   assert.ok(install.height > notNow.height, `Install is taller (${install.height} vs ${notNow.height})`);
   assert.ok(install.width > never.width + notNow.width, 'Install is wider than both together');
   const centre = install.x + install.width / 2 - (box.x + box.width / 2);

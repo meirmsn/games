@@ -58,8 +58,10 @@ the design. No game page changes.
 - **Changed after the go, by the owner (2026-11-11), on the PR's screenshots:** "Maybe make the first
   button that don't show again, and then on the not now, the one on the right, to make it easier to
   tap for a right-handed, and also that install button, maybe make it larger and center so that you
-  don't hit the not now or don't show again by mistake." So "Don't show again" sits left and "Not
-  now" right, and Install spans the dialog's width, taller than the two below it. The same message
+  don't hit the not now or don't show again by mistake." Then, the same day, on seeing it: "Actually,
+  the note now should be first because it's the first one that you read." So "Not now" sits first
+  (left) and "Don't show again" second (right), as before, and Install spans the dialog's width,
+  taller than the two below it. The same message
   showed the ribbon sliding out of its corner while the dialog was open; that was a bug (its corner
   box could scroll), fixed, not a spec change.
 - The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
