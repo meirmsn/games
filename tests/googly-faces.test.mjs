@@ -83,9 +83,12 @@ async function openGame({ fakeAudio = true, muted = false, url = GAME, slowFrame
 const state = (page) => page.evaluate(() => window.googly.state);
 const gameTime = (page) => page.evaluate(() => window.__gameT);
 
-// Waits until `s` seconds of the game's time have passed since `from` (a gameTime reading).
-const untilGameTime = (page, from, s) =>
-  waitFor(page, (t) => window.__gameT >= t, from + s, { what: `${s} s of the game's time`, timeout: 20000 });
+// Waits until `s` seconds of the game's time have passed since `since` (a gameTime reading; by
+// default, now), counted as the game counts them: the page's frame intervals, each capped at 1/20 s.
+async function gameSeconds(page, s, { since } = {}) {
+  const from = since ?? (await gameTime(page));
+  await waitFor(page, (t) => window.__gameT >= t, from + s, { what: `${s} s of the game's time`, timeout: 20000 });
+}
 
 // Runs `act` (a tap or click), then waits until the page has seen its press and its release.
 async function seenAfter(page, act) {
@@ -308,7 +311,7 @@ test('slow-tests-crumble-googly AC-9: tapping empty space is answered too, and t
   await eyesLookAt(page, x2, f.y, 'the pointer');
   // ...then, once the look has held (2 s of the game's time) and let go (0.35 s), rolls loose again,
   // back to the bottom.
-  await untilGameTime(page, tapped, 2.35);
+  await gameSeconds(page, 2.35, { since: tapped });
   await pupilsRestAtBottom(page);
   await context.close();
 });
