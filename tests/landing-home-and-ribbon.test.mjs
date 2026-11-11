@@ -110,11 +110,26 @@ test('landing-home-and-ribbon AC-1: the header starts with a 44 px Home button t
 
 test('landing-home-and-ribbon AC-1: at 320 px wide the header stays on one line, even with Install showing', async (t) => {
   const { page } = await open({ viewport: { width: 320, height: 568 } }, t);
-  for (const install of [false, true]) {
-    if (install) {
+  // The browser's own font, then DejaVu Sans, the wide one a Linux browser without system-ui falls
+  // back to (CI's runner): the header must fit in both.
+  for (const [install, font] of [
+    [false, null],
+    [false, 'DejaVu Sans'],
+    [true, null],
+    [true, 'DejaVu Sans'],
+  ]) {
+    if (install && !(await page.locator('[data-install]').isVisible())) {
       await offerInstall(page);
       await page.locator('[data-install]').waitFor();
     }
+    await page.evaluate((font) => {
+      document.querySelector('#font-under-test')?.remove();
+      if (!font) return;
+      const style = Object.assign(document.createElement('style'), { id: 'font-under-test' });
+      style.textContent = `:root { --font-sans: '${font}' !important; }`;
+      document.head.append(style);
+    }, font);
+    await page.evaluate(() => document.fonts.ready);
     const row = await page.evaluate(() => {
       const items = [...document.querySelectorAll('.site-header .inner :is(a, button)')].filter((el) => el.offsetParent);
       const rects = items.map((el) => el.getBoundingClientRect());
@@ -127,8 +142,8 @@ test('landing-home-and-ribbon AC-1: at 320 px wide the header stays on one line,
       };
     });
     assert.equal(row.n, install ? 5 : 4, 'Home, Games, (Install,) sound, theme');
-    assert.equal(row.tops.length, 1, `one line (tops ${row.tops}), Install ${install}`);
-    assert.ok(row.right <= row.width, `nothing past the right edge (${row.right} > ${row.width}), Install ${install}`);
+    assert.equal(row.tops.length, 1, `one line (tops ${row.tops}), Install ${install}, font ${font}`);
+    assert.ok(row.right <= row.width, `nothing past the right edge (${row.right} > ${row.width}), Install ${install}, font ${font}`);
     assert.equal(row.scroll, row.width, 'no sideways scroll');
   }
 });
