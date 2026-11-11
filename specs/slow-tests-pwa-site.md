@@ -1,6 +1,6 @@
 # The PWA-update and landing-page tests run once, and can't hang
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11)
 
 ## Intent
 
