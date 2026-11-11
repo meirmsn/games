@@ -28,7 +28,7 @@ No game code changes. What `specs/pixel-leap.md` promises doesn't change.
 ### On `main`, before the change
 
 - **The file passes under the harness's loads** (2026-11-11, `main` at acd5a2d): five copies at
-  once on 4 CPUs, 47 of 47 each time; alone with `TEST_CPU_THROTTLE=10`, see the PR. The frame
+  once on 4 CPUs, 47 of 47 each time; alone with `TEST_CPU_THROTTLE=10`, 47 of 47 (325 s). The frame
   budget test runs with `throttle: false`, so the 10× run doesn't reach it. These runs can't tell
   the old waits from the new ones, so the guards below make the cause happen on demand. (Claude,
   2026-11-11)
