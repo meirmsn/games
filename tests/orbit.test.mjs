@@ -4,33 +4,24 @@
 // manual = true stops the page's own frames from advancing it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
+import { serve } from './serve.mjs';
+import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-// Its own port range: the test files run in parallel.
-const PORT = 9300 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ hash = '', viewport = { width: 390, height: 844 }, init = [], hasTouch = true } = {}) {
@@ -849,8 +840,74 @@ test('orbit AC-20: the probe dims over the last 2 s before its time runs out', a
   await context.close();
 });
 
-test('orbit AC-22: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
-  const { context, page } = await open();
+test('orbit AC-29: stardust shows at three brightnesses: this jump full, the next a little brighter than the rest, later ones dim', async () => {
+  const { context, page, errors } = await open({ hash: '#s2' });
+  await manual(page);
+  const r = await page.evaluate(() => {
+    const o = window.__orbit;
+    const g = o.game;
+    const looks = () => {
+      const by = {};
+      g.level.motes.forEach((m, i) => {
+        const l = o.moteLook(i);
+        const k = l ? `${l.alpha}/${l.scale}` : 'hidden';
+        (by[m.leg] ??= new Set()).add(k);
+      });
+      return Object.fromEntries(Object.entries(by).map(([leg, set]) => [leg, [...set]]));
+    };
+    const legs = g.level.legs.length;
+    const out = { legs, first: looks() };
+    // a mote of this jump, once caught, is not drawn
+    const i0 = g.level.motes.findIndex((m) => m.leg === 0);
+    g.taken.add(i0);
+    out.caught = o.moteLook(i0);
+    g.taken.delete(i0);
+    // while a capture steers in, the jump being flown is still the current one
+    g.mode = 'capture';
+    out.capture = looks();
+    g.mode = 'idle';
+    g.leg = 1;
+    out.second = looks();
+    g.leg = legs - 1;
+    out.last = looks();
+    g.mode = 'done';
+    out.done = looks();
+    o.draw();
+    return out;
+  });
+  assert.equal(r.legs, 4);
+  assert.deepEqual(r.first, { 0: ['0.95/1'], 1: ['0.5/0.85'], 2: ['0.3/0.75'], 3: ['0.3/0.75'] });
+  assert.equal(r.caught, null);
+  assert.deepEqual(r.capture, r.first);
+  assert.deepEqual(r.second, { 0: ['hidden'], 1: ['0.95/1'], 2: ['0.5/0.85'], 3: ['0.3/0.75'] });
+  assert.deepEqual(r.last, { 0: ['hidden'], 1: ['hidden'], 2: ['hidden'], 3: ['0.95/1'] });
+  assert.deepEqual(r.done, { 0: ['0.3/0.75'], 1: ['0.3/0.75'], 2: ['0.3/0.75'], 3: ['0.3/0.75'] });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+// The race behind orbit AC-22's flake: the game's frames run while the page loads, before a test takes
+// the clock. With window.__orbitManual set before the first frame, real frames only draw.
+test('ci-flakes AC-5: with the flag set before the first frame, real frames add no idle time and show no hint', async () => {
+  const { context, page } = await open({ init: [() => (window.__orbitManual = true)] });
+  // About 1.5 s of the page's own frames, as on a slow load (a busy machine runs fewer; any number works).
+  await page.evaluate(
+    () =>
+      new Promise((done) => {
+        let k = 0;
+        const tick = () => (++k >= 90 ? done() : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      })
+  );
+  const r = await page.evaluate(() => ({ manual: window.__orbit.manual, idle: window.__orbit.game.idleAge, hint: !document.querySelector('[data-hint]').hidden }));
+  assert.deepEqual(r, { manual: true, idle: 0, hint: false });
+  await context.close();
+});
+
+test('orbit AC-22, ci-flakes AC-3: on the first level the hint to fire shows after 4 s untouched, and never again once fired', async () => {
+  // The test owns the clock from the first frame: real frames never add to the 4 s of idling, however
+  // slowly the page loads (the init script runs again on the reload below).
+  const { context, page } = await open({ init: [() => (window.__orbitManual = true)] });
   await manual(page);
   const hint = () => page.evaluate(() => !document.querySelector('[data-hint]').hidden);
   await frames(page, 60 * 3);
@@ -1013,6 +1070,40 @@ test('orbit AC-28: Back asks before leaving; Space while it asks fires nothing; 
   await context.close();
 });
 
+test('edge-gestures AC-4: with iPhone insets, the booster bar sits half as high as #27 put it, its probes and hint above it, and a slide on it sets the power', async () => {
+  const { context, page } = await open();
+  const cdp = await simulateInsets(context, page, PORTRAIT_INSETS, () => window.__orbit && 'ready' in document.body.dataset);
+  const r = await page.evaluate(() => {
+    const box = (sel) => {
+      const b = document.querySelector(sel);
+      const was = b.hidden;
+      b.hidden = false; // the hint shows on the first level only; measure it anyway
+      const r = b.getBoundingClientRect();
+      b.hidden = was;
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+    };
+    return { bar: box('[data-boost]'), probes: box('.probes'), hint: box('[data-hint]'), fieldBottom: window.__orbit.view.y + 1800 * window.__orbit.view.s };
+  });
+  // #27 put the bar's foot 40 px above the safe area, 74 px above the screen's edge; now half that.
+  const foot = (PORTRAIT_INSETS.bottom + 40) / 2;
+  assert.ok(Math.abs(844 - r.bar.bottom - foot) < 0.5, `the bar's foot is ${844 - r.bar.bottom} px above the edge, want ${foot}`);
+  assert.ok(r.probes.bottom <= r.bar.top + 0.5 && r.probes.top >= r.fieldBottom - 1, `the probes sit between the field and the bar: ${JSON.stringify(r)}`);
+  assert.ok(r.hint.bottom <= r.probes.top + 0.5, `the hint sits above the probes: ${JSON.stringify(r)}`);
+  // The field takes the room: it reaches 37 px lower than with the bar 40 px above the safe area.
+  assert.ok(r.fieldBottom >= r.probes.top - 30, `the field runs down to the probes: ${JSON.stringify(r)}`);
+  // A slow slide that starts low on the bar, inside the bottom strip, still sets the power.
+  const power = () => page.evaluate(() => window.__orbit.input.power);
+  const before = await power();
+  await touchDrag(cdp, r.bar.left + (r.bar.right - r.bar.left) * 0.5, r.bar.bottom - 6, 40, 0);
+  assert.notEqual(await power(), before, 'a slide from the bar\'s low edge sets the power');
+  // A slide that starts on the bar inside the left-edge strip is the phone's back swipe: it sets nothing.
+  const now = await power();
+  assert.ok(r.bar.left < 20, `the bar reaches into the left strip (${r.bar.left})`);
+  await touchDrag(cdp, (r.bar.left + 20) / 2, (r.bar.top + r.bar.bottom) / 2, 120, 0);
+  assert.equal(await power(), now, 'a slide from the left strip sets nothing');
+  await context.close();
+});
+
 test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolling, clear of the buttons', async () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 390, height: 844 }, { width: 1280, height: 800 }]) {
     const { context, page } = await open({ viewport });
@@ -1055,7 +1146,9 @@ test('orbit AC-21: the field and buttons fit 360x640 and 390x844 without scrolli
     assert.ok(r.left >= 0 && r.right <= r.w && r.bottom <= r.h, `${viewport.width}: on screen`);
     assert.ok(r.buttons.every((x) => x >= 44));
     assert.ok(r.bar.top >= r.bottom, `${viewport.width}: the booster bar sits below the field`);
-    assert.ok(r.bar.bottom <= r.h - 24 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, above the edge strip`);
+    // edge-gestures (the owner, 2026-11-10) replaces "above the bottom edge strip": the bar's foot sits at
+    // half the gesture strip's height above the edge, (inset + 40) / 2, here 20 px.
+    assert.ok(Math.abs(r.h - r.bar.bottom - 20) < 0.5 && r.bar.left >= 0 && r.bar.right <= r.w, `${viewport.width}: the bar is on screen, its foot 20 px above the edge (${r.h - r.bar.bottom})`);
     assert.ok(r.bar.height >= 44, 'the bar is easy to hit');
     assert.ok(r.probes.top >= r.bottom - 1 && r.probes.left >= 0 && r.probes.right <= r.w, `${viewport.width}: the probes left sit between the field and the bar`);
     assert.ok(r.hud.left >= 0 && r.hud.right <= r.w && r.hud.rowFits && !r.hud.overlap, `${viewport.width}: the top bar fits, slingshots and all (${JSON.stringify(r.hud)})`);

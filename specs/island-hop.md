@@ -217,7 +217,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   at most 2× its CSS size, a building covering the person fades, and movement covers the same distance
   at 60 and 120 frames a second — `tests/island-hop.test.mjs`.
 - **AC-17** It plays offline once played — `tests/island-hop.test.mjs`.
-- **AC-18** The landing page's Island Hop tile is playable and the page keeps its eight tiles —
+- **AC-18** The landing page's Island Hop tile is playable and the page keeps its nine tiles (eight
+  before `main` added Crumble; owner, 2026-11-11: "Can you bring the latest main?") —
   `tests/site.test.mjs`.
 - **AC-19** The art is Kenney's: all 29 Watercraft sprites are drawn in the world (sailed, moored,
   traffic or buoys), and the Tiles Base, Tiles Buildings, Tiles City, Tiles Vehicles and Nature pieces

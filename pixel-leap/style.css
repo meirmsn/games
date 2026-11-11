@@ -386,6 +386,10 @@ body.building .deck {
   background: #f4f0fb;
 }
 
+/* A row the card leaves out (lives left, after a game over). */
+.tally-rows div[hidden] {
+  display: none;
+}
 .tally-rows dt {
   opacity: 0.7;
 }
@@ -619,6 +623,11 @@ body:not(.smooth) .hud > span {
 
 .hud-coin-icon {
   display: inline-flex;
+}
+
+/* Castle's keys held: shown only in a world with keys. */
+.hud > span[hidden] {
+  display: none !important;
 }
 
 .hud-coin-icon .hud-icon {

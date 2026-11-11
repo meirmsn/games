@@ -2,6 +2,7 @@
 // planet's orbit ring. One canvas; the physics lives in physics.js and the systems in levels.js.
 // The spec is specs/orbit.md. Tests reach the game through window.__orbit.
 import { mountShell } from '../shared/game-shell.js';
+import { MARGIN, SIDES_ONLY, isEdgeStart, safeRect } from '../shared/safe-zone.js';
 import {
   FIELD,
   DT,
@@ -119,6 +120,10 @@ const view = { x: 0, y: 0, s: 1 }; // field → CSS px: px = view.x + wx * view.
 const insets = { top: 0, bottom: 0, left: 0, right: 0 };
 const EDGE = 24; // touches starting this close to the bottom (plus the safe area) are the phone's
 const BAR_SPACE = 82; // room under the field for the booster bar and the probes left above it
+// The bar's foot sits at half the bottom gesture strip's height above the screen's edge
+// ((inset + MARGIN.bottom) / 2, style.css): a slow slide may start low, a quick swipe may not
+// (specs/edge-gestures.md, the owner's rule of 2026-11-10).
+const barFoot = () => (insets.bottom + MARGIN.bottom) / 2;
 
 function readInsets() {
   const probe = document.createElement('div');
@@ -140,9 +145,9 @@ function resize() {
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
-  // The field sits below the buttons (12 + 44 + 10 px) and above the bottom edge strip.
+  // The field sits below the buttons (12 + 44 + 10 px) and above the booster bar's room.
   const top = insets.top + 66;
-  const bottom = insets.bottom + EDGE + BAR_SPACE; // the booster bar sits below the field
+  const bottom = barFoot() + BAR_SPACE; // the booster bar sits below the field
   const side = 8;
   const aw = W - insets.left - insets.right - 2 * side;
   const ah = H - top - bottom;
@@ -219,7 +224,7 @@ const game = {
 };
 // The booster power on the bar, kept between visits (a convenience; losing it costs nothing).
 const input = { power: Math.min(1, Math.max(0, Number(store.get('orbit.power', 0.25)) || 0)), lastTick: -1 };
-let manual = false; // tests own the clock
+let manual = Boolean(window.__orbitManual); // tests own the clock (a test can set the flag before the first frame)
 
 function assistNow() {
   return Math.min(1, Math.max(0, (game.legFails - 2) / 3));
@@ -783,16 +788,33 @@ function drawBody(i, wx, wy) {
   ctx.fill();
 }
 
+// How a mote is drawn: null when it isn't (caught, or a past jump's), else its alpha and its size
+// factor. The current jump's are full; the next jump's a little brighter than the rest, so its line
+// can inform this jump's aim; every later jump's dim. The leg only moves on when a capture
+// finishes, so during a capture or rewind the current jump is still the one being flown.
+const MOTE_NOW = { alpha: 0.95, scale: 1 };
+const MOTE_NEXT = { alpha: 0.5, scale: 0.85 };
+const MOTE_LATER = { alpha: 0.3, scale: 0.75 };
+function moteLook(i) {
+  const m = game.level.motes[i];
+  if (game.taken.has(i)) return null; // caught
+  if (game.mode === 'done') return MOTE_LATER; // the end card: every uncaught mote dim
+  if (m.leg < game.leg) return null; // out of reach
+  if (m.leg === game.leg) return MOTE_NOW;
+  if (m.leg === game.leg + 1) return MOTE_NEXT;
+  return MOTE_LATER;
+}
+
 function drawMotes() {
   const motes = game.level.motes;
   for (let i = 0; i < motes.length; i++) {
+    const look = moteLook(i);
+    if (!look) continue;
     const m = motes[i];
-    if (game.taken.has(i) || (m.leg < game.leg && game.mode !== 'done')) continue; // caught, or out of reach
-    const current = m.leg === game.leg && game.mode !== 'done';
     const x = sx(m.x);
     const y = sy(m.y + Math.sin(time * 1.6 + i) * 3);
-    const s = Math.max(1.8, 4.5 * view.s) * (current ? 1 : 0.75);
-    ctx.globalAlpha = current ? 0.95 : 0.3;
+    const s = Math.max(1.8, 4.5 * view.s) * look.scale;
+    ctx.globalAlpha = look.alpha;
     ctx.fillStyle = 'rgba(255, 214, 140, 0.18)';
     ctx.beginPath();
     ctx.arc(x, y, s * 2.4, 0, Math.PI * 2);
@@ -1073,6 +1095,8 @@ ui.boost.addEventListener('pointerdown', (e) => {
     resumeGame();
     return;
   }
+  // A slow slide may start in the bottom strip, never in the left or top one (a back swipe).
+  if (isEdgeStart(e, safeRect(window, SIDES_ONLY))) return;
   if (barDrag !== null) return; // a second finger
   barDrag = e.pointerId;
   try {
@@ -1306,6 +1330,7 @@ window.__orbit = {
   probeWorld,
   launchPoint,
   timeoutDim,
+  moteLook,
   resize,
   tap: (y = 100) => onDown({ isPrimary: true, clientY: y }),
   setPower,

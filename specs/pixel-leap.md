@@ -1,6 +1,6 @@
 # Pixel Leap: build a monster, leap through worlds drawn in different art styles
 
-**Go:** "don't consult with me, just start building after following this process" 2026-11-09
+**Go:** "don't consult with me, just start building after following this process" 2026-11-09; batch 2: "Go" 2026-11-10; batch 3: "Go" 2026-11-10; batch 4: "go" 2026-11-10
 
 ## Intent
 
@@ -16,7 +16,9 @@ be excellent.
 
 **Hook:** build a goofy monster, then run and jump through worlds drawn in completely different art
 styles, and each world redraws your monster in its own style: chunky pixels in the Meadow and
-Frost, smooth and glossy in Candy, two-colour ink in Ink.
+Frost, smooth and glossy in Candy, two-colour ink in Ink. (Frost, here and in the first slice's
+decisions below, was replaced by Ice in batch 3; the batch decisions after them are the current
+ones.)
 
 This change is the first slice (see Out of scope): the builder, the style rule and four levels,
 each its own world: the Meadow and Frost (two parts of the Pixel Platformer pack), Candy (Platformer
@@ -24,6 +26,57 @@ Assets Candy, smooth) and Ink (the 1-Bit Platformer pack). The surface is a new 
 `pixel-leap/`, and its landing-page tile becomes playable. The game has its own look per world, like
 any game page; the landing page keeps the site's tokens. There is no `DESIGN.md`, so the baseline is
 the design.
+
+### Batch 2: Farm, Industrial, Mushroom and Pico
+
+The owner's words for this batch (2026-11-09): "Add **Farm** (Pixel Platformer Farm Expansion),
+**Industrial** (Pixel Platformer Industrial Expansion), **Mushroom** (Platformer Assets Mushroom) and
+**Pico** (Pico-8 Platformer). Place them between the existing worlds so pixel and smooth keep
+alternating: Meadow, Farm, Frost, Candy, Industrial, Mushroom, Pico, Ink, or better if play shows a
+better order. Each world needs its own mechanic and its own kind of challenge, not just a new skin
+… **Farm:** platform-heavy: many platforms, big and small, at very different heights; haybales that
+bounce; hidden pockets of coins. **Industrial:** moving platforms and lifts, and conveyor belts; a
+timing-and-riding challenge. **Mushroom:** mushroom caps that launch you higher with each bounce; a
+vertical, tall climb. **Pico** (8 px per tile, 16 colours; the monster baked to that palette):
+crowded with bad guys, including flying ones that swoop; stomp chains pay extra." Every rule above
+stays: an easy opening then the real threat, the same physics, bad guys 1.5 tiles, hearts and three
+lives, the glimpse before each door, the map showing every world, and the layout checks of AC-21,
+extended to each new mechanic. The journey grows from four levels to eight, about 12–16 minutes.
+
+### Batch 3: Castle, Ice, Sea and Ink's darkness
+
+The owner's words for this batch (2026-11-10): "Add **Castle** (Platformer Pack Medieval: a key opens
+the gate, crushers drop on a rhythm), **Ice** (Platformer Assets Ice: slippery ice, snowballs
+rolling down slopes), **Sea** (Platformer Pack Nautical: swimming, each tap a stroke, currents), and
+**Ink's darkness** (only a circle of light around the monster). Place them so pixel and smooth keep
+alternating where they can, or better if play shows a better order; Ice may replace today's pixel
+Frost (the lineup says so; ask the owner). Each world needs its own mechanic and its own kind of
+challenge, not just a new skin … **Castle:** puzzle-like situations: a key opens the gate; crushers
+drop on a rhythm. **Ice:** precision on small ledges: slippery ice; snowballs rolling down slopes.
+**Sea:** a different control: swimming, you float and each tap is a stroke; currents. **Ink's
+darkness:** the unknown: only a circle of light around the monster, with its ghosts and drips."
+Every rule above stays: an easy opening then the real threat, the same physics (Sea's swimming is
+the one new control, its numbers in tiles), bad guys 1.5 tiles, hearts and three lives with game
+over back to level 1, the glimpse before each door, the map showing every world, and the layout
+checks of AC-21, extended to each new mechanic. The journey grows to ten levels, about 16–20
+minutes.
+
+### Batch 4: Scribble, Sky and the journey's end
+
+The owner's words for this batch (2026-11-10): "Add **Scribble** (Scribble Platformer: platforms
+that draw themselves as you get near) and **Sky** (Jumper Pack: the finale, an automatic bouncing
+climb), and **the journey's end**. Place them so pixel and smooth keep alternating where they can,
+or better if play shows a better order (the run ends on Castle today). Each world needs its own
+mechanic and its own kind of challenge, not just a new skin … **Scribble:** trust: platforms draw
+themselves in as you near; jump before the ground is there. **Sky:** the finale: an automatic
+bouncing climb upward, a sprint to the top. **The journey's end:** what the player sees past the
+last door (today a stats card that says 'more worlds are on their way')." Every rule above stays:
+an easy opening then the real threat, the same physics (Sea's swimming is the one other control;
+any new numbers in tiles), bad guys 1.5 tiles, hearts and three lives with game over back to level
+1, the glimpse before each door, the map showing every world (checked with twelve cells), and the
+layout checks of AC-21/AC-38, extended to each new mechanic. With these two worlds every world in
+the lineup (Out of scope) is built: the journey is twelve levels, about 20–24 minutes, and ends.
+Riding along: FINDINGS F-13 and F-14 (stale mentions of Frost).
 
 ### Concept check (the guidelines' questions)
 
@@ -80,7 +133,7 @@ item.
 
 - **The scale-and-style rule, "the world redraws you":** one tile is one world unit. Every world
   draws its tiles at the same size on screen, and all physics is in tiles, so the monster runs and
-  jumps exactly the same everywhere (only the ground's grip differs, on Frost's ice). A world sets
+  jumps exactly the same everywhere (only the ground's grip differs, on ice). A world sets
   only its resolution in pixels per tile and its palette: the Meadow and Frost are 18 px per tile and
   Ink 16, each drawn into a back buffer and scaled to the screen with no smoothing; Candy is 70 px per
   tile, drawn smooth. The monster is drawn by the world's rule too: in a pixel world it is baked to
@@ -200,7 +253,7 @@ item.
 - **Builder:** the game opens on the builder over the live Meadow, with your last monster or a
   random one. Big buttons cycle body shape (6), colour (6), eyes (12), mouth (13), arms (5) and legs
   (5); Shuffle; Go. Each change makes the monster hop and plays a sound. A first-timer can press Go
-  at once. Play again, at the end of the last level, goes back to the builder.
+  at once. New monster, on the end card, goes back to the builder.
 - **The prize gives an ability:** Frost has one Monster Builder part in plain view from the main
   path, behind a route you choose to risk: a pair of big ears. Once you have them, holding jump while
   falling floats you down slowly. They join your monster, drawn in each world's style, for the rest
@@ -243,6 +296,273 @@ item.
   about every 1–2 minutes. The knobs are the movement constants above, the assist and the level
   layouts, all data. Performance: a frame's update and draw stay well inside a 60 Hz frame on a
   phone; physics runs on delta time in fixed steps, so it is the same at 60 and 120 Hz.
+- **Batch 2: eight levels, in this order** (owner, 2026-11-09, quoted in Intent): 1 Meadow (pixel,
+  18), 2 Farm (pixel, 18), 3 Frost (pixel, 18), 4 Candy (smooth, 70), 5 Industrial (pixel, 18), 6
+  Mushroom (smooth, 70), 7 Pico (pixel, 8 px per tile, 16 colours), 8 Ink (two colours, 16). From
+  Candy on, pixel and smooth alternate; Meadow, Farm and Frost are all pixel because the owner's
+  order puts them first. Each new world's level opens with an easy stretch (no hazard within 7
+  tiles of its start), brings its mechanic in where it can't hurt yet, then ramps up to its own kind
+  of challenge. Physics, bad guys' size, hearts, lives, the assist and the glimpse are as above.
+  Farm and Industrial use the Pixel Platformer's characters (they are its expansions, with tiles
+  only); Mushroom uses the New Platformer Pack's slimes, as Candy does (the Mushroom pack has no
+  characters); Pico uses its own pack's bad guys (walkers, and the winged ones as flyers). Farm,
+  Industrial and Pico use the retro sound set and its loop, Mushroom Candy's soft set and loop, until
+  the owner's own music (owner, 2026-11-10, at the go: kept Pico at 8 px, accepted the snaking map,
+  no crushers and slimes in Mushroom, and did not take new Kenney loops for the new worlds). The hidden assist never changes moving platforms,
+  belts, caps, haybales or flyers. Best times move to a new version of the levels (3), so an old
+  four-level run is no best to beat. A crossing between two pixel worlds of different resolutions
+  (Pico's 8 into Ink's 16) redraws the monster straight in the new style, with no sound, as between
+  any two pixel worlds.
+- **Farm: platforms, haybales, hidden pockets.** Most of the level is platforms (the pack's wooden
+  planks and crates): at least 14 separate platforms, from 1 to at least 6 tiles long, at at least 5
+  different heights from 1 to 8 tiles above the ground, over pits and over walkers, so the route
+  is chosen up and down. A haybale is a solid tile that bounces you when you land on it: about 2.5
+  tiles high on its own, about 5 with jump held. Hidden pockets: at least 3 nooks off the main
+  route (up high or under a platform), each with at least 3 coins that aren't drawn until the
+  monster is within 3 tiles; a faint glint every 2 s marks each pocket, so an attentive player can
+  find them. Rejected: a secret wall you walk through, which the pack has no art for.
+- **Industrial: riding and timing.** Moving platforms (3 tiles wide, sliding back and forth along a
+  track of 4–7 tiles at 2 tiles/s), lifts (3 wide, rising and sinking along up to 6 tiles at 2
+  tiles/s) and conveyor belts (ground that carries the monster standing on it at 2.5 tiles/s, left
+  or right; bad guys walk on belts unmoved). A platform or lift carries the monster standing on it
+  exactly with it, and a jump off it keeps its sideways motion; you land on it from above and jump
+  through it from below, like a one-way ledge, and it never crushes. Movers start over with the
+  level when a life is lost; no track reaches below the level's ground line or crosses into the
+  glimpse. At least two gaps are 10 tiles or wider, more than a running held jump can clear even
+  with the ears' float (about 9.4 tiles), so they are crossed only by riding; at least one ledge is
+  reached only by a lift; past the opening, belts carry you toward spikes or pits, so you run
+  against them or time a jump. Rejected: platforms that crush, which punish a ride you can't see
+  coming on a phone.
+- **Mushroom: a tall climb on bouncing caps.** The level is a climb: its door is at least 30 tiles
+  above its start, more than a phone's view is tall, so the climb scrolls. A mushroom cap (3 tiles
+  wide on a stem) launches you as you land on it, measured from the cap's top to the monster's
+  feet at the top of the arc: 4 tiles the first time, then 6, then 8 for every landing on a cap
+  after that (the same cap again counts) while you touch nothing else; landing on anything else
+  (ground, a ledge, a haybale or platform) sets it back to 4, and a stomp or a hit doesn't. No jump
+  is needed and holding jump changes nothing. Flat stem-top ledges, which don't bounce, rest you
+  between the bouncing runs. A level has its own height in rows (Mushroom's about 48, the others 15)
+  with its ground line near its bottom; the camera follows up and down, so after an 8-tile launch
+  the landing is in view; falling off its bottom still costs a life. The climb ends on a plateau at
+  the top, and the glimpse and the door are on that plateau.
+- **Pico: crowded, flyers, stomp chains.** Pico is drawn at 8 px per tile, every pixel of the world
+  one of PICO-8's 16 colours, and the monster is baked to those colours too (its own short palette
+  is mapped to their nearest, with the outline the palette's darkest). A Pico pixel is 2.25 or 4.5
+  screen pixels at most tile sizes, so its blocks are not all equal, as with Ink's 16. It has more
+  bad guys than any other level, at least one for every 8 tiles after its opening: the pack's
+  walkers, and flyers that hover about 4 tiles up and, when the monster comes within 5 tiles ahead
+  while on the ground, swoop down at 6 tiles/s toward where it stood, then climb back (changed
+  after the go, by the owner, 2026-11-10, on a flyer diving into the monster mid-jump: "Keep it",
+  so a flyer dives only at a monster on the ground; keep moving and it misses). A flyer can be stomped. Stomp chains
+  pay extra: in Pico, each stomp after the first before you land again pays coins (the second +1,
+  the third +2, up to +4 each), shown by a "+n" over the stomp; they count in the run's coins. A
+  chain ends when you land on anything (ground, ledge, platform) or take a hit.
+- **Music prompts for all eight worlds, and layered music** (owner, 2026-11-09: "give me the
+  prompts for the music for all the levels … 8 prompts. It's gonna go to 11 labs music generator.
+  Hopefully they're not like 15-second loop … maybe 1 minute long or 3 minutes long is actually not
+  that big of a deal … something like the parallax effect, but for sound, where you actually
+  generate … one track and another one that you can lay out on top at random intervals"). Each
+  world gets a prompt for a bed (about 2 minutes, instrumental, made to loop) and for three short
+  accents (4–8 s, free-time, no drums, so they sit on any bar) that play over the bed at random
+  every 15–40 s, never twice in a row. The prompts are given in the chat; the files are the owner's
+  to generate. Until a world's arrive, it keeps its Kenney loop.
+- **The owner's music is in for six worlds** (owner, 2026-11-10, sending the Meadow's bed and
+  accents: "maybe you can use them", then the Farm's, Frost's and Candy's). Each bed is levelled and
+  kept at 64 kbps (about 1 MB); each accents file is cut into its three phrases. A bed is streamed
+  by an audio element from a copy fetched as the page loads, so it is cached for offline play like
+  everything else but never decoded whole: eight two-minute tracks decoded would take hundreds of
+  megabytes on a phone. The accents count only while playing; pausing stops the bed, and the
+  site-wide mute mutes it. The other worlds' files are wired in the same way as they arrive. Sea's
+  and Castle's arrived on 2026-11-10 (owner, after batch 3 merged, sending the files made from the
+  prompts in the chat), and play their own bed and accents.
+- **The world map grows to eight cells:** the cells follow a snaking path in rows (three across in
+  portrait, going up the screen; four across in landscape), so all eight and the start fit on any
+  screen the game supports, each cell's name at least 12 CSS px tall. The zig-zag of four cells
+  can't hold eight. With ten (batch 3, found in the build, Claude, 2026-11-10), landscape takes five
+  across in two rows: four across would need three rows, too tight on a short landscape screen.
+- **Batch 3: ten levels, in this order** (owner, 2026-11-10, at the go: "Ice replaces Frost" and
+  "Perfect alternation"): 1 Meadow (pixel, 18), 2 Ice (smooth, 70; it replaces Frost, and takes
+  Frost's ears), 3 Farm (pixel, 18), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7
+  Pico (pixel, 8), 8 Sea (smooth, 70), 9 Ink (two colours, 16, now dark), 10 Castle (smooth, 70).
+  Pixel and smooth alternate at every door. Ice opens gently, as level 2 must: its first stretch
+  is snow, its ice ledges come later and its ears sit on a route you choose to risk. Ice replaces Frost
+  because two ice worlds would be the same mechanic twice, the owner's "different skin" note; it
+  keeps Frost's slot, its prize and the owner's Frost music (a cold, glassy bed fits Ice). Proposed
+  first was keeping every shipped world's place (Meadow, Farm, Ice, Candy, …), which breaks the
+  alternation twice; the owner chose perfect alternation. Sea, a new
+  control, comes at 8 rather than last, so a game over there costs less replay; Ink's darkness is
+  late; Castle's puzzles, at the end of a castle's road, close the journey for now. Frost, the Pixel
+  Platformer's snow, leaves the game; its level and art go. The three new worlds are vector packs with no characters
+  of their own, so their bad guys come from the New Platformer Pack (as Candy's and Mushroom's
+  slimes do): Castle's mice, Ice's snails, Sea's fish; Castle's key and Sea's urchins (its spikes) come
+  from it too, as the world's own pack has none. Added beyond the request, for the go: lamps in
+  Ink, the mice, snails, fish and urchins, a key count in the HUD, and two kinds of ground in Ice. All three use Candy's soft sound set
+  (jump, coin, stomp…) and the owner's music: Ice the Frost bed and accents, Sea and Castle their
+  own (sent 2026-11-10, after batch 3 merged). Best times move to version 4. The hidden
+  assist never changes crushers, snowballs, currents, fish or the swim. Bad guys stay 1.5 tiles,
+  including fish; a snowball is 1.2 tiles across (a rolling hazard, not a bad guy).
+- **Castle: keys, gates and crushers, in puzzle-like situations.** A gate is the pack's portcullis,
+  3 tiles tall with wall above it to the top of the level, so it can't be jumped. It is solid until
+  the monster touches it while holding a key; then it rises and stays open, and the key is used.
+  Any key opens any gate; keys held show in the HUD; a life lost resets them with the level. Each
+  gate's key is in the stretch before it, never on the straight run to it: up a climb of ledges,
+  back behind you, or at the end of a side passage, so reaching a gate without its key means going
+  back to find it. There are at least three gates. Keys still held at the door are dropped (none carry
+  into the next level); a hit taken with a heart keeps the keys; mice turn back at a shut gate. A
+  crusher is a 2-tile-wide stone block hung on a chain, its bottom at most 4 tiles above the
+  floor: it waits up (1.4 s, shaking for its last 0.4 s), drops to the floor in 0.2 s, stays down
+  0.6 s and rises in 1.0 s, a 3.2 s rhythm; crushers in a row are offset so a gap opens and runs
+  along them. Its steady rhythm is its warning (as the spec's one-second rule asks): the next drop
+  is always readable from the last. Touching a crusher while it falls or is down (or rising, its
+  bottom under 1.4 tiles off the floor) is a hit; a heart knocks you out away from its middle, and
+  the 1.2 s of safety after it outlasts the 0.6 s it stays down. A crusher is never a surface or a
+  wall: up, it is harmless stone overhead. Rejected: crushers that pin you against the floor (a death with no way to read it on a
+  phone) and switches far from their doors (too slow to read without text).
+- **Ice: precision on small ledges, slippery ice, snowballs down slopes.** Two grounds, per tile (new: Frost's
+  ice was the whole world): snow (tundra) grips like grass; ice (the pack's ice blocks) keeps you
+  sliding with Frost's numbers (from top speed you slide about 2.3 tiles to a stop; steering back
+  stops you in about 1). At least 10 ledges 1–3 tiles long over pits, so a landing must be placed;
+  at least 5 of them are ice, each at least 2 tiles long, so a landing at a walk holds. Slopes: the
+  pack's 45° snow hills, snow only; they count as ground (for jumps, coyote time and landings) and
+  you run them at your flat speed; the monster runs up and down them without jumping, its feet on
+  the slope; snails turn back at a slope. A snow pile at a slope's top, always in view from the
+  slope's foot, sends a snowball every 2.5 s (each pile its own phase): it rolls down at up to 4
+  tiles/s, carries on along the flat at 3 tiles/s and shatters at a wall or the edge of a pit. Its
+  pile's steady rhythm is the warning, and it shakes a moment before it sends one. Found in the
+  build (Claude, 2026-11-10): each snow slope has a ditch at its foot that catches its snowballs, so
+  they never roll on across the level, and its pile sits a tile back from the top; a snowball sets
+  off slowly and gathers speed. Then the way up is readable: wait for a snowball to drop into the
+  ditch, run up, and jump the next one on the flat top. A snowball, 1.2 tiles across, hurts; it can't be stomped,
+  only jumped. Ice's bad guys are snails (stompable, slow). The ears are on a high ice ledge in plain
+  view from the main path.
+- **Sea: swimming.** The level starts on a beach and goes under the water in basins. The monster is in the
+  water when its middle is below the surface. There it floats: water gravity 4 tiles/s² and it
+  sinks at most 1.5 tiles/s; each jump press is a stroke, an upward speed of 4 tiles/s (about 2
+  tiles of lift), at most one stroke every 0.25 s, and holding jump does nothing more; it swims
+  sideways at up to 4 tiles/s. A press on the water's floor, or one buffered just before entering
+  the water, is a stroke; there is no coyote time in the water and the ears don't float you there.
+  A stroke with its head within half a tile of the surface is a leap out: the land jump, so its feet
+  reach about 3.3 tiles up, enough for a ledge 2 tiles above the water. Out of the water it runs
+  and jumps as everywhere. Currents are bands of water at least 3 tiles wide that carry the
+  monster at 3 tiles/s their way (left, right, up or down), drawn as streaming bubbles; at least
+  three places use them, with you or against you. Its bad guys are fish swimming back and forth at
+  2 tiles/s along 3–6 tiles (hurt at a touch, from any side: you can't stomp in water), and urchins
+  (spikes) on the water's floor. The water's floor is solid. Rejected: an air meter (a second
+  thing to watch on a phone, and the owner asked for a different control, not a timer).
+- **Ink's darkness: the unknown.** Ink is dark outside a circle of light around the monster:
+  lit within 4.5 tiles, a dithered ring in Ink's two colours (no third colour) out to 5.5, dark
+  beyond. Lamps along the way light a pool 2.5 tiles round them, more often in the opening. What
+  would be unseen gives itself away in the dark, so every hazard is still seen a second before you
+  must commit: ghosts' eyes, a drip's glint, spikes' tips, a pit's edges and the ends of ledges
+  glimmer at any distance. The glimpse of the next world and the door are lit: the way out of the
+  dark. Ink's glimpse at the end of Sea and its map cell are drawn lit (a peek, not the level).
+  Ink's sky is now flat and its far pillars dotted, so not even the light shows a third colour.
+  Rejected: a light that shrinks over time (a timer
+  again).
+- **Batch 4: twelve levels, in this order** (owner, 2026-11-10, "go" on the proposal: line art for
+  Scribble, the game-over rule kept, the additions below kept): 1 Meadow (pixel, 18), 2 Ice
+  (smooth), 3 Farm (pixel), 4 Candy (smooth), 5 Industrial (pixel), 6 Mushroom (smooth), 7 Pico
+  (pixel, 8), 8 Sea (smooth), 9 Ink (two colours, 16), 10 Castle (smooth), 11 Scribble (line art),
+  12 Sky (smooth). Both new packs are vector, so no order of them after Castle alternates pixel and
+  smooth; Scribble is drawn as a third style, **line art** (the lineup's word for it), so every
+  door still changes the style: smooth into line art into smooth. Sky is the finale, as the lineup
+  says. Rejected: Scribble baked to a pixel grid to keep the strict alternation (its pen lines turn
+  to mush at any pixel size a tile can hold) and Scribble before Castle (Castle and Sky, both
+  smooth, would then meet at a door). Best times move to version 5.
+- **Line art, Scribble's rule: "the world redraws you" as a pen drawing.** Scribble is a page of
+  paper (warm white, with faint ruled lines) and everything on it is the pack's black pen lines on
+  white, drawn smooth at 70 px per tile. The monster is redrawn by that rule: its shape filled with
+  the paper's white and traced with a black pen line about a fourteenth of a tile thick, its eyes
+  and mouth in the same line, no colour; the line boils, redrawn with a slightly different wobble
+  eight times a second (three wobbles in turn), as a hand-drawn cartoon does. Scribble's bad guys
+  (the New Platformer Pack's slimes, as in Candy and Mushroom, since the Scribble pack has no
+  characters) are redrawn the same way, so nothing on the page is in colour but the coins' and
+  hearts' fill (the pack's own). Crossing into line art, the monster's colour drains out and its
+  line draws itself on over half a second, with a pen-scratch sound; out of it into Sky, colour
+  floods back in, with the rising sound.
+- **Scribble: trust, platforms that draw themselves.** Scribble's ledges and bridges over pits are
+  sketch tiles. A sketch tile isn't there (not drawn, not solid) until the monster's middle comes
+  within 3 tiles of it across and 5 up or down (measured from the monster's middle to the tile's
+  nearest edge); then a pen draws it in 0.3 s and it is solid from the moment it is whole and the
+  monster doesn't overlap it (a tile drawn round a monster jumping up through it turns solid once
+  it is clear, so it never traps you), and it stays for the rest of that life (a life lost undraws it, with the
+  level). A monster at top speed covers 3 tiles in about 0.46 s, so a sketch tile on its way is
+  always whole before its feet arrive; a pit with sketch tiles across it looks like a pit until
+  you're nearly there, and a ledge out over a wide pit is drawn only once you're in the air toward
+  it: that is the trust. Before a sketch run is drawn, two faint pencil ticks mark its ends (and,
+  in the opening, a dotted pencil guide its whole length), so where the ground will be is always
+  in view a second before you commit, as the spec's one-second rule asks; the pit is the hazard,
+  and it's in view as ever. Past the opening: pits too wide for a running held jump (over 9.4
+  tiles) bridged only by sketch ledges, sketch stairs up to high coins, sketch bridges with spikes
+  or a pit under them, and line-art slimes on solid ground between. Bad guys never walk on sketch
+  tiles: to them a sketch tile is a pit's edge, and they turn back. Castle's glimpse of Scribble
+  shows its sketch tiles already drawn (a peek, as Ink's lit glimpse is). The map's leap into
+  Scribble is the leap into any smooth world, ending in line art; the leap out of Scribble into Sky
+  goes straight in, as the map is pixels and Sky smooth. Rejected: platforms that rub themselves out after you've used them (Candy's cookies
+  already crumble) and decoy marks that never draw (a trick that punishes trust, the very thing
+  the world teaches).
+- **Sky: the finale, an automatic bouncing climb.** Sky is a column 12 tiles wide between two cloud
+  walls and at least 90 tiles tall, of the Jumper Pack's floating ledges, which you jump up through
+  from below and land on from above. In Sky the monster bounces whenever it lands on a ledge,
+  without a press: its feet rise about 3.3 tiles above the ledge (the held jump's speed, 15.7
+  tiles/s, the same physics, never cut short by letting go); a jump pressed within 0.12 s before
+  landing (the jump buffer, which the hidden assist doesn't widen here) bounces it to about 5 tiles
+  (19.2 tiles/s, Farm's high haybale bounce), so the expert climbs faster; holding jump through a
+  landing without a fresh press doesn't, and there is no coyote jump and no jump in the air (the
+  ears don't float you in Sky: every press is a bounce request). A bounce off a sliding ledge keeps
+  its sideways motion, as riding does in Industrial. The start's ground and the top plateau don't
+  bounce: there you run and jump as everywhere. You steer left and right at the usual top speed.
+  Sky's new numbers, in tiles: a spring launches the feet about 10 tiles up (27 tiles/s); wings
+  carry the monster straight up 15 tiles at a steady 7.5 tiles/s while you steer; a stomp bounces
+  like a ledge (3.3, or 5 with a fresh press); sliding ledges move 2 tiles/s along 3–6 tiles.
+  **The camera:** it follows the monster up and never goes back down below the highest ledge the
+  monster has landed on: the view's bottom stays at least 1.5 tiles below that ledge, so a bounce
+  in place, a 5-tile bounce included, never drops the monster out of view, while a miss that falls
+  past that ledge does. Falling below the view's bottom costs a life (with or without a heart, as
+  any fall). After a spring or wings the camera follows the launch; the ledge you land on next
+  becomes the floor of the view. **Fairness above fast launches:** no bad guy or spiky within the
+  launch's height plus 6 tiles above a spring or the wings, in their columns and two either side, so
+  every hazard is in view a second before you reach it. **The sprint:** the level is short in time
+  (about 40–60 s for a first-timer) and its best time is the run's last to beat. Its things, from
+  the pack: grass ledges (2–4 tiles), sliding ledges, cracked ledges that bounce you once and then
+  break and fall, springs and wings; coins and hearts. Its bad guys: the pack's flyers, hovering
+  side to side along 3–6 tiles, stomped from above and hurting from the side or below, and the
+  pack's spiky ones on ledges, which can't be stomped. The opening (its first 15 tiles up) is wide
+  grass ledges 2 tiles apart, coins and nothing that hurts; then sliding and cracked ledges; then
+  flyers and spikies; the top is a cloud plateau with the door. **No glimpse:** no world follows
+  Sky, so its plateau shows the summit's gold star by the door instead. **Reach:** every ledge on
+  the climb has one below it at most 2.5 tiles lower and at most 3 tiles across, edge to edge, so a
+  plain bounce from a standstill reaches it (a 3.3-tile bounce is above a ledge 2.5 tiles up for
+  about 0.35 s). Rejected: wrapping round from one side of the screen to the other (a known game's
+  signature), a storm rising from below (a timer, rejected for Ink), and the sky climb as a free
+  jump (no new mechanic: the owner asked for an automatic bounce).
+- **The journey's end.** Sky's door leads to the world map, where for the first time every cell is
+  lit and the path paints on past Sky to a summit, a gold star at the path's end; the monster walks
+  up to it. Then the gallery: your monster twelve times in a row (two rows of six in portrait), each
+  drawn by its world's own rule over a little scene of its world (the Meadow's 18-px pixels, Ice
+  smooth, Pico's 16 colours, Ink's two, Scribble's pen line, Sky smooth…), hopping in turn from the
+  first world to the last while the end jingle plays (at most 6 s; a tap or a key skips to the
+  card; it pauses as play does): the hook ("each world redraws your monster") shown all at once.
+  The run's best is saved as Sky's door is reached, before the gallery. Then the card, titled "The journey's end", with the run's coins, time, lives
+  left, the prize and the best run, and Play again and New monster (Play again starts level 1 with
+  the same monster, as after a game over). Nothing says more worlds are coming, and the old "end of
+  the road, for now" title is gone. Rejected: a cutscene with text (the game has none) and an endless mode after Sky (scope;
+  the owner asked for an end).
+- **Added beyond the request, kept at the go:** Scribble's slimes redrawn as line art, its boiling
+  line and the pen-scratch crossing; Sky's spikies, wings and cracked ledges; the summit and the
+  twelve-monster gallery; lives left on the end card.
+- **The map holds twelve cells and the summit.** Portrait keeps three across, now in four rows;
+  landscape goes to six across in two rows (five across would need a third row, the reason it went
+  to five for ten). A cell keeps at least 1.6 tiles across. The summit is a small pad past the
+  last cell, as the start is before the first: above Sky's cell, below the HUD (changed after the
+  go, by the owner, 2026-11-10: "Above Sky's cell", in both orientations: the path snakes, so in
+  landscape Sky's cell is at the top row's left end, not its right).
+- **Sound and music for batch 4:** Scribble and Sky use Candy's soft sound set; their music is the
+  owner's (owner, 2026-11-10, sending Scribble's and Sky's beds and accents before the go), levelled
+  and cut as batch 2's; the owner's beds and accents for Industrial, Mushroom, Pico, Sea, Ink and Castle
+  are wired as batch 2 did (`bed: true`, `sounds/<id>-bed.mp3`, `<id>-a1..3.mp3`) as they arrive.
+  ElevenLabs prompts for Scribble's and Sky's bed (2:00) and accents (0:30, three phrases) go to
+  the owner in the chat. The hidden assist never changes sketch tiles' drawing, Sky's bounce, its
+  sliding or cracked ledges, springs, wings or flyers.
 
 ## Acceptance items
 
@@ -272,15 +592,15 @@ item.
   held; landing on a spiky walker hurts instead — `tests/pixel-leap.test.mjs`.
 - **AC-9** A heart picked up adds a heart (at most two) and a coin; with two held, a heart shows as a
   coin and adds only a coin; the HUD shows the lives and hearts held — `tests/pixel-leap.test.mjs`.
-- **AC-10** Taking Frost's ears adds them to the monster and lets it float: falling with jump
+- **AC-10** Taking Ice's ears adds them to the monster and lets it float: falling with jump
   held is at most 40% as fast as without — `tests/pixel-leap.test.mjs`.
 - **AC-11** In Candy a jelly gumdrop bounces the monster higher than a full jump, a cookie crumbles
-  about 0.5 s after it's landed on and comes back after 3 s, a spring in the Meadow launches, Frost's
+  about 0.5 s after it's landed on and comes back after 3 s, a spring in the Meadow launches, Ice's
   ice keeps the monster sliding further than the Meadow's grass, and an Ink drip falls as the
   monster comes near and hurts — `tests/pixel-leap.test.mjs`.
 - **AC-12** Reaching a level's door shows the world map, with no numbers card, heading from that
-  level's cell to the next; the map then leaps into the next level's world, which from Frost to
-  Candy goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
+  level's cell to the next; the map then leaps into the next level's world, which from the Meadow to
+  Ice goes through 18-px-per-tile blocks, then 35, then smooth, and the next level is playing with
   the monster's ears kept and its time at 0 — `tests/pixel-leap.test.mjs`.
 - **AC-13** At 360×640 and 390×844 in portrait, at pixel ratios 1, 2 and 3, the view shows at least
   12 tiles across and the tile is a whole multiple of 18 canvas pixels, the deck doesn't overlap the
@@ -298,37 +618,184 @@ item.
 - **AC-16** After two lives lost the coyote time and buffer grow (to at most double), enemies keep
   their speed, the assist survives a game over, and clearing a level resets it —
   `tests/pixel-leap.test.mjs`.
-- **AC-17** Each level is its own world, in this order: Meadow, Frost, Candy, Ink; each level's last
-  stretch, from its `next` column, is drawn in the next world's style; the UI is pixel-styled in
-  pixel worlds and smooth in Candy; the best time per level is kept — `tests/pixel-leap.test.mjs`.
+- **AC-17** Each level is its own world, in this order: Meadow, Ice, Farm, Candy, Industrial,
+  Mushroom, Pico, Sea, Ink, Castle, Scribble, Sky; best times are kept under version 5 of the
+  levels; each level's last stretch but Sky's (the last), from its `next` column, is drawn in the
+  next world's style; the UI is pixel-styled in pixel worlds and smooth in Ice, Candy, Mushroom,
+  Castle, Sea, Scribble and Sky; the best time per level is kept — `tests/pixel-leap.test.mjs`.
 - **AC-18** Jumping in the Meadow plays the Meadow's jump sound and in Candy Candy's, and each world
   starts its own music — `tests/pixel-leap.test.mjs`.
-- **AC-19** Pixel Leap plays offline once it has been played, Candy and Ink included, though only
+- **AC-19** Pixel Leap plays offline once it has been played, every world included, though only
   the Meadow was played — `tests/pixel-leap.test.mjs`.
 - **AC-20** The landing page's Pixel Leap tile is playable and links to `pixel-leap/` —
   `tests/site.test.mjs`.
-- **AC-21** Every level can be finished: a scripted run through each level reaches its door, taking
-  the first coin within 5 s of Go; in the level data no hazard is within 7 tiles of a level's start,
-  and every spring and jelly has no solid tile within six tiles above it or its neighbours —
+- **AC-21** Every level can be finished: a scripted run through each level (it only runs, jumps and
+  steers left or right) reaches its door, taking the first coin within 5 s of Go; in the level data
+  no hazard (pit, spikes, bad guy, drip, belt) is within 7 tiles of a level's start, a flyer counted
+  from 5 tiles before it; above every spring, jelly and haybale no solid tile is within 6 tiles, and
+  above every mushroom cap none within 9, in its columns and its neighbours'; every moving
+  platform's and lift's whole track, and two tiles above it, is clear of solid tiles, above the
+  ground line and short of the glimpse; and no setting of the hidden assist changes a mover's,
+  belt's, cap's, haybale's or flyer's speed —
   `tests/pixel-leap.test.mjs`.
 - **AC-22** At 390×844, a 20 s run's update and draw take under 8 ms per frame on average in the test
   browser, and the simulation moves the same at 60 and 120 frames per second —
   `tests/pixel-leap.test.mjs`.
-- **AC-23** The glimpse before Frost's door is drawn smooth and the one before Candy's door in Ink's
-  pixels; stepping into a glimpse that changes the style plays the rising (into smooth) or falling
-  (out of smooth) sound and draws the monster at in-between resolutions, then in the new style, and
-  stepping from the Meadow into Frost's glimpse changes nothing — `tests/pixel-leap.test.mjs`.
+- **AC-23** The glimpse before Farm's door is drawn smooth, the one before Candy's door in
+  Industrial's 18-px pixels and the one before Sea's door in Ink's; stepping into a glimpse that
+  changes the style plays the rising (into smooth) or falling (out of smooth) sound and draws the
+  monster at in-between resolutions, then in the new style; in this order every door changes the
+  style (owner, 2026-11-10, at the go: "Perfect alternation"), Castle's into line art and
+  Scribble's into smooth included; the crossing into line art is AC-40's (the pen-scratch, not a
+  change of resolution) — `tests/pixel-leap.test.mjs`.
 - **AC-24** The map at the start lights only the first world's cell and carves the others dark, and
-  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Frost with
-  both lit; a tap skips ahead to the step into the world — `tests/pixel-leap.test.mjs`.
+  heads from the start to level 1; through the Meadow's door it heads from the Meadow to Ice with
+  both lit; a tap skips ahead to the step into the world; at 360×640 and 390×844 in portrait and
+  1024×700 and 844×390 in landscape, all twelve cells, the start and the summit are on screen, no two cells overlap and each
+  name is at least 12 CSS px tall — `tests/pixel-leap.test.mjs`.
+
+- **AC-25** Farm has at least 14 separate platforms (a platform: a run of ledge or block tiles side
+  by side in one row, not ground), from 1 to at least 6 tiles long, at at least 5 different heights
+  between 1 and 8 tiles above the ground under them; landing on a haybale bounces the monster's
+  feet 2–3 tiles above its top, and 4.5–5.5 with jump held — `tests/pixel-leap.test.mjs`.
+- **AC-26** Farm has at least 3 hidden pockets of at least 3 coins each, off the scripted run's
+  route; a pocket's coins aren't drawn while the monster is more than 3 tiles away and are once it
+  comes within 3; a glint shows at each hidden pocket at least once every 2 s — `tests/pixel-leap.test.mjs`.
+- **AC-27** In Industrial, a monster standing still on a moving platform or a lift for 1 s ends within
+  0.1 tile of where the platform carried that spot, and can jump up through one and land on it;
+  standing still on a belt for 1 s carries the monster 2.5 tiles (±0.3) its way; the level has at
+  least two gaps of 10 tiles or more with a moving platform in each, at least one lift, and a
+  scripted run with the ears that never rides falls into each of those gaps —
+  `tests/pixel-leap.test.mjs`.
+- **AC-28** In Mushroom, the door is at least 30 tiles above the start; landing on a cap launches the
+  monster's feet 4 tiles above the cap's top, the next cap landing without touching anything else
+  6, the one after 8 and the one after that 8 again, and after touching the ground the next cap 4
+  again (each within half a tile); after an 8-tile launch the landing spot is in view; falling below
+  the level's bottom costs a life — `tests/pixel-leap.test.mjs`.
+- **AC-29** Pico is drawn at 8 px per tile and every pixel of its world layer on screen (the HUD,
+  particles and the glimpse aside) is one of PICO-8's 16 colours; its monster's frames use only
+  those colours — `tests/pixel-leap.test.mjs`.
+- **AC-30** Pico has more bad guys than any other level, at least one per 8 tiles after its first 15;
+  a flyer swoops down toward the monster when it comes within 5 tiles ahead on the ground and climbs
+  back, hurts
+  from the side and can be stomped; in Pico a second stomp before landing pays one extra coin, a
+  third two more and a sixth only four more; landing or a hit ends the chain; in the Meadow a chain
+  pays nothing extra — `tests/pixel-leap.test.mjs`.
+- **AC-31** Each new world plays its music (the owner's bed where it has arrived, which among the
+  four new worlds is so far only Farm's, else its sound set's loop) and draws from its own pack: Farm's and
+  Industrial's ground are their expansion's tiles, Mushroom's ground its caps and stems, Pico's its
+  pack's — `tests/pixel-leap.test.mjs`.
+- **AC-32** A world with the owner's music plays its bed and, over it, one of its three accents
+  after every 15–40 s of play, all three in turn but never the same twice running; paused, the bed
+  stops and no accent comes; muting mutes the bed — `tests/pixel-leap.test.mjs`.
+- **AC-33** In Castle, a gate stops the monster until it touches the gate holding a key; then the
+  gate opens and stays open, the key is used and the HUD's key count drops by one; a key picked up
+  shows in the HUD; a life lost brings back the level's keys and shuts its gates. Keys held at the
+  door don't carry into the next level. The level has at least three gates, each with a key before
+  it and after the gate before it, and the door is past the last gate; a scripted run that only runs
+  right, jumping gaps, walls and hazards, touches no key and stops at the first gate —
+  `tests/pixel-leap.test.mjs`.
+- **AC-34** A Castle crusher waits up 1.4 s (shaking for the last 0.4), drops to the floor in 0.2 s,
+  stays 0.6 s and rises in 1.0 s, again every 3.2 s (each within 0.05 s); touching it while it falls,
+  is down, or is rising with its bottom under 1.4 tiles above the floor costs a heart or a life, and
+  standing under it while it waits up costs nothing; a crusher's bottom is at most 4 tiles above
+  the floor; crushers next to each other start at different points of the rhythm; the level has at
+  least five — `tests/pixel-leap.test.mjs`.
+- **AC-35** In Ice, letting go at top speed on ice slides the monster at least 2 tiles before it
+  stops, and on snow less than 1; the monster runs up a slope to its top and down it at its flat
+  speed (±10%) without jumping, its feet within 0.1 tile of the slope, and can jump from it; a snow
+  pile sends a snowball every 2.5 s (±0.1) that rolls down its slope no faster than 4 tiles/s, along
+  the flat at no more than 3, and is gone at a wall or a pit's edge; a snowball hurts and can't be
+  stomped; the level has at least 10 ledges 1–3 tiles long over pits, at least 5 of them ice and at
+  least 2 tiles long, and at least 3 snow piles — `tests/pixel-leap.test.mjs`.
+- **AC-36** In Sea, in the water and pressing nothing, the monster sinks no faster than 1.5 tiles/s;
+  one tap lifts it 1.5–2.5 tiles, holding jump lifts it no further than a tap, and taps closer than
+  0.25 s apart count once; a tap on the water's floor strokes; it swims sideways at no more than 4
+  tiles/s; a stroke with its head within half a tile of the surface by a ledge 2 tiles above the
+  water lands it on the ledge; in a current, pressing nothing, it is carried 3 tiles/s
+  (±0.3) the current's way; a fish hurts at a touch, also from above; the level has at least three
+  currents and starts on dry land — `tests/pixel-leap.test.mjs`.
+- **AC-37** In Ink, on the world layer (the HUD, particles and the glimpse aside), screen pixels
+  more than 5.5 tiles from the monster and from every lamp are Ink's dark colour except for
+  glimmers (each within half a tile of a ghost, a drip, a spike, a pit's edge, a ledge's end or the
+  door), the level shows within 4.5 tiles of the monster, and every pixel is one of Ink's two
+  colours; each ghost, drip, spike run, pit edge and ledge end draws a glimmer in the dark; the
+  glimpse of Castle and the door are drawn lit — `tests/pixel-leap.test.mjs`.
+- **AC-38** AC-21's scripted player also fetches a key when a gate stops it (steering to the nearest
+  key not yet taken, then back), waits out a crusher's drop, jumps snowballs, runs slopes, and in
+  the water strokes to keep its depth and leaps out at a ledge; with these it finishes Ice, Sea,
+  Ink and Castle. In AC-21's layout checks, also: no crusher, snow pile, current, fish or urchin within 7
+  tiles of a level's start (a snow pile counted at the foot of its slope); each crusher's drop, from
+  its top to the floor, is clear of solid tiles; no snowball's path from its pile to where it
+  shatters crosses the start; each Castle key is reachable before its gate and the door is behind
+  the last gate; and no setting of the hidden assist changes a crusher's, snowball's, current's,
+  fish's or the swim's speed — `tests/pixel-leap.test.mjs`.
+- **AC-39** Each batch-3 world draws from its own pack and plays its music: Castle's ground and
+  gates are the Medieval pack's tiles, Ice's its snow and ice, Sea's its sand, water and wood; Ice
+  plays the owner's Frost bed, and Sea and Castle the owner's own beds (changed after the go: the
+  owner sent them, 2026-11-10); the world map shows all ten — `tests/pixel-leap.test.mjs`.
+- **AC-40** Scribble is drawn smooth at 70 px per tile in line art: every pixel of the monster's
+  frames there is the paper's white, the pen's black or a grey between them, its outline differs
+  between two moments 1/8 s apart, and Scribble's slimes are drawn the same way; crossing from
+  Castle into Scribble plays the pen-scratch sound and draws the monster part-traced before it is
+  whole — `tests/pixel-leap.test.mjs`.
+- **AC-41** A Scribble sketch tile is not drawn and not solid while the monster's middle is more
+  than 3 tiles across or 5 up or down from it; once within, it is whole and solid 0.3 s (±0.05)
+  later (measured to the tile's nearest edge) and stays drawn, and a life lost undraws it; a tile
+  drawn while the monster overlaps it turns solid only once it is clear; a monster running at top speed along a row of
+  sketch tiles over a pit never falls into the pit; before a run is drawn its two ends show pencil
+  ticks — `tests/pixel-leap.test.mjs`.
+- **AC-42** Scribble has at least 30 sketch tiles in at least 8 runs, at least 3 of them over pits
+  more than 9.4 tiles wide, and no sketch tile, pit or bad guy within 7 tiles of its start; no bad
+  guy stands on or walks onto a sketch tile; the scripted player finishes Scribble, and at least 5 of its jumps
+  leave the ground while the tile it lands on isn't drawn yet — `tests/pixel-leap.test.mjs`.
+- **AC-43** In Sky, landing on a ledge with nothing pressed bounces the monster's feet 3.3 tiles
+  (±0.2) above it, and a jump pressed within 0.12 s before landing 5 (±0.2), also when let go before
+  the top; holding jump through a landing without a fresh press bounces it 3.3, as does a press 0.2
+  s before landing, with the hidden assist at its most too; a press in the air does nothing; the
+  start's ground and the top plateau don't bounce; a bounce off a sliding ledge keeps its sideways
+  motion; it passes up through a ledge from below and lands on it from above; its top speed
+  sideways is the usual 6.5 tiles/s — `tests/pixel-leap.test.mjs`.
+- **AC-44** In Sky, a cracked ledge bounces the monster once and is gone; a spring launches its
+  feet at least 9.5 tiles up; wings carry it 15 tiles (±1) up over 2 s (±0.1); a flyer landed on
+  from above is stomped and bounces the monster, and touched from the side hurts; a spiky one hurts
+  from above; the camera never moves down, and the view's bottom stays at least 1.5 tiles below the
+  highest ledge landed on, so at 1024×700 a 5-tile bounce in place costs no life, while dropping
+  below the view's bottom costs a life, a heart held or not; the door is at least 90 tiles above the start; the level has at least 3 sliding
+  ledges, 3 cracked ones, 2 springs, 1 pair of wings, 4 flyers and 2 spikies —
+  `tests/pixel-leap.test.mjs`.
+- **AC-45** In Sky's layout, every ledge above the start's has a ledge (or the start) at most 2.5
+  tiles below it and at most 3 across, edge to edge, so a plain bounce reaches every step of the
+  climb; no bad guy, cracked ledge or spring is within 7 tiles of the start; no bad guy or spiky is
+  within a spring's or the wings' launch height plus 6 tiles above them, in their columns and two
+  either side; each sliding ledge's and flyer's
+  track is clear of other ledges and inside the walls; no setting of the hidden assist changes a
+  sketch tile's drawing, Sky's bounce or any of Sky's things' speeds; the scripted player finishes
+  Sky with plain bounces only (it never presses jump there, and has no ears), steering to the
+  nearest ledge above it that isn't cracked and that a plain bounce reaches — `tests/pixel-leap.test.mjs`.
+- **AC-46** Past Sky's door the map lights all twelve cells and heads from Sky's cell to the
+  summit; then the gallery shows the run's monster twelve times, each drawn by its world's rule (the
+  Meadow's in 18-px blocks, Ink's in Ink's two colours, Pico's in PICO-8's, Scribble's in line art,
+  Sky's smooth); a tap skips the gallery, which lasts at most 6 s; the card titled "The journey's
+  end" shows the run's coins, time, lives left, the prize and best run with Play again and New
+  monster; no text on the page says more worlds are coming or "for now";
+  Play again starts level 1 with 3 lives — `tests/pixel-leap.test.mjs`.
+- **AC-47** Scribble's ground, sketch tiles and ticks are the Scribble pack's tiles and Sky's
+  ledges, springs, wings, flyers and spikies the Jumper Pack's; both play the owner's bed and
+  accents; each world whose bed is in `pixel-leap/sounds/` is marked `bed:
+  true` and plays it — `tests/pixel-leap.test.mjs`.
 
 ## Core flow
 
 1. Tap the Pixel Leap tile: the builder, over the moving Meadow, with a pixel monster.
 2. Change parts or Shuffle, then Go.
-3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Frost.
-4. Back on the map, walk on to Frost, then Candy (redrawn smooth) and Ink (two colours), with three
-   lives and up to two hearts; the run's statistics show at its end.
+3. Watch the map paint the way to the Meadow; run and jump to its door, which already shows Ice.
+4. Back on the map, walk on through Ice (redrawn smooth), Farm, Candy, Industrial, Mushroom
+   (smooth), Pico (16 colours), Sea (swimming), Ink (two colours, in the dark), Castle, Scribble
+   (line art, ground that draws itself) and Sky (bouncing up), with three lives and up to two
+   hearts.
+5. Past Sky's door: the map's summit, the gallery of your monster in all twelve styles, and the
+   journey's end card with the run's statistics.
 
 ## States
 
@@ -340,7 +807,7 @@ item.
 | Paused (page hidden or blurred, a resize, P or Escape) | hidden | shown, still | shown | hidden |
 | Leaping to the next world | hidden | view shown, changing resolution | hidden | hidden |
 | Game over (the third life lost) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
-| End of the slice (after Ink) | hidden | shown, still | hidden | shown: the run's statistics, Play again and New monster |
+| The journey's end (after Sky) | hidden | view shows the map's summit, then the gallery | hidden | shown after the gallery: "The journey's end", the run's statistics, Play again and New monster |
 
 ## Out of scope
 
@@ -358,22 +825,22 @@ item.
   | # | World (Kenney pack) | Style | Its own mechanic | Its kind of challenge |
   | --- | --- | --- | --- | --- |
   | 1 | Meadow (Pixel Platformer) | pixel | stomping walkers, springs | a gentle mix, to learn (built) |
-  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights |
+  | 2 | Farm (Pixel Platformer Farm Expansion) | pixel | haybales that bounce; hidden pockets of coins | platforms: many, big and small, at very different heights (built) |
   | 3 | Candy (Platformer Assets Candy) | smooth | jelly bounces, crumbling cookies, slimes | tricky timing (built) |
-  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding |
-  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb |
-  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded |
-  | 7 | Castle (Platformer Pack Medieval) | smooth | a key opens the gate; crushers drop on a rhythm | puzzle-like situations |
-  | 8 | Ice (Platformer Assets Ice; may replace today's pixel Frost) | smooth | slippery ice, snowballs rolling down slopes | precision on small ledges |
-  | 9 | Sea (Platformer Pack Nautical) | smooth | swimming: you float, each tap a stroke; currents | a different control |
-  | 10 | Ink (1-Bit Platformer Pack) | 1-bit | darkness: only a circle of light around the monster; ghosts, drips | the unknown (built, darkness to add) |
-  | 11 | Scribble (Scribble Platformer) | line art | platforms that draw themselves as you near | trust: jump before the ground is there |
-  | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top |
+  | 4 | Industrial (Pixel Platformer Industrial Expansion) | pixel | moving platforms and lifts, conveyor belts | timing and riding (built) |
+  | 5 | Mushroom (Platformer Assets Mushroom) | smooth | mushroom caps that launch you higher each bounce | vertical: a tall climb (built) |
+  | 6 | Pico (Pico-8 Platformer) | pixel, 16 colours | flying bad guys that swoop; stomp chains pay extra | bad guys: crowded (built) |
+  | 7 | Castle (Platformer Pack Medieval) | smooth | a key opens the gate; crushers drop on a rhythm | puzzle-like situations (built) |
+  | 8 | Ice (Platformer Assets Ice; replaced the pixel Frost) | smooth | slippery ice, snowballs rolling down slopes | precision on small ledges (built) |
+  | 9 | Sea (Platformer Pack Nautical) | smooth | swimming: you float, each tap a stroke; currents | a different control (built) |
+  | 10 | Ink (1-Bit Platformer Pack) | 1-bit | darkness: only a circle of light around the monster; ghosts, drips | the unknown (built) |
+  | 11 | Scribble (Scribble Platformer) | line art | platforms that draw themselves as you near | trust: jump before the ground is there (batch 4) |
+  | 12 | Sky (Jumper Pack) | smooth | the finale: an automatic bouncing climb upward | a sprint to the top (batch 4) |
 
-  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stays as a world. **Batch 2** (next):
-  Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
+  Today's Frost (Pixel Platformer snow: ice and spiky walkers) stayed as a world through batch 2; batch
+  3 replaced it with Ice (owner, 2026-11-10). **Batch 2:** Farm, Industrial, Mushroom and Pico, the four most different challenges. **Batch 3:** Castle,
   Ice, Sea, and Ink's darkness. **Batch 4:** Scribble and Sky, then the journey's end. After each
-  batch ships, the next batch's session is suggested.
+  batch ships, the next batch's session is suggested; batch 4 is the last, so none follows it.
 - Music: the owner will generate music for each world (and the two crossing sounds) from prompts
   given in the chat; until then the worlds use Kenney loops.
 - Leaderboards, accounts, saved runs beyond the monster code and best times.

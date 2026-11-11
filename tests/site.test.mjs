@@ -2,32 +2,23 @@
 // Run: scripts/check-slow.sh (serves the site and runs these with Playwright's Chromium).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { chromium } from 'playwright';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-const PORT = 8790 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 // Wait for the service worker to control the page, or fail after 10 s instead of hanging.
@@ -50,9 +41,23 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('reef AC-11: landing page lists eight games, Reef first and playable, with no errors', async () => {
+// No game on the live landing page is coming soon any more (Island Hop took the last one's place),
+// but the page still handles one. Tests of that behaviour serve the page with Orbit's tile turned
+// into a coming-soon tile, as a game waiting for its PR would be.
+async function withSoonTile(page) {
+  await page.route(BASE, async (route) => {
+    const res = await route.fetch();
+    const html = (await res.text()).replace(
+      /<a class="tile ([^"]*)" href="orbit\/">([\s\S]*?)<\/div>\s*<\/a>/,
+      '<article class="tile is-soon $1" aria-label="Orbit, coming soon">$2<span class="badge">Coming soon</span></div></article>'
+    );
+    await route.fulfill({ response: res, body: html });
+  });
+}
+
+test('reef AC-11: landing page lists nine games, Reef first and playable, with no errors', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
   const reef = page.locator('.tiles > li').first().locator('.tile');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
@@ -63,12 +68,25 @@ test('reef AC-11: landing page lists eight games, Reef first and playable, with 
   await context.close();
 });
 
-test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playable after Googly Faces', async () => {
+test('splat-gallery AC-20: the Splat Gallery tile is playable and opens the game', async () => {
   const { context, page, errors } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Splat Gallery' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'the tile is a link');
+  assert.equal(await tile.getAttribute('href'), 'splat-gallery/');
+  assert.equal(await tile.locator('.badge').count(), 0, 'no coming-soon badge');
+  await tile.click();
+  await page.waitForURL(/splat-gallery\/$/);
+  await page.waitForFunction(() => window.__gallery);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('walk-on-red AC-21: the landing page shows nine tiles, Gotta Go! playable after Googly Faces', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names.indexOf('Walk on Red'), names.indexOf('Googly Faces') + 1);
-  const tile = page.locator('.tile', { hasText: 'Walk on Red' });
+  assert.equal(names.indexOf('Gotta Go!'), names.indexOf('Googly Faces') + 1);
+  const tile = page.locator('.tile', { hasText: 'Gotta Go!' });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
   assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
   assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
@@ -79,9 +97,9 @@ test('walk-on-red AC-21: the landing page shows eight tiles, Walk on Red playabl
   await context.close();
 });
 
-test('runes AC-17: the Runes tile is a playable link, and the page lists eight tiles (Walk on Red adds one)', async () => {
+test('runes AC-17: the Runes tile is a playable link, and the page lists nine tiles (Gotta Go! and Crumble add one each)', async () => {
   const { context, page } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   const runes = page.locator('.tile', { has: page.locator('h2', { hasText: 'Runes' }) });
   assert.equal(await runes.evaluate((el) => el.tagName), 'A');
   assert.equal(await runes.getAttribute('href'), 'runes/');
@@ -91,9 +109,9 @@ test('runes AC-17: the Runes tile is a playable link, and the page lists eight t
   await context.close();
 });
 
-test('orbit AC-16: the Orbit tile is a playable link, and the page shows eight tiles (Walk on Red adds one)', async () => {
+test('orbit AC-16: the Orbit tile is a playable link, and the page shows nine tiles (Gotta Go! and Crumble add one each)', async () => {
   const { context, page } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   const orbit = page.locator('.tile', { has: page.locator('h2', { hasText: /^Orbit$/ }) });
   assert.equal(await orbit.evaluate((el) => el.tagName), 'A');
   assert.equal(await orbit.getAttribute('href'), 'orbit/');
@@ -115,7 +133,10 @@ test('pixel-leap AC-20: the Pixel Leap tile is playable and opens pixel-leap/', 
 });
 
 test('a coming-soon tile nudges and does not navigate', async () => {
-  const { context, page } = await open();
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+  await withSoonTile(page);
+  await page.goto(BASE);
   const tile = page.locator('.tile.is-soon').first();
   await tile.click();
   assert.ok(await tile.evaluate((el) => el.classList.contains('nudge')));
@@ -158,6 +179,21 @@ test('the manifest is valid and its icons load', async () => {
   for (const icon of m.icons) assert.ok((await fetch(BASE + icon.src)).ok, icon.src);
 });
 
+test('crumble AC-16: the landing page shows 9 tiles, with Crumble playable after Splat Gallery', async () => {
+  const { context, page, errors } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 9);
+  const names = await page.locator('.tile h2').allTextContents();
+  assert.equal(names.indexOf('Crumble'), names.indexOf('Splat Gallery') + 1);
+  const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Crumble' }) });
+  assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+  assert.equal(await tile.getAttribute('href'), 'crumble/');
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  await page.waitForLoadState('networkidle');
+  assert.ok(await tile.locator('img').evaluate((img) => img.complete && img.naturalWidth > 0));
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
 test('works offline once loaded', async () => {
   const { context, page } = await open();
   assert.ok(await swReady(page), 'service worker registered');
@@ -165,7 +201,7 @@ test('works offline once loaded', async () => {
   assert.ok(await page.evaluate(() => !!navigator.serviceWorker.controller), 'page is controlled');
   await context.setOffline(true);
   await page.reload();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   const tileArt = page.locator('.tile img').first();
   assert.ok(await tileArt.evaluate((img) => img.complete && img.naturalWidth > 0));
   await context.close();
@@ -223,24 +259,25 @@ test('Escape in a game goes back to the landing page, after asking', async () =>
   await context.close();
 });
 
-async function openWithFakeAudio(path = '') {
+async function openWithFakeAudio(path = '', { soon = false } = {}) {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
+  if (soon) await withSoonTile(page);
   await page.goto(BASE + path);
   await page.waitForFunction((n) => window.__decoded >= n, 3); // tap, soon and toggle
   return { context, page };
 }
 
 test("the very first tap's sound plays, and mute silences it", async () => {
-  const { context, page } = await openWithFakeAudio();
+  const { context, page } = await openWithFakeAudio('', { soon: true });
   await page.locator('.tile.is-soon').first().click();
   let played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'first tap plays a sound');
   assert.equal(played[0].state, 'running', 'audio was unlocked by that tap');
 
   await page.locator('[data-sound-toggle]').click(); // mute (its own sound is muted too)
-  await page.locator('.tile.is-soon').first().click(); // the same tile: one is left coming soon
+  await page.locator('.tile.is-soon').first().click(); // the same tile again
   played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'nothing plays while muted');
 
@@ -286,13 +323,10 @@ test('a playable tile plays its sound and opens its game', async () => {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
-  // Serve the landing page with its first coming-soon tile made playable, pointing at the test game.
+  // Serve the landing page with Orbit's tile pointing at the test game.
   await page.route(BASE, async (route) => {
     const res = await route.fetch();
-    const html = (await res.text()).replace(
-      /<article class="tile is-soon ([^"]*)"([^>]*)>([\s\S]*?)<\/article>/,
-      '<a class="tile $1" href="tests/fixtures/game/">$3</a>'
-    );
+    const html = (await res.text()).replace('href="orbit/"', 'href="tests/fixtures/game/"');
     await route.fulfill({ response: res, body: html });
   });
   await page.goto(BASE);
@@ -343,9 +377,9 @@ test('Escape in a text field does not leave the game', async () => {
   await context.close();
 });
 
-test('island-hop AC-18: the Island Hop tile is playable and the page keeps its eight tiles', async () => {
+test('island-hop AC-18: the Island Hop tile is playable and the page keeps its nine tiles', async () => {
   const { context, page } = await open();
-  assert.equal(await page.locator('.tiles > li').count(), 8);
+  assert.equal(await page.locator('.tiles > li').count(), 9);
   const tile = page.locator('a.tile[href="island-hop/"]');
   assert.equal(await tile.count(), 1);
   assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);

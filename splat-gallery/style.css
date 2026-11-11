@@ -1,0 +1,361 @@
+/* Splat Gallery: the canvas fills the screen; the cards float over it. The palette is the
+   pack's: orange curtains, warm wood and a cream card. */
+
+html,
+body {
+  height: 100dvh;
+}
+
+body {
+  background: #3a2414;
+  color: #4a2a12;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+}
+
+#booth {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+  cursor: default;
+}
+
+.mute {
+  position: fixed;
+  z-index: 10;
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.mute svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+.mute:active,
+.play:active {
+  transform: scale(0.94);
+}
+
+.mute:focus-visible,
+.play:focus-visible,
+.pause:focus-visible .card-like {
+  outline: 3px solid #fff;
+  outline-offset: 3px;
+}
+
+.card {
+  position: fixed;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 20px 20px 18px;
+  text-align: center;
+  border-radius: 22px;
+  background: #fff4dc;
+  border: 4px solid #b9773a;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 35%);
+}
+
+.card[data-screen='over'] {
+  bottom: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding-top: 24px;
+}
+
+.card[hidden],
+.pause[hidden] {
+  display: none;
+}
+
+.card h2 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #d35a12;
+}
+
+.score-line {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.score-line span {
+  font-size: 40px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail,
+.best {
+  margin: 8px 0 0;
+  font-size: 16px;
+  color: #7a4a22;
+}
+
+.best.is-new {
+  color: #d35a12;
+  font-weight: 700;
+}
+
+.play {
+  display: block;
+  width: 100%;
+  min-height: 56px;
+  margin: 0;
+  border: 0;
+  border-radius: 16px;
+  font: inherit;
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  background: #e86a17;
+  box-shadow: 0 4px 0 #a8460a;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.card[data-screen='over'] .play {
+  margin-top: 18px;
+}
+
+@media (hover: hover) {
+  .play:hover {
+    background: #f27a26;
+  }
+}
+
+.pause {
+  position: fixed;
+  z-index: 8;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: rgb(30 18 8 / 55%);
+  cursor: pointer;
+  font: inherit;
+}
+
+.card-like {
+  padding: 18px 28px;
+  border-radius: 20px;
+  background: #fff4dc;
+  border: 4px solid #b9773a;
+  color: #4a2a12;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.veil {
+  position: fixed;
+  z-index: 9;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(60 60 60 / 62%);
+  -webkit-backdrop-filter: grayscale(1);
+  backdrop-filter: grayscale(1);
+}
+
+.veil[hidden] {
+  display: none;
+}
+
+.turned {
+  width: min(300px, calc(100vw - 48px));
+  text-align: center;
+}
+
+.turned p {
+  margin: 0 0 14px;
+}
+
+.turned .hint {
+  margin: 12px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #7a4a22;
+}
+
+/* Analog: every card is a nailed wooden sign from the pack's own wood, its lettering painted on, its
+   buttons painted boards. (These rules come last and win over the plainer ones above.) */
+.card,
+.card-like {
+  border-radius: 4px;
+  background: #b9773a url('img/wood.png') 0 0 / 128px 128px repeat;
+  border: 3px solid #3b210c;
+  box-shadow:
+    inset 2px 2px 0 rgb(255 222 170 / 45%),
+    inset -2px -2px 0 rgb(40 18 4 / 55%),
+    0 8px 24px rgb(0 0 0 / 45%);
+  color: #fff1d6;
+  font-family: 'Rockwell', 'Georgia', 'Times New Roman', serif;
+  text-shadow: 1px 2px 0 rgb(30 12 2 / 75%);
+}
+
+/* A nail in each corner. */
+.card::before,
+.card-like::before {
+  content: '';
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) top left / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) top right / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) bottom left / 7px 7px no-repeat,
+    radial-gradient(circle at 3px 3px, #8a8178 0 2px, #4a433c 2.5px, transparent 3.5px) bottom right / 7px 7px no-repeat;
+}
+
+.card-like {
+  position: relative;
+}
+
+.card h2 {
+  color: #ffd23f;
+  font-size: 30px;
+  letter-spacing: 0.5px;
+}
+
+.score-line,
+.detail,
+.best,
+.turned p,
+.turned .hint {
+  color: #fff1d6;
+}
+
+.best.is-new {
+  color: #ffd23f;
+}
+
+/* Buttons: a painted red board, bevelled, with cream lettering. */
+.play {
+  border-radius: 4px;
+  font-family: 'Rockwell', 'Georgia', 'Times New Roman', serif;
+  color: #fff1d6;
+  text-shadow: 1px 2px 0 rgb(40 8 0 / 70%);
+  background: linear-gradient(#d4462f, #a8301c);
+  border: 2px solid #4a160a;
+  box-shadow:
+    inset 2px 2px 0 rgb(255 190 160 / 45%),
+    inset -2px -3px 0 rgb(60 10 0 / 45%),
+    0 3px 0 #3b210c;
+}
+
+@media (hover: hover) {
+  .play:hover {
+    background: linear-gradient(#e0553b, #b53822);
+  }
+}
+
+/* Lettering: Rye, a fairground woodtype (SIL Open Font License, fonts/OFL.txt), its paint worn in
+   specks so the wood shows through, with a dark edge below. */
+@font-face {
+  font-family: 'Rye';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/rye.woff2') format('woff2');
+}
+
+.card,
+.card-like,
+.play {
+  font-family: 'Rye', 'Rockwell', 'Georgia', serif;
+  font-weight: 400;
+  font-synthesis: none;
+}
+
+.card h2,
+.score-line,
+.turned p {
+  color: transparent;
+  background: url('img/wear-cream.png') 0 0 / 64px 64px repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none;
+  filter: drop-shadow(1px 2px 0 rgb(30 12 2 / 80%));
+}
+
+.card h2 {
+  background-image: url('img/wear-gold.png');
+  font-weight: 400;
+}
+
+.score-line span {
+  font-weight: 400;
+}
+
+/* The button and the pause sign keep their painted board behind the worn lettering. */
+.pause .card-like {
+  color: transparent;
+  background:
+    url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+    #b9773a url('img/wood.png') 0 0 / 128px 128px repeat;
+  -webkit-background-clip: text, border-box;
+  background-clip: text, border-box;
+  text-shadow: none;
+}
+
+.play {
+  color: transparent;
+  background:
+    url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+    linear-gradient(#d4462f, #a8301c);
+  -webkit-background-clip: text, border-box;
+  background-clip: text, border-box;
+  filter: none;
+  text-shadow: none;
+}
+
+@media (hover: hover) {
+  .play:hover {
+    background:
+      url('img/wear-cream.png') 0 0 / 64px 64px repeat,
+      linear-gradient(#e0553b, #b53822);
+    -webkit-background-clip: text, border-box;
+    background-clip: text, border-box;
+  }
+}

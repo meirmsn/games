@@ -3,6 +3,7 @@
 // memory (each mission's best time, medal, splits and ghost, and the missions opened).
 import { mountShell } from '../shared/game-shell.js';
 import { createCamera, sortByDepth } from '../shared/iso.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import { ATLAS } from './atlas.js';
 import { ROWS, MOORED, BUOYS, SEA_ROCKS, TRAFFIC, YOUR_BOATS } from './map.js';
 import {
@@ -200,6 +201,7 @@ function stick() {
 canvas.addEventListener('pointerdown', (e) => {
   if (pointer) return; // a second finger is ignored
   if (!world || world.phase !== 'play' || paused) return;
+  if (isEdgeStart(e)) return; // the phone's edge gestures start there (shared/safe-zone.js)
   pointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
   canvas.setPointerCapture?.(e.pointerId);
 });

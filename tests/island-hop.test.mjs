@@ -5,9 +5,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { FAKE_AUDIO } from './fake-audio.mjs';
+import { serve } from './serve.mjs';
 import { ROWS, ISLANDS, CARS, MAP_VERSION } from '../island-hop/map.js';
 import { ATLAS } from '../island-hop/atlas.js';
 import {
@@ -34,29 +34,19 @@ import {
   TRAFFIC_R,
 } from '../island-hop/rules.js';
 
-// Its own port range: the test files run in parallel, and a shared range can collide (FINDINGS F-18).
-const PORT = 9600 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
+let BASE; // set in before(), from tests/serve.mjs
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 async function open({ hash = '', audio = false, mem = null, ...opts } = {}) {
@@ -584,6 +574,31 @@ test('island-hop AC-6: a drag anywhere steers; a second finger is ignored', asyn
   assert.ok(p2.y < p1.y - 20, `still moving up: ${p1.y} → ${p2.y}`);
   await fire('pointerup', 2, 100, 400);
   await fire('pointerup', 1, 200, 540);
+  await context.close();
+});
+
+test('island-hop: a drag that starts in the phone\'s edge strips doesn\'t steer (game guidelines, phone hygiene; shared/safe-zone.js)', async () => {
+  const { context, page } = await open({ hasTouch: true });
+  await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(0, { fly: false });
+  });
+  const fire = (type, id, x, y) =>
+    page.evaluate(
+      ([type, id, x, y]) => document.getElementById('world').dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true })),
+      [type, id, x, y]
+    );
+  // From the bottom strip (40 px), dragged up: nothing; from mid-screen, the same drag steers.
+  for (const [y0, steers] of [[844 - 10, false], [600, true]]) {
+    await page.evaluate(() => __hop.start(0, { fly: false }));
+    await fire('pointerdown', 1, 200, y0);
+    await fire('pointermove', 1, 200, y0 - 60);
+    await page.evaluate(() => { __hop.manual = false; });
+    await page.waitForTimeout(600);
+    await page.evaluate(() => { __hop.manual = true; });
+    await fire('pointerup', 1, 200, y0 - 60);
+    assert.equal(await page.evaluate(() => __hop.state.started), steers, `a drag from y ${y0}`);
+  }
   await context.close();
 });
 

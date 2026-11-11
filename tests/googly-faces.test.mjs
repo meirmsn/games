@@ -2,34 +2,26 @@
 // Run: scripts/check-slow.sh (serves the site and runs these with Playwright's Chromium).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { serve } from './serve.mjs';
 import { chromium } from 'playwright';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
-const PORT = 8900 + Math.floor(Math.random() * 100);
-const BASE = `http://127.0.0.1:${PORT}/`;
-const GAME = BASE + 'googly-faces/';
+let BASE; // set in before(), from tests/serve.mjs
+let GAME;
 const SOUND_FILES = 23; // the game's 22 and the shell's back sound
 let server;
 let browser;
 
 before(async () => {
-  server = spawn('python3', ['-m', 'http.server', '--bind', '127.0.0.1', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  });
-  for (let i = 0; i < 50; i++) {
-    try {
-      if ((await fetch(BASE)).ok) break;
-    } catch {}
-    await new Promise((r) => setTimeout(r, 100));
-  }
+  server = await serve();
+  BASE = server.base;
+  GAME = BASE + 'googly-faces/';
   browser = await chromium.launch();
 });
 
 after(async () => {
   await browser?.close();
-  server?.kill();
+  server?.close();
 });
 
 // Open the game on a phone-sized touch screen, with the stand-in audio unless told otherwise.

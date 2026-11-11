@@ -14,6 +14,7 @@
 //  - Tension comes in waves: a long calm brings a hunter in; every half minute a school of small fish
 //    passes by, a feast. Combos, close calls and an extra life at each new depth are the rewards.
 import { mountShell } from '../shared/game-shell.js';
+import { isEdgeStart } from '../shared/safe-zone.js';
 import { FRAMES } from './atlas.js';
 
 const { sound } = mountShell({
@@ -647,7 +648,8 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   // Touch steers relatively: drag anywhere and the fish follows the drag, so your finger never
-  // covers it.
+  // covers it. Anywhere but the phone's edge strips, whose swipes are the phone's (shared/safe-zone.js).
+  if (isEdgeStart(e)) return;
   canvas.setPointerCapture?.(e.pointerId);
   const p = toWorld(e);
   input.drag = { id: e.pointerId, x: p.x, y: p.y };

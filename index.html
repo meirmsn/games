@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Game explorations</title>
     <meta name="description" content="Game explorations: small, relaxing browser games made with Kenney's art and sound. Touch-first, for phone, tablet and desktop." />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Game explorations" />
+    <meta property="og:title" content="Game explorations" />
+    <meta property="og:description" content="Game explorations: small, relaxing browser games made with Kenney's art and sound. Touch-first, for phone, tablet and desktop." />
+    <meta property="og:url" content="https://games.meirmsn.dev/" />
+    <meta property="og:image" content="https://games.meirmsn.dev/assets/previews/site.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Six game tiles in a grid: Reef, Googly Faces, Orbit, Runes, Splat Gallery and Gotta Go!, with the name Game explorations in the middle." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Game explorations" />
+    <meta name="twitter:description" content="Game explorations: small, relaxing browser games made with Kenney's art and sound. Touch-first, for phone, tablet and desktop." />
+    <meta name="twitter:image" content="https://games.meirmsn.dev/assets/previews/site.jpg" />
+    <meta name="twitter:image:alt" content="Six game tiles in a grid: Reef, Googly Faces, Orbit, Runes, Splat Gallery and Gotta Go!, with the name Game explorations in the middle." />
     <meta name="theme-color" content="#f8f5ef" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#14161f" media="(prefers-color-scheme: dark)" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -66,7 +81,7 @@
           <a class="tile tone-sun" href="walk-on-red/">
             <div class="art"><img class="pixel" src="assets/tiles/walk-on-red.png" alt="" width="640" height="400" /></div>
             <div class="body">
-              <h2>Walk on Red</h2>
+              <h2>Gotta Go!</h2>
               <p class="muted">He needs the loo, and it's across the street. Cross before the light turns green.</p>
             </div>
           </a>
@@ -81,14 +96,22 @@
           </a>
         </li>
         <li>
-          <article class="tile is-soon tone-rose" aria-label="Shooting Gallery, coming soon">
-            <div class="art"><img src="assets/tiles/shooting-gallery.png" alt="" width="640" height="400" /></div>
+          <a class="tile tone-rose" href="splat-gallery/">
+            <div class="art"><img src="assets/tiles/splat-gallery.png" alt="" width="640" height="400" /></div>
             <div class="body">
-              <h2>Shooting Gallery</h2>
-              <p class="muted">A fairground range, one tap per shot.</p>
-              <span class="badge">Coming soon</span>
+              <h2>Splat Gallery</h2>
+              <p class="muted">Pull the slingshot, lead the shot and paint the booth.</p>
             </div>
-          </article>
+          </a>
+        </li>
+        <li>
+          <a class="tile tone-sun" href="crumble/">
+            <div class="art"><img src="assets/tiles/crumble.png" alt="" width="640" height="400" /></div>
+            <div class="body">
+              <h2>Crumble</h2>
+              <p class="muted">Blast the sand from under the other tank before the tide comes in.</p>
+            </div>
+          </a>
         </li>
         <li>
           <a class="tile tone-sea" href="island-hop/">
@@ -119,6 +142,11 @@
         </li>
       </ul>
     </main>
+
+    <div class="update" role="status" data-update hidden>
+      <p>New version available</p>
+      <button class="btn btn-primary" type="button">Update</button>
+    </div>
 
     <footer class="site-footer">
       <p>Art and sound by <a href="https://www.kenney.nl">Kenney</a> (CC0). <a href="https://github.com/meirmsn/games">Source on GitHub</a>.</p>

@@ -2,15 +2,23 @@
 //
 // The rule (specs/pixel-leap.md): one tile is one world unit, every world draws its tiles at the
 // same size on screen and all physics is in tiles; a world sets only its resolution (pixels per
-// tile) and palette. Each level is its own world. A pixel world (Meadow and Frost at 18 px per
-// tile, Ink at 16 in two colours) is drawn into a back buffer and scaled up with no smoothing, and
-// the monster is baked to its grid; Candy is drawn smooth at 70 px per tile, and the HUD turns
-// smooth with it. The leap between levels steps through the resolutions on screen.
+// tile) and palette. Each level is its own world. A pixel world (the Meadow, Farm and Industrial at
+// 18 px per tile, Pico at 8, Ink at 16 in two colours) is drawn into a back buffer and scaled up with
+// no smoothing, and the monster is baked to its grid; a smooth world (Ice, Candy, Mushroom, Sea,
+// Castle, Sky) is drawn smooth at 70 px per tile, and the HUD turns smooth with it; Scribble is drawn
+// smooth too, as line art: pen on paper, the monster included. The leap between levels steps through
+// the resolutions on screen. Past the last level, Sky, the journey ends.
 import { mountShell } from '../shared/game-shell.js';
-import { WORLDS, buildStage, T, ROWS } from './worlds.js';
+import { WORLDS, buildStage, T, ROWS, SOLID, SLOPES, slopeY } from './worlds.js';
 import { CANDY } from './candy-atlas.js';
+import { MUSHROOM } from './mushroom-atlas.js';
+import { CASTLE } from './castle-atlas.js';
+import { ICE } from './ice-atlas.js';
+import { SEA } from './sea-atlas.js';
+import { SCRIBBLE } from './scribble-atlas.js';
+import { JUMPER } from './jumper-atlas.js';
 import {
-  PARTS, randomMonster, encode, decode, drawVector, bake, scaleFor, makeCanvas,
+  PARTS, randomMonster, encode, decode, drawVector, bake, scaleFor, makeCanvas, lineArt, toLineArt, BOILS,
 } from './monster.js';
 
 // ---------------------------------------------------------------- movement (tiles, seconds)
@@ -34,14 +42,52 @@ export const MOVE = {
   iceAccel: 22, // on ice you get going and stop more slowly
   iceFriction: 9,
   drip: 30, // a drip's fall
+  hay: 13.6, // a haybale's bounce: about 2.5 tiles
+  hayHigh: 19.2, // with jump held: about 5
+  caps: [17.2, 21.1, 24.3], // a cap's launch, 4, 6 then 8 tiles, landing on cap after cap
+  mover: 2, // moving platforms and lifts, tiles/s
+  belt: 2.5, // conveyor belts
+  swoop: 6, // a flyer's dive
+  climb: 3, // a flyer's climb back
+  // Sea: in the water you float, and each tap is a stroke.
+  swimGravity: 4, // tiles/s² in the water
+  sink: 1.5, // the fastest you sink
+  stroke: 4, // a stroke's upward speed: about 2 tiles of lift
+  strokeGap: 0.25, // at most one stroke this often
+  swimTop: 4, // sideways in the water
+  current: 3, // a current's carry
+  fish: 2,
+  // Castle: a crusher's rhythm (seconds): up, falling, down, rising.
+  crusher: [1.4, 0.2, 0.6, 1.0],
+  crusherShake: 0.4,
+  // Ice: a snow pile sends a snowball this often; it rolls down a slope at up to rollSlope, on the flat at rollFlat.
+  pileEvery: 2.5,
+  rollSlope: 4,
+  rollFlat: 3,
+  // Scribble: a sketch tile draws itself in this long once the monster is within sketchNear tiles
+  // across (and sketchNearY up or down) of it.
+  sketchDraw: 0.3,
+  sketchNear: 3,
+  sketchNearY: 5,
+  // Sky: a bounce is the held jump (15.7: 3.3 tiles); a press just before landing, 19.2 (5 tiles).
+  skyHigh: 19.2,
+  skyPress: 0.12, // that press's window, which the hidden assist doesn't widen
+  skySpring: 27.2, // about 10 tiles
+  wings: 7.5, // tiles/s straight up
+  wingsTime: 2, // 15 tiles
+  skyFlyer: 2, // a flyer's patrol
+  skyFloor: 1.5, // the view's bottom stays this far below the highest ledge landed on
 };
+const CRUSH_SAFE = 1.4; // a rising crusher hurts until its bottom is this far above the floor
+const BALL_R = 0.6; // a snowball's radius, in tiles
+const CHAIN_MAX = 4; // the most extra coins one stomp in a chain pays
 const LIVES = 3;
 const ENEMY_SIZE = 1.5; // bad guys' size, in tiles
 const MAX_SHIELDS = 2; // hearts you can hold: each takes one hit for you
 const W_BOX = 0.7; // the monster's collision box, in tiles
 const H_BOX = 1.3;
 const STEP = 1 / 120;
-const VERSION = 2; // best times are kept under this version of the levels
+const VERSION = 5; // best times are kept under this version of the levels
 const KEY = 'pixel-leap';
 
 // ---------------------------------------------------------------- the page
@@ -63,7 +109,11 @@ const SOUNDS = {};
 for (const s of ['m', 'c']) {
   for (const n of ['jump', 'coin', 'stomp', 'poof', 'flag', 'land', 'music']) SOUNDS[`${s}-${n}`] = `sounds/${s}-${n}.mp3`;
 }
-for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music', 'morph-up', 'morph-down']) SOUNDS[n] = `sounds/${n}.mp3`;
+for (const n of ['m-spring', 'm-part', 'c-crumble', 'c-bounce', 'pick', 'shuffle', 'leap', 'done', 'i-music', 'morph-up', 'morph-down', 'scratch']) SOUNDS[n] = `sounds/${n}.mp3`;
+// The owner's music: each such world has a long bed and three short accents. The accents are
+// sounds like any other; the beds are streamed (see music()), not decoded whole.
+const ACCENTS = 3;
+for (const w of WORLDS) if (w.bed) for (let i = 1; i <= ACCENTS; i++) SOUNDS[`${w.id}-a${i}`] = `sounds/${w.id}-a${i}.mp3`;
 const { sound } = mountShell({ sounds: SOUNDS });
 const heard = []; // the last sounds played, for tests
 function play(name, opts) {
@@ -79,6 +129,7 @@ function showMute() {
 }
 muteBtn.addEventListener('click', () => {
   sound.muted = !sound.muted;
+  bedEl.muted = sound.muted;
   showMute();
 });
 showMute();
@@ -120,7 +171,7 @@ const images = {};
 
 // ---------------------------------------------------------------- state
 const game = {
-  mode: 'build', // build | play | paused | tally | wipe | leap | end
+  mode: 'build', // build | map | play | paused | leap | gallery | tally
   world: 0,
   stage: 0,
   coins: 0, // this level's
@@ -209,11 +260,25 @@ function world() {
 function loadStage(w, s) {
   game.world = w;
   game.stage = s;
-  const st = buildStage(WORLDS[w].stages[s]);
+  const st = buildStage(WORLDS[w].stages[s], WORLDS[w].rows);
   st.things = st.things.map((t, i) => ({
-    ...t, id: i, sx: t.x, sy: t.y, alive: true, dir: -1, t: 0, state: 'whole', got: false,
+    ...t, id: i, sx: t.x, sy: t.y, alive: true, dir: -1, t: 0, state: t.type === 'flyer' ? 'hover' : 'whole', got: false,
+    dx: 0, dy: 0, vx: 0,
   }));
+  st.movers = st.things.filter((t) => t.type === 'mover');
+  st.balls = []; // Ice's snowballs, rolling
+  st.currents = st.things.filter((t) => t.type === 'current');
+  for (const t of st.things) if (t.type === 'crusher') placeCrusher(t, 0);
+  st.clock = 0; // the level's own clock: crushers and piles keep their rhythm to it
+  game.keys = 0; // Castle's keys held: a life lost brings the level's keys back and shuts its gates
+  st.surfaces = st.things.filter((t) => t.type === 'mover' || t.type === 'cap' || t.type === 'cracked');
+  // Scribble's sketch tiles: not there (AIR in the grid) until the monster nears; then drawn in.
+  st.sketches = (st.sketches || []).map((k) => ({ ...k, state: 'undrawn', t: 0 }));
+  placeMovers(st, 0);
   stage = st;
+  game.skyFloor = st.base; // Sky: the highest ledge landed on, the floor of the view
+  game.skyLaunch = false;
+  game.wingsT = 0;
   game.inNext = false;
   game.morphT = 0;
   player.checkpoint = { x: st.start.x, y: st.start.y };
@@ -228,6 +293,15 @@ function respawn(fresh = false) {
   player.vy = 0;
   player.ground = true;
   player.poof = 0;
+  player.carry = 0;
+  player.onMover = null;
+  player.onSlope = false;
+  player.lastStroke = -9;
+  player.pressAt = -9;
+  game.wingsT = 0;
+  player.groundTile = T.GROUND;
+  game.capChain = 0;
+  game.stompChain = 0;
   player.invul = fresh ? 0 : 0.6;
   player.face = 1;
   snapCamera();
@@ -240,7 +314,7 @@ function bakedFor(w) {
   const key = `${w.id}:${codeOf(monster)}:${game.ears}`;
   let b = bakeCache.get(key);
   if (!b) {
-    b = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit }) };
+    b = { key, ...bake(images.monster, monster, w.res, { outline: w.outline, ears: game.ears, oneBit: w.oneBit, fixed: w.fixed }) };
     bakeCache.set(key, b);
     if (bakeCache.size > 16) bakeCache.delete(bakeCache.keys().next().value);
   }
@@ -255,12 +329,11 @@ function ensureBaked() {
 function tileAt(tx, ty) {
   if (tx < 0 || tx >= stage.cols) return T.GROUND; // the stage's ends are walls
   if (ty < 0) return T.AIR;
-  if (ty >= ROWS) return T.AIR;
+  if (ty >= stage.rows) return T.AIR;
   return stage.grid[ty * stage.cols + tx];
 }
 function solid(tx, ty) {
-  const t = tileAt(tx, ty);
-  return t === T.GROUND || t === T.BLOCK;
+  return SOLID.has(tileAt(tx, ty));
 }
 function cookieAt(tx, ty) {
   for (const t of stage.things) {
@@ -270,41 +343,73 @@ function cookieAt(tx, ty) {
 }
 function topSurface(tx, ty) {
   const t = tileAt(tx, ty);
-  return t === T.GROUND || t === T.BLOCK || t === T.ONEWAY || Boolean(cookieAt(tx, ty));
+  return SOLID.has(t) || t === T.ONEWAY || Boolean(cookieAt(tx, ty));
 }
 
 // Feet that clip a ledge's corner, a hair below its top, are lifted onto it instead of stopping.
 function stepUp(tx, ty) {
   const p = player;
   const below = p.y - ty;
-  if (p.vy < 0 || below <= 0 || below > 0.3 * (1 + game.assist)) return false;
+  // Off a slope's top onto the flat, the feet are up to half a tile under the next tile's top.
+  const most = p.onSlope ? 0.55 : 0.3 * (1 + game.assist);
+  if (p.vy < 0 || below <= 0 || below > most) return false;
   if (solid(tx, ty - 1) || solid(tx, ty - 2)) return false;
   p.y = ty;
   p.vy = 0;
   return true;
 }
 
+// The ground under a slope tile is the slope's: its own top is not a surface or a wall.
+function underSlope(tx, ty) {
+  return SLOPES.has(tileAt(tx, ty - 1));
+}
+// A shut gate, touched with a key held, opens: its bars rise and the key is used.
+function tryGate(tx, ty) {
+  if (tileAt(tx, ty) !== T.GATE || game.keys <= 0) return false;
+  for (let y = 0; y < stage.rows; y++) if (tileAt(tx, y) === T.GATE) stage.grid[y * stage.cols + tx] = T.AIR;
+  game.keys--;
+  const g = stage.things.find((t) => t.type === 'gate' && Math.floor(t.x) === tx);
+  if (g) {
+    g.open = true;
+    g.t = 0;
+  }
+  play('m-part', { rate: 0.8 });
+  return true;
+}
+// A slope tile in the column under x near the feet, and its surface there.
+function slopeUnder(x, y) {
+  const tx = Math.floor(x);
+  for (let ty = Math.floor(y) - 1; ty <= Math.floor(y) + 1; ty++) {
+    const t = tileAt(tx, ty);
+    if (SLOPES.has(t)) return { t, tx, ty, y: slopeY(t, tx, ty, x) };
+  }
+  return null;
+}
+
 function movePlayer(dt) {
   const p = player;
-  // Horizontal.
-  p.x += p.vx * dt;
+  // Horizontal: your own speed, plus what carries you (a belt underfoot, a platform you jumped off,
+  // a current).
+  p.x += (p.vx + (p.carry || 0) + (p.curX || 0)) * dt;
   const top = p.y - H_BOX;
   const r0 = Math.floor(top + 0.01);
   const r1 = Math.floor(p.y - 0.01);
-  if (p.vx > 0) {
+  if (p.vx + (p.curX || 0) > 0) {
     const tx = Math.floor(p.x + W_BOX / 2);
     for (let ty = r0; ty <= r1; ty++) {
-      if (solid(tx, ty)) {
+      if (solid(tx, ty) && !(ty === r1 && underSlope(tx, ty))) {
+        if (tryGate(tx, ty)) break;
         if (stepUp(tx, ty)) break;
         p.x = tx - W_BOX / 2 - 0.001;
         p.vx = 0;
         break;
       }
     }
-  } else if (p.vx < 0) {
+  } else if (p.vx + (p.curX || 0) < 0) {
     const tx = Math.floor(p.x - W_BOX / 2);
     for (let ty = r0; ty <= r1; ty++) {
-      if (solid(tx, ty)) {
+      if (solid(tx, ty) && !(ty === r1 && underSlope(tx, ty))) {
+        if (tryGate(tx, ty)) break;
         if (stepUp(tx, ty)) break;
         p.x = tx + 1 + W_BOX / 2 + 0.001;
         p.vx = 0;
@@ -314,25 +419,67 @@ function movePlayer(dt) {
   }
   // Vertical.
   const prevY = p.y;
-  p.y += p.vy * dt;
+  const wasGround = p.ground;
+  p.y += (p.vy + (p.curY || 0)) * dt;
   const c0 = Math.floor(p.x - W_BOX / 2 + 0.01);
   const c1 = Math.floor(p.x + W_BOX / 2 - 0.01);
   p.ground = false;
   p.onCookie = null;
-  if (p.vy >= 0) {
+  p.onMover = null;
+  p.onCap = null;
+  p.onCracked = null;
+  const wasSlope = p.onSlope;
+  p.onSlope = false;
+  // A slope under the monster's middle is its ground: it lands on it, and walking down it the feet
+  // stay on it rather than skipping into the air.
+  const sl = p.vy >= 0 ? slopeUnder(p.x, p.y) : null;
+  if (sl && prevY <= sl.y + 0.5 && (p.y >= sl.y || ((wasGround || wasSlope) && sl.y - p.y < 0.6))) {
+    p.y = sl.y;
+    p.vy = 0;
+    p.ground = true;
+    p.onSlope = true;
+    p.groundTile = T.GROUND;
+  } else if (p.vy >= 0) {
     const ty = Math.floor(p.y);
-    if (ty >= 0 && ty < ROWS && Math.floor(prevY - 0.001) < ty + 0.5) {
+    if (ty >= 0 && ty < stage.rows && Math.floor(prevY - 0.001) < ty + 0.5) {
       for (let tx = c0; tx <= c1; tx++) {
+        if (underSlope(tx, ty)) continue;
         const t = tileAt(tx, ty);
         const ck = cookieAt(tx, ty);
         const oneWayOk = prevY <= ty + landingGrace();
-        if (t === T.GROUND || t === T.BLOCK || ((t === T.ONEWAY || ck) && oneWayOk)) {
+        if (SOLID.has(t) || ((t === T.ONEWAY || ck) && oneWayOk)) {
           p.y = ty;
           p.vy = 0;
           p.ground = true;
+          p.groundTile = ck ? T.ONEWAY : t;
           if (ck) p.onCookie = ck;
           break;
         }
+      }
+    }
+    // Moving platforms, lifts and caps: landed on from above, like a one-way ledge.
+    for (const m of stage.surfaces) {
+      if (m.state === 'broken') continue;
+      if (p.x + W_BOX / 2 - 0.02 <= m.x || p.x - W_BOX / 2 + 0.02 >= m.x + m.w) continue;
+      if (prevY > m.y + landingGrace() || p.y < m.y) continue;
+      if (p.ground && p.y <= m.y) continue;
+      p.y = m.y;
+      p.vy = 0;
+      p.ground = true;
+      p.onCookie = null;
+      p.groundTile = T.ONEWAY;
+      if (m.type === 'mover') p.onMover = m;
+      else if (m.type === 'cracked') p.onCracked = m;
+      else p.onCap = m;
+    }
+    // Off a slope's foot onto the flat: the feet stay down rather than skip a step in the air.
+    if (!p.ground && wasSlope) {
+      const ty = Math.floor(p.y + 0.3);
+      if (topSurface(Math.floor(p.x), ty) && ty - p.y < 0.3 && ty >= p.y) {
+        p.y = ty;
+        p.vy = 0;
+        p.ground = true;
+        p.groundTile = tileAt(Math.floor(p.x), ty);
       }
     }
   } else {
@@ -370,11 +517,19 @@ function update(dt) {
     builderPan += dt;
     animateThings(dt, false);
     cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, 2 + (Math.sin(builderPan * 0.12 - Math.PI / 2) + 1) * 8));
-    cam.y = ROWS - 1.2 - view.tilesH;
+    cam.y = stage.rows - 1.2 - view.tilesH;
+    return;
+  }
+  if (game.mode === 'gallery') {
+    if (game.modeT >= GALLERY.end) showEnd();
     return;
   }
   if (game.mode === 'map') {
-    if (game.modeT >= MAP.enter) {
+    if (game.modeT >= MAP.enter && game.map.to >= WORLDS.length) {
+      // Past Sky: the summit, then the gallery of the monster in every world's style.
+      setMode('gallery');
+      play('done', { rate: 1.2 });
+    } else if (game.modeT >= MAP.enter) {
       // Into the world: the leap's steps from the map's pixels to the world's own rule.
       startWorld(game.map.to, game.map.to === 0);
       game.leapFrom = 0;
@@ -401,6 +556,9 @@ function update(dt) {
   }
   if (game.mode !== 'play') return;
   game.time += dt;
+  accents(dt);
+  placeMovers(stage, dt);
+  sketchStep(dt);
   stepPlayer(dt);
   crossing(dt);
   animateThings(dt, true);
@@ -421,10 +579,57 @@ function crossing(dt) {
   game.inNext = inNext;
   const from = inNext ? w : wn;
   const to = inNext ? wn : w;
-  if (from.smooth === to.smooth && from.res === to.res && !from.oneBit === !to.oneBit) return;
+  // Into line art (Scribble) the colour drains out and the pen traces the monster, with a scratch;
+  // out of it, the colour floods back in, with the rising sound.
+  if (Boolean(from.lineArt) !== Boolean(to.lineArt)) {
+    game.morphT = MORPH;
+    game.morphFrom = from;
+    game.morphKind = 'pen';
+    play(to.lineArt ? 'scratch' : 'morph-up', { gain: 0.8 });
+    return;
+  }
+  // Only a change between pixels and smooth steps through resolutions; between two pixel worlds
+  // (even Pico's 8 into Ink's 16) the monster is redrawn straight in the new style.
+  if (from.smooth === to.smooth) return;
   game.morphT = MORPH;
   game.morphFrom = from;
+  game.morphKind = 'res';
   play(to.smooth ? 'morph-up' : 'morph-down', { gain: 0.8 });
+}
+
+// Scribble: a sketch tile draws itself in once the monster's middle is within sketchNear tiles of it
+// across and sketchNearY up or down (to the tile's nearest edge); it is whole after sketchDraw s and
+// turns solid as soon as the monster doesn't overlap it, then stays for the rest of the life.
+function sketchStep(dt) {
+  if (!stage.sketches.length) return;
+  const p = player;
+  const mid = p.y - H_BOX / 2;
+  let drew = false;
+  for (const k of stage.sketches) {
+    if (k.state === 'undrawn') {
+      const dx = Math.max(0, k.x - p.x, p.x - (k.x + 1));
+      const dy = Math.max(0, k.y - mid, mid - (k.y + 1));
+      if (dx <= MOVE.sketchNear && dy <= MOVE.sketchNearY && p.poof <= 0) {
+        k.state = 'drawing';
+        k.t = 0;
+        drew = true;
+      }
+    } else if (k.state === 'drawing' || k.state === 'whole') {
+      k.t += dt;
+      if (k.t >= MOVE.sketchDraw) {
+        k.state = 'whole';
+        const over = p.x + W_BOX / 2 > k.x && p.x - W_BOX / 2 < k.x + 1 && p.y > k.y && p.y - H_BOX < k.y + 1;
+        if (!over) {
+          k.state = 'solid';
+          stage.grid[k.y * stage.cols + k.x] = T.SKETCH;
+        }
+      }
+    }
+  }
+  if (drew && game.t - (game.lastScratch || -9) > 0.25) {
+    game.lastScratch = game.t;
+    play('scratch', { gain: 0.35, rate: 1.1 + Math.random() * 0.3 });
+  }
 }
 
 function setMode(m) {
@@ -453,8 +658,31 @@ function stepPlayer(dt) {
     if (p.poof <= 0) afterLostLife();
     return;
   }
+  // A platform or lift you stand on carries you with it; a belt underfoot carries you its way.
+  if (p.onMover && p.ground) {
+    p.x += p.onMover.dx;
+    p.y += p.onMover.dy;
+  }
+  if (p.ground) {
+    const belt = p.groundTile === T.BELTR ? 1 : p.groundTile === T.BELTL ? -1 : 0;
+    p.carry = belt * MOVE.belt;
+  }
+  // A current you're in carries you its way.
+  p.curX = 0;
+  p.curY = 0;
+  const wet = inWater();
+  if (wet) {
+    for (const c of stage.currents) {
+      if (p.x >= c.x && p.x < c.x + c.w && p.y - H_BOX / 2 >= c.y && p.y - H_BOX / 2 < c.y + c.h) {
+        p.curX += c.cx * MOVE.current;
+        p.curY += c.cy * MOVE.current;
+      }
+    }
+  }
+  if (wet) return swimStep(dt);
+  const sky = Boolean(world().bounce);
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  const ice = world().ice && p.ground;
+  const ice = (world().ice || p.groundTile === T.ICE) && p.ground;
   const accel = p.ground ? (ice ? MOVE.iceAccel : MOVE.accel) : MOVE.airAccel;
   if (dir) {
     p.vx += dir * accel * dt;
@@ -466,9 +694,10 @@ function stepPlayer(dt) {
   } else {
     p.vx *= 1 - 2 * dt;
   }
-  // Jump: buffered presses and coyote time.
+  // Jump: buffered presses and coyote time. In Sky only on the start's ground and the plateau: in
+  // the air a press is a bounce request for the next landing.
   p.buffer = Math.max(0, p.buffer - dt);
-  p.coyote = p.ground ? coyoteTime() : Math.max(0, p.coyote - dt);
+  p.coyote = p.ground ? coyoteTime() : sky ? 0 : Math.max(0, p.coyote - dt);
   if (p.buffer > 0 && p.coyote > 0) {
     p.vy = -MOVE.jump;
     p.ownJump = true;
@@ -476,21 +705,67 @@ function stepPlayer(dt) {
     p.coyote = 0;
     p.ground = false;
     p.airTime = 0;
+    // A jump off a moving platform keeps its sideways motion.
+    if (p.onMover) p.carry = p.onMover.vx;
     play(`${world().sound}-jump`, { rate: 0.96 + Math.random() * 0.08 });
     dust(p.x, p.y, 4);
   }
   // Letting go cuts your own jump short; a spring's or a stomp's launch isn't cut.
   if (p.vy >= 0) p.ownJump = false;
   if (p.ownJump && !input.jump && p.vy < -MOVE.cut) p.vy = -MOVE.cut;
-  // Gravity; the ears float you down while jump is held.
+  // Gravity; the ears float you down while jump is held (not in Sky). Wings carry you straight up.
   p.vy += MOVE.gravity * dt;
-  const floating = game.ears && input.jump && p.vy > 0;
+  if (game.wingsT > 0) {
+    game.wingsT = Math.max(0, game.wingsT - dt);
+    p.vy = -MOVE.wings;
+    p.ownJump = false;
+  }
+  const floating = game.ears && input.jump && p.vy > 0 && !sky;
   p.vy = Math.min(p.vy, floating ? MOVE.float : MOVE.maxFall);
   p.floating = floating;
   const wasGround = p.ground;
   const fallSpeed = p.vy;
   movePlayer(dt);
   if (!p.ground) p.airTime += dt;
+  if (p.ground && !wasGround) {
+    game.stompChain = 0; // a landing ends a stomp chain
+    if (!p.onMover) p.carry = 0;
+    if (p.onCap) {
+      // A cap launches you: higher for each cap you land on without touching anything else.
+      const v = MOVE.caps[Math.min(MOVE.caps.length - 1, game.capChain)];
+      game.capChain++;
+      bounceOff(v, p.onCap);
+      play('c-bounce', { rate: 0.9 + Math.min(2, game.capChain - 1) * 0.12 });
+      return afterMove(dt);
+    }
+    game.capChain = 0;
+    // Sky: every ledge bounces you (not the start's ground or the plateau): the held jump's height,
+    // or higher with a fresh press just before landing. A sliding ledge's motion carries on.
+    if (sky && skyBounces()) {
+      const fresh = game.t - p.pressAt <= MOVE.skyPress + 1e-6;
+      const from = p.onMover;
+      const cr = p.onCracked;
+      bounceOff(fresh ? MOVE.skyHigh : MOVE.jump, cr);
+      p.pressAt = -9;
+      p.buffer = 0;
+      p.carry = from ? from.vx : 0;
+      if (cr) {
+        cr.state = 'broken';
+        cr.t = 0;
+        play('c-crumble', { gain: 0.8 });
+      }
+      game.skyLaunch = false;
+      if (p.y < game.skyFloor) game.skyFloor = p.y;
+      play('c-bounce', { rate: fresh ? 1.25 : 1, gain: 0.7 });
+      return afterMove(dt);
+    }
+    if (p.groundTile === T.HAY) {
+      bounceOff(input.jump ? MOVE.hayHigh : MOVE.hay, null);
+      play('m-spring', { rate: 0.8, gain: 0.8 });
+      dust(p.x, p.y, 5);
+      return afterMove(dt);
+    }
+  }
   if (p.ground && !wasGround && p.airTime > 0.12) {
     p.land = 0.12;
     if (fallSpeed > 6) {
@@ -502,14 +777,94 @@ function stepPlayer(dt) {
     p.airTime = 0;
     p.coyote = coyoteTime();
   }
+  return afterMove(dt);
+}
+
+// In the water (Sea): the monster is in it when its middle is below the surface.
+function inWater(x = player.x, y = player.y - H_BOX / 2) {
+  const c = Math.floor(x);
+  if (!stage.water || c < 0 || c >= stage.cols) return false;
+  return y > stage.water[c];
+}
+// Swimming: you float, sinking slowly; each press is a stroke up (at most one every strokeGap s),
+// and a stroke with your head near the surface is a leap out, the land jump. No coyote time here,
+// and the ears don't float you.
+function swimStep(dt) {
+  const p = player;
+  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (dir) {
+    p.vx += dir * MOVE.airAccel * dt;
+    p.vx = Math.max(-MOVE.swimTop, Math.min(MOVE.swimTop, p.vx));
+    p.face = dir;
+  } else if (p.ground) {
+    const f = MOVE.friction * dt;
+    p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f;
+  } else p.vx *= 1 - 3 * dt;
+  if (Math.abs(p.vx) > MOVE.swimTop) p.vx = Math.sign(p.vx) * Math.max(MOVE.swimTop, Math.abs(p.vx) - 20 * dt);
+  p.buffer = Math.max(0, p.buffer - dt);
+  p.coyote = 0;
+  p.ownJump = false;
+  p.floating = false;
+  if (p.buffer > 0 && game.t - p.lastStroke >= MOVE.strokeGap) {
+    p.buffer = 0;
+    p.lastStroke = game.t;
+    const surface = stage.water[Math.floor(p.x)];
+    const head = p.y - H_BOX;
+    p.ground = false;
+    p.airTime = 0;
+    if (head - surface < 0.5) {
+      p.vy = -MOVE.jump; // a leap out: the land jump, in full
+      play(`${world().sound}-jump`);
+      for (let i = 0; i < 6; i++) particles.push({ x: p.x + (Math.random() - 0.5), y: surface, vx: (Math.random() - 0.5) * 3, vy: -2 - Math.random() * 3, g: 20, t: 0, life: 0.5, kind: 'drop', size: 0.14 });
+    } else {
+      p.vy = -MOVE.stroke;
+      play(`${world().sound}-jump`, { rate: 1.3, gain: 0.45 });
+      particles.push({ x: p.x, y: p.y - H_BOX, vx: 0, vy: -1.5, t: 0, life: 0.7, kind: 'bubble', size: 0.18 });
+    }
+  }
+  // Water slows a fall into it to a sink, quickly.
+  p.vy += MOVE.swimGravity * dt;
+  if (p.vy > MOVE.sink) p.vy = Math.max(MOVE.sink, p.vy - 30 * dt);
+  const wasGround = p.ground;
+  movePlayer(dt);
+  if (p.ground && !wasGround) {
+    game.stompChain = 0;
+    game.capChain = 0;
+  }
+  p.airTime = p.ground ? 0 : p.airTime + dt;
+  return afterMove(dt);
+}
+
+// In Sky: is what the monster just landed on a bouncing ledge? Ledges, sliding and cracked ones
+// bounce; the start's ground and the plateau at the top don't.
+function skyBounces() {
+  const p = player;
+  if (p.onMover || p.onCracked) return true;
+  return p.groundTile === T.ONEWAY && Math.round(p.y) !== stage.top;
+}
+// A bounce off a haybale or a cap: an automatic launch, not cut short by letting go of jump.
+function bounceOff(v, thing) {
+  const p = player;
+  p.vy = -v;
+  p.ground = false;
+  p.ownJump = false;
+  p.airTime = 0;
+  p.coyote = 0;
+  p.onMover = null;
+  if (thing) thing.boing = 0.3;
+}
+
+function afterMove(dt) {
+  const p = player;
   if (p.ground && Math.abs(p.vx) > 0.5) p.run += (Math.abs(p.vx) / MOVE.top) * dt * 2.6;
   // A cookie you stand on starts to crumble.
   if (p.onCookie && p.onCookie.state === 'whole') {
     p.onCookie.state = 'shaking';
     p.onCookie.t = 0;
   }
-  // Falling off the bottom: no heart saves you from that.
-  if (p.y > ROWS + 1.5) return loseLife();
+  // Falling off the bottom: no heart saves you from that. In Sky, the bottom is the view's.
+  if (p.y > stage.rows + 1.5) return loseLife();
+  if (world().bounce && p.y - H_BOX > cam.y + view.tilesH) return loseLife();
   // Spikes.
   const hb = hurtbox();
   for (let ty = Math.floor(hb.t); ty <= Math.floor(hb.b); ty++) {
@@ -518,6 +873,10 @@ function stepPlayer(dt) {
     }
   }
   touchThings(hb);
+  if (p.poof > 0) return;
+  for (const b of stage.balls) {
+    if (overlaps(hb, b.x - BALL_R * 0.8, b.y - BALL_R * 1.8, b.x + BALL_R * 0.8, b.y)) return hit(b.x);
+  }
 }
 
 function touchThings(hb) {
@@ -552,6 +911,23 @@ function touchThings(hb) {
       case 'drip':
         if (overlaps(hb, t.x - 0.3, t.y, t.x + 0.3, t.y + 0.8)) return hit(t.x);
         break;
+      case 'key':
+        if (Math.abs(t.x - p.x) < 0.75 && t.y > p.y - H_BOX - 0.45 && t.y < p.y + 0.3) {
+          t.alive = false;
+          game.keys++;
+          play('m-part', { rate: 1.3 });
+          for (let i = 0; i < 2; i++) sparkle(t.x, t.y);
+        }
+        break;
+      case 'fish': {
+        // A fish hurts at a touch, from any side: you can't stomp in the water.
+        const hw = 0.42 * ENEMY_SIZE;
+        if (overlaps(hb, t.x - hw, t.y - 0.6 * ENEMY_SIZE, t.x + hw, t.y - 0.1)) return hit(t.x);
+        break;
+      }
+      case 'crusher':
+        if (crusherHurts(t) && overlaps(hb, t.x + 0.05, t.y - 1.5, t.x + t.w - 0.05, t.y)) return hit(t.x + t.w / 2);
+        break;
       case 'ears':
         if (Math.abs(t.x - p.x) < 0.8 && t.y > p.y - H_BOX - 0.6 && t.y < p.y + 0.4) {
           t.alive = false;
@@ -567,7 +943,10 @@ function touchThings(hb) {
       case 'jelly':
         if (p.vy >= 0 && Math.abs(t.x - p.x) < 0.7 && p.y > t.y - 0.65 && p.y <= t.y + 0.05) {
           p.y = t.y - 0.6;
-          p.vy = -(t.type === 'spring' ? MOVE.spring : MOVE.jelly);
+          p.vy = -(t.type === 'spring' ? (t.power === 'sky' ? MOVE.skySpring : MOVE.spring) : MOVE.jelly);
+          if (t.power === 'sky') game.skyLaunch = true;
+          p.ownJump = false;
+          p.pressAt = -9;
           p.airTime = 0;
           p.coyote = 0;
           t.t = 0;
@@ -576,23 +955,51 @@ function touchThings(hb) {
         }
         break;
       case 'walker':
+      case 'flyer':
       case 'worm': {
         const hw = t.type === 'worm' ? 0.7 : 0.4 * ENEMY_SIZE;
-        const hh = t.type === 'worm' ? 0.55 : 0.8 * ENEMY_SIZE;
+        const hh = t.type === 'worm' ? 0.55 : (t.type === 'flyer' ? 0.7 : 0.8) * ENEMY_SIZE;
         if (!overlaps({ l: p.x - W_BOX / 2, r: p.x + W_BOX / 2, t: p.y - H_BOX, b: p.y }, t.x - hw, t.y - hh, t.x + hw, t.y)) break;
         // A stomp: falling, with your feet above its middle. A spiky walker can't be stomped.
         if (t.kind !== 'spiky' && p.vy > 0 && p.y - p.vy * STEP <= t.y - hh * 0.5 + 0.15) {
           t.alive = false;
           t.squash = 0;
-          p.vy = -(input.jump ? MOVE.jump : MOVE.stomp);
+          // In Sky a stomp bounces you as a ledge does.
+          if (world().bounce) {
+            p.vy = -(game.t - p.pressAt <= MOVE.skyPress + 1e-6 ? MOVE.skyHigh : MOVE.jump);
+            p.pressAt = -9;
+            p.ownJump = false;
+          } else p.vy = -(input.jump ? MOVE.jump : MOVE.stomp);
           p.airTime = 0;
-          play(`${s}-stomp`);
+          play(`${s}-stomp`, { rate: 1 + Math.min(game.stompChain, 5) * 0.08 });
           dust(t.x, t.y - 0.2, 6);
+          // A stomp chain: each stomp after the first before you land pays extra, in a world whose
+          // rule it is (Pico).
+          game.stompChain++;
+          const extra = world().chain ? Math.min(CHAIN_MAX, game.stompChain - 1) : 0;
+          if (extra > 0) {
+            game.coins += extra;
+            game.chainPaid = (game.chainPaid || 0) + extra;
+            particles.push({ x: t.x, y: t.y - 1.6, vx: 0, vy: -1.5, t: 0, life: 0.9, kind: 'text', text: `+${extra}`, size: 0.6 });
+            play(`${s}-coin`, { rate: 1.2 + extra * 0.08 });
+          }
         } else if (overlaps(hb, t.x - hw * 0.8, t.y - hh * 0.85, t.x + hw * 0.8, t.y)) {
           return hit(t.x);
         }
         break;
       }
+      case 'wings':
+        // Sky's wings: straight up 15 tiles over 2 s, steering as you like.
+        if (Math.abs(t.x - p.x) < 0.8 && t.y > p.y - H_BOX - 0.6 && t.y - 1 < p.y + 0.4) {
+          t.alive = false;
+          game.wingsT = MOVE.wingsTime;
+          game.skyLaunch = true;
+          p.ground = false;
+          p.coyote = 0;
+          play('m-part', { rate: 1.2 });
+          for (let i = 0; i < 3; i++) sparkle(t.x, t.y - 0.5);
+        }
+        break;
       case 'portal':
         if (Math.abs(t.x - p.x) < 0.7 && Math.abs(t.y - p.y) < 1.5) {
           enterPortal();
@@ -609,6 +1016,7 @@ function touchThings(hb) {
 function hit(fromX) {
   const p = player;
   if (p.invul > 0 || p.poof > 0) return;
+  game.stompChain = 0; // a hit ends a stomp chain
   if (game.shields > 0) {
     game.shields--;
     p.invul = 1.2;
@@ -640,7 +1048,7 @@ function loseLife() {
   play(`${world().sound}-poof`);
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    particles.push({ x: p.x, y: Math.min(p.y, ROWS) - 0.7, vx: Math.cos(a) * 3.2, vy: Math.sin(a) * 3.2, t: 0, life: 0.45, kind: 'puff', size: 0.32 });
+    particles.push({ x: p.x, y: Math.min(p.y, stage.rows) - 0.7, vx: Math.cos(a) * 3.2, vy: Math.sin(a) * 3.2, t: 0, life: 0.45, kind: 'puff', size: 0.32 });
   }
 }
 function afterLostLife() {
@@ -658,7 +1066,80 @@ function restartLevel() {
   player.invul = 0.6;
 }
 
+// A crusher's place in its rhythm: up (waiting, shaking at the end), falling, down, rising.
+function crusherPhase(t, clock = stage.clock) {
+  const [up, fall, down, rise] = MOVE.crusher;
+  const period = up + fall + down + rise;
+  const u = (((clock + t.phase * period) % period) + period) % period;
+  if (u < up) return { state: 'up', u, left: up - u, k: 0 };
+  if (u < up + fall) return { state: 'falling', u, k: (u - up) / fall };
+  if (u < up + fall + down) return { state: 'down', u, k: 1 };
+  return { state: 'rising', u, k: 1 - (u - up - fall - down) / rise };
+}
+function placeCrusher(t, clock = stage.clock) {
+  const ph = crusherPhase(t, clock);
+  t.state = ph.state;
+  // It falls faster and faster, and rises at an even pace.
+  t.y = ph.state === 'rising' ? t.floor - t.h * (1 - ph.k) : t.floor - t.h * (1 - ph.k * ph.k);
+  t.shake = ph.state === 'up' && ph.left < MOVE.crusherShake;
+  return ph;
+}
+function crusherHurts(t) {
+  if (t.state === 'falling' || t.state === 'down') return true;
+  return t.state === 'rising' && t.floor - t.y < CRUSH_SAFE;
+}
+// Where a snowball rolling along stands: the slope or the ground under x, near y; null over a pit.
+function groundUnder(x, y) {
+  const sl = slopeUnder(x, y);
+  if (sl) return sl;
+  const tx = Math.floor(x);
+  for (let ty = Math.floor(y - 0.5); ty < Math.floor(y) + 2; ty++) {
+    if (topSurface(tx, ty) && !SLOPES.has(tileAt(tx, ty))) return { y: ty };
+  }
+  return null;
+}
+function rollBalls(dt, live) {
+  for (const pile of stage.things) {
+    if (pile.type !== 'pile') continue;
+    pile.next = pile.next === undefined ? ((pile.id * 0.83) % MOVE.pileEvery) + 0.6 : pile.next - dt;
+    if (pile.next <= 0) {
+      pile.next += MOVE.pileEvery;
+      pile.sent = (pile.sent || 0) + 1;
+      stage.balls.push({ x: pile.x + pile.dir * 0.4, y: pile.y, vx: pile.dir * 1, dir: pile.dir, spin: 0, from: pile.id });
+    }
+  }
+  for (let i = stage.balls.length - 1; i >= 0; i--) {
+    const b = stage.balls[i];
+    const on = groundUnder(b.x, b.y);
+    const slope = on && on.t !== undefined;
+    const down = slope && ((on.t === T.SLOPEU && b.dir < 0) || (on.t === T.SLOPED && b.dir > 0));
+    const want = down ? MOVE.rollSlope : MOVE.rollFlat;
+    let speed = Math.abs(b.vx);
+    speed = down ? Math.min(want, speed + 6 * dt) : Math.min(want, speed + 4 * dt);
+    b.vx = b.dir * speed;
+    const nx = b.x + b.vx * dt;
+    b.spin += (b.vx * dt) / BALL_R;
+    const ahead = Math.floor(nx + b.dir * BALL_R);
+    const wall = solid(ahead, Math.floor(b.y - 0.3)) && !underSlope(ahead, Math.floor(b.y - 0.3)) && !slopeUnder(nx + b.dir * BALL_R, b.y);
+    const next = groundUnder(nx, b.y);
+    // It shatters at a wall or at a pit's edge.
+    if (wall || !next || next.y > b.y + 0.7) {
+      stage.balls.splice(i, 1);
+      if (live && Math.abs(b.x - player.x) < view.tilesW) play('c-crumble', { gain: 0.5, rate: 1.2 });
+      for (let k = 0; k < 6; k++) particles.push({ x: b.x, y: b.y - 0.5, vx: (Math.random() - 0.5) * 4, vy: -1 - Math.random() * 3, g: 20, t: 0, life: 0.6, kind: 'snow', size: 0.2 });
+      continue;
+    }
+    b.x = nx;
+    b.y = next.y;
+    // Off the slope, at most the flat's speed.
+    if (next.t === undefined && Math.abs(b.vx) > MOVE.rollFlat) b.vx = b.dir * MOVE.rollFlat;
+  }
+}
 function animateThings(dt, live) {
+  if (live) {
+    stage.clock += dt;
+    rollBalls(dt, live);
+  }
   for (const t of stage.things) {
     t.t += dt;
     if (t.boing) t.boing = Math.max(0, t.boing - dt);
@@ -685,38 +1166,142 @@ function animateThings(dt, live) {
       if (t.falling) {
         t.vy = (t.vy || 0) + MOVE.drip * dt;
         t.y += t.vy * dt;
-        if (topSurface(Math.floor(t.x), Math.floor(t.y + 0.8)) || t.y > ROWS) {
+        if (topSurface(Math.floor(t.x), Math.floor(t.y + 0.8)) || t.y > stage.rows) {
           t.alive = false;
           for (let i = 0; i < 4; i++) particles.push({ x: t.x, y: t.y + 0.6, vx: (Math.random() - 0.5) * 4, vy: -2 - Math.random() * 2, g: 25, t: 0, life: 0.5, kind: 'crumb', size: 0.15 });
         }
       }
+    }
+    if (t.type === 'flyer' && t.alive && live) flyerStep(t, dt);
+    if (t.type === 'cracked' && t.state === 'broken') t.y = t.sy + 0.5 * 20 * t.t * t.t; // it falls away
+    if (t.type === 'crusher') {
+      const was = t.state;
+      placeCrusher(t);
+      if (live && was === 'falling' && t.state === 'down' && Math.abs(t.x - player.x) < view.tilesW * 0.7) {
+        play(`${world().sound}-stomp`, { rate: 0.5, gain: 0.7 });
+        dust(t.x + 0.5, t.floor, 3);
+        dust(t.x + 1.5, t.floor, 3);
+      }
+    }
+    if (t.type === 'fish' && t.alive) {
+      // Back and forth along its range, at MOVE.fish tiles/s, bobbing a little.
+      const span = Math.max(0.01, t.range);
+      const f = ((stage.clock * MOVE.fish) / span + t.id * 0.37) % 2;
+      const was = t.x;
+      t.x = t.sx + (f < 1 ? f : 2 - f) * span;
+      t.y = t.sy + Math.sin(game.t * 2 + t.id) * 0.12;
+      if (t.x !== was) t.dir = t.x > was ? 1 : -1;
     }
     if ((t.type === 'walker' || t.type === 'worm') && t.alive && live) {
       const speed = t.type === 'worm' ? MOVE.worm : MOVE.walker;
       const nx = t.x + t.dir * speed * dt;
       const ahead = Math.floor(nx + t.dir * 0.5);
       const row = Math.round(t.y);
-      const blocked = solid(ahead, row - 1) || !topSurface(ahead, row);
+      // Bad guys turn back at a wall, a shut gate, an edge or a slope.
+      // A sketch tile is a pit's edge to them: they never walk onto one.
+      const blocked = solid(ahead, row - 1) || !topSurface(ahead, row) || SLOPES.has(tileAt(ahead, row - 1)) || SLOPES.has(tileAt(ahead, row)) || tileAt(ahead, row) === T.SKETCH;
       if (blocked) t.dir = -t.dir;
       else t.x = nx;
     }
   }
 }
 
+// Moving platforms and lifts: back and forth along their track at MOVE.mover tiles/s, starting at
+// `phase` of the way along it. Each keeps how far it moved this step, to carry what stands on it.
+function placeMovers(st, dt) {
+  for (const m of st.movers) {
+    m.mt = (m.mt || 0) + dt;
+    const f = (((m.mt * MOVE.mover) / m.range + 2 * m.phase) % 2 + 2) % 2;
+    const u = (f < 1 ? f : 2 - f) * m.range;
+    const nx = m.axis === 'x' ? m.sx + u : m.sx;
+    const ny = m.axis === 'y' ? m.sy - u : m.sy;
+    m.dx = nx - m.x;
+    m.dy = ny - m.y;
+    m.vx = dt > 0 ? m.dx / dt : 0;
+    m.x = nx;
+    m.y = ny;
+  }
+}
+
+// A flyer hovers where it was put, bobbing; when the monster, on the ground, comes within 5 tiles
+// ahead of it, it swoops at where the monster stood, then climbs back home and waits a moment before the next.
+function flyerStep(t, dt) {
+  const p = player;
+  if (t.kind === 'patrol') {
+    // Sky's flyers patrol side to side along their range, bobbing.
+    const span = Math.max(0.01, t.range);
+    const f = ((stage.clock * MOVE.skyFlyer) / span + t.id * 0.37) % 2;
+    const was = t.x;
+    t.x = t.sx + (f < 1 ? f : 2 - f) * span;
+    t.y = t.sy + Math.sin(game.t * 3 + t.id) * 0.12;
+    if (t.x !== was) t.dir = t.x > was ? 1 : -1;
+    return;
+  }
+  if (t.state === 'hover') {
+    t.wait = Math.max(0, (t.wait || 0) - dt);
+    t.y = t.sy + Math.sin(game.t * 3 + t.id) * 0.15;
+    t.x = t.sx;
+    const ahead = t.x - p.x;
+    // It dives only at a monster on the ground, at where it stands: keep moving and it misses.
+    if (!t.wait && p.ground && ahead > 0 && ahead <= 5 && p.y > t.y && p.y - t.y < 8 && p.poof <= 0) {
+      t.state = 'swoop';
+      t.tx = p.x;
+      t.ty = p.y;
+      t.dir = p.x < t.x ? -1 : 1;
+    }
+  } else {
+    const back = t.state === 'return';
+    const gx = back ? t.sx : t.tx;
+    const gy = back ? t.sy : t.ty;
+    const dx = gx - t.x;
+    const dy = gy - t.y;
+    const d = Math.hypot(dx, dy);
+    const step = (back ? MOVE.climb : MOVE.swoop) * dt;
+    if (d <= step || (!back && t.y >= gy)) {
+      if (back) {
+        t.state = 'hover';
+        t.wait = 1.2;
+        t.x = t.sx;
+        t.y = t.sy;
+      } else t.state = 'return';
+    } else {
+      t.x += (dx / d) * step;
+      t.y += (dy / d) * step;
+      if (Math.abs(dx) > 0.05) t.dir = Math.sign(dx);
+    }
+  }
+}
+
 function updateCamera(dt) {
   const p = player;
+  if (world().bounce) return skyCamera(dt);
   const want = Math.max(-1, Math.min(1, p.vx / MOVE.top)) * Math.min(3, view.tilesW * 0.22);
   cam.lead += (want - cam.lead) * Math.min(1, dt * 2.5);
   const tx = p.x - view.tilesW / 2 + cam.lead;
-  const ty = p.y - view.tilesH * 0.62;
+  // Launched up hard (a spring, a cap), the camera looks up ahead of you, so the landing is in view.
+  const ty = p.y - view.tilesH * (p.vy < -12 ? 0.8 : 0.62);
   cam.x += (tx - cam.x) * Math.min(1, dt * 8);
   cam.y += (ty - cam.y) * Math.min(1, dt * (p.vy < -12 ? 9 : 5));
   clampCamera();
 }
+// Sky's camera follows the monster up and never goes back down: the view's bottom stays skyFloor
+// tiles below the highest ledge landed on, so a bounce in place never leaves the view.
+function skyCamera(dt) {
+  const p = player;
+  cam.x = (stage.cols - view.tilesW) / 2;
+  const follow = p.y - view.tilesH * (p.vy < -12 ? 0.8 : 0.62);
+  // Bouncing, the view's bottom stays skyFloor below the highest ledge landed on; launched by a
+  // spring or wings, it follows the launch, and the next ledge landed on is the new floor.
+  const floor = game.skyFloor + MOVE.skyFloor - view.tilesH;
+  const want = game.skyLaunch ? follow : Math.max(follow, floor);
+  const next = cam.y + (want - cam.y) * Math.min(1, dt * (p.vy < -12 ? 9 : 5));
+  cam.y = Math.min(cam.y, next);
+  cam.y = Math.min(stage.rows - 1.2 - view.tilesH, cam.y);
+}
 function clampCamera() {
   cam.x = Math.max(0, Math.min(stage.cols - view.tilesW, cam.x));
   // Show at most a tile and a bit below the usual ground line's depth: pits still read as bottomless.
-  cam.y = Math.min(ROWS - 1.2 - view.tilesH, cam.y);
+  cam.y = Math.min(stage.rows - 1.2 - view.tilesH, cam.y);
   if (stage.cols < view.tilesW) cam.x = (stage.cols - view.tilesW) / 2;
 }
 function snapCamera() {
@@ -725,6 +1310,7 @@ function snapCamera() {
   cam.x = player.x - view.tilesW / 2;
   cam.y = player.y - view.tilesH * 0.62;
   clampCamera();
+  if (stage.climb) cam.y = Math.min(cam.y, game.skyFloor + MOVE.skyFloor - view.tilesH);
 }
 
 function dust(x, y, n) {
@@ -749,7 +1335,7 @@ function startWorld(w, keepAssist = true) {
   }
   game.earsThisWorld = false;
   game.earsBefore = game.ears;
-  const built = buildStage(WORLDS[w].stages[0]);
+  const built = buildStage(WORLDS[w].stages[0], WORLDS[w].rows);
   game.coinsTotal = built.coins + built.things.filter((t) => t.type === 'heart').length;
   loadStage(w, 0);
 }
@@ -778,6 +1364,7 @@ function showMap(from, to) {
 }
 function skipMap() {
   if (game.mode === 'map' && game.modeT < MAP.arrive) game.modeT = MAP.arrive;
+  else if (game.mode === 'gallery') showEnd();
 }
 // The run's statistics, shown only at its end: game over, or past the last level's door.
 function showStats(title, note) {
@@ -787,6 +1374,8 @@ function showStats(title, note) {
   document.querySelector('[data-tally-time]').textContent = clock(game.runTime);
   document.querySelector('[data-tally-prize]').textContent = game.ears ? 'Ears!' : '—';
   document.querySelector('[data-tally-best]').textContent = clock(best);
+  document.querySelector('[data-tally-lives]').textContent = String(Math.max(0, game.lives));
+  document.querySelector('[data-tally-lives-row]').hidden = game.over;
   document.querySelector('[data-tally-note]').textContent = note;
   document.querySelector('[data-leap]').textContent = 'Play again';
   document.querySelector('[data-rebuild]').hidden = false;
@@ -806,6 +1395,7 @@ function gameOver() {
 // between levels). Past the last door, the run's statistics.
 function enterPortal() {
   const w = world();
+  game.keys = 0; // keys held at the door don't carry on
   play('done');
   stopMusic();
   const store = readStore();
@@ -818,11 +1408,14 @@ function enterPortal() {
   game.over = false;
   game.last = last;
   if (last) {
+    // The journey's end: the run's best is kept now; the map shows the way to the summit, then the
+    // gallery, then the card.
     const runKey = `${VERSION}:run`;
     const isBest = !best[runKey] || game.runTime < best[runKey];
     if (isBest) best[runKey] = Math.round(game.runTime * 10) / 10;
     writeStore({ best });
-    showStats(`${w.name}: the end of the road, for now`, isBest ? 'A new best run! More worlds are on their way.' : 'More worlds are on their way.');
+    game.endBest = isBest;
+    showMap(game.world, WORLDS.length);
     return;
   }
   writeStore({ best });
@@ -836,6 +1429,79 @@ function clock(s) {
   const r = Math.floor(s % 60);
   return `${m}:${String(r).padStart(2, '0')}`;
 }
+// The journey's end card, after the gallery.
+function showEnd() {
+  if (game.mode !== 'gallery') return;
+  play('done');
+  showStats("The journey's end", game.endBest ? 'A new best run! Every world, crossed.' : 'Every world, crossed.');
+}
+// The gallery: the run's monster twelve times, each drawn by its world's own rule over a little
+// scene of that world, hopping in turn from the first world to the last (two rows of six in
+// portrait, one row of twelve in landscape). At most GALLERY.end s; a tap or a key skips to the card.
+const GALLERY = { hop: 0.32, each: 0.36, end: 5.6 };
+function galleryCells() {
+  const portrait = view.H >= view.W;
+  const across = portrait ? 6 : 12;
+  const rows = Math.ceil(WORLDS.length / across);
+  const size = Math.floor(Math.min((view.W * 0.94) / across, (view.H * 0.62) / rows));
+  const x0 = (view.W - size * across) / 2;
+  const y0 = view.H * 0.5 - (size * rows) / 2;
+  return WORLDS.map((w, i) => ({ id: w.id, x: Math.round(x0 + (i % across) * size), y: Math.round(y0 + Math.floor(i / across) * size), size }));
+}
+function drawGallery() {
+  const t = game.modeT;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const grad = ctx.createLinearGradient(0, 0, 0, view.H);
+  grad.addColorStop(0, '#2b2540');
+  grad.addColorStop(1, '#4a3f6b');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, view.W, view.H);
+  // Confetti, gold and white, behind the cells.
+  for (let i = 0; i < 40; i++) {
+    const x = (hash(i) * view.W + Math.sin(t * 2 + i) * view.U * 0.3) % view.W;
+    const y = ((hash(i + 9) * view.H + t * view.U * (1.5 + hash(i + 3))) % (view.H + view.U)) - view.U * 0.5;
+    ctx.fillStyle = i % 3 ? '#ffd23f' : '#ffffff';
+    ctx.fillRect(Math.round(x), Math.round(y), Math.round(view.U * 0.12), Math.round(view.U * 0.2));
+  }
+  const cells = galleryCells();
+  const pose = { run: 0, moving: 0, look: 1, ears: game.ears };
+  cells.forEach((c, i) => {
+    const w = WORLDS[i];
+    const img = thumbFor(i);
+    const hopT = t - i * GALLERY.each;
+    const hop = hopT > 0 && hopT < GALLERY.hop ? Math.sin((hopT / GALLERY.hop) * Math.PI) : 0;
+    const pad = Math.round(c.size * 0.06);
+    const inner = c.size - 2 * pad;
+    ctx.fillStyle = '#1c1826';
+    ctx.fillRect(c.x + pad - 3, c.y + pad - 3, inner + 6, inner + 6);
+    // The scene and the monster, by the world's own rule: pixels scaled by a whole number, or smooth.
+    if (w.smooth) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(img, c.x + pad, c.y + pad, inner, inner);
+      const res = inner / 3;
+      const fx = c.x + pad + inner / 2;
+      const fy = c.y + pad + res * 2.2 - hop * res * 0.9;
+      if (w.lineArt) {
+        const set = lineArtFor();
+        const f = set.frame(hop > 0 ? 'rise' : 'stand0', boilNow());
+        const s = res / LINE_RES;
+        ctx.drawImage(f, fx - set.footX * s, fy - set.footY * s, set.w * s, set.h * s);
+      } else drawVector(ctx, images.monster, monster, fx, fy, scaleFor(monster, res), { ...pose, air: hop > 0 ? -1 : 0 });
+    } else {
+      const q = Math.max(1, Math.floor(inner / (w.res * 3)));
+      const side = q * w.res * 3;
+      const ox = c.x + pad + Math.floor((inner - side) / 2);
+      const oy = c.y + pad + Math.floor((inner - side) / 2);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, ox, oy, side, side);
+      const bk = bakedFor(w);
+      const f = bk.frames[hop > 0 ? 'rise' : 'stand0'];
+      ctx.drawImage(f, ox + (Math.round(w.res * 1.5) - bk.footX) * q, oy + (w.res * 2 - bk.footY - Math.round(hop * w.res * 0.9)) * q, f.width * q, f.height * q);
+    }
+    ctx.imageSmoothingEnabled = false;
+  });
+  renderRes = 0;
+}
 // The stats card's Play again: the same monster starts a new run from the first level.
 function leap() {
   if (game.mode !== 'tally') return;
@@ -848,19 +1514,75 @@ document.querySelector('[data-rebuild]').addEventListener('click', () => {
 });
 
 // ---------------------------------------------------------------- music
+// A world with the owner's music plays its bed, a two-minute track, on a loop, and over it now and
+// then (every 15 to 40 s of play, at random) one of its short accents, never the same one twice
+// running, so the loop never settles into a pattern the ear learns. The bed is streamed by an audio
+// element from a copy fetched as the page loads: cached for offline play, and never decoded whole
+// (eight two-minute tracks decoded would be hundreds of megabytes on a phone). Other worlds loop
+// their sound set's music.
+const ACCENT_GAP = [15, 40];
+const bedEl = new Audio();
+bedEl.loop = true;
+bedEl.preload = 'auto';
+bedEl.volume = 0.6 * 0.35;
+const bedUrls = {};
+for (const w of WORLDS) {
+  if (!w.bed) continue;
+  const url = `sounds/${w.id}-bed.mp3`;
+  bedUrls[w.id] = fetch(url)
+    .then((r) => (r.ok ? r.blob() : null))
+    .then((b) => (b ? URL.createObjectURL(b) : url))
+    .catch(() => url);
+}
 function music() {
   stopMusic();
-  const name = world().music || `${world().sound}-music`;
+  const w = world();
+  if (w.bed) {
+    heard.push(`loop:${w.id}-bed`);
+    let stopped = false;
+    bedUrls[w.id].then((src) => {
+      if (stopped) return;
+      if (bedEl.dataset.world !== w.id) {
+        bedEl.src = src;
+        bedEl.dataset.world = w.id; // the same world's bed carries on where it was after a pause
+      }
+      bedEl.muted = sound.muted;
+      const p = bedEl.play();
+      if (p && p.catch) p.catch(() => {});
+    });
+    game.accentIn = nextAccentGap();
+    stopMusic = () => {
+      stopped = true;
+      bedEl.pause();
+    };
+    return;
+  }
+  game.accentIn = Infinity;
+  const name = w.music || `${w.sound}-music`;
   heard.push(`loop:${name}`);
   stopMusic = sound.loop(name, { gain: 0.35 });
+}
+function nextAccentGap() {
+  return ACCENT_GAP[0] + Math.random() * (ACCENT_GAP[1] - ACCENT_GAP[0]);
+}
+// Counted in play only: paused, on the map or between worlds, no accent comes.
+function accents(dt) {
+  if (!world().bed || !(game.accentIn < Infinity)) return;
+  game.accentIn -= dt;
+  if (game.accentIn > 0) return;
+  let n;
+  do n = 1 + Math.floor(Math.random() * ACCENTS);
+  while (n === game.lastAccent && ACCENTS > 1);
+  game.lastAccent = n;
+  play(`${world().id}-a${n}`, { gain: 0.55 });
+  game.accentIn = nextAccentGap();
 }
 
 // ---------------------------------------------------------------- drawing
 // Tile indices in each pack's sheet.
 const PP = {
-  // Pixel Platformer (18 px): the Meadow's grass and Frost's snow.
+  // Pixel Platformer (18 px): the Meadow's grass.
   meadow: { top: [1, 2, 3, 0], dirt: [121, 122, 123, 120], decor: [124, 125, 126, 128, 124], walker: [18, 19], bgX: 144 },
-  frost: { top: [81, 82, 83, 80], dirt: [121, 122, 123, 120], decor: [126, 145, 126, 124, 126], walker: [18, 19], bgX: 0 },
   block: 6,
   oneway: [48, 49, 50],
   spikes: 68,
@@ -884,6 +1606,34 @@ const INK = {
   door: 56,
   decor: [36, 37, 58, 38, 36],
 };
+// The Pixel Platformer's Farm and Industrial expansions (18 px, 16 to a row), and the Pico-8
+// Platformer (8 px, 15 to a row, in PICO-8's 16 colours).
+const FARM = {
+  top: [1, 2, 3, 0], dirt: [33, 34, 35, 32], oneway: [13, 14, 15, 12], block: 6, hay: 10,
+  decor: [20, 4, 56, 58, 73, 5, 57, 75],
+};
+const IND = {
+  top: [1, 2, 3, 0], dirt: [33, 34, 35, 32], oneway: [4, 5, 6, 5], block: 38, belt: [100, 101, 102, 85],
+  mover: [87, 88, 90], decor: [9, 10, 41, 42, 9, 26],
+};
+const PICO = {
+  top: 34, fill: [2, 2, 17, 2, 32, 2, 9], oneway: [48, 49, 50, 49], block: 19, spikes: 75, spring: [30, 15],
+  coin: 88, heart: 132, walker: [105, 106], walker2: [90, 91], flyer: [112, 113], door: [101, 116],
+  decor: [65, 80, 72, 87, 65], cloud: 81, edge: '#ffa300',
+};
+function sheetTile(g, img, cols, ts, idx, x, y, res) {
+  g.drawImage(img, (idx % cols) * ts, Math.floor(idx / cols) * ts, ts, ts, Math.round(x), Math.round(y), res, res);
+}
+const farmTile = (g, idx, x, y, res) => sheetTile(g, images.farm, 16, 18, idx, x, y, res);
+const indTile = (g, idx, x, y, res) => sheetTile(g, images.ind, 16, 18, idx, x, y, res);
+const picoTile = (g, idx, x, y, res) => sheetTile(g, images.pico, 15, 8, idx, x, y, res);
+function mushTile(g, name, x, y, res, w = 1, h = 1) {
+  const f = MUSHROOM[name];
+  g.drawImage(images.mushroom, f[0], f[1], f[2], f[3], x, y, res * w + seam, res * h + seam);
+}
+// Worlds drawn with the Pixel Platformer's own coins, hearts, springs, spikes, doors and walkers.
+const ppLike = (w) => w.pack === 'pp' || w.pack === 'farm' || w.pack === 'ind';
+
 function ppTile(g, idx, x, y, res) {
   const sx = (idx % 20) * 18;
   const sy = Math.floor(idx / 20) * 18;
@@ -898,6 +1648,20 @@ let seam = 0; // smooth tiles overlap by a hair, so no hairline shows between th
 function candyTile(g, name, x, y, res, w = 1, h = 1) {
   const f = CANDY[name];
   g.drawImage(images.candy, f[0], f[1], f[2], f[3], x, y, res * w + seam, res * h + seam);
+}
+// Batch 3's packs: the Platformer Pack Medieval, Platformer Assets Ice and Platformer Pack
+// Nautical (70 px, vector), and the New Platformer Pack's critters (128 px cells: mouse, snail, two
+// fish, a key and spikes).
+const B3 = { castle: CASTLE, ice: ICE, sea: SEA };
+const B3IMG = { castle: 'castle', ice: 'ice', sea: 'sea' };
+const isB3 = (w) => Boolean(w && B3[w.pack]);
+function b3Tile(g, w, name, x, y, res, sw = 1, sh = 1) {
+  const f = B3[w.pack][name];
+  g.drawImage(images[B3IMG[w.pack]], f[0], f[1], f[2], f[3], x, y, res * sw + seam, res * sh + seam);
+}
+const CRIT = { mouse: [0, 1], snail: [2, 3], fishBlue: [4, 5], fishYellow: [6, 7], key: 8, spikes: 9, shell: 10 };
+function critter(g, idx, x, y, size) {
+  g.drawImage(images.critters, idx * 128, 0, 128, 128, x, y, size, size);
 }
 function hash(x) {
   const s = Math.sin(x * 127.1) * 43758.5453;
@@ -934,11 +1698,11 @@ function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height,
     g.translate(-ox, -oy);
     for (let x = from; x <= to; x++) {
       const gy = stage.ground[x];
-      if (gy >= ROWS || tileAt(x, gy - 1) !== T.AIR) continue;
+      if (gy >= stage.rows || tileAt(x, gy - 1) !== T.AIR) continue;
       const h = hash(x + WORLDS.indexOf(lw) * 31);
       if (h < 0.3) drawDecor(g, lw, x, gy - 1, res, h);
     }
-    for (let y = Math.max(0, Math.floor(cam.y)); y < ROWS; y++) {
+    for (let y = Math.max(0, Math.floor(cam.y)); y < Math.min(stage.rows, Math.ceil(cam.y + vh / res) + 1); y++) {
       for (let x = from; x <= to; x++) {
         const t = stage.grid[y * stage.cols + x];
         if (t !== T.AIR) drawTile(g, lw, t, x, y, res);
@@ -953,8 +1717,11 @@ function drawScene(g, res, wi, pixel, vw = g.canvas.width, vh = g.canvas.height,
   const mine = (x) => region === 'all' || (region === 'main' ? x < stage.next : x >= stage.next);
   g.save();
   g.translate(-ox, -oy);
+  if (stage.sketches.length) drawSketches(g, w, res, mine);
   drawThings(g, w, res, pixel, mine);
+  if (stage.balls.length && isB3(w)) drawBalls(g, w, res, mine);
   if (mine(player.x)) drawPlayer(g, w, res, pixel);
+  if (w.swim) drawWater(g, w, res, c0, c1);
   drawParticles(g, w, res, pixel);
   g.restore();
 }
@@ -968,7 +1735,11 @@ function edgeIndex(x, y, kind) {
 function drawTile(g, w, t, x, y, res) {
   const px = x * res;
   const py = y * res;
-  if (w.id === 'meadow' || w.id === 'frost') {
+  if (isB3(w)) return drawTileB3(g, w, t, x, y, res, px, py);
+  if (w.pack === 'scribble') return drawTileScribble(g, w, t, x, y, res, px, py);
+  if (w.pack === 'sky') return drawTileSky(g, w, t, x, y, res, px, py);
+  if (w.pack === 'farm' || w.pack === 'ind' || w.pack === 'pico' || w.pack === 'mush') return drawTileNew(g, w, t, x, y, res, px, py);
+  if (w.id === 'meadow') {
     const set = PP[w.id];
     if (t === T.GROUND) {
       const top = tileAt(x, y - 1) !== T.GROUND;
@@ -1008,9 +1779,117 @@ function drawTile(g, w, t, x, y, res) {
   }
 }
 
+// The new worlds' tiles: Farm's straw-topped soil, crates and haybales; Industrial's steel, girders
+// and belts; Pico's dark rock edged in orange; Mushroom's soft tan caps over soil.
+function drawTileNew(g, w, t, x, y, res, px, py) {
+  const top = (k) => tileAt(x, y - 1) !== T.GROUND && tileAt(x, y - 1) !== k;
+  if (w.pack === 'farm' || w.pack === 'ind') {
+    const set = w.pack === 'farm' ? FARM : IND;
+    const tile = w.pack === 'farm' ? farmTile : indTile;
+    if (t === T.GROUND) tile(g, top(T.GROUND) ? set.top[edgeIndex(x, y, T.GROUND)] : set.dirt[edgeIndex(x, y, T.GROUND)], px, py, res);
+    else if (t === T.BLOCK) tile(g, set.block, px, py, res);
+    else if (t === T.ONEWAY) tile(g, set.oneway[edgeIndex(x, y, T.ONEWAY)], px, py, res);
+    else if (t === T.SPIKES) ppTile(g, PP.spikes, px, py, res);
+    else if (t === T.HAY) tile(g, FARM.hay, px, py, res);
+    else if (t === T.BELTL || t === T.BELTR) {
+      const l = tileAt(x - 1, y) === t;
+      const r = tileAt(x + 1, y) === t;
+      tile(g, IND.belt[l && r ? 1 : l ? 2 : r ? 0 : 1], px, py, res);
+      // Arrows running along the belt the way it carries.
+      const u = Math.max(1, Math.round(res / 18));
+      const dir = t === T.BELTR ? 1 : -1;
+      const off = (((game.t * MOVE.belt * dir) % 1) + 1) % 1;
+      g.fillStyle = '#ffd23f';
+      for (let k = 0; k < 2; k++) {
+        const ax = Math.round(px + ((off + k * 0.5) % 1) * res);
+        const ay = Math.round(py + res * 0.42);
+        for (let i = 0; i < 3; i++) g.fillRect(ax + (dir > 0 ? i : -i) * u, ay - (2 - i) * u, u, (2 - i) * 2 * u + u);
+      }
+    }
+  } else if (w.pack === 'pico') {
+    const u = Math.max(1, Math.round(res / 8));
+    if (t === T.GROUND) {
+      picoTile(g, top(T.GROUND) ? PICO.top : PICO.fill[Math.floor(hash(x * 3 + y * 7) * PICO.fill.length)], px, py, res);
+      g.fillStyle = PICO.edge;
+      if (tileAt(x - 1, y) === T.AIR || tileAt(x - 1, y) === T.SPIKES) g.fillRect(Math.round(px), Math.round(py), u, res);
+      if (tileAt(x + 1, y) === T.AIR || tileAt(x + 1, y) === T.SPIKES) g.fillRect(Math.round(px + res - u), Math.round(py), u, res);
+    } else if (t === T.BLOCK) picoTile(g, PICO.block, px, py, res);
+    else if (t === T.ONEWAY) picoTile(g, PICO.oneway[edgeIndex(x, y, T.ONEWAY)], px, py, res);
+    else if (t === T.SPIKES) picoTile(g, PICO.spikes, px, py, res);
+    else picoTile(g, PICO.block, px, py, res);
+  } else {
+    // Mushroom: smooth.
+    if (t === T.GROUND) {
+      if (top(T.GROUND)) {
+        const e = edgeIndex(x, y, T.GROUND);
+        mushTile(g, ['shroomTanLeft', 'shroomTanMid', 'shroomTanRight', 'shroomTanMid'][e], px, py, res);
+      } else {
+        g.fillStyle = '#7a5a3f';
+        g.fillRect(px, py, res + seam, res + seam);
+        g.fillStyle = '#8c6a4c';
+        const h = hash(x * 7 + y * 13);
+        g.beginPath();
+        g.arc(px + res * (0.2 + h * 0.6), py + res * (0.25 + hash(x + y) * 0.5), res * 0.09, 0, Math.PI * 2);
+        g.fill();
+      }
+    } else if (t === T.BLOCK) mushTile(g, 'shroomTanMidAlt', px, py, res);
+    else if (t === T.ONEWAY) {
+      const e = edgeIndex(x, y, T.ONEWAY);
+      mushTile(g, ['shroomBrownLeft', 'shroomBrownMid', 'shroomBrownRight', 'shroomBrownMidAlt'][e], px, py, res);
+    } else candyTile(g, 'canePinkSmall', px, py, res);
+  }
+  return undefined;
+}
+
+// Castle's stone and portcullis; Ice's snow, ice blocks and slopes; Sea's sand, docks and urchins.
+function drawTileB3(g, w, t, x, y, res, px, py) {
+  const above = tileAt(x, y - 1);
+  const exposed = above === T.AIR || above === T.SPIKES || above === T.ONEWAY;
+  const e = edgeIndex(x, y, t);
+  if (t === T.SPIKES) {
+    if (w.pack === 'ice') return b3Tile(g, w, 'spikes', px, py, res);
+    return critter(g, CRIT.spikes, px, py, res);
+  }
+  if (w.pack === 'castle') {
+    if (t === T.GROUND) b3Tile(g, w, exposed ? 'top' : 'fill', px, py, res);
+    else if (t === T.ONEWAY) b3Tile(g, w, ['ledgeL', 'ledgeM', 'ledgeR', 'ledgeM'][e], px, py, res);
+    else if (t === T.GATE) b3Tile(g, w, 'bars', px, py, res);
+    else b3Tile(g, w, 'fill', px, py, res);
+  } else if (w.pack === 'ice') {
+    if (t === T.SLOPEU) b3Tile(g, w, 'hillUp', px, py, res);
+    else if (t === T.SLOPED) b3Tile(g, w, 'hillDown', px, py, res);
+    else if (t === T.ICE) b3Tile(g, w, exposed ? 'ice' : 'iceAlt', px, py, res);
+    else if (t === T.ONEWAY) b3Tile(g, w, ['halfL', 'halfM', 'halfR', 'halfM'][e], px, py, res);
+    else if (t === T.GROUND && exposed) b3Tile(g, w, ['topL', 'top', 'topR', 'topOne'][e], px, py, res);
+    else if (t === T.GROUND && SLOPES.has(above)) b3Tile(g, w, above === T.SLOPEU ? 'hillUpFill' : 'hillDownFill', px, py, res);
+    else b3Tile(g, w, 'fill', px, py, res);
+  } else {
+    if (t === T.GROUND && exposed) b3Tile(g, w, ['topL', 'top', 'topR', 'top'][e], px, py, res);
+    else if (t === T.ONEWAY) b3Tile(g, w, ['dockL', 'dock', 'dockR', 'dock'][e], px, py - res * 0.1, res);
+    else if (t === T.BLOCK) b3Tile(g, w, 'crate', px, py, res);
+    else b3Tile(g, w, hash(x * 3 + y * 5) < 0.2 ? 'fill2' : 'fill', px, py, res);
+  }
+  return undefined;
+}
+
 function drawDecor(g, w, x, y, res, h) {
   const pick = (list) => list[Math.floor(h * 16) % list.length];
-  if (w.id === 'meadow' || w.id === 'frost') ppTile(g, pick(PP[w.id].decor), x * res, y * res, res);
+  if (w.pack === 'scribble') return drawDoodle(g, x, y, res, h);
+  if (w.pack === 'sky') return undefined;
+  if (isB3(w)) {
+    const n = pick({ castle: ['torch', 'banner', 'torch2', 'flag'], ice: ['pine', 'plant', 'rock', 'dead', 'pine'], sea: ['weed', 'coral1', 'star', 'weed2', 'coral3', 'shell', 'rock'] }[w.pack]);
+    if (w.pack === 'castle' && n === 'flag') return b3Tile(g, w, n, x * res, (y - 1) * res, res, 1, 2);
+    return b3Tile(g, w, n, x * res, y * res, res);
+  }
+  if (w.pack === 'farm') return farmTile(g, pick(FARM.decor), x * res, y * res, res);
+  if (w.pack === 'ind') return indTile(g, pick(IND.decor), x * res, y * res, res);
+  if (w.pack === 'pico') return picoTile(g, pick(PICO.decor), x * res, y * res, res);
+  if (w.pack === 'mush') {
+    const n = pick(['tinyShroom_red', 'tinyShroom_tan', 'bush', 'tinyShroom_brown', 'tinyShroom_tan']);
+    if (n === 'bush') return mushTile(g, n, x * res - res, y * res + res * 0.35, res, 3, 0.65);
+    return mushTile(g, n, x * res, y * res, res);
+  }
+  if (w.id === 'meadow') ppTile(g, pick(PP[w.id].decor), x * res, y * res, res);
   else if (w.id === 'ink') inkTile(g, pick(INK.decor), x * res, y * res, res);
   else {
     const n = pick(['lollipopRed', 'canePinkSmall', 'lollipopGreen', 'creamPink', 'lollipopWhiteRed']);
@@ -1029,21 +1908,25 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
   grad.addColorStop(1, w.sky[1]);
   g.fillStyle = grad;
   g.fillRect(0, 0, vw, vh);
-  const groundY = 11 * res - oy; // the usual ground line on screen
-  if (w.id === 'meadow' || w.id === 'frost') {
-    // The pack's background panel (green for the Meadow, icy blue for Frost), with parallax.
+  const groundY = stage.base * res - oy; // the usual ground line on screen
+  if (isB3(w)) return drawBackgroundB3(g, w, res, ox, oy, vw, vh, groundY);
+  if (w.pack === 'scribble' || w.pack === 'sky') return drawBackgroundB4(g, w, res, ox, oy, vw, vh, groundY);
+  if (w.pack === 'ind' || w.pack === 'pico' || w.pack === 'mush') return drawBackgroundNew(g, w, res, ox, oy, vw, vh, groundY);
+  if (w.id === 'meadow' || w.id === 'farm') {
+    // The pack's background panel (green for the Meadow and the Farm), with parallax.
+    const bg = 'meadow';
     const s = res / 18;
     const tw = 24 * s;
     const par = Math.round(ox * 0.35 + game.t * 2 * s);
     const baseY = Math.round(groundY - 24 * s * 2.2);
-    g.fillStyle = images.bgFill[w.id];
+    g.fillStyle = images.bgFill[bg];
     g.fillRect(0, baseY + 3 * tw - 1, vw, vh);
     for (let x = -((par % (2 * tw)) + 2 * tw) % (2 * tw) - 2 * tw; x < vw; x += 2 * tw) {
       for (let r = 0; r < 3; r++) {
-        g.drawImage(images.meadowBg, PP[w.id].bgX, r * 24, 48, 24, Math.round(x), baseY + r * tw, 2 * tw, tw);
+        g.drawImage(images.meadowBg, PP[bg].bgX, r * 24, 48, 24, Math.round(x), baseY + r * tw, 2 * tw, tw);
       }
     }
-    // Clouds drifting by (Frost: falling snow too).
+    // Clouds drifting by.
     g.fillStyle = 'rgba(255,255,255,0.85)';
     const u = Math.max(1, Math.round(res / 9));
     for (let i = 0; i < 9; i++) {
@@ -1052,14 +1935,6 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
       const py = Math.round(groundY - res * (5.5 + ((i * 5) % 9) * 1.45));
       g.fillRect(px, py, u * 10, u * 3);
       g.fillRect(px + u * 2, py - u * 2, u * 5, u * 2);
-    }
-    if (w.id === 'frost') {
-      g.fillStyle = '#ffffff';
-      for (let i = 0; i < 40; i++) {
-        const fx = ((hash(i) * vw + game.t * res * 0.4 * (0.5 + hash(i + 9)) - ox * 0.5) % vw + vw) % vw;
-        const fy = ((hash(i + 3) * vh + game.t * res * (0.8 + hash(i + 5))) % vh + vh) % vh;
-        g.fillRect(Math.round(fx), Math.round(fy), u, u);
-      }
     }
   } else if (w.id === 'ink') {
     // Stars, and far pillars drawn in outline.
@@ -1071,17 +1946,19 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
       const sy = hash(i + 7) * (groundY - res * 2);
       if (Math.sin(game.t * 2 + i) > -0.6) g.fillRect(Math.round(sx), Math.round(sy), u, u);
     }
-    g.globalAlpha = 0.35;
+    // Far pillars in dotted outline: faint, yet only the world's two colours.
     const par = ox * 0.3;
+    const dotted = (x0, y0, w0, h0) => {
+      for (let yy = 0; yy < h0; yy += 3 * u) for (let xx = 0; xx < w0; xx += 3 * u) g.fillRect(x0 + xx, y0 + yy, u, u);
+    };
     for (let i = -1; i < vw / (res * 5) + 2; i++) {
       const idx = i + Math.floor(par / (res * 5));
       const px = Math.round(i * res * 5 - (par % (res * 5)));
       const h = res * (3 + hash(idx) * 4);
-      g.fillRect(px, Math.round(groundY - h), u, Math.round(h + res * 4));
-      g.fillRect(px + Math.round(res * 1.5), Math.round(groundY - h), u, Math.round(h + res * 4));
-      g.fillRect(px, Math.round(groundY - h), Math.round(res * 1.5) + u, u);
+      dotted(px, Math.round(groundY - h), u, Math.round(h + res * 4));
+      dotted(px + Math.round(res * 1.5), Math.round(groundY - h), u, Math.round(h + res * 4));
+      dotted(px, Math.round(groundY - h), Math.round(res * 1.5) + u, u);
     }
-    g.globalAlpha = 1;
   } else {
     // Soft hills and big lollipops far away.
     g.fillStyle = '#ffc4df';
@@ -1123,6 +2000,571 @@ function drawBackground(g, w, res, ox, oy, vw, vh, pixel) {
   }
 }
 
+// Industrial: a far skyline of factories with chimneys, in pixels. Pico: PICO-8's peach sky and
+// its pack's clouds, nothing else. Mushroom: soft hills and giant mushrooms far away, smooth.
+function drawBackgroundNew(g, w, res, ox, oy, vw, vh, groundY) {
+  if (w.pack === 'ind') {
+    const u = Math.max(1, Math.round(res / 18));
+    const par = ox * 0.3;
+    const span = res * 4;
+    for (const [layer, col, f, hgt] of [[0, '#b7c2cd', 0.18, 5.5], [1, '#8d9aa8', 0.32, 3.6]]) {
+      g.fillStyle = col;
+      const p2 = ox * f;
+      for (let i = -1; i < vw / span + 2; i++) {
+        const idx = i + Math.floor(p2 / span) + layer * 17;
+        const bx = Math.round(i * span - (p2 % span));
+        const bh = Math.round(res * (hgt * (0.6 + hash(idx) * 0.6)));
+        g.fillRect(bx, Math.round(groundY - bh), Math.round(span * 0.8), bh + vh);
+        if (hash(idx + 3) < 0.55) {
+          const cx = bx + Math.round(span * 0.2 + hash(idx + 5) * span * 0.4);
+          const chH = Math.round(res * (1.2 + hash(idx + 7) * 1.5));
+          g.fillRect(cx, Math.round(groundY - bh - chH), Math.round(res * 0.35), chH + 1);
+          // A puff of smoke drifting up from the chimney.
+          if (layer === 1) {
+            g.fillStyle = 'rgba(240,244,248,0.8)';
+            const k = (game.t * 0.4 + hash(idx)) % 1;
+            const sz = Math.round(res * (0.25 + k * 0.4));
+            g.fillRect(cx - Math.round(k * res * 0.4), Math.round(groundY - bh - chH - k * res * 2.2 - sz), sz, sz);
+            g.fillStyle = col;
+          }
+        }
+      }
+    }
+    void par;
+    g.fillStyle = '#5d6a78';
+    g.fillRect(0, Math.round(groundY + res * 0.5), vw, vh);
+    void u;
+  } else if (w.pack === 'pico') {
+    const u = Math.max(1, Math.round(res / 8));
+    g.fillStyle = w.sky[0];
+    g.fillRect(0, 0, vw, vh);
+    for (let i = 0; i < 7; i++) {
+      const cx = ((i * 9.7 + game.t * (0.15 + (i % 3) * 0.06) - cam.x * 0.2) % 48 + 48) % 48;
+      const px = Math.round((cx - 6) * res);
+      const py = Math.round(groundY - res * (5 + ((i * 5) % 7) * 1.3));
+      picoTile(g, PICO.cloud, px, py, res);
+      picoTile(g, PICO.cloud, px + res, py, res);
+    }
+    // Far pink trees in a row, as in the pack's sample.
+    const par = ox * 0.4;
+    const span = res * 6;
+    for (let i = -1; i < vw / span + 2; i++) {
+      const idx = i + Math.floor(par / span);
+      const tx = Math.round(i * span - (par % span) + hash(idx) * res * 3);
+      const th = 2 + Math.floor(hash(idx + 1) * 3);
+      for (let k = 0; k < th; k++) picoTile(g, 38, tx, Math.round(groundY - res * (k + 1)), res);
+      picoTile(g, 23, tx, Math.round(groundY - res * (th + 1)), res);
+      picoTile(g, 8, tx, Math.round(groundY - res * (th + 2)), res);
+    }
+    void u;
+  } else {
+    // Mushroom: far hills and giant mushrooms, faded. In a tall level they sit on a horizon that
+    // moves slowly as the camera climbs, so the climb reads as height.
+    const hz = vh * 0.78 + (groundY - vh * 0.78) * 0.12;
+    g.fillStyle = '#b6e083';
+    const par = ox * 0.25;
+    for (let i = -1; i < vw / (res * 4) + 2; i++) {
+      const hx = i * res * 4 - (par % (res * 4));
+      g.beginPath();
+      g.arc(hx, hz + res * 0.6, res * (2.6 + hash(i + Math.floor(par / (res * 4))) * 1.6), Math.PI, 0);
+      g.fill();
+    }
+    g.fillRect(0, hz + res * 0.5, vw, vh);
+    g.globalAlpha = 0.4;
+    const par2 = ox * 0.15;
+    for (let i = -1; i < vw / (res * 6) + 2; i++) {
+      const idx = i + Math.floor(par2 / (res * 6));
+      const lx = i * res * 6 - (par2 % (res * 6)) + res * hash(idx) * 2;
+      const n = ['tallShroom_red', 'tallShroom_tan', 'tallShroom_brown'][Math.abs(idx) % 3];
+      const sz = res * (2 + hash(idx + 4) * 2);
+      mushTile(g, n, lx, hz - sz + res * 0.6, sz);
+    }
+    g.globalAlpha = 1;
+    const deep = g.createLinearGradient(0, groundY, 0, groundY + res * 4);
+    deep.addColorStop(0, '#6a9a3f');
+    deep.addColorStop(1, '#2f4d22');
+    g.fillStyle = deep;
+    g.fillRect(0, groundY + res * 0.55, vw, vh);
+  }
+  return undefined;
+}
+
+// Castle: far towers with battlements. Ice: snowy peaks and pines far away. Sea: the open sea from
+// the water's surface down, deepening.
+function drawBackgroundB3(g, w, res, ox, oy, vw, vh, groundY) {
+  if (w.pack === 'castle') {
+    const par = ox * 0.25;
+    const span = res * 5;
+    g.fillStyle = '#b9cfdc';
+    for (let i = -1; i < vw / span + 2; i++) {
+      const idx = i + Math.floor(par / span);
+      const bx = i * span - (par % span);
+      const th = res * (3 + hash(idx) * 3);
+      const tw = res * (1.4 + hash(idx + 2) * 0.8);
+      g.fillRect(bx, groundY - th, tw, th + vh);
+      for (let k = 0; k < 3; k++) g.fillRect(bx + (k * tw) / 2.5, groundY - th - res * 0.3, tw / 5, res * 0.3);
+    }
+    g.fillStyle = '#a3bccb';
+    g.fillRect(0, groundY - res * 1.4, vw, vh);
+    const deep = g.createLinearGradient(0, groundY, 0, groundY + res * 4);
+    deep.addColorStop(0, '#7f97a6');
+    deep.addColorStop(1, '#3d4c57');
+    g.fillStyle = deep;
+    g.fillRect(0, groundY + res * 0.55, vw, vh);
+  } else if (w.pack === 'ice') {
+    const par = ox * 0.2;
+    const span = res * 6;
+    for (const [col, f, hgt] of [['#d6ecf7', 0.15, 6], ['#bfe0f0', 0.3, 3.8]]) {
+      g.fillStyle = col;
+      const p2 = ox * f;
+      for (let i = -1; i < vw / span + 2; i++) {
+        const idx = i + Math.floor(p2 / span) + hgt * 7;
+        const mx = i * span - (p2 % span) + hash(idx) * res * 2;
+        const mh = res * hgt * (0.6 + hash(idx + 1) * 0.6);
+        g.beginPath();
+        g.moveTo(mx - mh * 0.9, groundY + res);
+        g.lineTo(mx, groundY - mh);
+        g.lineTo(mx + mh * 0.9, groundY + res);
+        g.fill();
+      }
+    }
+    void par;
+    // Snow drifting down.
+    g.fillStyle = 'rgba(255,255,255,0.9)';
+    for (let i = 0; i < 30; i++) {
+      const fx = ((hash(i) * vw + game.t * res * 0.3 * (0.5 + hash(i + 9)) - ox * 0.4) % vw + vw) % vw;
+      const fy = ((hash(i + 3) * vh + game.t * res * (0.6 + hash(i + 5) * 0.6)) % vh + vh) % vh;
+      g.beginPath();
+      g.arc(fx, fy, res * 0.05, 0, Math.PI * 2);
+      g.fill();
+    }
+    const deep = g.createLinearGradient(0, groundY, 0, groundY + res * 4);
+    deep.addColorStop(0, '#9cc9e2');
+    deep.addColorStop(1, '#3f6f93');
+    g.fillStyle = deep;
+    g.fillRect(0, groundY + res * 0.55, vw, vh);
+  } else {
+    // The sea: from the water's surface down, darker as it deepens.
+    let surf = Infinity;
+    for (let c = 0; c < stage.cols; c++) surf = Math.min(surf, stage.water[c]);
+    const sy = Number.isFinite(surf) ? surf * res - oy : groundY;
+    g.fillStyle = 'rgba(255,255,255,0.75)';
+    for (let i = 0; i < 6; i++) {
+      const cx = ((i * 9.1 + game.t * (0.15 + (i % 3) * 0.05) - cam.x * 0.15) % 48 + 48) % 48;
+      const px = (cx - 6) * res;
+      const py = sy - res * (4 + ((i * 5) % 7));
+      g.beginPath();
+      g.arc(px, py, res * 0.5, 0, Math.PI * 2);
+      g.arc(px + res * 0.6, py - res * 0.2, res * 0.65, 0, Math.PI * 2);
+      g.arc(px + res * 1.2, py, res * 0.45, 0, Math.PI * 2);
+      g.fill();
+    }
+    const deep = g.createLinearGradient(0, sy, 0, sy + res * 9);
+    deep.addColorStop(0, '#5cc3e6');
+    deep.addColorStop(1, '#1d5f8a');
+    g.fillStyle = deep;
+    g.fillRect(0, sy, vw, vh);
+  }
+  return undefined;
+}
+// Sea's water over everything in it: a clear tint, and the pack's waves along the surface.
+function drawWater(g, w, res, c0, c1) {
+  if (!stage.water) return;
+  for (let x = c0; x <= c1; x++) {
+    const s0 = stage.water[x];
+    if (!Number.isFinite(s0)) continue;
+    g.fillStyle = 'rgba(70,180,230,0.22)';
+    g.fillRect(x * res, s0 * res, res + seam, (stage.rows - s0) * res);
+    g.globalAlpha = 0.8;
+    b3Tile(g, w, (x + Math.floor(game.t * 2)) % 2 ? 'wave' : 'wave2', x * res, (s0 - 0.45) * res + Math.sin(game.t * 2 + x) * res * 0.04, res, 1, 0.55);
+    g.globalAlpha = 1;
+  }
+  // Currents: bubbles streaming their way.
+  for (const c of stage.currents) {
+    for (let i = 0; i < c.w * c.h * 0.8; i++) {
+      const fx = hash(i + c.id * 13);
+      const fy = hash(i * 3 + c.id * 7);
+      let bx = c.x + fx * c.w;
+      let by = c.y + fy * c.h;
+      const run = (game.t * MOVE.current * 0.9 + hash(i + 5) * 9) % (c.cx ? c.w : c.h);
+      if (c.cx) bx = c.x + ((fx * c.w + c.cx * run) % c.w + c.w) % c.w;
+      else by = c.y + ((fy * c.h + c.cy * run) % c.h + c.h) % c.h;
+      const r = res * (0.06 + hash(i + 11) * 0.07);
+      g.fillStyle = 'rgba(255,255,255,0.7)';
+      g.beginPath();
+      g.arc(bx * res, by * res, r, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+}
+
+// ---------------------------------------------------------------- batch 4: Scribble and Sky
+// Scribble draws in pen on paper: ink lines about a fourteenth of a tile thick, a little wobbly, and
+// the wobble boils (three of them in turn, eight times a second) as a hand-drawn cartoon's does.
+const PEN = { ink: '#1b1b1f', paper: '#fbf8ef', pencil: '#a29c8f', white: '#ffffff' };
+function boilNow() {
+  return Math.floor(game.t * 8) % BOILS;
+}
+function wob(seed, res) {
+  return (hash(seed + boilNow() * 3.17) - 0.5) * res * 0.05;
+}
+function penStyle(g, res, colour = PEN.ink, k = 1) {
+  g.strokeStyle = colour;
+  g.lineWidth = Math.max(1.5, (res / 14) * k);
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
+}
+function penLine(g, x0, y0, x1, y1, seed, res) {
+  g.beginPath();
+  g.moveTo(x0 + wob(seed, res), y0 + wob(seed + 1, res));
+  g.quadraticCurveTo((x0 + x1) / 2 + wob(seed + 2, res), (y0 + y1) / 2 + wob(seed + 3, res), x1 + wob(seed + 4, res), y1 + wob(seed + 5, res));
+  g.stroke();
+}
+const solidAt = (x, y) => SOLID.has(tileAt(x, y));
+// The Scribble Platformer's tiles (70 px per tile) and the Jumper Pack's sprites, from their sheets.
+function scrib(g, name, x, y, w, h) {
+  const f = SCRIBBLE[name];
+  g.drawImage(images.scribble, f[0], f[1], f[2], f[3], x, y, w, h);
+}
+function jump(g, name, x, y, w, h) {
+  const f = JUMPER[name];
+  g.drawImage(images.jumper, f[0], f[1], f[2], f[3], x, y, w, h);
+}
+// The pack's white coin and heart, filled gold and red so they read on the white page.
+const tinted = {};
+function scribTinted(name, colour) {
+  if (!tinted[name]) {
+    const f = SCRIBBLE[name];
+    const c = makeCanvas(f[2], f[3]);
+    const g = c.getContext('2d');
+    g.drawImage(images.scribble, f[0], f[1], f[2], f[3], 0, 0, f[2], f[3]);
+    const d = g.getImageData(0, 0, f[2], f[3]);
+    const [r, gg, b] = [1, 3, 5].map((i) => parseInt(colour.slice(i, i + 2), 16));
+    for (let i = 0; i < d.data.length; i += 4) {
+      if (d.data[i + 3] > 0 && d.data[i] > 200 && d.data[i + 1] > 200 && d.data[i + 2] > 200) {
+        d.data[i] = r;
+        d.data[i + 1] = gg;
+        d.data[i + 2] = b;
+      }
+    }
+    g.putImageData(d, 0, 0);
+    tinted[name] = c;
+  }
+  return tinted[name];
+}
+function drawTileScribble(g, w, t, x, y, res, px, py) {
+  const seed = x * 13.1 + y * 7.7;
+  if (t === T.SKETCH) {
+    const l = tileAt(x - 1, y) !== T.SKETCH;
+    const r = tileAt(x + 1, y) !== T.SKETCH;
+    return drawSketchTile(g, px, py, res, 1, l, r, seed);
+  }
+  if (t === T.SPIKES) return scrib(g, 'tile_spikes', px, py, res + seam, res + seam);
+  if (t === T.ONEWAY) return scrib(g, 'tile_bridge', px, py, res + seam, res * 0.5);
+  // Ground and blocks: the pack's grass-topped tile where it meets the air, its plain tile below.
+  const top = !solidAt(x, y - 1) && tileAt(x, y - 1) !== T.SPIKES;
+  scrib(g, top ? 'tile_grass' : 'tile', px, py, res + seam, res + seam);
+  void seed;
+  return undefined;
+}
+// A sketch tile, drawn k of the way (the pen runs along its top, round its end and back along its
+// bottom, then hatches it). l, r: it ends a run on that side.
+function drawSketchTile(g, px, py, res, k, l, r, seed) {
+  // The pack's bridge plank, revealed left to right as the pen draws it, the pack's pencil at the tip.
+  void l;
+  void r;
+  void seed;
+  const h = res * 0.5;
+  if (k >= 1) return scrib(g, 'tile_bridge', px, py, res + seam, h);
+  g.save();
+  g.beginPath();
+  g.rect(px, py - res * 0.1, res * k, h + res * 0.2);
+  g.clip();
+  scrib(g, 'tile_bridge', px, py, res + seam, h);
+  g.restore();
+  const f = SCRIBBLE.item_pencil;
+  const ph = res * 0.9;
+  const pw = (f[2] / f[3]) * ph;
+  g.save();
+  g.translate(px + res * k, py + h * 0.5);
+  g.rotate(0.5);
+  scrib(g, 'item_pencil', -pw / 2, -ph, pw, ph);
+  g.restore();
+  return undefined;
+}
+// Scribble's sketch tiles that aren't solid yet: drawing in, or not there at all. Before a run is
+// drawn, two pencil ticks mark its ends (and in the opening a dotted guide its length).
+function drawSketches(g, w, res, mine) {
+  if (!w.lineArt) return;
+  const runs = new Map();
+  for (const k of stage.sketches) {
+    if (!mine(k.x + 0.5)) continue;
+    if (!runs.has(k.run)) runs.set(k.run, []);
+    runs.get(k.run).push(k);
+  }
+  for (const list of runs.values()) {
+    const x0 = Math.min(...list.map((k) => k.x));
+    const x1 = Math.max(...list.map((k) => k.x)) + 1;
+    const y = list[0].y;
+    if (list.some((k) => k.state === 'undrawn')) {
+      // The ticks: the two ends of the pack's plank, faint, where the run will be drawn.
+      g.save();
+      g.globalAlpha = 0.4;
+      const f = SCRIBBLE.tile_bridge;
+      const cap = f[2] * 0.22;
+      g.drawImage(images.scribble, f[0], f[1], cap, f[3], x0 * res, y * res, res * 0.22, res * 0.5);
+      g.drawImage(images.scribble, f[0] + f[2] - cap, f[1], cap, f[3], (x1 - 0.22) * res, y * res, res * 0.22, res * 0.5);
+      g.restore();
+      if (list[0].guide) {
+        g.fillStyle = PEN.pencil;
+        for (let xx = x0 + 0.2; xx < x1 - 0.1; xx += 0.3) {
+          g.beginPath();
+          g.arc(xx * res, y * res, res * 0.035, 0, Math.PI * 2);
+          g.fill();
+        }
+      }
+    }
+    for (const k of list) {
+      if (k.state !== 'drawing' && k.state !== 'whole') continue;
+      const kk = Math.min(1, k.t / MOVE.sketchDraw);
+      drawSketchTile(g, k.x * res, k.y * res, res, kk, k.x === x0, k.x + 1 === x1, k.x * 13.1 + k.y * 7.7);
+    }
+  }
+}
+function drawDoodle(g, x, y, res, h) {
+  // The pack's bushes and trees on the ground.
+  const n = ['tile_bush', 'tile_bushHalf', 'tile_tree', 'tile_bushHalf'][Math.floor(h * 13) % 4];
+  scrib(g, n, x * res, y * res, res, res);
+}
+// Scribble's coin and heart: drawn in pen, the only colour on the page their fill.
+function penPickup(g, coin, px, py, res) {
+  const img = coin ? scribTinted('tile_coin', '#ffd23f') : scribTinted('tile_heart', '#ff5d73');
+  const sz = res * (coin ? 0.75 : 0.85);
+  const sq = coin ? 0.45 + 0.55 * Math.abs(Math.cos(game.t * 3 + px)) : 1;
+  g.drawImage(img, px - (sz * sq) / 2, py - sz / 2, sz * sq, sz);
+}
+function penDoor(g, px, py, res, glow) {
+  g.fillStyle = `rgba(255,230,120,${0.2 + glow * 0.25})`;
+  g.beginPath();
+  g.arc(px, py - res * 1.1, res * 1.3, 0, Math.PI * 2);
+  g.fill();
+  scrib(g, 'tile_door', px - res * 0.75, py - res * 1.5, res * 1.5, res * 1.5);
+}
+// The New Platformer Pack's slimes, redrawn as line art (cached per frame and wobble).
+const lineSlimes = {};
+function lineSlime(col, boil) {
+  const key = `${col}:${boil}`;
+  if (!lineSlimes[key]) {
+    const c = makeCanvas(128, 128);
+    c.getContext('2d').drawImage(images.slimes, col * 128, 0, 128, 128, 0, 0, 128, 128);
+    lineSlimes[key] = toLineArt(c, { ink: PEN.ink, paper: PEN.white, r: 6, boil });
+  }
+  return lineSlimes[key];
+}
+
+// Sky: the Jumper Pack's floating ledges (grass on earth), sliding stone ones, cracked ones; cloud
+// walls; the plateau of cloud at the top.
+const SKYC = { grass: '#6ccb3f', grassDark: '#4fa82c', earth: '#c98b52', earthDark: '#9a6538', stone: '#9fb3c4', stoneDark: '#71879b', cloud: '#ffffff', cloudShade: '#dceefa' };
+function drawSkyLedge(g, x, y, wTiles, res, kind) {
+  // The pack's floating ground, its ends kept and its middle stretched to the ledge's length:
+  // grass, broken grass for a cracked ledge, stone for a sliding one.
+  const name = kind === 'slide' ? 'ground_stone' : kind === 'cracked' ? 'ground_grass_broken' : 'ground_grass';
+  const f = JUMPER[name];
+  const h = res * 0.62;
+  const s2 = h / f[3];
+  const cap = 34;
+  const capD = Math.min(cap * s2, (wTiles * res) / 2);
+  const wpx = wTiles * res;
+  const top = y - res * 0.12;
+  g.drawImage(images.jumper, f[0], f[1], cap, f[3], x, top, capD, h);
+  g.drawImage(images.jumper, f[0] + cap, f[1], f[2] - 2 * cap, f[3], x + capD - 0.5, top, wpx - 2 * capD + 1, h);
+  g.drawImage(images.jumper, f[0] + f[2] - cap, f[1], cap, f[3], x + wpx - capD, top, capD, h);
+}
+function drawCloud(g, cx, cy, r, colour = SKYC.cloud) {
+  g.fillStyle = colour;
+  g.beginPath();
+  g.arc(cx - r * 0.9, cy + r * 0.15, r * 0.65, 0, Math.PI * 2);
+  g.arc(cx, cy - r * 0.15, r, 0, Math.PI * 2);
+  g.arc(cx + r * 0.95, cy + r * 0.1, r * 0.7, 0, Math.PI * 2);
+  g.fill();
+}
+function drawTileSky(g, w, t, x, y, res, px, py) {
+  if (t === T.BLOCK) {
+    // A cloud wall: puffs stacked up the column's side.
+    g.fillStyle = SKYC.cloudShade;
+    g.fillRect(px, py, res + seam, res + seam);
+    drawCloud(g, px + res * 0.5, py + res * 0.5, res * 0.5 * (0.85 + hash(y) * 0.3));
+    return undefined;
+  }
+  if (t === T.ONEWAY) {
+    if (y === stage.top) {
+      // The plateau: one long ledge of the pack's ground, drawn whole by its left end.
+      if (tileAt(x - 1, y) === T.ONEWAY) return undefined;
+      let n = 1;
+      while (tileAt(x + n, y) === T.ONEWAY) n++;
+      drawSkyLedge(g, px, py, n, res, 'grass');
+      return undefined;
+    }
+    const l = tileAt(x - 1, y) !== T.ONEWAY;
+    const r = tileAt(x + 1, y) !== T.ONEWAY;
+    if (!l) return undefined; // a run of ledge tiles is drawn whole by its left end
+    let n = 1;
+    while (tileAt(x + n, y) === T.ONEWAY) n++;
+    void r;
+    drawSkyLedge(g, px, py, n, res, 'grass');
+    return undefined;
+  }
+  if (t === T.SPIKES) return candyTile(g, 'canePinkSmall', px, py, res);
+  // The start's ground: the pack's grass over its earth.
+  const top = tileAt(x, y - 1) === T.AIR;
+  g.fillStyle = SKYC.earthDark;
+  g.fillRect(px, py, res + seam, res + seam);
+  if (top) {
+    const f = JUMPER.ground_grass;
+    g.drawImage(images.jumper, f[0] + 40, f[1], 70, f[3], px, py - res * 0.12, res + seam, res * 0.62);
+  }
+  return undefined;
+}
+function drawSkySpring(g, px, py, res, boing) {
+  const f = JUMPER[boing ? 'spring_out' : 'spring'];
+  const w = res * 0.95;
+  const h = (f[3] / f[2]) * w;
+  return jump(g, boing ? 'spring_out' : 'spring', px - w / 2, py - h, w, h);
+}
+function drawSkySpringOld(g, px, py, res, boing) {
+  const up = boing ? res * 0.25 : 0;
+  g.strokeStyle = '#7a7f87';
+  g.lineWidth = res * 0.07;
+  g.beginPath();
+  for (let i = 0; i <= 4; i++) g.lineTo(px + (i % 2 ? 0.22 : -0.22) * res, py - (i / 4) * (res * 0.55 + up));
+  g.stroke();
+  g.fillStyle = '#e8453c';
+  g.beginPath();
+  g.roundRect(px - res * 0.4, py - res * 0.68 - up, res * 0.8, res * 0.18, res * 0.08);
+  g.fill();
+}
+function drawWing(g, x, y, size, side, flap) {
+  g.save();
+  g.translate(x, y);
+  g.scale(side, 1);
+  g.rotate(-flap);
+  g.fillStyle = '#ffffff';
+  g.strokeStyle = '#c9dceb';
+  g.lineWidth = size * 0.08;
+  g.beginPath();
+  g.moveTo(0, 0);
+  g.quadraticCurveTo(size * 0.9, -size * 0.9, size * 1.3, -size * 0.3);
+  g.quadraticCurveTo(size * 0.9, -size * 0.1, size * 1.1, size * 0.15);
+  g.quadraticCurveTo(size * 0.6, size * 0.05, size * 0.7, size * 0.4);
+  g.quadraticCurveTo(size * 0.3, size * 0.2, 0, size * 0.25);
+  g.fill();
+  g.stroke();
+  g.restore();
+}
+// Sky's flyer, drawn at its feet: a round, cross little body on flapping wings.
+function drawSkyFlyer(g, r2, f) {
+  const cy = -r2 * 0.5;
+  drawWing(g, -r2 * 0.12, cy - r2 * 0.05, r2 * 0.35, -1, f ? 0.5 : -0.2);
+  drawWing(g, r2 * 0.12, cy - r2 * 0.05, r2 * 0.35, 1, f ? 0.5 : -0.2);
+  g.fillStyle = '#8e5bd6';
+  g.beginPath();
+  g.arc(0, cy, r2 * 0.3, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#fff';
+  for (const d of [-1, 1]) {
+    g.beginPath();
+    g.arc(d * r2 * 0.11, cy - r2 * 0.03, r2 * 0.075, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.fillStyle = '#1b1b1f';
+  for (const d of [-1, 1]) {
+    g.beginPath();
+    g.arc(d * r2 * 0.1 - r2 * 0.02, cy - r2 * 0.02, r2 * 0.035, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.strokeStyle = '#1b1b1f';
+  g.lineWidth = r2 * 0.03;
+  g.beginPath();
+  g.moveTo(-r2 * 0.19, cy - r2 * 0.14);
+  g.lineTo(-r2 * 0.04, cy - r2 * 0.09);
+  g.moveTo(r2 * 0.19, cy - r2 * 0.14);
+  g.lineTo(r2 * 0.04, cy - r2 * 0.09);
+  g.stroke();
+}
+function drawStar(g, x, y, r, rot) {
+  g.fillStyle = '#ffd23f';
+  g.strokeStyle = '#e89a17';
+  g.lineWidth = r * 0.12;
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = rot + (i * Math.PI) / 5 - Math.PI / 2;
+    const rr = i % 2 ? r * 0.45 : r;
+    g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  g.closePath();
+  g.fill();
+  g.stroke();
+}
+// Scribble's paper: ruled lines that scroll with the world, far hills in pencil, and hatching below
+// the ground line so a pit reads as a drop. Sky: clouds drifting past as you climb.
+function drawBackgroundB4(g, w, res, ox, oy, vw, vh, groundY) {
+  if (w.pack === 'scribble') {
+    g.strokeStyle = 'rgba(120,160,200,0.28)';
+    g.lineWidth = Math.max(1, res / 60);
+    const gap = res * 0.75;
+    for (let y = ((-oy % gap) + gap) % gap; y < vh; y += gap) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(vw, y);
+      g.stroke();
+    }
+    penStyle(g, res, 'rgba(162,156,143,0.6)', 0.6);
+    const par = ox * 0.3;
+    const span = res * 5;
+    for (let i = -1; i < vw / span + 2; i++) {
+      const idx = i + Math.floor(par / span);
+      const hx = i * span - (par % span);
+      const hr = res * (2 + hash(idx) * 1.5);
+      g.beginPath();
+      g.arc(hx, groundY + res * 0.5, hr, Math.PI * 1.05, Math.PI * 1.95);
+      g.stroke();
+    }
+    // The pack's clouds and far trees, faint.
+    g.save();
+    g.globalAlpha = 0.55;
+    for (let i = 0; i < 6; i++) {
+      const cx = ((i * 9.3 + game.t * (0.12 + (i % 3) * 0.05) - cam.x * 0.15) % 48 + 48) % 48;
+      scrib(g, i % 2 ? 'background_cloudA' : 'background_cloudB', (cx - 6) * res, groundY - res * (5 + ((i * 5) % 7)), res * 2, res);
+    }
+    const p3 = ox * 0.45;
+    for (let i = -1; i < vw / (res * 6) + 2; i++) {
+      const idx = i + Math.floor(p3 / (res * 6));
+      if (hash(idx + 2) < 0.5) scrib(g, 'background_tree', i * res * 6 - (p3 % (res * 6)) + hash(idx) * res * 3, groundY - res * 1.4, res * 0.7, res * 1.4);
+    }
+    g.restore();
+    g.strokeStyle = 'rgba(162,156,143,0.45)';
+    g.lineWidth = Math.max(1, res / 40);
+    const top = groundY + res * 0.6;
+    for (let x = -vh; x < vw; x += res * 0.35) {
+      g.beginPath();
+      g.moveTo(x - ((ox * 1) % (res * 0.35)), vh);
+      g.lineTo(x + (vh - top) - ((ox * 1) % (res * 0.35)), top);
+      g.stroke();
+    }
+    return undefined;
+  }
+  // Sky: far clouds, drifting, slower than the climb.
+  for (let i = 0; i < 14; i++) {
+    const span = res * 9;
+    const cyw = ((hash(i + 3) * span * 3 - oy * 0.35) % (span * 3) + span * 3) % (span * 3) - span * 0.5;
+    const cx = ((hash(i) * vw + game.t * res * 0.15 * (0.5 + hash(i + 7))) % (vw + res * 4)) - res * 2;
+    g.globalAlpha = 0.55;
+    drawCloud(g, cx, cyw, res * (0.6 + hash(i + 11) * 0.7));
+  }
+  g.globalAlpha = 1;
+  return undefined;
+}
+
 // A heart you can't hold (you already hold two) shows as a coin.
 function heartAsCoin() {
   return game.shields >= MAX_SHIELDS;
@@ -1134,17 +2576,43 @@ function drawThings(g, w, res, pixel, mine) {
     const tw = w;
     const px = t.x * res;
     const py = t.y * res;
-    const pp = tw.id === 'meadow' || tw.id === 'frost';
+    const pp = ppLike(tw);
     const ink = tw.id === 'ink';
+    const pico = tw.pack === 'pico';
+    const mush = tw.pack === 'mush' || isB3(tw) || tw.pack === 'sky';
+    const pen = Boolean(tw.lineArt);
     const sm = g.imageSmoothingEnabled;
     if (!tw.smooth) g.imageSmoothingEnabled = false;
     switch (t.type) {
       case 'coin':
       case 'heart': {
         if (!t.alive) break;
+        // A hidden pocket's coins show only once you come within 3 tiles; until then a faint glint
+        // marks the pocket every 2 s.
+        if (t.hidden && !t.found) {
+          if (Math.hypot(t.x - player.x, t.y - (player.y - H_BOX / 2)) <= POCKET_NEAR) t.found = true;
+          else {
+            const first = stage.things.find((c) => c.pocket === t.pocket);
+            if (first === t && glintOn(t)) drawGlint(g, tw, px, py, res, pixel);
+            break;
+          }
+        }
         const asCoin = t.type === 'coin' || heartAsCoin();
         const bob = t.type === 'heart' ? Math.round(Math.sin(game.t * 3 + t.id) * res * 0.08) : 0;
-        if (pp) ppTile(g, asCoin ? PP.coin[Math.floor(game.t * 4 + t.id) % 2] : PP.heart, px - res / 2, py - res / 2 + bob, res);
+        if (pico) picoTile(g, asCoin ? PICO.coin : PICO.heart, px - res / 2, py - res / 2 + bob, res);
+        else if (pen) penPickup(g, asCoin, px, py + Math.sin(game.t * 3 + t.id) * res * 0.06, res);
+        else if (tw.pack === 'sky' && asCoin) {
+          const n = `gold_${1 + (Math.floor(game.t * 8 + t.id) % 4)}`;
+          const fr = JUMPER[n];
+          const hh = res * 0.6;
+          const ww = (fr[2] / fr[3]) * hh;
+          jump(g, n, px - ww / 2, py - hh / 2 + Math.sin(game.t * 3 + t.id) * res * 0.06, ww, hh);
+        }
+        else if (mush) {
+          const b2 = Math.sin(game.t * 3 + t.id) * res * 0.06;
+          if (asCoin) drawSmoothCoin(g, px, py + b2, res);
+          else candyTile(g, 'heart', px - res * 0.45, py - res * 0.45 + b2, res * 0.9, 1, 1);
+        } else if (pp) ppTile(g, asCoin ? PP.coin[Math.floor(game.t * 4 + t.id) % 2] : PP.heart, px - res / 2, py - res / 2 + bob, res);
         else if (ink) inkTile(g, asCoin ? INK.coin[Math.floor(game.t * 4 + t.id) % 2] : INK.heart, px - res / 2, py - res / 2 + bob, res);
         else {
           const b2 = Math.sin(game.t * 3 + t.id) * res * 0.06;
@@ -1156,7 +2624,9 @@ function drawThings(g, w, res, pixel, mine) {
       case 'spring': {
         const up = t.boing ? Math.round(res * 0.15) : 0;
         if (ink) inkTile(g, INK.spring[t.boing ? 1 : 0], px - res / 2, py - res, res);
+        else if (pico) picoTile(g, PICO.spring[t.boing ? 1 : 0], px - res / 2, py - res, res);
         else if (pp) ppTile(g, PP.spring, px - res / 2, py - res - up, res);
+        else if (tw.pack === 'sky') drawSkySpring(g, px, py, res, t.boing);
         else candyTile(g, 'candyBlue', px - res * 0.6, py - res, res * 1.2, 1, 1);
         break;
       }
@@ -1185,6 +2655,25 @@ function drawThings(g, w, res, pixel, mine) {
         if (t.kind === 'ghost') {
           const r2 = Math.round(res * z);
           inkTile(g, INK.ghost[f], -r2 / 2, -r2 + Math.round(Math.sin(game.t * 4 + t.id) * res * 0.06), r2);
+        } else if (pico) {
+          const r2 = Math.round(res * z);
+          picoTile(g, (t.id % 3 ? PICO.walker : PICO.walker2)[f], -r2 / 2, -r2, r2);
+        } else if (tw.pack === 'sky') {
+          // Sky's spikies: the Jumper Pack's spikeMan, walking.
+          const n = f ? 'spikeMan_walk1' : 'spikeMan_walk2';
+          const fr = JUMPER[n];
+          const hh = res * z;
+          const ww = (fr[2] / fr[3]) * hh;
+          jump(g, n, -ww / 2, -hh + res * 0.04, ww, hh);
+        } else if (pen) {
+          // Scribble redraws its slimes as line art, as it does the monster.
+          const sz = res * z;
+          const col = (t.kind === 'spiky' ? 3 : 0) + f;
+          g.drawImage(lineSlime(col, boilNow()), -sz / 2, -sz + res * 0.04, sz, sz);
+        } else if (isB3(tw)) {
+          // Batch 3's bad guys, from the New Platformer Pack: Castle's mice, snails elsewhere.
+          const sz = res * z;
+          critter(g, (tw.pack === 'castle' ? CRIT.mouse : CRIT.snail)[f], -sz / 2, -sz + res * 0.04, sz);
         } else if (tw.smooth) {
           // Candy's bad guys: the New Platformer Pack's slimes, purple (stomp it) or green with a spike (don't).
           const col = (t.kind === 'spiky' ? 3 : 0) + f;
@@ -1198,6 +2687,90 @@ function drawThings(g, w, res, pixel, mine) {
           g.drawImage(images.meadowChars, sx, sy, 24, 24, Math.round(-12 * s), Math.round(-24 * s + 2 * s), Math.round(24 * s), Math.round(24 * s));
         }
         g.restore();
+        break;
+      }
+      case 'flyer': {
+        if (!t.alive) break;
+        // A flyer: the Pico pack's winged one, flapping (fast while it swoops).
+        const f = Math.floor(game.t * (t.state === 'swoop' ? 14 : 7)) % 2;
+        const r2 = Math.round(res * ENEMY_SIZE);
+        g.save();
+        g.translate(Math.round(px), Math.round(py));
+        if (t.dir > 0) g.scale(-1, 1);
+        if (pico) picoTile(g, PICO.flyer[f], -r2 / 2, -r2, r2);
+        else if (tw.pack === 'sky') {
+          const n = `wingMan${1 + (Math.floor(game.t * 8 + t.id) % 4)}`;
+          const fr = JUMPER[n];
+          const ww = r2 * 1.3;
+          const hh = (fr[3] / fr[2]) * ww;
+          jump(g, n, -ww / 2, -hh, ww, hh);
+        }
+        else inkTile(g, INK.ghost[f], -r2 / 2, -r2, r2);
+        g.restore();
+        break;
+      }
+      case 'cap': {
+        // A bouncy cap on its stem down to the ground (or the level's bottom), squashing as it launches.
+        const sq = t.boing ? Math.sin(t.boing * 20) * t.boing * 0.5 : 0;
+        const cx = t.x * res;
+        let gy = t.y + 1;
+        const col = Math.floor(t.x + 1);
+        while (gy < stage.rows && !SOLID.has(tileAt(col, gy))) gy++;
+        if (mush) {
+          for (let y = t.y + 1; y < gy; y++) mushTile(g, y === gy - 1 && gy < stage.rows ? 'stemBase' : y === t.y + 1 ? 'stemTop' : 'stem', cx + res, y * res, res);
+          const h = res * (1 - sq * 0.4);
+          const ww = res * (1 + sq * 0.15);
+          const x0 = cx - (ww - res) * 1.5;
+          mushTile(g, 'shroomRedLeft', x0, py + res - h, ww, 1, h / ww);
+          mushTile(g, 'shroomRedMid', x0 + ww, py + res - h, ww, 1, h / ww);
+          mushTile(g, 'shroomRedRight', x0 + ww * 2, py + res - h, ww, 1, h / ww);
+        } else {
+          g.fillStyle = '#e8d8b8';
+          g.fillRect(cx + res * 1.3, py + res, res * 0.4, (gy - t.y - 1) * res);
+          g.fillStyle = '#d6453d';
+          g.fillRect(cx, py, res * 3, res * 0.6);
+        }
+        break;
+      }
+      case 'mover': {
+        // A moving platform or lift: the Industrial pack's striped plates (its track drawn faintly).
+        const x0 = Math.round(t.x * res);
+        const y0 = Math.round(t.y * res);
+        if (tw.pack === 'ind') {
+          g.fillStyle = 'rgba(38,35,56,0.25)';
+          const u = Math.max(1, Math.round(res / 18));
+          if (t.axis === 'x') g.fillRect(Math.round(t.sx * res), Math.round(t.sy * res + res * 0.5), Math.round((t.range + 3) * res), u);
+          else g.fillRect(Math.round((t.sx + 1.5) * res), Math.round((t.sy - t.range) * res), u, Math.round(t.range * res));
+          for (let i = 0; i < 3; i++) indTile(g, IND.mover[i], x0 + i * res, y0, res);
+        } else if (tw.pack === 'sky') drawSkyLedge(g, t.x * res, t.y * res, t.w, res, 'slide');
+        else if (pico) for (let i = 0; i < 3; i++) picoTile(g, PICO.oneway[i], x0 + i * res, y0, res);
+        else if (pp) for (let i = 0; i < 3; i++) ppTile(g, PP.oneway[i], x0 + i * res, y0, res);
+        else for (let i = 0; i < 3; i++) candyTile(g, ['cakeHalfLeft', 'cakeHalfMid', 'cakeHalfRight'][i], x0 + i * res, y0, res);
+        break;
+      }
+      case 'cracked': {
+        // Sky's cracked ledge: it breaks after one bounce and falls away, fading.
+        if (t.state === 'broken' && t.t > 0.8) break;
+        g.save();
+        if (t.state === 'broken') {
+          g.globalAlpha = Math.max(0, 1 - t.t / 0.8);
+          g.translate((t.x + t.w / 2) * res, t.y * res);
+          g.rotate(t.t * 0.6);
+          g.translate(-(t.x + t.w / 2) * res, -t.y * res);
+        }
+        drawSkyLedge(g, t.x * res, t.y * res, t.w, res, 'cracked');
+        g.restore();
+        break;
+      }
+      case 'wings': {
+        if (!t.alive) break;
+        const flap = Math.sin(game.t * 8) * 0.25;
+        g.fillStyle = `rgba(255,255,255,${0.3 + 0.2 * Math.sin(game.t * 5)})`;
+        g.beginPath();
+        g.arc(px, py - res * 0.7, res * 0.7, 0, Math.PI * 2);
+        g.fill();
+        void flap;
+        jump(g, 'powerup_wings', px - res * 0.45, py - res * 1.15, res * 0.9, res * 0.9);
         break;
       }
       case 'worm': {
@@ -1220,16 +2793,171 @@ function drawThings(g, w, res, pixel, mine) {
       case 'portal':
         drawPortal(g, tw, px, py, res, pixel);
         break;
+      case 'key': {
+        if (!t.alive) break;
+        const b2 = Math.sin(game.t * 3 + t.id) * res * 0.08;
+        g.fillStyle = `rgba(255,240,170,${0.25 + 0.2 * Math.sin(game.t * 5)})`;
+        g.beginPath();
+        g.arc(px, py + b2, res * 0.55, 0, Math.PI * 2);
+        g.fill();
+        critter(g, CRIT.key, px - res * 0.5, py - res * 0.5 + b2, res);
+        break;
+      }
+      case 'gate': {
+        // An opened portcullis rises into the wall over half a second.
+        if (!t.open || t.t > 0.6) break;
+        const up = Math.min(1, t.t / 0.5) * 3;
+        g.save();
+        g.beginPath();
+        g.rect(px - res / 2, (t.y - 3) * res, res, 3 * res);
+        g.clip();
+        for (let k = 0; k < 3; k++) b3Tile(g, tw.pack === 'castle' ? tw : WORLDS.find((x) => x.pack === 'castle'), 'bars', px - res / 2, (t.y - 3 + k - up) * res, res);
+        g.restore();
+        break;
+      }
+      case 'crusher': {
+        // A stone block on a chain; its teeth face down. It shakes before it drops.
+        const cw = WORLDS.find((x) => x.pack === 'castle');
+        const sx = t.shake ? Math.sin(game.t * 60) * res * 0.04 : 0;
+        const x0 = t.x * res + sx;
+        const yb = t.y * res;
+        g.fillStyle = '#5b5e66';
+        for (const cx of [0.55, 1.45]) {
+          for (let cy = yb - 1.5 * res; cy > -res; cy -= res * 0.3) g.fillRect(x0 + cx * res - res * 0.05, cy - res * 0.22, res * 0.1, res * 0.22);
+        }
+        b3Tile(g, cw, 'fill', x0, yb - 1.5 * res, res, 2, 1.1);
+        g.save();
+        g.translate(x0, yb);
+        g.scale(1, -1);
+        b3Tile(g, cw, 'teeth', 0, 0, res, 2, 0.45);
+        g.restore();
+        break;
+      }
+      case 'pile': {
+        // It shakes for a moment before it sends a snowball.
+        const sh = t.next !== undefined && t.next < 0.4 ? Math.sin(game.t * 50) * res * 0.05 : 0;
+        b3Tile(g, tw.pack === 'ice' ? tw : WORLDS.find((x) => x.pack === 'ice'), 'hill', px - res + sh, py - res * 0.75, res, 2, 0.8);
+        break;
+      }
+      case 'fish': {
+        if (!t.alive) break;
+        const f = Math.floor(game.t * 5 + t.id) % 2;
+        const sz = res * ENEMY_SIZE;
+        g.save();
+        g.translate(px, py);
+        if (t.dir > 0) g.scale(-1, 1);
+        critter(g, (t.id % 2 ? CRIT.fishBlue : CRIT.fishYellow)[f], -sz / 2, -sz * 0.8, sz);
+        g.restore();
+        break;
+      }
+      case 'lamp': {
+        // Ink's lamp: a post with a lantern, in ink.
+        const u = Math.max(1, Math.round(res / 16));
+        g.fillStyle = tw.oneBit ? tw.oneBit.ink : '#f2efe6';
+        g.fillRect(Math.round(px - u / 2), Math.round(py - res * 1.6), u, Math.round(res * 1.6));
+        g.fillRect(Math.round(px - 3 * u), Math.round(py - res * 2.1), 6 * u, Math.round(res * 0.5));
+        if (Math.floor(game.t * 3 + t.id) % 4) g.fillRect(Math.round(px - u), Math.round(py - res * 2.4), 2 * u, 2 * u);
+        break;
+      }
       default:
     }
     g.imageSmoothingEnabled = sm;
   }
 }
 
+// Ice's snowballs, rolling and spinning.
+function drawBalls(g, w, res, mine) {
+  for (const b of stage.balls) {
+    if (!mine(b.x)) continue;
+    g.save();
+    g.translate(b.x * res, (b.y - BALL_R) * res);
+    g.rotate(b.spin);
+    b3Tile(g, w.pack === 'ice' ? w : WORLDS.find((x) => x.pack === 'ice'), 'ball', -BALL_R * res, -BALL_R * res, res * BALL_R * 2);
+    g.restore();
+  }
+}
+const POCKET_NEAR = 3; // a hidden pocket's coins show once the monster is this near (tiles)
+function glintOn(t) {
+  return ((game.t + t.pocket * 0.7) % 2) < 0.35;
+}
+// The glint over a hidden pocket: a little four-pointed twinkle.
+function drawGlint(g, w, px, py, res, pixel) {
+  const u = pixel ? Math.max(1, Math.round(res / (w.res || 18))) : res / 18;
+  g.fillStyle = w.pack === 'pico' ? '#fff1e8' : 'rgba(255,255,240,0.9)';
+  g.fillRect(Math.round(px - u / 2), Math.round(py - 3 * u), Math.max(1, Math.round(u)), Math.round(6 * u));
+  g.fillRect(Math.round(px - 3 * u), Math.round(py - u / 2), Math.round(6 * u), Math.max(1, Math.round(u)));
+}
+// Mushroom's coin: a smooth gold disc (the pack has none of its own).
+function drawSmoothCoin(g, px, py, res) {
+  const r = res * 0.3;
+  const sq = Math.abs(Math.cos(game.t * 3 + px));
+  g.fillStyle = '#e8a417';
+  g.beginPath();
+  g.ellipse(px, py, r * (0.35 + sq * 0.65), r, 0, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = '#ffd23f';
+  g.beginPath();
+  g.ellipse(px, py, r * (0.35 + sq * 0.65) * 0.72, r * 0.72, 0, 0, Math.PI * 2);
+  g.fill();
+}
+
 // The door at a level's end, in the style of the world it leads to (it stands in the glimpse).
 function drawPortal(g, w, px, py, res, pixel) {
   const glow = 0.5 + 0.5 * Math.sin(game.t * 4);
-  if (w.id === 'meadow' || w.id === 'frost') {
+  if (w.pack === 'pico') {
+    // Pico's own door, and a twinkle in its colours only (the world stays in its 16).
+    picoTile(g, PICO.door[0], px - res / 2, py - 2 * res, res);
+    picoTile(g, PICO.door[1], px - res / 2, py - res, res);
+    g.fillStyle = '#fff1e8';
+    const u = Math.max(1, Math.round(res / 8));
+    const a = game.t * 2;
+    g.fillRect(Math.round(px + Math.cos(a) * res * 0.9), Math.round(py - res * 1.1 + Math.sin(a) * res * 1.1), u, u);
+    return;
+  }
+  if (w.pack === 'scribble') return penDoor(g, px, py, res, glow);
+  if (w.pack === 'sky') {
+    // The plateau's door, and the summit's gold star beside it: the journey's end is through it.
+    g.fillStyle = `rgba(255,250,210,${0.3 + glow * 0.3})`;
+    g.beginPath();
+    g.arc(px, py - res * 1.1, res * 1.5, 0, Math.PI * 2);
+    g.fill();
+    // The pack's portal, standing up, turning.
+    g.save();
+    g.translate(px, py - res * 1.1);
+    g.rotate(Math.PI / 2);
+    g.scale(1, 1 + 0.08 * Math.sin(game.t * 3));
+    jump(g, 'portal_yellow', -res * 1.1, -res * 0.4, res * 2.2, res * 0.8);
+    g.restore();
+    drawStar(g, px + res * 1.4, py - res * 1.6 + Math.sin(game.t * 2) * res * 0.1, res * 0.55, game.t * 0.8);
+    return;
+  }
+  if (isB3(w)) {
+    // Castle's arched door, Ice's igloo, Sea's treasure chest, glowing: the way on.
+    g.fillStyle = `rgba(255,255,220,${0.25 + glow * 0.25})`;
+    g.beginPath();
+    g.arc(px, py - res * 1.1, res * 1.3, 0, Math.PI * 2);
+    g.fill();
+    if (w.pack === 'castle') b3Tile(g, w, 'door', px - res, py - res * 2, res, 2, 2);
+    else if (w.pack === 'ice') b3Tile(g, w, 'igloo', px - res, py - res * 2, res, 2, 2);
+    else {
+      b3Tile(g, w, 'flag', px - res * 0.5, py - res * 2.6, res);
+      b3Tile(g, w, 'chest', px - res * 0.75, py - res * 1.5, res * 1.5);
+    }
+    return;
+  }
+  if (w.pack === 'mush') {
+    // A tall red mushroom, glowing: the way on.
+    g.fillStyle = `rgba(255,255,220,${0.25 + glow * 0.25})`;
+    g.beginPath();
+    g.arc(px, py - res * 1.1, res * 1.3, 0, Math.PI * 2);
+    g.fill();
+    mushTile(g, 'tallShroom_red', px - res * 1.1, py - res * 2.2, res * 2.2);
+    return;
+  }
+  if (w.pack === 'farm' || w.pack === 'ind') {
+    ppTile(g, PP.door[0], px - res / 2, py - 2 * res, res);
+    ppTile(g, PP.door[1], px - res / 2, py - res, res);
+  } else if (w.id === 'meadow') {
     ppTile(g, PP.door[0], px - res / 2, py - 2 * res, res);
     ppTile(g, PP.door[1], px - res / 2, py - res, res);
   } else if (w.id === 'ink') {
@@ -1304,6 +3032,35 @@ function drawPlayer(g, w, res, pixel) {
     ears: game.ears,
     blink: Math.sin(game.t * 0.9) > 0.985 ? 1 : 0,
   };
+  // Mid-change into or out of line art: into it, the colour drains out while the pen traces the
+  // monster round; out of it, the colour floods back in over the drawing.
+  if (game.morphT > 0 && game.morphFrom && game.morphKind === 'pen') {
+    const k = 1 - game.morphT / MORPH;
+    game.morphTrace = w.lineArt ? k : 1 - k;
+    const art = lineArtFrame(w.lineArt ? w : game.morphFrom, res);
+    g.save();
+    g.globalAlpha = w.lineArt ? 1 - k : k;
+    drawVector(g, images.monster, monster, fx, fy, scaleFor(monster, res), pose);
+    g.restore();
+    g.save();
+    if (w.lineArt) {
+      // The pen's sweep: a wedge round the monster's middle, growing.
+      const cy = fy - res * 0.75;
+      g.beginPath();
+      g.moveTo(fx, cy);
+      g.arc(fx, cy, res * 3, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2);
+      g.closePath();
+      g.clip();
+    } else g.globalAlpha = 1 - k;
+    drawLineArt(g, art, fx, fy, res);
+    g.restore();
+    return;
+  }
+  game.morphTrace = 0;
+  if (w.lineArt) {
+    drawLineArt(g, lineArtFrame(w, res), fx, fy, res);
+    return;
+  }
   // Mid-change between a pixel and a smooth world: the monster steps through the resolutions in
   // between, drawn small and scaled up without smoothing.
   if (game.morphT > 0 && game.morphFrom) {
@@ -1336,8 +3093,43 @@ function drawPlayer(g, w, res, pixel) {
     g.drawImage(f, -own.footX, -own.footY);
     g.restore();
   } else {
+    // Sky's wings, while they carry you: the pack's, flapping either side.
+    if (w.pack === 'sky' && game.wingsT > 0) {
+      const flap = Math.sin(game.t * 18) * 0.35;
+      for (const [n, d] of [['wing_left', -1], ['wing_right', 1]]) {
+        g.save();
+        g.translate(fx + d * res * 0.35, fy - res * 1.0);
+        g.rotate(d * flap);
+        jump(g, n, d < 0 ? -res * 0.9 : 0, -res * 0.6, res * 0.9, res * 0.9);
+        g.restore();
+      }
+    }
     drawVector(g, images.monster, monster, fx, fy, scaleFor(monster, res), pose);
   }
+}
+
+// The monster in line art: its frames are made at LINE_RES px per tile (half again Scribble's 70, so
+// the line stays crisp on a big screen), cached per monster, and drawn scaled to res; the pose and
+// the line's wobble change as it moves.
+const LINE_RES = 105;
+let lineArtSet = null;
+function lineArtFor() {
+  const key = `${codeOf(monster)}:${game.ears}`;
+  if (!lineArtSet || lineArtSet.key !== key) lineArtSet = { key, ...lineArt(images.monster, monster, LINE_RES, { ears: game.ears, ink: PEN.ink, paper: PEN.white }) };
+  return lineArtSet;
+}
+function lineArtFrame() {
+  const set = lineArtFor();
+  return { set, img: set.frame(poseName(), boilNow()) };
+}
+function drawLineArt(g, art, fx, fy, res) {
+  const { set, img } = art;
+  const s = res / LINE_RES;
+  g.save();
+  g.translate(fx, fy);
+  if (player.face < 0) g.scale(-1, 1);
+  g.drawImage(img, -set.footX * s, -set.footY * s, set.w * s, set.h * s);
+  g.restore();
 }
 
 function drawParticles(g, w, res, pixel) {
@@ -1347,6 +3139,18 @@ function drawParticles(g, w, res, pixel) {
     const s = p.size * res * (p.kind === 'puff' ? 1 + p.t * 2 : 1);
     g.globalAlpha = pixel ? 1 : Math.max(0, a);
     if (pixel && a < 0.25) continue;
+    if (p.kind === 'text') {
+      // A stomp chain's "+n", in the world's lettering.
+      g.globalAlpha = 1;
+      g.font = `${Math.round(res * p.size)}px 'Kenney Pixel', monospace`;
+      g.textAlign = 'center';
+      g.lineWidth = Math.max(1, res / 8);
+      g.strokeStyle = '#000000';
+      g.fillStyle = '#ffec27';
+      g.strokeText(p.text, Math.round(p.x * res), Math.round(p.y * res));
+      g.fillText(p.text, Math.round(p.x * res), Math.round(p.y * res));
+      continue;
+    }
     g.fillStyle = ink || (p.kind === 'spark' ? '#fff6b0' : p.kind === 'crumb' ? '#5b3a29' : p.kind === 'puff' ? '#ffffff' : w.id === 'meadow' ? '#e8d5b5' : '#fff');
     if (pixel) {
       const u = Math.max(1, Math.round(s));
@@ -1372,6 +3176,7 @@ function leapSteps(from, to) {
 function render() {
   if (!stage) return;
   if (game.mode === 'map') return drawMap();
+  if (game.mode === 'gallery' || (game.mode === 'paused' && game.resumeFrom === 'gallery')) return drawGallery();
   const w = world();
   let res = w.res;
   let overlay = 0;
@@ -1406,6 +3211,7 @@ function render() {
     bctx.imageSmoothingEnabled = false;
     bctx.setTransform(1, 0, 0, 1, 0, 0);
     drawScene(bctx, res, game.world, pixel, bw, bh, region);
+    if (w.dark && pixel && game.mode !== 'build') applyDark(bctx, w, res, bw, bh);
     ctx.imageSmoothingEnabled = false;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     // A tile is U canvas pixels: when res doesn't divide U (Ink's 16), the buffer is scaled to fit.
@@ -1453,6 +3259,114 @@ function render() {
     ctx.globalAlpha = 1;
   }
 }
+// Ink's darkness: outside the circle of light around the monster (and the lamps' pools) the world
+// is the dark colour; between the lit circle and the dark a ring is dithered, so no third colour
+// appears. What would hide in the dark gives itself away with glimmers. Drawn into the pixel buffer,
+// row by row: each row's lit and ring spans are unions of the circles' chords.
+const DARK = { lit: 4.5, edge: 5.5, lampLit: 2.5, lampEdge: 3 };
+let checker = null;
+function spans(list) {
+  list.sort((a, b) => a[0] - b[0]);
+  const out = [];
+  for (const [a, b] of list) {
+    if (out.length && a <= out[out.length - 1][1]) out[out.length - 1][1] = Math.max(out[out.length - 1][1], b);
+    else out.push([a, b]);
+  }
+  return out;
+}
+function lightsFor(res, ox, oy) {
+  const L = [{ x: player.x * res - ox, y: (player.y - H_BOX / 2) * res - oy, r0: DARK.lit * res, r1: DARK.edge * res }];
+  for (const t of stage.things) {
+    if (t.type === 'lamp' && Math.abs(t.x - player.x) < view.tilesW + 4) L.push({ x: t.x * res - ox, y: (t.y - 2.2) * res - oy, r0: DARK.lampLit * res, r1: DARK.lampEdge * res });
+  }
+  return L;
+}
+function applyDark(g, w, res, bw, bh) {
+  const ox = Math.round(cam.x * res);
+  const oy = Math.round(cam.y * res);
+  const { dark, ink } = w.oneBit;
+  if (!checker) {
+    const c = makeCanvas(2, 2);
+    const cg = c.getContext('2d');
+    cg.fillStyle = dark;
+    cg.fillRect(0, 0, 1, 1);
+    cg.fillRect(1, 1, 1, 1);
+    checker = g.createPattern(c, 'repeat');
+  }
+  const L = lightsFor(res, ox, oy);
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  for (let y = 0; y < bh; y++) {
+    const yc = y + 0.5;
+    const outer = [];
+    const inner = [];
+    for (const l of L) {
+      const dy = yc - l.y;
+      if (Math.abs(dy) < l.r1) {
+        const h = Math.sqrt(l.r1 * l.r1 - dy * dy);
+        outer.push([Math.round(l.x - h), Math.round(l.x + h)]);
+      }
+      if (Math.abs(dy) < l.r0) {
+        const h = Math.sqrt(l.r0 * l.r0 - dy * dy);
+        inner.push([Math.round(l.x - h), Math.round(l.x + h)]);
+      }
+    }
+    const O = spans(outer);
+    const I = spans(inner);
+    g.fillStyle = dark;
+    let x = 0;
+    for (const [a, b] of O) {
+      if (a > x) g.fillRect(x, y, a - x, 1);
+      x = Math.max(x, b);
+    }
+    if (x < bw) g.fillRect(x, y, bw - x, 1);
+    g.fillStyle = checker;
+    for (const [a, b] of O) {
+      let s0 = a;
+      for (const [c, d] of I) {
+        if (d <= s0 || c >= b) continue;
+        if (c > s0) g.fillRect(s0, y, c - s0, 1);
+        s0 = Math.max(s0, d);
+      }
+      if (s0 < b) g.fillRect(s0, y, b - s0, 1);
+    }
+  }
+  // Glimmers: a ghost's eyes, a drip's glint, spikes' tips, a pit's edges and the ends of ledges.
+  g.fillStyle = ink;
+  const lit = (x, y) => L.some((l) => Math.hypot(x * res - ox - l.x, y * res - oy - l.y) < l.r1);
+  const dot = (x, y) => {
+    if (!lit(x, y)) g.fillRect(Math.round(x * res - ox), Math.round(y * res - oy), 1, 1);
+  };
+  const blink = (k) => Math.floor(game.t * 2 + k) % 3 !== 0;
+  for (const t of stage.things) {
+    if (!t.alive || Math.abs(t.x - player.x) > view.tilesW + 2) continue;
+    if (t.type === 'walker' && t.kind === 'ghost') {
+      dot(t.x - 0.2, t.y - 0.95);
+      dot(t.x + 0.2, t.y - 0.95);
+    } else if (t.type === 'drip' && blink(t.id)) dot(t.x, t.y + 0.4);
+  }
+  const c0 = Math.max(0, Math.floor(cam.x) - 1);
+  const c1 = Math.min(stage.next - 1, Math.ceil(cam.x + bw / res) + 1);
+  for (let x = c0; x <= c1; x++) {
+    const gy = stage.ground[x];
+    if (gy < stage.rows) {
+      if (stage.ground[x - 1] >= stage.rows) dot(x + 0.06, gy + 0.06);
+      if (stage.ground[x + 1] >= stage.rows) dot(x + 0.94, gy + 0.06);
+    }
+    for (let y = Math.max(0, Math.floor(cam.y)); y < Math.min(stage.rows, Math.ceil(cam.y + bh / res) + 1); y++) {
+      const k = tileAt(x, y);
+      if (k === T.SPIKES) {
+        dot(x + 0.25, y + 0.45);
+        dot(x + 0.75, y + 0.45);
+      } else if ((k === T.ONEWAY || k === T.BLOCK) && tileAt(x, y - 1) === T.AIR) {
+        if (tileAt(x - 1, y) === T.AIR) dot(x + 0.06, y + 0.06);
+        if (tileAt(x + 1, y) === T.AIR) dot(x + 0.94, y + 0.06);
+      }
+    }
+  }
+  g.restore();
+}
+
 // The smooth path draws straight to the screen, at res pixels per tile scaled by s.
 function drawSceneScaled(res, s, region = 'all') {
   seam = 0.8 / s;
@@ -1463,17 +3377,33 @@ const buffer2 = makeCanvas(1, 1); // the glimpse of a pixel world
 const b2ctx = buffer2.getContext('2d');
 
 // ---------------------------------------------------------------- the world map
-// Cells along a zig-zag path (up the screen in portrait, across it in landscape), the start first.
-function mapNodes() {
-  const n = WORLDS.length + 1;
+// Cells along a snaking path in rows, the start first and the summit last: three across going up
+// the screen in portrait (four rows for the twelve worlds), six across in landscape (two rows; five
+// across would need a third, too tight on a short landscape screen). The summit sits above the last
+// cell, Sky's. Returns the nodes (in tiles: the start, a node per world, the summit) and the cells'
+// size (in tiles).
+function mapLayout() {
   const portrait = view.H >= view.W;
-  const nodes = [];
-  for (let i = 0; i < n; i++) {
-    const t = i / (n - 1);
-    const zig = i === 0 ? 0.5 : i % 2 ? 0.27 : 0.73;
-    nodes.push(portrait ? { x: zig, y: 0.86 - t * 0.68 } : { x: 0.1 + t * 0.8, y: i === 0 ? 0.55 : i % 2 ? 0.34 : 0.68 });
+  const across = portrait ? 3 : 6;
+  const rows = Math.ceil(WORLDS.length / across);
+  const top = portrait ? 0.24 : 0.32;
+  const bottom = portrait ? 0.76 : 0.68;
+  const nodes = [portrait ? { x: 0.5, y: 0.9 } : { x: 0.05, y: 0.9 }];
+  for (let i = 0; i < WORLDS.length; i++) {
+    const r = Math.floor(i / across);
+    const c = r % 2 ? across - 1 - (i % across) : i % across;
+    const x = portrait ? 0.17 + (c * 0.66) / (across - 1) : 0.1 + (c * 0.8) / (across - 1);
+    nodes.push({ x, y: rows === 1 ? bottom : bottom - (r * (bottom - top)) / (rows - 1) });
   }
-  return nodes.map((p) => ({ x: p.x * view.tilesW, y: p.y * view.tilesH }));
+  const last = nodes[nodes.length - 1];
+  nodes.push({ x: last.x, y: top - (portrait ? 0.1 : 0.15) });
+  const colGap = ((portrait ? 0.66 : 0.8) / Math.max(1, across - 1)) * view.tilesW;
+  const rowGap = ((bottom - top) / Math.max(1, rows - 1)) * view.tilesH;
+  const cs = Math.max(1.2, Math.min(3, colGap * 0.78, rowGap * 0.62));
+  return { nodes: nodes.map((p) => ({ x: p.x * view.tilesW, y: p.y * view.tilesH })), cs };
+}
+function mapNodes() {
+  return mapLayout().nodes;
 }
 // A world's cell picture: a little scene drawn by that world's own rule.
 const thumbs = {};
@@ -1490,15 +3420,51 @@ function thumbFor(wi) {
   g.fillStyle = grad;
   g.fillRect(0, 0, res * 3, res * 3);
   for (let x = 0; x < 3; x++) {
-    if (w.id === 'meadow' || w.id === 'frost') {
+    if (w.pack === 'farm' || w.pack === 'ind') {
+      const set = w.pack === 'farm' ? FARM : IND;
+      const tile = w.pack === 'farm' ? farmTile : indTile;
+      tile(g, set.top[x === 0 ? 0 : x === 2 ? 2 : 1], x * res, res * 2, res);
+      if (x !== 1) tile(g, set.decor[x], x * res, res, res);
+    } else if (w.pack === 'pico') {
+      picoTile(g, PICO.top, x * res, res * 2, res);
+      if (x === 0) picoTile(g, PICO.decor[0], x * res, res, res);
+    } else if (w.pack === 'mush') {
+      mushTile(g, ['shroomTanLeft', 'shroomTanMid', 'shroomTanRight'][x], x * res, res * 2, res);
+    } else if (isB3(w)) {
+      b3Tile(g, w, w.pack === 'castle' ? 'top' : ['topL', 'top', 'topR'][x], x * res, res * 2, res);
+    } else if (w.id === 'meadow') {
       ppTile(g, PP[w.id].top[x === 0 ? 0 : x === 2 ? 2 : 1], x * res, res * 2, res);
       ppTile(g, PP[w.id].decor[x], x * res, res, res);
     } else if (w.id === 'ink') {
       inkTile(g, INK.top[1], x * res, res * 2, res);
       if (x !== 1) inkTile(g, INK.decor[x], x * res, res, res);
-    } else {
+    } else if (w.pack === 'scribble') {
+      g.fillStyle = PEN.white;
+      g.fillRect(x * res, res * 2.2, res, res * 0.8);
+    } else if (w.pack !== 'sky') {
       candyTile(g, ['cakeLeft', 'cakeMid', 'cakeRight'][x], x * res, res * 2, res);
     }
+  }
+  if (w.pack === 'scribble') {
+    // Paper: a pen line along the ground, a ledge half drawn, a slime in line art.
+    const real = game.t;
+    game.t = 0;
+    penStyle(g, res);
+    penLine(g, 0, res * 2.2, res * 3, res * 2.2, 3, res);
+    drawSketchTile(g, res * 0.3, res * 1.1, res, 1, true, false, 5);
+    drawSketchTile(g, res * 1.3, res * 1.1, res, 0.5, false, true, 6);
+    g.drawImage(lineSlime(0, 0), res * 1.7, res * 1.15, res * 1.05, res * 1.05);
+    game.t = real;
+  }
+  if (w.pack === 'sky') {
+    drawCloud(g, res * 0.6, res * 0.5, res * 0.35);
+    drawSkyLedge(g, res * 0.2, res * 2.2, 2.6, res, 'grass');
+    drawSkyLedge(g, res * 1.4, res * 1.2, 1.4, res, 'grass');
+    g.save();
+    g.translate(res * 0.8, res * 1.9);
+    drawSkyFlyer(g, res, 0);
+    g.restore();
+    drawStar(g, res * 2.4, res * 0.5, res * 0.3, 0);
   }
   if (w.id === 'candy') {
     candyTile(g, 'lollipopBase', 0, res, res);
@@ -1506,15 +3472,44 @@ function thumbFor(wi) {
     g.drawImage(images.slimes, 0, 0, 128, 128, res * 1.6, res * 1.1, res * 1.1, res * 1.1);
   }
   if (w.id === 'ink') inkTile(g, INK.ghost[0], res, res, res);
+  if (w.pack === 'farm') farmTile(g, FARM.hay, res, res, res);
+  if (w.pack === 'ind') for (let i = 0; i < 3; i++) indTile(g, IND.mover[i], i * res, res * 0.4, res);
+  if (w.pack === 'pico') {
+    picoTile(g, PICO.flyer[0], res, 0, res);
+    picoTile(g, PICO.walker[0], res * 2, res, res);
+  }
+  if (w.pack === 'mush') {
+    mushTile(g, 'shroomRedMid', res, res * 0.6, res);
+    mushTile(g, 'stem', res, res * 1.6, res, 1, 0.4);
+  }
+  if (w.pack === 'castle') {
+    b3Tile(g, w, 'bars', res * 2, res, res);
+    critter(g, CRIT.key, res * 0.6, res * 1.1, res * 0.8);
+    b3Tile(g, w, 'fill', 0, 0, res, 2, 0.6);
+  }
+  if (w.pack === 'ice') {
+    b3Tile(g, w, 'pine', 0, res, res);
+    b3Tile(g, w, 'ball', res * 1.3, res * 1.2, res * 0.8);
+  }
+  if (w.pack === 'sea') {
+    g.fillStyle = 'rgba(40,140,200,0.55)';
+    g.fillRect(0, res * 1.2, res * 3, res * 1.8);
+    b3Tile(g, w, 'wave', 0, res * 0.9, res, 3, 0.4);
+    critter(g, CRIT.fishYellow[0], res * 0.9, res * 1.4, res * 0.9);
+  }
   thumbs[wi] = c;
   return c;
+}
+// The cells' names: in proportion to the cells, never under 13 CSS px.
+function mapFont(cs) {
+  return Math.round(Math.max(13 * view.ratio, view.U * 0.3 * cs));
 }
 function drawMap() {
   const { from, to } = game.map;
   const U = view.U;
   const k = view.k;
   const t = game.modeT;
-  const nodes = mapNodes();
+  const { nodes, cs } = mapLayout();
   // The wall: a dark stone face, drawn in the Meadow's pixels (18 per tile).
   const bw = Math.ceil(view.W / k);
   const bh = Math.ceil(view.H / k);
@@ -1560,9 +3555,17 @@ function drawMap() {
   g.fillRect(s0.x - 10, s0.y - 4, 20, 8);
   g.fillStyle = '#6d6482';
   g.fillRect(s0.x - 10, s0.y - 5, 20, 6);
+  // The summit: a pad with a star carved into the wall, golden once the way to it is open.
+  const top = P(nodes[nodes.length - 1]);
+  const sumLit = to >= WORLDS.length && paint >= 1;
+  g.fillStyle = '#231f2e';
+  g.fillRect(top.x - 12, top.y + 2, 24, 7);
+  g.fillStyle = sumLit ? '#ffd23f' : '#6d6482';
+  g.fillRect(top.x - 12, top.y + 1, 24, 5);
   // The cells: hollows in the wall, lit once reached.
-  const cell = 3 * 18;
+  const cell = Math.round(cs * 18);
   const lit = (i) => i <= from || i === to;
+  game.map.summit = sumLit;
   for (let i = 0; i < WORLDS.length; i++) {
     const c = P(nodes[i + 1]);
     g.fillStyle = '#1c1826';
@@ -1574,6 +3577,15 @@ function drawMap() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(buffer, 0, 0, bw * k, bh * k);
+  // The summit's star: carved dark until the journey's end, then gold and turning.
+  {
+    const sx = nodes[nodes.length - 1].x * U;
+    const sy = (nodes[nodes.length - 1].y - 0.55) * U;
+    ctx.save();
+    ctx.globalAlpha = sumLit ? 1 : 0.35;
+    drawStar(ctx, sx, sy, U * 0.45, sumLit ? t * 1.5 : 0);
+    ctx.restore();
+  }
   // Each lit cell's picture, drawn by its world's own rule, straight onto the screen.
   for (let i = 0; i < WORLDS.length; i++) {
     if (!lit(i)) continue;
@@ -1581,15 +3593,15 @@ function drawMap() {
     const img = thumbFor(i);
     ctx.imageSmoothingEnabled = Boolean(WORLDS[i].smooth);
     const pop = i === to && t > MAP.arrive ? 1 + Math.sin(Math.min(1, (t - MAP.arrive) / (MAP.enter - MAP.arrive)) * Math.PI) * 0.12 : 1;
-    const sz = 3 * U * pop;
+    const sz = cs * U * pop;
     ctx.drawImage(img, c.x * U - sz / 2, c.y * U - sz / 2, sz, sz);
-    ctx.font = `${Math.round(U * 0.9)}px 'Kenney Pixel', monospace`;
+    ctx.font = `${mapFont(cs)}px 'Kenney Pixel', monospace`;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fffdf2';
     ctx.lineWidth = Math.max(2, Math.round(U / 9));
     ctx.strokeStyle = '#1c1826';
-    ctx.strokeText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
-    ctx.fillText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * 2.4);
+    ctx.strokeText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * (cs / 2 + 0.2) + mapFont(cs) * 0.75);
+    ctx.fillText(`${i + 1} ${WORLDS[i].name}`, c.x * U, c.y * U + U * (cs / 2 + 0.2) + mapFont(cs) * 0.75);
   }
   // The monster, walking from where it was to the next cell, and stepping in.
   const a = from < 0 ? nodes[0] : nodes[from + 1];
@@ -1690,7 +3702,7 @@ function showScreens() {
   screens.build.hidden = m !== 'build';
   screens.paused.hidden = m !== 'paused';
   screens.tally.hidden = m !== 'tally';
-  hud.hidden = m === 'build';
+  hud.hidden = m === 'build' || m === 'gallery';
   document.body.classList.toggle('building', m === 'build');
   showStyle();
 }
@@ -1706,6 +3718,9 @@ const hudCoins = document.querySelector('[data-hud-coins]');
 const hudLives = document.querySelector('[data-hud-lives]');
 const hudHearts = document.querySelector('[data-hud-hearts]');
 const hudCoinIcon = document.querySelector('[data-hud-coin-icon]');
+const hudKeys = document.querySelector('[data-hud-keys]');
+const hudKeysN = document.querySelector('[data-hud-keys-n]');
+const hudKeyIcon = document.querySelector('[data-hud-key-icon]');
 let hudKey = '';
 function updateHud() {
   if (hud.hidden) return;
@@ -1714,6 +3729,19 @@ function updateHud() {
   if (hudStage.textContent !== label) hudStage.textContent = label;
   const c = String(game.coins);
   if (hudCoins.textContent !== c) hudCoins.textContent = c;
+  // Castle's keys held, in a world that has keys.
+  const hasKeys = stage.things.some((t) => t.type === 'key');
+  if (hudKeys.hidden === hasKeys) hudKeys.hidden = !hasKeys;
+  const kn = String(game.keys || 0);
+  if (hudKeysN.textContent !== kn) hudKeysN.textContent = kn;
+  if (hasKeys && !hudKeyIcon.firstChild) {
+    const c = document.createElement('canvas');
+    c.className = 'hud-icon on';
+    c.width = 64;
+    c.height = 64;
+    critter(c.getContext('2d'), CRIT.key, 0, 0, 64);
+    hudKeyIcon.appendChild(c);
+  }
   game.lifePop = Math.max(0, (game.lifePop || 0) - 1 / 60);
   game.shieldPop = Math.max(0, (game.shieldPop || 0) - 1 / 60);
   const key = `${game.lives}:${game.shields}:${baked ? baked.key : ''}:${w.id}`;
@@ -1783,7 +3811,16 @@ function icon(kind, on) {
     g.fillRect(3, 3, 10, 10);
   } else if (kind === 'coin') {
     const w = world();
-    if (w.oneBit) {
+    if (w.pack === 'pico') {
+      c.width = 8;
+      c.height = 8;
+      picoTile(g, PICO.coin, 0, 0, 8);
+    } else if (w.pack === 'mush' || isB3(w) || w.pack === 'sky' || w.lineArt) {
+      c.width = 70;
+      c.height = 70;
+      g.imageSmoothingEnabled = true;
+      drawSmoothCoin(g, 35, 35, 100);
+    } else if (w.oneBit) {
       c.width = 16;
       c.height = 16;
       inkTile(g, INK.coin[0], 0, 0, 16);
@@ -1797,6 +3834,10 @@ function icon(kind, on) {
       c.height = 18;
       ppTile(g, PP.coin[0], 0, 0, 18);
     }
+  } else if (world().pack === 'pico') {
+    c.width = 8;
+    c.height = 8;
+    picoTile(g, PICO.heart, 0, 0, 8);
   } else if (world().oneBit) {
     c.width = 16;
     c.height = 16;
@@ -1816,13 +3857,23 @@ function icon(kind, on) {
 
 // ---------------------------------------------------------------- pause
 function pause() {
-  if (game.mode !== 'play') return;
+  if (game.mode !== 'play' && game.mode !== 'gallery') return;
+  game.resumeFrom = game.mode;
+  game.resumeT = game.modeT;
   setMode('paused');
   releaseAll();
   stopMusic();
 }
 function resume() {
   if (game.mode !== 'paused') return;
+  if (game.resumeFrom === 'gallery') {
+    // The gallery carries on where it was.
+    setMode('gallery');
+    game.modeT = game.resumeT;
+    game.resumeFrom = 'play';
+    releaseAll();
+    return;
+  }
   setMode('play');
   player.invul = Math.max(player.invul, 0.5);
   releaseAll();
@@ -1870,7 +3921,10 @@ function sync() {
   input.left = k.has('left') || input.padDir < 0;
   input.right = k.has('right') || input.padDir > 0;
   const jump = k.has('jump') || input.jumpId !== null;
-  if (jump && !input.jump) player.buffer = bufferTime();
+  if (jump && !input.jump) {
+    player.buffer = bufferTime();
+    player.pressAt = game.t;
+  }
   input.jump = jump;
   pad.dataset.dir = String(input.left && !input.right ? -1 : input.right && !input.left ? 1 : 0);
   jumpKey.classList.toggle('on', jump);
@@ -1882,7 +3936,7 @@ const KEYS = {
 // On the capture phase, so a pause can take Escape before the shell's back handler sees it.
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof Element && e.target.closest('input, textarea')) return;
-  if (game.mode === 'map' && (KEYS[e.code] || e.code === 'Enter')) {
+  if ((game.mode === 'map' || game.mode === 'gallery') && (KEYS[e.code] || e.code === 'Enter')) {
     e.preventDefault();
     skipMap();
     return;
@@ -1894,7 +3948,7 @@ window.addEventListener('keydown', (e) => {
     }
     return;
   }
-  if (game.mode === 'play' && (e.code === 'Escape' || e.code === 'KeyP')) {
+  if ((game.mode === 'play' || game.mode === 'gallery') && (e.code === 'Escape' || e.code === 'KeyP')) {
     e.preventDefault();
     pause();
     return;
@@ -2020,12 +4074,22 @@ Promise.all([
   loadImage('img/ink-tiles.png'),
   loadImage('img/candy-slimes.png'),
   import('./monster-atlas.js'),
-]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas]) => {
-  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes });
+  loadImage('img/farm-tiles.png'),
+  loadImage('img/industrial-tiles.png'),
+  loadImage('img/pico-tiles.png'),
+  loadImage('img/mushroom.png'),
+  loadImage('img/castle.png'),
+  loadImage('img/ice.png'),
+  loadImage('img/sea.png'),
+  loadImage('img/critters.png'),
+  loadImage('img/scribble.png'),
+  loadImage('img/jumper.png'),
+]).then(([meadowTiles, meadowChars, meadowBg, candy, monsterImg, inkImg, slimes, atlas, farm, ind, pico, mushroom, castle, ice, sea, critters, scribble, jumper]) => {
+  Object.assign(images, { meadowTiles, meadowChars, meadowBg, candy, monster: monsterImg, slimes, farm, ind, pico, mushroom, castle, ice, sea, critters, scribble, jumper });
   MONSTER_FRAMES = atlas.MONSTER;
   // The colour under each background panel's hills, to fill below them.
   images.bgFill = {};
-  for (const [id, x] of [['meadow', PP.meadow.bgX], ['frost', PP.frost.bgX]]) {
+  for (const [id, x] of [['meadow', PP.meadow.bgX]]) {
     const c = makeCanvas(1, 1).getContext('2d');
     c.drawImage(meadowBg, x, 71, 1, 1, 0, 0, 1, 1);
     const d = c.getImageData(0, 0, 1, 1).data;
@@ -2058,6 +4122,8 @@ Promise.all([
     baked: () => baked,
     renderRes: () => renderRes,
     heard,
+    bed: () => ({ world: bedEl.dataset.world || null, paused: bedEl.paused, muted: bedEl.muted }),
+    ACCENT_GAP,
     frameWork,
     step: (dt = STEP) => update(dt),
     advance,
@@ -2079,8 +4145,23 @@ Promise.all([
     resume,
     leap,
     skipMap,
+    mapLayout,
+    mapFont,
+    galleryCells,
+    GALLERY,
+    lineArtFrame: (pose, boil) => lineArtFor().frame(pose, boil),
+    lineSlime,
+    boilNow,
+    clearParticles: () => {
+      particles.length = 0;
+    },
     MAP,
     tileAt,
+    crusherPhase,
+    inWater,
+    DARK,
+    SLOPES,
+    slopeY,
     sync,
     layout,
     store: readStore,
