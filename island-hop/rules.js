@@ -23,7 +23,7 @@ export const RULES = {
   accel: 1.1, // seconds from still to top speed
   brake: 0.7, // seconds from top speed to still
   spin: 120, // degrees: a stick further than this from the bow turns the boat on the spot
-  dock: { range: 1.5, slow: 0.5, touch: 0.35 }, // under half top speed: within 1.5 tiles of a free berth heading in, or touching its jetty
+  dock: { range: 1.5, slow: 0.5, touch: 0.35, away: 0.3 }, // under half top speed: within 1.5 tiles of a free berth heading in, or touching its jetty
   transition: 0.3,
   bump: 0.6, // seconds held still after hitting a rock or traffic
   personR: 0.2,
@@ -269,6 +269,11 @@ function tick(s, dt, stick) {
     runTransition(s, dt);
     return;
   }
+  // A tap while driving gets you out, wherever the car is.
+  if (s.mode === 'car' && stick && stick.out) {
+    s.trans = { kind: 'carOut', t: 0, car: s.you.car };
+    return;
+  }
   if (s.mode === 'boat') sailStep(s, youBoat(s), g, dt);
   else if (s.mode === 'walk') walkStep(s, g, dt);
   else if (s.mode === 'car') driveStep(s, youCar(s), g, dt);
@@ -349,14 +354,19 @@ function tryDock(s, b) {
     if (!berthFree(s, br) || (br.shallow && !spec.shallow)) continue;
     const c = centre(br);
     const d = dist(b, c);
-    // The berth just left doesn't pull you back in until you've been clear of it.
+    // Heading slowly into the berth, or touching its jetty from any side.
+    const heading = (Math.cos(b.h) * (c.x - b.x) + Math.sin(b.h) * (c.y - b.y)) / Math.max(d, 1e-6);
+    let toward = d <= RULES.dock.range && (d < 0.6 || heading > 0.3);
+    let touching = br.planks.some((t) => Math.hypot(Math.max(t.x - b.x, 0, b.x - (t.x + 1)), Math.max(t.y - b.y, 0, b.y - (t.y + 1))) <= spec.radius + RULES.dock.touch);
+    // The berth just left: you can turn straight back into it, but a boat still sitting there, or
+    // turning away from it, doesn't dock again.
     if (b.left === br.id) {
       if (d > RULES.dock.range + 0.5) b.left = null;
-      else continue;
+      else {
+        toward = d >= RULES.dock.away && d <= RULES.dock.range && heading > 0.3;
+        touching = false;
+      }
     }
-    // Heading slowly into the berth, or touching its jetty from any side.
-    const toward = d <= RULES.dock.range && (d < 0.6 || (Math.cos(b.h) * (c.x - b.x) + Math.sin(b.h) * (c.y - b.y)) / d > 0.3);
-    const touching = br.planks.some((t) => Math.hypot(Math.max(t.x - b.x, 0, b.x - (t.x + 1)), Math.max(t.y - b.y, 0, b.y - (t.y + 1))) <= spec.radius + RULES.dock.touch);
     if (!toward && !touching) continue;
     s.trans = { kind: 'dock', t: 0, boat: b.id, berth: br.id, from: { x: b.x, y: b.y, h: b.h } };
     b.v = 0;
@@ -392,7 +402,7 @@ function walkStep(s, g, dt) {
       s.events.push({ type: 'step' });
     }
   }
-  arrive(s);
+  arrive(s, g);
 }
 // Touching a stop: standing on its doormat, or within a step of its building's walls.
 export const STOP_TOUCH = 0.15; // tiles between the person's edge and the wall
@@ -404,7 +414,7 @@ export function touchesStop(p, stop) {
 }
 // What walking does: a stop's doormat or building ticks it, a berth with your boat boards it, a
 // parked car gets you in.
-function arrive(s) {
+function arrive(s, g = { x: 0, y: 0, len: 0 }) {
   const p = s.person;
   const key = `${Math.floor(p.x)},${Math.floor(p.y)}`;
   const entered = key !== p.tile;
@@ -418,10 +428,13 @@ function arrive(s) {
     return;
   }
   p.nearCar = near;
-  if (entered) {
-    const berthId = WORLD.jettyEnds[key];
-    const boat = berthId && s.boats.find((b) => b.berth === berthId);
-    if (boat) {
+  // Your boat at this jetty end: stepping onto it, or pushing toward the boat while on it, boards.
+  const berthId = WORLD.jettyEnds[key];
+  const boat = berthId && s.boats.find((b) => b.berth === berthId);
+  if (boat) {
+    const d = walkDir(g);
+    const toBoat = g.len > 0 && (d.x * (boat.x - p.x) + d.y * (boat.y - p.y)) / Math.max(dist(boat, p), 1e-6) > 0.3;
+    if (entered || toBoat) {
       s.trans = { kind: 'board', t: 0, boat: boat.id, from: { x: p.x, y: p.y } };
       return;
     }

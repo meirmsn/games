@@ -328,6 +328,46 @@ test('island-hop AC-7: a slow boat touching a free jetty from any side docks, no
   assert.equal(s.mode, 'boat', 'sailing past at speed');
 });
 
+test('island-hop AC-7: straight after docking you can board again, and straight after leaving you can dock again', () => {
+  const br = WORLD.berthById.portW; // free in mission 1; its jetty runs along x, end (6,9), berth (5,9)
+  const s = play(0);
+  afloat(s, 'motor', br.x - 0.7, br.y + 0.5, 0, 1);
+  run(s, 0.5, gridToStick(1, 0, 0.3));
+  assert.equal(s.mode, 'walk', 'docked');
+  // Without walking away: push back toward the boat from the jetty end, and you're aboard.
+  run(s, 0.6, gridToStick(-1, 0));
+  assert.equal(s.mode, 'boat', 'boarded again at once');
+  // Turn away and sail out a little, then straight back: it docks again.
+  const b = youBoat(s);
+  run(s, 0.9, gridToStick(-1, 0.2));
+  assert.equal(s.mode, 'boat');
+  assert.ok(Math.hypot(b.x - (br.x + 0.5), b.y - (br.y + 0.5)) < 2, `still close: ${b.x.toFixed(2)},${b.y.toFixed(2)}`);
+  run(s, 3, (st) => (st.mode === 'boat' ? toward(youBoat(st), centre(br), 0.4) : null));
+  assert.equal(s.mode, 'walk', 'docked again at once');
+  // A boat still sitting at the berth it just left doesn't dock again by itself.
+  const s2 = play(0);
+  afloat(s2, 'motor', br.x - 0.7, br.y + 0.5, 0, 1);
+  run(s2, 0.5, gridToStick(1, 0, 0.3));
+  run(s2, 0.6, gridToStick(-1, 0));
+  assert.equal(s2.mode, 'boat');
+  run(s2, 1, null);
+  assert.equal(s2.mode, 'boat', 'no re-dock while it sits there');
+});
+
+test('island-hop AC-7: a tap while driving gets you out wherever the car is, and the car stays', () => {
+  const s = play(1);
+  s.mode = 'car';
+  s.you.car = 'portS';
+  const car = s.cars.find((c) => c.id === 'portS');
+  Object.assign(car, { x: 9.5, y: 5.5, node: { x: 9, y: 5 }, target: null }); // mid-road, nothing in reach
+  run(s, 0.3, null);
+  assert.equal(s.mode, 'car', 'letting go mid-road keeps you in');
+  step(s, RULES.dt, { x: 0, y: 0, out: true });
+  run(s, 0.5, null);
+  assert.equal(s.mode, 'walk', 'the tap got you out');
+  assert.deepEqual({ x: car.x, y: car.y }, { x: 9.5, y: 5.5 });
+});
+
 test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board; a parked car gets you in and lets you out by a car park, jetty or door, and stays there', () => {
   // You came to Lagoon Isle by motorboat (moored at Port Town's west berth), took the rowboat out into
   // the channel and docked it back; the motorboat is still at its berth and boards.
@@ -622,6 +662,43 @@ test('island-hop AC-4: the page opens on the moving archipelago behind the missi
   const c = await page.evaluate(() => ({ clock: __hop.state.clock, started: __hop.state.started }));
   assert.ok(c.started && c.clock > 0.4, `the clock runs: ${c.clock}`);
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('island-hop AC-4: the mission card and a big banner when you take control say the goal: collect them all, as fast as you can', async () => {
+  const { context, page } = await open();
+  assert.match(await page.textContent('[data-goal]'), /Collect them all, as fast as you can!/);
+  assert.equal(await page.isVisible('[data-goal]'), true);
+  await page.click('[data-start]');
+  assert.equal(await page.isVisible('[data-banner]'), false, 'not during the fly-over');
+  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 5000 });
+  await page.waitForFunction(() => !document.querySelector('[data-banner]').hidden, null, { timeout: 2000 });
+  const b = await page.evaluate(() => {
+    const el = document.querySelector('[data-banner]');
+    return { text: el.textContent, size: parseFloat(getComputedStyle(el).fontSize) };
+  });
+  assert.match(b.text, /Collect them all,\s*as fast as you can!/);
+  assert.ok(b.size >= 28, `big: ${b.size}px`);
+  await page.waitForFunction(() => document.querySelector('[data-banner]').hidden, null, { timeout: 5000 });
+  await context.close();
+});
+
+test('island-hop AC-7: a tap on the screen, or Space, while driving gets you out', async () => {
+  const { context, page } = await open({ hasTouch: true });
+  for (const how of ['tap', 'space']) {
+    await page.evaluate(() => {
+      __hop.manual = true;
+      __hop.start(1, { fly: false });
+      const s = __hop.state;
+      s.mode = 'car';
+      s.you.car = 'portS';
+      Object.assign(s.cars.find((c) => c.id === 'portS'), { x: 9.5, y: 5.5, node: { x: 9, y: 5 }, target: null });
+      __hop.manual = false;
+    });
+    if (how === 'tap') await page.touchscreen.tap(200, 500);
+    else await page.keyboard.press('Space');
+    await page.waitForFunction(() => __hop.state.mode === 'walk', null, { timeout: 3000 });
+  }
   await context.close();
 });
 
@@ -923,6 +1000,9 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
     });
   const loud = await scenario();
   for (const n of ['creak', 'door', 'chime', 'jingle']) assert.ok(loud.names.includes(n), `${n} in ${loud.names}`);
+  // The car's engine runs while you drive; the sea plays afloat and the island's breeze ashore.
+  for (const n of ['loop:motor', 'loop:land']) assert.ok(loud.names.includes(n), `${n} in ${loud.names}`);
+  assert.ok(await page.evaluate(() => __hop.played.includes('loop:sea')), 'the sea plays afloat');
   assert.ok(loud.sounded >= 8, `${loud.sounded} sounds reached the speakers`);
   await page.click('[data-again]');
   await page.click('[data-mute]');

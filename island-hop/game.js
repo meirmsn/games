@@ -41,7 +41,7 @@ const mapBtn = $('[data-map]');
 const restartBtn = $('[data-restart]');
 
 const SOUNDS = {};
-for (const n of ['step', 'door', 'creak', 'bump', 'chime', 'jingle', 'nope', 'sea', 'engine', 'motor']) SOUNDS[n] = `sounds/${n}.mp3`;
+for (const n of ['step', 'door', 'creak', 'bump', 'chime', 'jingle', 'nope', 'sea', 'land', 'engine', 'motor']) SOUNDS[n] = `sounds/${n}.mp3`;
 let world = null; // the rules' state
 let paused = false;
 const { sound } = mountShell({ sounds: SOUNDS, unsaved: () => !!world && world.started && world.phase === 'play' });
@@ -60,9 +60,13 @@ muteBtn.addEventListener('click', () => {
   syncMute();
 });
 syncMute();
-const loops = { sea: null, engine: null, motor: null };
+const loops = { sea: null, land: null, engine: null, motor: null };
 function loopOn(name, on, gain = 1) {
-  if (on && !loops[name]) loops[name] = sound.loop(name, { gain });
+  on = on && !sound.muted; // muted, no loop runs at all; unmuted, the next frame starts it again
+  if (on && !loops[name]) {
+    loops[name] = sound.loop(name, { gain });
+    played.push(`loop:${name}`); // for tests: which loops started
+  }
   if (!on && loops[name]) {
     loops[name]();
     loops[name] = null;
@@ -202,7 +206,7 @@ canvas.addEventListener('pointerdown', (e) => {
   if (pointer) return; // a second finger is ignored
   if (!world || world.phase !== 'play' || paused) return;
   if (isEdgeStart(e)) return; // the phone's edge gestures start there (shared/safe-zone.js)
-  pointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY };
+  pointer = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, t0: performance.now() };
   canvas.setPointerCapture?.(e.pointerId);
 });
 canvas.addEventListener('pointermove', (e) => {
@@ -210,8 +214,13 @@ canvas.addEventListener('pointermove', (e) => {
   pointer.x = e.clientX;
   pointer.y = e.clientY;
 });
+// A tap (a short press that hardly moves) while driving gets you out of the car.
+let getOut = false;
 function lift(e) {
-  if (pointer && e.pointerId === pointer.id) pointer = null;
+  if (!pointer || e.pointerId !== pointer.id) return;
+  const tap = performance.now() - pointer.t0 < 300 && Math.hypot(pointer.x - pointer.x0, pointer.y - pointer.y0) < 10;
+  if (tap && e.type === 'pointerup' && world && world.mode === 'car' && !world.trans) getOut = true;
+  pointer = null;
 }
 canvas.addEventListener('pointerup', lift);
 canvas.addEventListener('pointercancel', lift);
@@ -227,6 +236,11 @@ function syncKeys() {
   keyStick = len ? { x: x / len, y: y / len } : { x: 0, y: 0 };
 }
 window.addEventListener('keydown', (e) => {
+  if ((e.code === 'Space' || e.code === 'Enter') && world && world.mode === 'car' && !world.trans && !e.target.closest?.('button')) {
+    e.preventDefault();
+    getOut = true;
+    return;
+  }
   if (!KEYMAP[e.code]) return;
   e.preventDefault();
   keys.add(e.code);
@@ -299,6 +313,16 @@ function showCard(i) {
 }
 let ghost = null; // the best run's positions, every 0.2 s
 let pilot = null; // tests and the demo can let the autopilot drive
+// The goal, big and clear, when the mission hands you control.
+let bannerT = 0;
+function showBanner() {
+  const el = $('[data-banner]');
+  el.hidden = false;
+  el.classList.remove('show');
+  void el.offsetWidth;
+  el.classList.add('show');
+  bannerT = 2.6;
+}
 function start(i, { fly = true } = {}) {
   missionIndex = i;
   world = createMission(i, { phase: fly ? 'fly' : 'play' });
@@ -312,7 +336,9 @@ function start(i, { fly = true } = {}) {
   restartBtn.hidden = false;
   renderHud();
   snapCamera();
-  loopOn('sea', true, 0.5);
+  $('[data-banner]').hidden = true;
+  bannerT = 0;
+  if (!fly) showBanner();
 }
 let finishView = null; // { route, gold } polylines drawn over the map at the finish
 function finish() {
@@ -328,6 +354,7 @@ function finish() {
   play('jingle');
   loopOn('engine', false);
   loopOn('motor', false);
+  loopOn('land', false);
   const best = mem.best[i];
   $('[data-medal]').textContent = medal ? MEDAL[medal] : '🏁';
   $('[data-medal]').setAttribute('aria-label', medal ? `${medal} medal` : 'No medal');
@@ -925,6 +952,17 @@ function ghostAt() {
   return { x, y, z: isLand(ch(Math.floor(x), Math.floor(y))) ? LAND_Z : 0 };
 }
 
+// The loops: the boat's engine while it moves; in the car its engine, moving or not; afloat the sea,
+// ashore the island's breeze.
+function syncLoops() {
+  const b = youBoat(world);
+  const playing = world.phase === 'play' || world.phase === 'fly';
+  loopOn('engine', world.phase === 'play' && world.mode === 'boat' && b.v > 0.3, 0.35);
+  loopOn('motor', world.phase === 'play' && world.mode === 'car', 0.4);
+  loopOn('sea', playing && world.mode === 'boat', 0.5);
+  loopOn('land', playing && world.mode !== 'boat', 0.45);
+}
+
 // --- The loop -------------------------------------------------------------------------------------------------
 let last = performance.now();
 let frames = 0;
@@ -950,8 +988,16 @@ function advance(dt) {
   if (!world) return;
   clock += dt;
   if (!paused && !manual) {
-    const input = pilot ? (st) => (st.phase === 'play' ? pilotStick(st, pilot) : null) : stick();
+    let input = pilot ? (st) => (st.phase === 'play' ? pilotStick(st, pilot) : null) : stick();
+    if (getOut && !pilot) input = { ...input, out: true };
+    getOut = false;
+    const wasFlying = world.phase === 'fly';
     rulesStep(world, dt, input);
+    if (wasFlying && world.phase === 'play') showBanner();
+    if (bannerT > 0) {
+      bannerT -= dt;
+      if (bannerT <= 0) $('[data-banner]').hidden = true;
+    }
     handleEvents();
     if (world.phase === 'play' || world.phase === 'done') {
       $('[data-clock]').textContent = fmtClock(world.clock);
@@ -962,9 +1008,7 @@ function advance(dt) {
       splitTimer -= dt;
       if (splitTimer <= 0) $('[data-split]').hidden = true;
     }
-    const b = youBoat(world);
-    loopOn('engine', world.phase === 'play' && world.mode === 'boat' && b.v > 0.3, 0.35);
-    loopOn('motor', world.phase === 'play' && world.mode === 'car' && world.cars.some((c) => c.id === world.you.car && c.target), 0.4);
+    syncLoops();
   }
   updateCamera(dt);
 }
@@ -1024,6 +1068,7 @@ window.__hop = {
       const input = pilot ? (st) => (st.phase === 'play' ? pilotStick(st, pilot) : null) : stickIn;
       rulesStep(world, dt, input);
       handleEvents();
+      syncLoops();
       updateCamera(dt);
       if (world.phase === 'done') break;
     }

@@ -153,6 +153,18 @@ mp3(
         'afade=t=in:d=0.05,afade=t=out:st=11.95:d=0.05',
     ],
 )
+# Ashore: a light breeze, airier than the sea (pink noise, band-passed, swelling slowly); 12 s, faded
+# at both ends to loop.
+mp3(
+    'land',
+    [
+        '-f', 'lavfi', '-i', 'anoisesrc=color=pink:amplitude=0.35:duration=12:seed=11',
+        '-af',
+        'highpass=f=300,lowpass=f=2400,volume=0.6,'
+        "volume='0.45+0.35*sin(2*PI*t/8)+0.2*sin(2*PI*t/3)':eval=frame,"
+        'afade=t=in:d=0.05,afade=t=out:st=11.95:d=0.05',
+    ],
+)
 # An outboard's hum: a low buzzing square, warmed; 2 s to loop (its pitch follows the boat's speed).
 mp3(
     'engine',

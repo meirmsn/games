@@ -371,7 +371,60 @@ button:focus-visible {
   background: var(--gold);
 }
 
+/* The goal: on the mission card, and as a big banner when you take control. */
+.goal {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--accent);
+}
+
+.banner {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 24px;
+  color: #fff;
+  background: rgb(16 38 60 / 78%);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 30%);
+}
+
+.banner.show {
+  animation: banner 2.6s ease-out both;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .banner.show {
+    animation: none;
+  }
+
   .stops li.flash,
   .carrying span.flash {
     animation: none;

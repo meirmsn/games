@@ -38,7 +38,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   hall). Each open stop has a tall coloured beam of light over its building, visible from anywhere,
   and an arrow at the screen's edge when it's off screen. A 3-second fly-over shows every stop before
   the clock starts. Mission 1 is one island and one door: sail, dock, walk in. Each next mission
-  adds one thing. No written tips.
+  adds one thing. The one line of words is the goal, big and clear on the mission card and again as
+  a banner when you take control: "Collect them all, as fast as you can!" (owner, 2026-11-11: "on
+  the beginning of the game, you should say very big and clear, collect as fast as possible so that
+  you know that this is what you're trying to do").
 - **Three clocks:** seconds: a dock, a car door, a stop ticked with a chime. Minutes: each mission adds
   a car, a second island, a pickup in order, a second boat, then traffic. Back: a best time and a
   medal per mission, splits against the best, and a ghost of your best run.
@@ -114,12 +117,18 @@ grab a car, drive to the door, and back to the boat. The route is yours.
     jetty from any side (owner, 2026-11-11: "You should allow getting out of the boat when touching the
     dog from anywhere, not just from the front"). Sailing past at speed doesn't dock. Moored decoration boats
     never sit on berths; a berth holds one of your boats, and one holding a boat can't be docked at
-    (marinas have two berths).
-  - Walking onto a berth holding one of your boats boards it. Your boats each stay where you left them,
+    (marinas have two berths). Straight after leaving a berth you can turn back into it and dock at
+    once; only a boat still sitting there (under 0.3 tiles from it) doesn't dock again by itself
+    (owner, 2026-11-11: "if I unload on the dock and I, try to go back into the boat, it doesn't work. I need to like walk away a little bit and then come back. Similar if I dock and then if I leave on the boat and then I try to return to the boat, to the dock immediately, it wouldn't let me. ... it should allow you to return immediately").
+  - Walking onto a berth holding one of your boats boards it, and so does pushing toward the boat
+    while standing on its jetty end, so you can get straight back in after docking (the owner's words
+    above). Your boats each stay where you left them,
     so leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board.
   - Walking into a parked car gets in. Letting go of the stick with the car within 1 tile of a car
-    park, a jetty or a stop's door gets out; anywhere else, the car just stops. A car stays where you
-    leave it.
+    park, a jetty or a stop's door gets out; anywhere else, the car just stops. A tap on the screen
+    (or Space or Enter) gets you out wherever the car is (owner, 2026-11-11: "I don't know how to get
+    out of the car. Maybe it should be that if you tap on the car, then it comes out of the car"). A
+    car stays where you leave it.
   - Walking onto a stop's doormat ticks it, and so does walking up to its building from any side
     (within 0.15 tiles of its walls); the doormat stays as a hint. (Owner, 2026-11-11: "when I go to
     the building that had the, the emoji, nothing happens. So I'm not sure how it's supposed to work,
@@ -164,9 +173,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - Readability: the person has a bright ring under them; a building drawn after the person whose
   bounds cover them fades to 35%. Stops are tall beams in their own colour with their icon on top;
   off-screen ones get an edge arrow with the icon and the distance.
-- Sound, through the shared sound module and the site-wide mute, MP3: the sea's ambience, a boat
-  engine hum by speed, footsteps, a car door and engine, a rope creak at the berth, a bump, a chime at
-  each stop, a medal jingle at the finish.
+- Sound, through the shared sound module and the site-wide mute, MP3: the sea's ambience afloat and an
+  island breeze ashore, a boat engine hum while it moves, footsteps, a car door and an engine that
+  runs the whole time you're in the car, a rope creak at the berth, a bump, a chime at each stop, a
+  medal jingle at the finish (owner, 2026-11-11: "there should be like sound effect when you're in
+  the car, and definitely should be different sound when you are in the island than when you are in
+  the water"). While muted, no loop runs at all.
 - Interruptible: hiding the page pauses the mission, the clock and a fly-over in progress; it resumes
   on a tap.
 - The game exposes `window.__hop` (its state, `start(mission)`, and a `step(dt)` that advances
@@ -185,9 +197,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-2** `shared/iso.js` sorts drawables back to front — `tests/iso.test.mjs`.
 - **AC-3** `shared/iso.js`'s camera and gestures work as its tests specify — `tests/iso.test.mjs`.
 - **AC-4** The page opens on the archipelago moving (traffic sailing, water animating) behind the
-  mission card, with no errors; the card shows the mission's stops as icons; Start flies over the
-  stops in about 3 s with the clock at 0:00, then hands control to the boat, and the clock starts on
-  the first move — `tests/island-hop.test.mjs`.
+  mission card, with no errors; the card shows the mission's stops as icons and the goal, "Collect
+  them all, as fast as you can!", big; Start flies over the stops in about 3 s with the clock at 0:00,
+  then hands control to the boat with the goal again as a big banner, and the clock starts on the
+  first move — `tests/island-hop.test.mjs`.
 - **AC-5** The map: from each mission's start, every stop can be reached with the boats and cars that
   mission provides; every berth touches water its boats can reach; the lagoon is open only to the
   rowboat and the footbridge only passable by it; the two large islands have three berths and at least
@@ -200,10 +213,13 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   takes the branch the stick points at; a boat nosed into a cliff gets free in under 2 s —
   `tests/island-hop.test.mjs`.
 - **AC-7** A boat heading slowly toward a free berth within 1.5 tiles docks and the person steps
-  ashore, and so does a slow boat touching a free jetty from any side; sailing past at speed doesn't; a berth holding a boat can't be docked at; walking onto a
-  berth holding one of your boats boards it; after leaving the rowboat in the lagoon the motorboat is
-  still at its berth and boards; walking into a parked car gets in; letting go with the car within
-  1 tile of a car park, jetty or door gets out and the car stays there — `tests/island-hop.test.mjs`.
+  ashore, and so does a slow boat touching a free jetty from any side; sailing past at speed doesn't;
+  a berth holding a boat can't be docked at; walking onto a berth holding one of your boats boards
+  it, and right after docking, pushing back toward the boat boards it; right after leaving a berth,
+  turning back into it docks; after leaving the rowboat in the lagoon the motorboat is still at its
+  berth and boards; walking into a parked car gets in; letting go with the car within 1 tile of a car
+  park, jetty or door gets out, a tap (or Space) gets out anywhere, and the car stays there —
+  `tests/island-hop.test.mjs`.
 - **AC-8** Walking onto a stop's doormat, or up to its building from any side, ticks it with a chime
   and a split; an ordered stop isn't
   ticked before its pickup, and its beam pulses and the pickup's icon flashes; pickups ride with you
@@ -227,8 +243,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-14** Hiding the page pauses the mission, the clock and a fly-over; it resumes only on a tap;
   restart, from the HUD or the pause card, resets the clock, the stops, any pickup and every vehicle —
   `tests/island-hop.test.mjs`.
-- **AC-15** Docking, a car door, a stop and the finish each play their sound, and none plays while
-  muted — `tests/island-hop.test.mjs`.
+- **AC-15** Docking, a car door, a stop and the finish each play their sound; the car's engine runs
+  while you're in it, the sea plays afloat and the island's breeze ashore; and none plays while muted
+  — `tests/island-hop.test.mjs`.
 - **AC-16** On a 390×844 phone the page doesn't scroll, every button is at least 44 px, the canvas is
   at most 2× its CSS size, a building covering the person fades, and movement covers the same distance
   at 60 and 120 frames a second — `tests/island-hop.test.mjs`.
