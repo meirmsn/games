@@ -90,8 +90,9 @@ const LAST_ROUND = 6;
 // The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
 // lane, from round 2, worth the most pips and points; 0.6 of a far target, never under 30 CSS px.
 const TINY = { pips: 5, base: 250, upFor: 1.4, scale: 0.6, minPx: 30, from: 6, to: 24, gap: 6, retry: 0.25, lastSecs: 2 };
-// A hit's "+N" flies from where the ball landed to the count board in this long.
-const PIP_FLY = 0.45;
+// The tip under each round's goal (the owner, 2026-11-11: "you can put like a pro tip there about
+// like you know further target count more").
+const TIP = 'Tip: far targets count more';
 
 // The bullseye of each target face: its painted centre with the ring around it, as a share of the
 // sprite's half-width (measured from the pack's art).
@@ -321,7 +322,6 @@ const game = {
   score: 0,
   roundScore: 0,
   pips: 0,
-  goalShown: 0, // the pips the count board shows: it climbs as each "+N" arrives
   goalPulse: 0,
   bonus: false,
   time: ROUND_TIME, // left in the round
@@ -602,9 +602,7 @@ function startRound(n) {
   const cfg = ROUNDS[n];
   game.cfg = cfg;
   game.pips = 0;
-  game.goalShown = 0;
   game.goalPulse = 0;
-  fx = fx.filter((f) => f.type !== 'pip');
   game.roundScore = 0;
   game.bonus = false;
   game.time = ROUND_TIME;
@@ -623,7 +621,7 @@ function startRound(n) {
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
   game.modeT = 0;
-  banner(`Round ${n}`, cfg.name, 1.3, false, `${cfg.quota} to clear`);
+  banner(`Round ${n}`, cfg.name, 1.3, false, `${cfg.quota} to clear`, TIP);
   sfx('round');
   if (n === 1) {
     // A big, slow target crosses the middle of the nearest lane, where a short straight pull lands.
@@ -637,8 +635,8 @@ function startRound(n) {
 
 // A banner between rounds sits over the lanes; one during play (`small`) is a slim pill on the
 // counter, where nothing can be hit, so it never hides a target.
-function banner(text, sub = '', life = 1.2, small = false, goal = '') {
-  game.banner = { text, sub, goal, t: 0, life, small };
+function banner(text, sub = '', life = 1.2, small = false, goal = '', tip = '') {
+  game.banner = { text, sub, goal, tip, t: 0, life, small };
 }
 
 function roundOver() {
@@ -659,7 +657,6 @@ function roundOver() {
 }
 
 function gameOver() {
-  settlePips();
   game.mode = 'over';
   game.modeT = 0;
   game.attract = true;
@@ -896,7 +893,8 @@ function landOn(b) {
   if (!free) {
     const was = game.pips;
     game.pips += pips;
-    fx.push({ type: 'pip', x: b.x1, y: b.y1, n: pips, t: 0 });
+    // The count board climbs at once, with a swell; the hit shows only its points.
+    game.goalPulse = 1;
     if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
       game.bonus = true;
       sfx('quota');
@@ -963,17 +961,6 @@ function paintAlpha(p) {
 function popup(x, y, text, color) {
   fx.push({ type: 'text', x, y, text, color, t: 0 });
 }
-// A "+N" that reached the board takes its pips off the board's count, with a swell.
-function pipArrived(f) {
-  game.goalShown += f.n;
-  game.goalPulse = 1;
-}
-// Every "+N" still flying lands at once (a game over, so the card's board reads as it ended).
-function settlePips() {
-  for (const f of fx) if (f.type === 'pip') pipArrived(f);
-  fx = fx.filter((f) => f.type !== 'pip');
-}
-
 // ---------- The simulation ----------
 
 function spawnStep(dt, cfg) {
@@ -1066,8 +1053,8 @@ function timerColour() {
 }
 // Green is the count board's alone: never the timer's, so the two boards never read as one. A
 // bottle green, like tinted glass, not a bright one (the owner, 2026-11-11: "make it like the green
-// that is analog, which is not that bright"); its lettering, the "+N" and the banner's goal, is a
-// paler green that reads on wood.
+// that is analog, which is not that bright"); the banner's goal line is painted a paler green that
+// reads on wood.
 const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', green: '#8fbf6a', dark: null };
 const GOAL_PAINT = '#b4d89a';
 // The bulbs of a seven-segment digit: segments a (top) to g (middle), three bulbs each.
@@ -1483,11 +1470,8 @@ function update(dt) {
     }
   }
   balls = balls.filter((b) => !b.landed);
-  for (const f of fx) {
-    f.t += dt;
-    if (f.type === 'pip' && f.t >= PIP_FLY) pipArrived(f);
-  }
-  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : f.type === 'pip' ? PIP_FLY : 0.7));
+  for (const f of fx) f.t += dt;
+  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : 0.7));
   paint = paint.filter((p) => p.dying < 0 || game.T - p.dying < 0.5);
 
   if (game.mode === 'play' && game.time <= 0) {
@@ -1807,7 +1791,7 @@ function goalBarState() {
 }
 function drawGoalBoard(g) {
   const cfg = game.cfg;
-  const met = game.goalShown >= cfg.quota;
+  const met = game.pips >= cfg.quota;
   const swell = 1 + 0.18 * Math.sin(Math.PI * Math.min(1, game.goalPulse));
   ctx.save();
   ctx.translate(g.x + g.w / 2, g.y + g.h / 2);
@@ -1821,7 +1805,7 @@ function drawGoalBoard(g) {
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
   ctx.lineWidth = 2;
   ctx.strokeRect(-g.w / 2 + 6, -g.h / 2 + 6, g.w - 12, panelH);
-  const n = Math.min(99, game.goalShown);
+  const n = Math.min(99, game.pips);
   const digits = [n >= 10 ? Math.floor(n / 10) % 10 : -1, n % 10];
   const dh = g.font;
   const dw = dh * 0.5;
@@ -1838,7 +1822,7 @@ function drawGoalBoard(g) {
     ctx.fillStyle = 'rgba(208, 52, 44, 0.8)';
     ctx.fillRect(bx, by, bw, bh);
   }
-  const f = clamp(game.goalShown / cfg.quota, 0, 1);
+  const f = clamp(game.pips / cfg.quota, 0, 1);
   if (f > 0) brass(bx, by + 1, bw * f, bh - 2, game.bonus);
   ctx.restore();
 }
@@ -2153,14 +2137,6 @@ function drawFx() {
     if (f.type === 'text') {
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, f.t - 0.5) / 0.4);
       label(f.text, f.x, f.y - f.t * 36, 18, 'center', f.color);
-    } else if (f.type === 'pip') {
-      // From where the ball landed to the board, easing in as it goes.
-      const g = hudLayout().goal;
-      const p = Math.min(1, f.t / PIP_FLY);
-      const e = p * p * (3 - 2 * p);
-      const x = lerp(f.x, g.x + g.w / 2, e);
-      const y = lerp(f.y - 18, g.y + g.h / 2, e) - Math.sin(Math.PI * p) * 30;
-      painted(`+${f.n}`, x, y, 20 - 6 * p, 'center', GOAL_PAINT);
     } else if (f.type === 'ring') {
       ctx.globalAlpha = Math.max(0, 1 - f.t / 0.7);
       ctx.strokeStyle = '#ffd23f';
@@ -2223,12 +2199,13 @@ function drawBanner() {
   ctx.translate(SW / 2, (L.T + L.C) / 2);
   ctx.scale(s, s);
   const w = Math.min(SW - 40, 300);
-  const bh2 = b.goal ? 112 : b.sub ? 88 : 66;
+  const bh2 = b.tip ? 134 : b.goal ? 112 : b.sub ? 88 : 66;
   plank(-w / 2, -42, w, bh2, { tone: 0.04 });
   painted(b.text, 0, b.sub ? -14 : -9, 30, 'center', '#ffd23f');
   if (b.sub) painted(b.sub, 0, 20, 16);
   // The round's goal, as the count board counts toward it.
   if (b.goal) painted(b.goal, 0, 46, 18, 'center', GOAL_PAINT);
+  if (b.tip) painted(b.tip, 0, 72, 13);
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -2621,7 +2598,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, PIP_FLY, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
@@ -2651,10 +2628,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           banner: b ? b.text : null,
           bannerSub: b ? b.sub : '',
           bannerGoal: b ? b.goal || '' : '',
-          goalText: !shown || !game.cfg ? '' : String(Math.min(99, game.goalShown)),
+          bannerTip: b ? b.tip || '' : '',
+          goalText: !shown || !game.cfg ? '' : String(Math.min(99, game.pips)),
           goalColour: !shown || !game.cfg ? 'hidden' : 'green',
-          goalFill: !shown || !game.cfg ? 0 : clamp(game.goalShown / game.cfg.quota, 0, 1),
-          goalRim: !!shown && !!game.cfg && game.goalShown >= game.cfg.quota,
+          goalFill: !shown || !game.cfg ? 0 : clamp(game.pips / game.cfg.quota, 0, 1),
+          goalRim: !!shown && !!game.cfg && game.pips >= game.cfg.quota,
+          goalPulse: game.goalPulse,
           hud: shown,
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
           timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',

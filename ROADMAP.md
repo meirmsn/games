@@ -224,5 +224,5 @@ it; right after this merges, a small docs-only PR brings the game's main spec up
 
 The edits are those taken out of the count-board PR: a decisions section on the count board and the
 gauge's removal, the tiny target under the rounds table and in scoring, the banner's goal line, and
-its AC-22's 44 px far-target floor exempting the tiny target (at least 30 px). The test AC-12 had
+its AC-22's 44 px far-target floor exempting the tiny target (at least 30 px); and since then the banner's tip line and no "+N" (the owner's change of 2026-11-11 in that spec). The test AC-12 had
 (`splat-gallery-goal-and-tiny-target AC-12`) comes back with them.

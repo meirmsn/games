@@ -1563,7 +1563,6 @@ test('splat-gallery AC-34: no pink lights in a frenzy or on its target, which we
   const r = await page.evaluate(async () => {
     const g = window.__gallery;
     g.game.pips = 3;
-    g.game.goalShown = 3; // the quota's bar, on the count board since splat-gallery-goal-and-tiny-target
     g.game.hopper = 4;
     g.game.lastFire = -1;
     g.fire();
@@ -2079,7 +2078,7 @@ const placeTiny = (page, x = 200) =>
   }, x);
 const goal = (page) => page.evaluate(() => {
   const u = window.__gallery.ui();
-  return { text: u.goalText, colour: u.goalColour, fill: Math.round(u.goalFill * 1000) / 1000, rim: u.goalRim, bar: u.pips, flying: window.__gallery.fx().filter((f) => f.type === 'pip').length };
+  return { text: u.goalText, colour: u.goalColour, fill: Math.round(u.goalFill * 1000) / 1000, rim: u.goalRim, bar: u.pips };
 });
 
 test('splat-gallery-goal-and-tiny-target AC-1: a bottle-green count board at the top right counts the pips scored, a brass bar under its digits; hidden on the start screen', async () => {
@@ -2087,8 +2086,8 @@ test('splat-gallery-goal-and-tiny-target AC-1: a bottle-green count board at the
   const start = await page.evaluate(() => window.__gallery.ui());
   assert.deepEqual([start.goalText, start.goalColour], ['', 'hidden'], 'hidden on the start screen');
   await ready(page, 3);
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown', flying: 0 });
-  await page.evaluate(() => (window.__gallery.game.goalShown = 6));
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
+  await page.evaluate(() => (window.__gallery.game.pips = 6));
   await realFrames(page, 2);
   const d = await page.evaluate(() => {
     const g = window.__gallery;
@@ -2102,43 +2101,34 @@ test('splat-gallery-goal-and-tiny-target AC-1: a bottle-green count board at the
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their pips as each "+N" arrives, filling its bar; at the quota the bar is gold, a gold rim, counting on; time up short flashes it; the next round starts at 0', async () => {
+test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their pips as each ball lands, filling its bar; at the quota the bar is gold, a gold rim, counting on; time up short flashes it; the next round starts at 0', async () => {
   const { context, page } = await open();
   await ready(page, 3);
   const far = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   assert.equal((await shoot(page, far.x + far.w * 0.38, 0)).what, 'body');
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown', flying: 1 }, 'the "+3" is still flying');
-  await steps(page, 0.5);
-  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown', flying: 0 });
+  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown' }, 'counted as the ball lands');
   // A gold duck counts 2, a near target 1, a tiny target 5.
   for (const [kind, lane, opts, n] of [['gold', 4, {}, 2], ['duck', 4, { face: 'duck_yellow' }, 1]]) {
     const t = await place(page, kind, { lane, x: 200, ...opts });
-    assert.ok(['body', 'bull'].includes((await shoot(page, t.x, lane)).what));
     const before = Number((await goal(page)).text);
-    await steps(page, 0.5);
+    assert.ok(['body', 'bull'].includes((await shoot(page, t.x, lane)).what));
     assert.equal(Number((await goal(page)).text), before + n, `${kind} counts ${n}`);
   }
   const tiny = await placeTiny(page);
   assert.equal((await shoot(page, tiny.x + tiny.w * 0.38, 0)).kind, 'tiny');
-  await steps(page, 0.5);
   assert.equal((await goal(page)).text, '11', 'the tiny target counts 5');
   // The quota met: the bar full and gold, the rim, the bulbs still green; it counts on past it.
-  await page.evaluate(() => {
-    window.__gallery.game.pips = 15;
-    window.__gallery.game.goalShown = 15;
-  });
+  await page.evaluate(() => (window.__gallery.game.pips = 15));
   const last = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, last.x + last.w * 0.38, 0);
-  assert.equal((await state(page)).bonus, true, 'the bonus starts as the ball lands');
-  await steps(page, 0.5);
-  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold', flying: 0 });
+  assert.equal((await state(page)).bonus, true);
+  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold' });
   const more = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, more.x + more.w * 0.38, 0);
-  await steps(page, 0.5);
   assert.equal((await goal(page)).text, '21', 'it keeps counting in the bonus');
   await realFrames(page, 2);
   const withRim = await page.evaluate(() => window.__gallery.brassDrawn());
-  await page.evaluate(() => (window.__gallery.game.goalShown = 17));
+  await page.evaluate(() => (window.__gallery.game.pips = 17));
   await realFrames(page, 2);
   const noRim = await page.evaluate(() => window.__gallery.brassDrawn());
   assert.equal(withRim, noRim + 1, 'the board has a brass rim at the quota');
@@ -2151,13 +2141,9 @@ test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their 
     g.step(1 / 60);
   });
   assert.equal((await goal(page)).bar, 'flash');
-  // The next round: 0, empty, no rim, and a "+N" still flying is dropped.
-  await ready(page, 3);
-  const t4 = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
-  await shoot(page, t4.x + t4.w * 0.38, 0);
-  assert.equal((await goal(page)).flying, 1);
+  // The next round: 0, empty, no rim.
   await page.evaluate(() => window.__gallery.startRound(4));
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown', flying: 0 });
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
   await context.close();
 });
 
@@ -2196,55 +2182,41 @@ test('splat-gallery-goal-and-tiny-target AC-3: the board overlaps neither the ti
 test('splat-gallery-goal-and-tiny-target AC-4: the counter has no quota gauge and no "N / quota" text', async () => {
   const { context, page } = await open();
   await ready(page, 3);
-  await page.evaluate(() => {
-    window.__gallery.game.pips = 7;
-    window.__gallery.game.goalShown = 0; // the board's bar empty, so any brass would be a gauge's
-  });
+  await page.evaluate(() => (window.__gallery.game.pips = 7));
   await realFrames(page, 2);
   const d = await page.evaluate(() => ({ texts: window.__gallery.signTexts(), brass: window.__gallery.brassDrawn(), hb: window.__gallery.hudBounds() }));
-  assert.equal(d.brass, 0, 'no brass bar on the counter');
+  assert.equal(d.brass, 1, "the count board's bar is the only brass: none on the counter");
   assert.ok(!d.texts.some((t) => /^\d+ \/ \d+$/.test(t)), `no count on the counter: ${d.texts}`);
   assert.ok(d.texts.includes('Round 3 · Drop-downs'), "the round's sign stays");
   assert.ok(d.hb.hopper.y > d.hb.counterTop, 'the hopper is on the counter');
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-5: each paid hit sends its "+N" to the board in 0.4–0.5 s; a free (frenzy) ball sends none; a new round or restart leaves none flying', async () => {
+test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points where it lands and swells the board; no "+N" is shown; a free (frenzy) ball moves neither', async () => {
   const { context, page } = await open();
   await ready(page, 3);
-  assert.ok(near(await page.evaluate(() => window.__gallery.PIP_FLY), 0.45));
   const t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
   await shoot(page, t.x + t.w * 0.38, 2);
-  const flying = await page.evaluate(() => window.__gallery.fx().filter((f) => f.type === 'pip').map((f) => f.n));
-  assert.deepEqual(flying, [2], 'a "+2" from the middle lane');
-  await steps(page, 0.38);
-  assert.equal((await goal(page)).text, '0', 'not there at 0.4 s');
-  await steps(page, 0.12);
-  assert.equal((await goal(page)).text, '2', 'there by 0.5 s');
-  // In a frenzy: the ball is free, adds no pips and sends nothing.
-  await page.evaluate(() => window.__gallery.startFrenzy());
+  const shown = await page.evaluate(() => ({ fx: window.__gallery.fx().filter((f) => f.type === 'text').map((f) => f.text), pulse: window.__gallery.ui().goalPulse }));
+  assert.deepEqual(shown.fx, ['+20'], 'only the points, where it landed');
+  assert.ok(shown.pulse > 0.5, `the board swells: ${shown.pulse}`);
+  await realFrames(page, 2);
+  const texts = await page.evaluate(() => window.__gallery.signTexts());
+  assert.ok(!texts.some((x) => /^\+\d$/.test(x)), `no "+N" painted: ${texts}`);
+  // In a frenzy: the ball is free, adds no pips and doesn't swell the board.
+  await page.evaluate(() => {
+    window.__gallery.startFrenzy();
+    window.__gallery.game.goalPulse = 0;
+  });
   const t2 = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
-  const pips0 = (await state(page)).pips;
-  const r = await shoot(page, t2.x + t2.w * 0.38, 2);
-  assert.equal(r.what, 'body');
-  assert.equal((await state(page)).pips, pips0);
-  assert.equal((await goal(page)).flying, 0);
-  // A "+N" in flight when the round changes or the run restarts is dropped.
-  for (const reset of ['startRound', 'startRun']) {
-    await page.evaluate(() => (window.__gallery.game.frenzy = 0));
-    await ready(page, 3);
-    const t3 = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
-    await shoot(page, t3.x + t3.w * 0.38, 2);
-    assert.equal((await goal(page)).flying, 1);
-    await page.evaluate((reset) => (reset === 'startRound' ? window.__gallery.startRound(4) : window.__gallery.startRun({ seed: 2 })), reset);
-    const after = await goal(page);
-    assert.equal(after.flying, 0, `${reset} leaves none flying`);
-    assert.equal(after.text, '0');
-  }
+  const before = await goal(page);
+  assert.equal((await shoot(page, t2.x + t2.w * 0.38, 2)).what, 'body');
+  assert.deepEqual(await goal(page), before);
+  assert.equal(await page.evaluate(() => window.__gallery.ui().goalPulse), 0);
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name and "Q to clear"', async () => {
+test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "Q to clear" and the tip that far targets count more', async () => {
   const { context, page } = await open();
   const banners = await page.evaluate(() => {
     const g = window.__gallery;
@@ -2254,11 +2226,11 @@ test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name an
     for (let n = 1; n <= 6; n++) {
       g.startRound(n);
       const u = g.ui();
-      out.push([u.banner, u.bannerSub, u.bannerGoal, g.ROUNDS[n].name, g.ROUNDS[n].quota]);
+      out.push([u.banner, u.bannerSub, u.bannerGoal, u.bannerTip, g.ROUNDS[n].name, g.ROUNDS[n].quota]);
     }
     return out;
   });
-  banners.forEach(([text, sub, goalLine, name, quota], i) => assert.deepEqual([text, sub, goalLine], [`Round ${i + 1}`, name, `${quota} to clear`]));
+  banners.forEach(([text, sub, goalLine, tip, name, quota], i) => assert.deepEqual([text, sub, goalLine, tip], [`Round ${i + 1}`, name, `${quota} to clear`, 'Tip: far targets count more']));
   await context.close();
 });
 
@@ -2440,33 +2412,30 @@ test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny t
   assert.equal((await shoot(page, t.x + t.w * 0.4, 0)).what, 'body');
   const s = await state(page);
   assert.deepEqual([s.score - s0.score, s.pips - s0.pips], [500, 0]);
-  assert.equal((await goal(page)).flying, 0);
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-2: the board through the states table: round won keeps the gold bar and rim; a game over lands a flying "+N" at once; paused or turned, a "+N" and the board hold still', async () => {
+test('splat-gallery-goal-and-tiny-target AC-2: the board through the states table: round won keeps the gold bar and rim; the game over card keeps it as it ended; paused or turned, it holds still', async () => {
   const { context, page } = await open();
   await ready(page, 3);
   // Round won: the quota met as the time runs out; between rounds the bar stays gold and rimmed.
   await page.evaluate(() => {
     const g = window.__gallery;
     g.game.pips = 18;
-    g.game.goalShown = 18;
     g.game.bonus = true;
     g.game.time = 0.01;
     g.step(1 / 60);
   });
   assert.equal((await state(page)).mode, 'won');
-  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold', flying: 0 });
-  // A game over with a "+N" in flight: it lands at once, so the board under the card reads as it ended.
+  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold' });
+  // A game over: the board under the card reads as the round ended.
   await ready(page, 3);
   const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, t.x + t.w * 0.38, 0);
-  assert.equal((await goal(page)).flying, 1);
   await page.evaluate(() => window.__gallery.gameOver());
-  const over = await goal(page);
-  assert.deepEqual([over.text, over.flying], ['3', 0], 'the "+3" landed as the run ended');
-  // Paused, then turned: real frames run, and neither the "+N" nor the board moves.
+  assert.equal((await page.evaluate(() => window.__gallery.ui().over)), true);
+  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown' });
+  // Paused, then turned: real frames run, and neither the board nor its swell moves.
   for (const flag of ['paused', 'turned']) {
     await ready(page, 3);
     const t2 = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
@@ -2475,19 +2444,18 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
       const g = window.__gallery;
       g.game[flag] = true;
       g.manual = false; // the page's own frames would step the game, if it weren't held
-      return g.fx().find((f) => f.type === 'pip').t;
+      return { pulse: g.ui().goalPulse, text: g.ui().goalText };
     }, flag);
     await realFrames(page, 10);
     const after = await page.evaluate((flag) => {
       const g = window.__gallery;
-      const f = g.fx().find((f) => f.type === 'pip');
-      const r = { t: f ? f.t : null, text: g.ui().goalText, colour: g.ui().goalColour };
+      const r = { pulse: g.ui().goalPulse, text: g.ui().goalText };
       g.manual = true;
       g.game[flag] = false;
       return r;
     }, flag);
-    assert.deepEqual(after, { t: before, text: '0', colour: 'green' }, `${flag}: the "+3" holds still and the board shows`);
+    assert.deepEqual(after, before, `${flag}: the board holds still`);
+    assert.ok(before.pulse > 0 && before.text === '3');
   }
   await context.close();
 });
-
