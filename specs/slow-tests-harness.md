@@ -48,6 +48,13 @@ cause; this one gives them what they need to do it and to prove it:
   old code and on the new. If the hang shows up, its cause is recorded here and F-34 is removed
   from `FINDINGS.md`; if not, F-34 stays, updated, and goes to R-5. Other waits in that file are
   R-5's. (Claude, 2026-11-11, from the spec review)
+- **F-34 wasn't reproduced (2026-11-11).** pwa-updates ran 5 times in parallel on `main`'s code
+  (all passed, about 31 s each), 5 times on this branch (all passed, about 32 s), 5 times on this
+  branch at throttle 10 (all passed, about 91 s), and 5 times at throttle 10 on `main`'s file with
+  only its `launch()` line changed (all passed, about 87 s): 20 runs, none hung. Its cause is still
+  unknown; the hang was seen in a whole-suite run, not pwa-updates alone. Every wait in it that
+  couldn't end on its own is now bounded, and any file that hangs is stopped and named, so if it
+  comes back it names itself. F-34 stays in `FINDINGS.md`, updated, for R-5. (Claude, 2026-11-11)
 - **The CPU throttle is applied by `launch()` in `tests/clock.mjs`, not by each file's `open()`.**
   The split named a `newContext()` wrapper and a one-line `open()` change per file, but 11 contexts
   in 7 files are made with `browser.newContext()` outside `open()` (Crumble, Googly Faces, PWA
