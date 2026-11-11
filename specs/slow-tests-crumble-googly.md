@@ -199,6 +199,14 @@ than the wall clock when frames come more than 50 ms apart.
 
 ### The proof
 
+- **Changed after the go: AC-7 covers the pull and round guards only.** In the build, the tap
+  guard passed with `tapAndJump()`'s old 120 ms wait: a busy frame also holds back the test's read,
+  so a frame has always run by the time the read does. The old wait fails only when frames come late
+  while the page is idle, which no setup here makes happen on demand. Asked, the owner chose
+  Proposal A, "AC-7 covers only the pull and round guards; the tap guard stays as a check that the
+  new wait holds at 250 ms frames": "A" (owner, 2026-11-11, relayed word for word by the parent
+  session). The tap fix rests on its cause: it waits for the frame that lifts the face.
+
 - **On `main`'s code, the old tests pass under both of the harness's loads** (2026-11-11): both
   files 5 times in parallel on 4 CPUs (34 of 34 each time), and each file alone with
   `TEST_CPU_THROTTLE=10` (Crumble 24 of 24, Googly Faces 10 of 10). At 10×, the frames still came
@@ -213,8 +221,9 @@ than the wall clock when frames come more than 50 ms apart.
 - **The guard tests,** titled with this spec's AC numbers, run on a `throttle: false` context (their
   frames are already slow; the throttle would only lengthen the run): Crumble's pulls with
   `pull()` at 100 ms frames; Googly's taps with `tapAndJump()` at 250 ms frames; Googly's plays a
-  round with `playRound()` at 100 ms frames. Each fails with its helper's old wait (`pull()`'s
-  60 ms, `tapAndJump()`'s 120 ms, `playRound()`'s fixed 5 s), and the PR records those runs. The
+  round with `playRound()` at 100 ms frames. The pull and round guards fail with their helper's old
+  wait (`pull()`'s 60 ms, `playRound()`'s fixed 5 s), and the PR records those runs; the tap guard
+  doesn't (changed after the go, below). The
   round guard is the longest: about 12 taps of up to 1.4 s of game time each, at half speed, about
   35 s, well inside the 5-minute file limit. (Claude, 2026-11-11, from the spec review)
 - **The whole of both files is also run with 100 ms frames on every page**, by a temporary local
@@ -253,8 +262,8 @@ than the wall clock when frames come more than 50 ms apart.
 - **AC-6** A guard test in `tests/googly-faces.test.mjs`, on a page whose every animation frame takes
   at least 100 ms, plays a round of twelve faces with `playRound()` to its play-again button and the
   `party` state.
-- **AC-7** Each of the three guards fails with its helper's old fixed wait in place of the new one.
-  — verified by review: the PR records the three runs.
+- **AC-7** The pull guard (AC-4) and the round guard (AC-6) each fail with their helper's old fixed
+  wait in place of the new one. — verified by review: the PR records both runs.
 - **AC-8** Googly's mute test waits for the game's delayed tap sounds with an in-page timer longer
   than the longest of them (140 ms), queued once the page has seen the tap's `pointerdown`.
 - **AC-9** Googly's empty-tap test checks that the pupils rest at the bottom only after at least

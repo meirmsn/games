@@ -221,8 +221,10 @@ test('tapping a face plays a sound and makes it react', async () => {
   await context.close();
 });
 
-// The guard for the tap: with every frame 250 ms long, no frame may run within 120 ms of the tap,
-// so a fixed 120 ms wait looked before the jump. tapAndJump waits for the frame instead.
+// The check for the tap: with every frame 250 ms long, tapAndJump still sees the face react and jump,
+// since it waits for the frame that lifts it, not 120 ms. (It doesn't fail the old 120 ms wait: a
+// busy frame holds back the test's read too; that wait failed only when frames came late while the
+// page sat idle. See specs/slow-tests-crumble-googly.md.)
 test('slow-tests-crumble-googly AC-5: a tapped face reacts and jumps with every frame 250 ms long', async () => {
   const { context, page } = await openGame({ slowFrames: 250 });
   await reactsAndJumps(page, await readyFace(page));
