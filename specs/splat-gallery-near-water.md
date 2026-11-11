@@ -24,38 +24,49 @@ strips.
 ## Decisions
 
 - The near lane's strip shows at least twice its waves' depth above the counter (the whole wave
-  and as much water again under it), in every layout. When the even spacing gives less, the lanes
-  are spaced closer, just enough, so every lane moves up a little and the far lane stays below the
-  valance; rejected: a shorter counter (it is the thumb's pad, sized for the pull) and shrinking
+  and as much water again under it), in every layout. A strip's waves' depth is the spread of its
+  tile's top contour (highest to lowest crest), at the strip's scale. When the even spacing gives
+  less, the lanes' spacing (`L.band`) shrinks just enough, from the same top: in landscape 16:9 it
+  goes from 96 to about 78 units, so every lane moves up, the nearer ones most; rejected: a shorter counter (it is the thumb's pad, sized for the pull) and shrinking
   the targets (the far ones are at their 44 px floor) (Claude, 2026-11-11).
-- Which lane a height belongs to follows the new spacing; heights below the near lane's band, down
-  to the counter, stay the near lane's, as now (Claude, 2026-11-11).
+- Which lane a height belongs to follows the new spacing (`laneAt` uses `L.band`); heights below
+  the near lane's band, down to the counter, stay the near lane's, as now (Claude, 2026-11-11).
+- The aim rule doesn't change: a pull still maps linearly from the counter to the booth's top
+  (`specs/splat-gallery.md`), so the same pull lands at the same height. The strip of space this
+  frees at the bottom is the near lane's water, which takes a shot as water does now; rejected:
+  re-mapping the pull to the lanes' new span, which would change every lane's feel for a layout fix
+  (Claude, 2026-11-11).
 - Only the water sways, as asked; the grass stays still (Claude, 2026-11-11).
 - The sway: each water strip slides left and right on a sine, as if on a crank, 6 units each way
-  every 3 s, neighbouring water lanes in opposite directions. It runs on the game's own clock, so
+  every 3 s, consecutive water lanes (lanes 0 and 2, 2 and 4) in opposite directions. The water's
+  solid fill under the waves is wide enough that its ends never show. It runs on the game's own clock, so
   it moves on the start card and stops while the game is paused, like the targets (Claude,
   2026-11-11).
 - What sits on the water moves with it: paint that lands on a water strip rides with the strip, a
   shot is judged against the crest where it is drawn at that moment, and paint stays clipped to
   the moving crest. Targets keep their own motion (Claude, 2026-11-11).
+- "The water ones" read as the water strips, not the ducks on them (the ducks already bob) — to be
+  confirmed by the owner at the go (Claude, 2026-11-11).
 
 ## Acceptance items
 
-- **AC-1** At 1920×1080, 2000×800, 1440×900, 1280×1000, 844×390, 390×844 and 360×640, the near
-  lane's crest, at its lowest point across the stage, sits above the counter's top by at least
-  twice its waves' depth, and the top of a target or a duck standing on the far lane's line stays at or below the booth's top
+- **AC-1** At 1920×1080, 2000×800, 1440×900, 1280×1000, 844×390, 390×844 and 360×640, and at
+  390×844 and 844×390 with a phone's home-screen insets, the near lane's highest wave tip (the
+  least `stripY` across the stage) is above the counter's top by at least twice its waves' depth,
+  and the top of a target or a duck standing on the far lane's line is at or below the booth's top
   (`L.T`).
-- **AC-2** A water strip's offset changes over game time: it reaches about 6 units each way
-  (between 5 and 7) over a 3 s cycle, two neighbouring water lanes are offset in opposite
-  directions at the same moment, grass strips never move, and the offset doesn't change while the
-  game is paused.
-- **AC-3** The strip as hit-tested is the strip as drawn: after the water has swayed, a shot just
-  below the drawn crest lands on the strip and one just above it doesn't, and the drawn crest
-  matches `stripY` (pixels a little above it are not water, a little below are).
-- **AC-4** Paint that lands on a water strip moves with it: half a cycle later it has moved by the
-  strip's change in offset, and it is still shown only below the crest.
-- **AC-5** The existing Splat Gallery tests still pass, among them sticks showing in every lane,
-  no target on the counter, far targets at least 44 px, and paint clipped at the crest.
+- **AC-2** On the game's clock (manual stepping), a water strip's offset reaches between 5 and 7
+  units each way over a 3 s cycle; consecutive water lanes are offset in opposite directions at the
+  same moment; grass strips never move; and the offset doesn't change while the game is paused or
+  turned.
+- **AC-3** The strip as hit-tested is the strip as drawn: with the water swayed away from its rest
+  position, a shot just below the crest `stripY` reports lands on the strip and one just above it
+  doesn't, and on the drawn canvas pixels 3 units above that crest are not water and 3 units below
+  are.
+- **AC-4** Paint that lands on a water strip moves with it: half a cycle later its drawn position
+  has shifted by the strip's change in offset, and it still shows only below the crest.
+- **AC-5** The other Splat Gallery tests still pass. The paint-clip test (the one titled "paint on the water or grass shows only below its crest")
+  reads its pixels at the same sway it took its crest spots at; nothing else in it changes.
 
 ## Out of scope
 
