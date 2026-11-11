@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
-import { launch, realFrames, waitFor, within } from './clock.mjs';
+import { launch, realFrames, scaled, waitFor, within } from './clock.mjs';
 import { serve } from './serve.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -67,8 +67,12 @@ test('slow-tests-harness AC-3: pwa-updates waits on the caches and the service w
   try {
     const page = await browser.newPage();
     const start = Date.now();
-    await assert.rejects(within(page.evaluate(() => new Promise(() => {})), 'the test promise', 500), /within: the test promise: didn't settle within 500 ms/);
-    assert.ok(Date.now() - start < 5000);
+    // Its time-outs scale with TEST_CPU_THROTTLE, so a throttled run expects the scaled one.
+    await assert.rejects(
+      within(page.evaluate(() => new Promise(() => {})), 'the test promise', 500),
+      new RegExp(`within: the test promise: didn't settle within ${scaled(500)} ms`)
+    );
+    assert.ok(Date.now() - start < scaled(500) + 4000);
   } finally {
     await browser.close();
   }
@@ -179,14 +183,14 @@ test('slow-tests-harness AC-10: realFrames waits on frames and fails on a page t
     assert.ok((await page.evaluate(() => window.__frames)) - f0 >= 9, 'ten frames ran');
     await page.evaluate(() => setTimeout(() => (window.__ready = true), 200));
     await waitFor(page, () => window.__ready === true, null, { what: 'the flag' });
-    await assert.rejects(waitFor(page, () => window.__never === true, null, { what: 'a flag nobody sets', timeout: 500 }), /waitFor: a flag nobody sets: not true after 500 ms/);
+    await assert.rejects(waitFor(page, () => window.__never === true, null, { what: 'a flag nobody sets', timeout: 500 }), new RegExp(`waitFor: a flag nobody sets: not true after ${scaled(500)} ms`));
     // A page that runs no frames, as a hidden one doesn't (headless Chromium keeps every page
     // visible, and won't freeze one, so the frames are stopped in the page): realFrames fails
     // instead of waiting for ever. Its bound is in Node, so why the frames stopped doesn't matter.
     await page.evaluate(() => (window.requestAnimationFrame = () => 0));
     const start = Date.now();
     await assert.rejects(realFrames(page, 5, { timeout: 1000 }), /realFrames: 5 animation frames/);
-    assert.ok(Date.now() - start < 5000);
+    assert.ok(Date.now() - start < scaled(1000) + 4000);
   } finally {
     await browser.close();
   }
