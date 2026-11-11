@@ -1551,7 +1551,8 @@ test('splat-gallery AC-33: the score, the signs and the cards are lettered in Ry
     return { font: g.SIGN_FONT, worn: g.signsWorn(), chipped: g.chipped('480', 26) };
   });
   assert.match(r.font, /^"Rye"/);
-  assert.ok(r.worn >= 3, `the score, the round and the quota are painted: ${r.worn}`);
+  // The quota's count is in bulbs on the count board since splat-gallery-goal-and-tiny-target AC-4.
+  assert.ok(r.worn >= 2, `the score and the round are painted: ${r.worn}`);
   assert.ok(r.chipped > 0.02 && r.chipped < 0.4, `the lettering is worn in specks: ${r.chipped}`);
   await context.close();
 });
