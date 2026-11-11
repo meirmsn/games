@@ -1,4 +1,4 @@
-# Splat Gallery: a "to go" board that makes the round's goal clear, and a tiny high-value target
+# Splat Gallery: a count board that makes the round's goal clear, and a tiny high-value target
 
 **Go:** "go" 2026-11-11 (to the summary that asked them to confirm the two calls marked "to confirm at the go")
 
@@ -33,26 +33,48 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
 
 - **The "to go" board:** a second bulb board built like the timer (`drawTimerBoard`: a nailed plank,
   a black panel, two seven-segment digits of bulbs), at the top right, left of the sound button
-  (`[data-mute]`), the score sign between the two boards. Its bulbs are **green** (`#7dff8a`, added to
+  (`[data-mute]`), the score sign between the two boards. Its bulbs are **green** (`#8fbf6a`, a bottle green; added to
   `BULB` as `green`), never the timer's cream, yellow, orange or red, so the two never read as one. It
   shows the pips still needed, `max(0, quota − pips)`, and counts **down**, so the two boards race to
-  zero. A small painted caption "TO GO" sits on the plank under the panel (the plank grows by the
+  zero (counts up since the owner's change below). A small painted caption "TO GO" sits on the plank under the panel (the plank grows by the
   caption's height; the timer doesn't change). Its right edge is the sound button's left edge less 8
   CSS px, converted to stage units; it may be narrower than the timer where the width needs it, never
   narrower than its two digits. (Claude, proposed 2026-11-11; owner "go with that" 2026-11-11.)
-- **At the quota:** the digits read `0`, still green, the caption turns to "BONUS" painted in gold and
+- **Changed by the owner, 2026-11-11, during the build:** "I don't like the green. It looks too not
+  analog. So we need another color in there. Or if you do green, make it like the green that is
+  analog, which is not that bright." The bright `#7dff8a` became a bottle green, `#8fbf6a`, like
+  tinted glass, picked by Claude from five rendered options (bright, sage, bottle, jade, amber;
+  amber read as the timer's warning colours) and shown to the owner; the "+N" and the banner's goal
+  line are painted a paler green, `#b4d89a`, to read on the wood.
+- **Changed by the owner, 2026-11-11, during the build: the board counts up, with the quota's bar
+  under its digits, and the bottom gauge goes.** Their words, in chat: "instead of saying to go, I
+  wonder if this counter should go off [up]. I think this one should go off. So that you're adding.
+  And then maybe the bar could be filling below it. I think the middle row of the green works." (the
+  middle row of the five options was the bottle green). Asked what then of the bottom gauge, they chose
+  "Remove it", and at the quota "Keeps counting, bar gold". So: the board's digits show the pips
+  scored so far this round (shown up to 99), climbing as each "+N" arrives; the "TO GO" caption is
+  gone, and in its place under the panel a brass bar slides along a groove, filling toward the quota
+  (the shown count over the quota); it turns gold in the bonus and its groove flashes red when the
+  time runs out short, as the bottom gauge did. Once the shown count reaches the quota the board gets
+  its gold brass rim; the digits keep counting past it. The bottom gauge is removed and the hopper
+  moves up under the round's sign. This replaces the counting-down, the caption and the gauge
+  decisions below, which are kept struck for the record.
+- ~~**At the quota:** the digits read `0`, still green, the caption turns to "BONUS" painted in gold and
   the board's plank gets a brass rim (`brass`, gold), for the rest of the round; the "Bonus!" pill
   shows as today. Not gold bulbs: the timer's yellow is that same gold (`#ffd23f`), and the boards must
-  never read as one. (Claude, after the spec review, 2026-11-11.)
-- **What the board shows lags the pips:** it keeps its own shown count, which drops when each "+N"
-  arrives; the quota itself (the bonus, the "Bonus!" pill, the gauge) moves the moment the ball lands,
-  as today. The caption and rim turn when the shown count reaches 0. A new round, a restart and a
-  game over clear any "+N" still flying and set the shown count to the new quota.
-- **Quota above 99:** never; the largest quota is 34. The board shows two digits, a dark tens bulb
-  under 10, like the timer.
-- **The bottom gauge:** the brass bar, its notches, its gold at the bonus and its red flash when the
+  never read as one. (Claude, after the spec review, 2026-11-11.)~~ The gold rim and the reason for no
+  gold bulbs stand.
+- **What the board shows lags the pips:** it keeps its own shown count, which climbs when each "+N"
+  arrives (it dropped, before the owner's change); the quota itself (the bonus, the "Bonus!" pill)
+  moves the moment the ball lands, as today. The bar fills and the rim turns with the shown count. A
+  new round and a restart drop any "+N" still flying and set the shown count to 0; a game over lands
+  them at once, so the board under the card reads as the round ended.
+- **Two digits:** the board shows the count up to 99, a dark tens bulb under 10, like the timer. The
+  largest quota is 34; a round's pips past 99 would show 99.
+- ~~**The bottom gauge:** the brass bar, its notches, its gold at the bonus and its red flash when the
   time runs out stay; the "N / quota" text on it goes, so the count isn't shown twice. The round's
-  sign ("Round 3 · Drop-downs") stays. (Owner, "go with that", 2026-11-11.)
+  sign ("Round 3 · Drop-downs") stays. (Owner, "go with that", 2026-11-11.)~~ Removed by the owner's
+  change above; the round's sign stays.
 - **The "+N" to the board:** each hit that adds pips sends a small painted "+N" (N the pips it added)
   from where the ball landed to the board, over about 0.45 s; on arrival the board swells briefly, like
   the timer's pulse. The points popup ("+60") stays where it is. A free ball (fired during a frenzy)
@@ -92,26 +114,30 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   today.
 - **Round 1 has none:** the warm-up stays as it is.
 - **Test hooks:** `ui()` gains `goalText` (the number shown; `''` when hidden), `goalColour`
-  (`green`, or `hidden`), `goalCaption` (`TO GO`, `BONUS` or `''`) and `bannerGoal`; `hudBounds()`
+  (`green`, or `hidden`), `goalFill` (the bar's share, 0 to 1), `goalRim` (the gold rim shows) and
+  `bannerGoal`; its `pips` (`shown`, `gold`, `flash`, `hidden`) now tells the board's bar; `hudBounds()`
   gains `goal`, the board's rectangle in CSS px; `game.spawn.tiny` holds the round's due times;
   `lastLand.kind` reads `tiny` for a hit on one.
 
 ## Acceptance items
 
-- **AC-1** During play the HUD has a "to go" board at the top right, left of the sound button: its
-  two bulb digits show the pips still to go, its lit bulbs are green and its caption reads "TO GO"; on
-  the start screen and before a round's config exists it is hidden (`goalText` `''`, `goalColour`
-  `hidden`).
-- **AC-2** Hitting targets makes the board count down by each hit's pips (1, 2 or 3 by lane, 2 for a
-  gold duck, 5 for a tiny target), each step when that hit's "+N" arrives; at 0 its caption reads
-  "BONUS" with a gold brass rim and its bulbs stay green, until the round ends; the next round starts
-  it at that round's quota with "TO GO".
+- **AC-1** (changed by the owner, 2026-11-11: "this counter should go [up] ... So that you're adding.
+  And then maybe the bar could be filling below it.") During play the HUD has a count board at the top
+  right, left of the sound button: its two bulb digits show the pips scored this round, its lit bulbs
+  are a bottle green, and under them a brass bar fills toward the quota; on the start screen and
+  before a round's config exists it is hidden (`goalText` `''`, `goalColour` `hidden`).
+- **AC-2** (changed by the owner, 2026-11-11, as AC-1, and "Keeps counting, bar gold") Hitting targets
+  makes the board count up by each hit's pips (1, 2 or 3 by lane, 2 for a gold duck, 5 for a tiny
+  target), and its bar fill by them over the quota, each step when that hit's "+N" arrives; at the
+  quota the bar is full and gold, the board has a gold brass rim and its bulbs stay green, and the
+  digits keep counting; the time running out short flashes the bar red; the next round starts it at
+  0, the bar empty, no rim.
 - **AC-3** In portrait 390×844, 360×640 and 320×568 and in landscape 844×390, with each existing inset
   test's safe-area insets (none at 360×640 and 320×568), the board's rectangle overlaps neither the
   timer board, nor the sound button, nor the score sign with a score of 99,999, and lies wholly above
   the far lane's targets.
-- **AC-4** The bottom gauge keeps its brass fill, notches, gold bonus and red flash, and paints no
-  "N / quota" text.
+- **AC-4** (changed by the owner, 2026-11-11: "Remove it", of the bottom gauge) The counter has no
+  quota gauge and no "N / quota" text: only the round's sign, the hopper and the slingshot.
 - **AC-5** Each paid hit that adds pips starts a "+N" that reaches the board in 0.4–0.5 s; a free
   (frenzy) ball sends none; a new round or restart leaves none flying.
 - **AC-6** Each round's opening banner reads "Round N", then its name, then "Q to clear" with Q its
@@ -128,31 +154,32 @@ bulb colours. `specs/splat-gallery.md`'s rules and HUD sections are updated to m
   scores 500 and gives a ball back; in the bonus a body hit scores 750; a bullseye in round 6's bonus
   scores 2,000 (the ×8 cap).
 - **AC-11** A free (frenzy) ball hitting a tiny target scores 250 × 2 for a body hit and adds no pips.
-- **AC-12** `specs/splat-gallery.md` describes the board, the gauge without its text, the banner's goal
-  line and the tiny target in its rules, scoring and HUD sections, and its 44 px far-target floor exempts the tiny
-  target from the 44 px floor.
+- **AC-12** (changed by the owner, 2026-11-11, as AC-4) `specs/splat-gallery.md` describes the board
+  with its bar, the gauge's removal, the banner's goal line and the tiny target in its rules, scoring
+  and HUD sections, and its 44 px far-target floor exempts the tiny target.
 
 ## Core flow
 
 1. A round opens: the banner reads "Round 3 / Drop-downs / 18 to clear"; the board at the top right
-   lights "18" in green, "TO GO" under it.
-2. A far-lane hit sends "+3" flying to the board, which swells and drops to 15.
+   lights "0" in green, its bar empty.
+2. A far-lane hit sends "+3" flying to the board, which swells, climbs to 3 and fills a sixth of its
+   bar.
 3. A tiny target pops up in the far lane with a ting; hitting it sends "+5".
-4. The board reaches 0: "BONUS" with a gold rim, and the round plays on for points.
+4. The board reaches 18: the bar full and gold, a gold rim, and it keeps counting bonus hits.
 
 ## States
 
-| State                     | The board                         | Tiny targets                |
-| ------------------------- | --------------------------------- | --------------------------- |
-| Start screen              | hidden                            | none                        |
-| Round intro               | quota, "TO GO"                    | none yet                    |
-| Play, under the quota     | pips to go, "TO GO"               | as scheduled                |
-| Play, quota met           | 0, "BONUS", gold rim              | as scheduled                |
-| Frenzy                    | unchanged by free balls           | held until it ends          |
-| Round won, between rounds | 0, "BONUS", gold rim              | none                        |
-| Time up, quota missed     | what was left, "TO GO"            | none                        |
-| Game over card            | as it ended, under the card       | none                        |
-| Paused or turned (veil)   | as it was, greyed; "+N" frozen    | frozen                      |
+| State                     | The board                                   | Tiny targets       |
+| ------------------------- | ------------------------------------------- | ------------------ |
+| Start screen              | hidden                                      | none               |
+| Round intro               | 0, bar empty                                | none yet           |
+| Play, under the quota     | pips scored, bar filling                    | as scheduled       |
+| Play, quota met           | pips scored, bar full and gold, gold rim    | as scheduled       |
+| Frenzy                    | unchanged by free balls                     | held until it ends |
+| Round won, between rounds | as it ended, bar gold, gold rim             | none               |
+| Time up, quota missed     | as it ended, bar flashing red               | none               |
+| Game over card            | as it ended, under the card                 | none               |
+| Paused or turned (veil)   | as it was, greyed; "+N" frozen              | frozen             |
 
 ## Out of scope
 

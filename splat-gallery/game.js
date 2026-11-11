@@ -80,13 +80,18 @@ const PALETTE = ['#2f80ed', '#9b51e0', '#eb4f9b', '#27ae60', '#00b5c8', '#7ac143
 const ROUNDS = [
   null,
   { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55, frenzy: true },
-  { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true },
-  { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true },
-  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true },
-  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true },
-  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true },
+  { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true, tiny: 1 },
+  { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true, tiny: 1 },
+  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true, tiny: 2 },
+  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true, tiny: 2 },
+  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true, tiny: 2 },
 ];
 const LAST_ROUND = 6;
+// The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
+// lane, from round 2, worth the most pips and points; 0.6 of a far target, never under 30 CSS px.
+const TINY = { pips: 5, base: 250, upFor: 1.4, scale: 0.6, minPx: 30, from: 6, to: 24, gap: 6, retry: 0.25, lastSecs: 2 };
+// A hit's "+N" flies from where the ball landed to the count board in this long.
+const PIP_FLY = 0.45;
 
 // The bullseye of each target face: its painted centre with the ring around it, as a share of the
 // sprite's half-width (measured from the pack's art).
@@ -156,6 +161,7 @@ let SH = 760;
 let orient = 'portrait'; // the stage's layout
 let insetTop = 0;
 let insetBottom = 0;
+let muteLeft = Infinity; // the sound button's left edge, in CSS px: the count board stops short of it
 const L = { lanes: [], n: 5 }; // the booth's lines, in units
 
 function readInsets() {
@@ -228,6 +234,8 @@ function fit() {
   k = Math.min(w / SW, h / SH);
   ox = (w - SW * k) / 2;
   oy = (h - SH * k) / 2;
+  const mute = document.querySelector('[data-mute]');
+  muteLeft = mute ? mute.getBoundingClientRect().left : Infinity;
 }
 
 // ---------- Sprites, masks and paint ----------
@@ -313,6 +321,8 @@ const game = {
   score: 0,
   roundScore: 0,
   pips: 0,
+  goalShown: 0, // the pips the count board shows: it climbs as each "+N" arrives
+  goalPulse: 0,
   bonus: false,
   time: ROUND_TIME, // left in the round
   elapsed: 0, // in the round, on the timer's own clock
@@ -494,6 +504,35 @@ function launchDrop(i, upFor = 1.8) {
   t.x = freeSpot(i, dims(t)[0] * 1.2);
   return t;
 }
+// The tiny target: it rises only where no live target in the farthest lane is within its width plus
+// that target's; with no such spot it doesn't come (null), and the schedule tries again shortly.
+function tinyScale() {
+  const s = L.lanes[0].s;
+  return Math.max(TINY.scale, TINY.minPx / (142 * s * k));
+}
+function launchTiny() {
+  const big = tinyScale();
+  const w = 142 * L.lanes[0].s * big;
+  const others = targets.filter((o) => o.lane === 0 && o.state === 'live');
+  for (let tries = 0; tries < 12; tries++) {
+    const x = rand(60, SW - 60);
+    if (others.every((o) => Math.abs(o.x - x) > w + dims(o)[0])) {
+      const t = makeTarget('tiny', { lane: 0, face: 'target_red1', turn: false, big, upFor: TINY.upFor });
+      t.motion = 'pop';
+      t.x = x;
+      t.y = hiddenY(t);
+      return t;
+    }
+  }
+  return null;
+}
+// When in the round (on its own clock, `game.elapsed`) its tiny targets are due: 6–24 s in, 6 s apart.
+function tinySchedule(n) {
+  if (!n) return [];
+  if (n === 1) return [rand(TINY.from, TINY.to)];
+  const a = rand(TINY.from, TINY.to - TINY.gap);
+  return [a, rand(a + TINY.gap, TINY.to)];
+}
 
 // ---------- Rounds and the run ----------
 
@@ -563,6 +602,9 @@ function startRound(n) {
   const cfg = ROUNDS[n];
   game.cfg = cfg;
   game.pips = 0;
+  game.goalShown = 0;
+  game.goalPulse = 0;
+  fx = fx.filter((f) => f.type !== 'pip');
   game.roundScore = 0;
   game.bonus = false;
   game.time = ROUND_TIME;
@@ -577,10 +619,11 @@ function startRound(n) {
   game.dirs = L.lanes.map(() => (rng() < 0.5 ? 1 : -1));
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
   if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
+  game.spawn.tiny = tinySchedule(cfg.tiny);
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
   game.modeT = 0;
-  banner(`Round ${n}`, cfg.name, 1.3);
+  banner(`Round ${n}`, cfg.name, 1.3, false, `${cfg.quota} to clear`);
   sfx('round');
   if (n === 1) {
     // A big, slow target crosses the middle of the nearest lane, where a short straight pull lands.
@@ -594,8 +637,8 @@ function startRound(n) {
 
 // A banner between rounds sits over the lanes; one during play (`small`) is a slim pill on the
 // counter, where nothing can be hit, so it never hides a target.
-function banner(text, sub = '', life = 1.2, small = false) {
-  game.banner = { text, sub, t: 0, life, small };
+function banner(text, sub = '', life = 1.2, small = false, goal = '') {
+  game.banner = { text, sub, goal, t: 0, life, small };
 }
 
 function roundOver() {
@@ -616,6 +659,7 @@ function roundOver() {
 }
 
 function gameOver() {
+  settlePips();
   game.mode = 'over';
   game.modeT = 0;
   game.attract = true;
@@ -836,8 +880,8 @@ function landOn(b) {
   }
   const bull = r.what === 'bull';
   const lane = L.lanes[t.lane];
-  const pips = t.kind === 'gold' ? 2 : lane.pips;
-  const base = t.kind === 'gold' ? 100 : 10 * pips;
+  const pips = t.kind === 'gold' ? 2 : t.kind === 'tiny' ? TINY.pips : lane.pips;
+  const base = t.kind === 'gold' ? 100 : t.kind === 'tiny' ? TINY.base : 10 * pips;
   const pts = base * multiplier(t, bull);
   game.score += pts;
   game.roundScore += pts;
@@ -852,6 +896,7 @@ function landOn(b) {
   if (!free) {
     const was = game.pips;
     game.pips += pips;
+    fx.push({ type: 'pip', x: b.x1, y: b.y1, n: pips, t: 0 });
     if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
       game.bonus = true;
       sfx('quota');
@@ -918,6 +963,16 @@ function paintAlpha(p) {
 function popup(x, y, text, color) {
   fx.push({ type: 'text', x, y, text, color, t: 0 });
 }
+// A "+N" that reached the board takes its pips off the board's count, with a swell.
+function pipArrived(f) {
+  game.goalShown += f.n;
+  game.goalPulse = 1;
+}
+// Every "+N" still flying lands at once (a game over, so the card's board reads as it ended).
+function settlePips() {
+  for (const f of fx) if (f.type === 'pip') pipArrived(f);
+  fx = fx.filter((f) => f.type !== 'pip');
+}
 
 // ---------- The simulation ----------
 
@@ -951,6 +1006,14 @@ function spawnStep(dt, cfg) {
       launchMover(pick(waters), cfg, true);
       sp.gold[g] = -1;
     }
+  }
+  // A tiny target never rises in a frenzy (its clock, `elapsed`, stops), nor in the last 2 s.
+  const tiny = sp.tiny || [];
+  for (let g = 0; g < tiny.length; g++) {
+    if (tiny[g] < 0 || fr || game.elapsed < tiny[g]) continue;
+    if (game.time < TINY.lastSecs) tiny[g] = -1;
+    else if (launchTiny()) tiny[g] = -1;
+    else tiny[g] = game.elapsed + TINY.retry;
   }
   if (!game.frenzyDone && !fr && game.frenzyTimes.length && game.elapsed >= game.frenzyTimes[0]) {
     game.frenzyTimes.shift();
@@ -1001,7 +1064,12 @@ function timerColour() {
   if (game.time <= 10) return 'yellow';
   return 'plain';
 }
-const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', dark: null };
+// Green is the count board's alone: never the timer's, so the two boards never read as one. A
+// bottle green, like tinted glass, not a bright one (the owner, 2026-11-11: "make it like the green
+// that is analog, which is not that bright"); its lettering, the "+N" and the banner's goal, is a
+// paler green that reads on wood.
+const BULB = { plain: '#fff1c1', yellow: '#ffd23f', orange: '#ff8c1a', red: '#ff3b2e', green: '#8fbf6a', dark: null };
+const GOAL_PAINT = '#b4d89a';
 // The bulbs of a seven-segment digit: segments a (top) to g (middle), three bulbs each.
 const SEGMENTS = ['abcdef', 'bc', 'abged', 'abgcd', 'fgbc', 'afgcd', 'afgedc', 'abc', 'abcdefg', 'abcfgd'];
 
@@ -1090,6 +1158,7 @@ const signCache = new Map();
 // Lettering drawn before Rye arrived used a stand-in: draw it again once the font is in.
 if (document.fonts) document.fonts.load(signFont(20)).then(() => signCache.clear(), () => {});
 let signsWorn = 0; // pieces of lettering drawn worn in the last frame (for the tests)
+let signTexts = []; // and what they read
 function signImage(text, px, color, scale, shadow = true) {
   const key = `${text}|${px}|${color}|${scale}|${shadow}`;
   let img = signCache.get(key);
@@ -1152,6 +1221,7 @@ function painted(text, x, y, px, align = 'center', color = '#fff1d6') {
   const left = align === 'left' ? x - pad : align === 'right' ? x - img.w + pad : x - img.w / 2;
   ctx.drawImage(img.c, left, y - img.h / 2, img.w, img.h);
   signsWorn++;
+  signTexts.push(String(text));
 }
 // A recessed groove in the wood, and a brass bar sliding in it.
 function groove(x, y, w, h) {
@@ -1335,6 +1405,7 @@ function update(dt) {
   }
   game.kick = Math.max(0, game.kick - dt * 6);
   game.pulse = Math.max(0, (game.pulse || 0) - dt * 1.6);
+  game.goalPulse = Math.max(0, game.goalPulse - dt * 3);
   for (const d of decor) if (d.v) d.x = d.x + d.v * dt > SW + 80 ? -80 : d.x + d.v * dt;
 
   if (game.mode === 'intro' && game.modeT >= 1.2) {
@@ -1374,7 +1445,8 @@ function update(dt) {
     if (t.state !== 'live' || !moving) continue;
     const lane = L.lanes[t.lane];
     if (t.kind === 'pop' || t.kind === 'drop' || t.motion === 'pop') {
-      t.popT += dt * speed;
+      // A tiny target keeps its 1.4 s whatever happens: a frenzy doesn't speed it up.
+      t.popT += dt * (t.kind === 'tiny' ? 1 : speed);
       const up = t.upFor;
       let h;
       if (t.popT < 0.35) h = t.popT / 0.35;
@@ -1388,7 +1460,11 @@ function update(dt) {
       const from = t.kind === 'drop' ? dropTop(t) : hiddenY(t);
       const wasHidden = t.y > lane.strip;
       t.y = from + (lane.line - from) * e;
-      if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
+      if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') {
+        // The tiny target rings a bright ting as it rises; the rest splash.
+        if (t.kind === 'tiny') sfx('ding', { gain: 0.8, rate: 1.7 });
+        else sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
+      }
     } else {
       t.x += t.dir * t.speed * dt * speed * rushNow();
       t.y = lane.line + (t.isDuck ? 2.5 * Math.sin(game.T * 2.4 + t.phase) : 0);
@@ -1407,8 +1483,11 @@ function update(dt) {
     }
   }
   balls = balls.filter((b) => !b.landed);
-  for (const f of fx) f.t += dt;
-  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : 0.7));
+  for (const f of fx) {
+    f.t += dt;
+    if (f.type === 'pip' && f.t >= PIP_FLY) pipArrived(f);
+  }
+  fx = fx.filter((f) => f.t < (f.type === 'text' ? 0.9 : f.type === 'pip' ? PIP_FLY : 0.7));
   paint = paint.filter((p) => p.dying < 0 || game.T - p.dying < 0.5);
 
   if (game.mode === 'play' && game.time <= 0) {
@@ -1561,6 +1640,15 @@ function drawTarget(t) {
       marqueeBulb(b.x, b.y, b.r, col);
     }
   }
+  if (t.kind === 'tiny' && !ts.showBack) {
+    // A gold rim and a turning sparkle: special, and never the frenzy target or a gold duck.
+    ctx.strokeStyle = '#ffd23f';
+    ctx.lineWidth = Math.max(2, w * 0.08);
+    ctx.beginPath();
+    ctx.arc(0, 0, w / 2, 0, Math.PI * 2);
+    ctx.stroke();
+    sparkle(w * 0.42, -h * 0.42, w * 0.3, game.T * 3);
+  }
   if (t.kind === 'gold' && !ts.showBack) {
     ctx.globalCompositeOperation = 'lighter';
     ctx.globalAlpha = 0.25 + 0.2 * Math.sin(game.T * 8);
@@ -1579,6 +1667,25 @@ function drawTarget(t) {
   ctx.restore();
   ctx.globalAlpha = 1;
 }
+
+// A four-pointed star of light, turning.
+function sparkle(x, y, r, a) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  ctx.fillStyle = '#fff6c8';
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const rr = i % 2 === 0 ? r : r * 0.28;
+    const q = (i * Math.PI) / 4;
+    ctx.lineTo(Math.cos(q) * rr, Math.sin(q) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  sparklesDrawn++;
+}
+let sparklesDrawn = 0; // in the last frame (for the tests)
 
 // A hit target's pose: the mechanism under the booth pulls it straight down along its stick, the
 // stick going with it, out of sight behind its strip; a drop-down is hauled up behind the valance.
@@ -1664,10 +1771,76 @@ function hudLayout() {
     // The timer board; `font` is its digits' height.
     timer: { x: Math.max(8, (64 - ox) / k), y: L.top + (land ? 3 : 4), w: land ? 70 : 88, h: land ? 46 : 58, font: land ? 30 : 38 },
     score: { y: L.top + (land ? 26 : 34), font: land ? 22 : 26 },
+    goal: goalLayout(land),
     label: { x: 22, y: L.C + 20 },
-    pips: { x: 22, y: L.C + (land ? 42 : 46), r: land ? 5.5 : 6.5 },
-    hopper: { x: 22, y: L.C + (land ? 72 : 82), r: land ? 7 : 8.5 },
+    // The quota's bar is on the count board at the top; the hopper sits under the round's sign.
+    hopper: { x: 22, y: L.C + (land ? 48 : 54), r: land ? 7 : 8.5 },
   };
+}
+
+// The count board: at the top right, 8 px short of the sound button, a little taller than the timer
+// for the quota's bar under its digits but still above the booth; as wide as the timer where there's
+// room beside the widest score sign (99,999), and never narrower than its two digits at their
+// smallest.
+const SCORE_MAX = '99,999';
+function scoreSignWidth(text, font) {
+  ctx.font = signFont(font);
+  return Math.max(48, ctx.measureText(text).width + 22);
+}
+function goalLayout(land) {
+  const h = land ? 54 : 66;
+  const bar = land ? 14 : 17; // the strip under the panel that holds the quota's bar
+  const full = land ? 70 : 88;
+  const least = 16 + 1.5 * 20;
+  const right = Math.min(SW - 8, (muteLeft - 8 - ox) / k);
+  const scoreRight = SW / 2 + scoreSignWidth(SCORE_MAX, land ? 22 : 26) / 2 + 6;
+  const w = clamp(right - scoreRight, least, full);
+  const panelH = h - 12 - bar;
+  // Its digits: as tall as the panel allows, narrow enough for the board's width.
+  const font = Math.min(land ? 30 : 38, panelH - 6, (w - 16) / 1.5);
+  return { x: right - w, y: L.top + (land ? 3 : 4), w, h, bar, panelH, font };
+}
+// What the quota's bar shows: gold in the bonus, flashing red when the time runs out short.
+function goalBarState() {
+  if (game.mode === 'lost') return 'flash';
+  return game.bonus ? 'gold' : 'shown';
+}
+function drawGoalBoard(g) {
+  const cfg = game.cfg;
+  const met = game.goalShown >= cfg.quota;
+  const swell = 1 + 0.18 * Math.sin(Math.PI * Math.min(1, game.goalPulse));
+  ctx.save();
+  ctx.translate(g.x + g.w / 2, g.y + g.h / 2);
+  ctx.scale(swell, swell);
+  // Once the count reaches the quota the board gets a gold brass rim; the bulbs stay green.
+  if (met) brass(-g.w / 2 - 3, -g.h / 2 - 3, g.w + 6, g.h + 6, true);
+  plank(-g.w / 2, -g.h / 2, g.w, g.h, { tone: -0.12 });
+  const { bar, panelH } = g;
+  ctx.fillStyle = '#17100a';
+  ctx.fillRect(-g.w / 2 + 6, -g.h / 2 + 6, g.w - 12, panelH);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-g.w / 2 + 6, -g.h / 2 + 6, g.w - 12, panelH);
+  const n = Math.min(99, game.goalShown);
+  const digits = [n >= 10 ? Math.floor(n / 10) % 10 : -1, n % 10];
+  const dh = g.font;
+  const dw = dh * 0.5;
+  const r = dh / 10.5;
+  const cy = -g.h / 2 + 6 + panelH / 2;
+  digits.forEach((d, i) => bulbDigit((i - 0.5) * (dw + r * 5.2), cy, dw, dh, d, BULB.green, r));
+  // The quota: a brass bar sliding along a groove under the digits, filling as the count climbs.
+  const bx = -g.w / 2 + 6;
+  const bw = g.w - 12;
+  const by = -g.h / 2 + 6 + panelH + 2;
+  const bh = bar - 3;
+  groove(bx, by, bw, bh);
+  if (goalBarState() === 'flash' && Math.floor(game.modeT * 6) % 2 === 0) {
+    ctx.fillStyle = 'rgba(208, 52, 44, 0.8)';
+    ctx.fillRect(bx, by, bw, bh);
+  }
+  const f = clamp(game.goalShown / cfg.quota, 0, 1);
+  if (f > 0) brass(bx, by + 1, bw * f, bh - 2, game.bonus);
+  ctx.restore();
 }
 
 function drawHud() {
@@ -1682,36 +1855,13 @@ function drawHud() {
   painted(sc, SW / 2, H.score.y + 1, H.score.font);
   if (!cfg) return;
   drawTimerBoard(H.timer);
+  drawGoalBoard(H.goal);
   // The round, painted on a nailed sign.
   const rt = `Round ${game.round} · ${cfg.name}`;
   ctx.font = signFont(13);
   const rw = ctx.measureText(rt).width + 20;
   plank(H.label.x - 6, H.label.y - 10, rw, 20, { tone: 0.08 });
   painted(rt, H.label.x + 4, H.label.y + 1, 13, 'left');
-  // The quota: a brass bar sliding along a groove in a wooden gauge, a notch for every pip; gold in
-  // the bonus; the empty groove flashing red when the time runs out. It stays left of the slingshot.
-  const flash = game.mode === 'lost' && Math.floor(game.modeT * 6) % 2 === 0;
-  const bw = Math.min(SW * 0.42, L.slingX - 62 - H.pips.x);
-  const bh = H.pips.r * 2.6;
-  const by = H.pips.y - bh / 2;
-  plank(H.pips.x - 4, by - 4, bw + 8, bh + 8, { nails: false, tone: -0.05 });
-  groove(H.pips.x, by, bw, bh);
-  if (flash) {
-    ctx.fillStyle = 'rgba(208, 52, 44, 0.8)';
-    ctx.fillRect(H.pips.x, by, bw, bh);
-  }
-  const f = clamp(game.pips / cfg.quota, 0, 1);
-  if (f > 0) brass(H.pips.x, by + 1, bw * f, bh - 2, game.bonus);
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.35)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < cfg.quota; i++) {
-    const nx = H.pips.x + (bw * i) / cfg.quota;
-    ctx.beginPath();
-    ctx.moveTo(nx, by + bh - 3);
-    ctx.lineTo(nx, by + bh);
-    ctx.stroke();
-  }
-  painted(`${Math.min(game.pips, 999)} / ${cfg.quota}`, H.pips.x + bw / 2, H.pips.y + 1, 11);
   // The hopper: a carved wooden tray with a cup for each paintball.
   const hx = H.hopper.x - 5;
   const hw = H.hopper.r * (2.6 * (HOPPER - 1) + 2) + 10;
@@ -2003,6 +2153,14 @@ function drawFx() {
     if (f.type === 'text') {
       ctx.globalAlpha = Math.max(0, 1 - Math.max(0, f.t - 0.5) / 0.4);
       label(f.text, f.x, f.y - f.t * 36, 18, 'center', f.color);
+    } else if (f.type === 'pip') {
+      // From where the ball landed to the board, easing in as it goes.
+      const g = hudLayout().goal;
+      const p = Math.min(1, f.t / PIP_FLY);
+      const e = p * p * (3 - 2 * p);
+      const x = lerp(f.x, g.x + g.w / 2, e);
+      const y = lerp(f.y - 18, g.y + g.h / 2, e) - Math.sin(Math.PI * p) * 30;
+      painted(`+${f.n}`, x, y, 20 - 6 * p, 'center', GOAL_PAINT);
     } else if (f.type === 'ring') {
       ctx.globalAlpha = Math.max(0, 1 - f.t / 0.7);
       ctx.strokeStyle = '#ffd23f';
@@ -2065,10 +2223,12 @@ function drawBanner() {
   ctx.translate(SW / 2, (L.T + L.C) / 2);
   ctx.scale(s, s);
   const w = Math.min(SW - 40, 300);
-  const bh2 = b.sub ? 88 : 66;
+  const bh2 = b.goal ? 112 : b.sub ? 88 : 66;
   plank(-w / 2, -42, w, bh2, { tone: 0.04 });
   painted(b.text, 0, b.sub ? -14 : -9, 30, 'center', '#ffd23f');
   if (b.sub) painted(b.sub, 0, 20, 16);
+  // The round's goal, as the count board counts toward it.
+  if (b.goal) painted(b.goal, 0, 46, 18, 'center', GOAL_PAINT);
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -2162,8 +2322,10 @@ function drawLamps() {
 
 function draw() {
   polesDrawn = 0;
+  sparklesDrawn = 0;
   paintClipped = 0;
   signsWorn = 0;
+  signTexts = [];
   paintballsDrawn = 0;
   bandsDrawn = 0;
   brassDrawn = 0;
@@ -2459,7 +2621,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, PIP_FLY, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
@@ -2488,6 +2650,11 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           turned: !ui.turned.hidden,
           banner: b ? b.text : null,
           bannerSub: b ? b.sub : '',
+          bannerGoal: b ? b.goal || '' : '',
+          goalText: !shown || !game.cfg ? '' : String(Math.min(99, game.goalShown)),
+          goalColour: !shown || !game.cfg ? 'hidden' : 'green',
+          goalFill: !shown || !game.cfg ? 0 : clamp(game.goalShown / game.cfg.quota, 0, 1),
+          goalRim: !!shown && !!game.cfg && game.goalShown >= game.cfg.quota,
           hud: shown,
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
           timer: !shown || !game.cfg ? 'hidden' : game.frenzy > 0 ? 'stopped' : 'running',
@@ -2513,6 +2680,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           hopper: c(H.hopper.x + H.hopper.r * (2.6 * (HOPPER - 1) + 2), H.hopper.y + H.hopper.r),
           hopperBall: { ...c(H.hopper.x + H.hopper.r, H.hopper.y), r: H.hopper.r * k },
           timerBadge: { ...c(H.timer.x, H.timer.y), w: H.timer.w * k, h: H.timer.h * k, font: H.timer.font * k },
+          goal: { ...c(H.goal.x, H.goal.y), w: H.goal.w * k, h: H.goal.h * k },
+          // The score sign as it would be at 99,999, the widest it's checked at.
+          scoreMax: (() => {
+            const w = scoreSignWidth(SCORE_MAX, H.score.font);
+            return { ...c(SW / 2 - w / 2, H.score.y - H.score.font * 0.75), w: w * k, h: H.score.font * 1.5 * k };
+          })(),
           scoreFont: H.score.font * k,
           sling: c(L.slingX, L.slingY),
           slingFoot: c(L.slingX, L.slingFoot),
