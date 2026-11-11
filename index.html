@@ -36,7 +36,12 @@
   <body>
     <header class="site-header">
       <div class="inner">
-        <a class="brand" href="./">Games</a>
+        <div class="start">
+          <a class="btn btn-outline icon-btn" href="https://meirmsn.dev/" data-home aria-label="Home" title="Home">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7M6 9.5V20h4.5v-5.5h3V20H18V9.5" fill="none" /></svg>
+          </a>
+          <a class="brand" href="./">Games</a>
+        </div>
         <div class="controls">
           <button class="btn btn-outline install" type="button" data-install hidden>Install</button>
           <button class="btn btn-outline icon-btn" type="button" data-sound-toggle aria-pressed="false" aria-label="Sound on (mute)" title="Sound on">
@@ -148,6 +153,31 @@
       <p>New version available</p>
       <button class="btn btn-primary" type="button">Update</button>
     </div>
+
+    <!-- The add-to-home-screen ribbon and its dialog (specs/landing-home-and-ribbon.md). -->
+    <div class="ribbon" data-ribbon hidden>
+      <button type="button" aria-haspopup="dialog">Bookmark this site</button>
+    </div>
+
+    <dialog class="add-dialog" data-add-dialog aria-labelledby="add-title">
+      <h2 id="add-title">Bookmark this site</h2>
+      <div class="advice" data-advice="install" hidden>
+        <p>Install the games as an app, to open them from your home screen or dock.</p>
+        <button class="btn btn-primary" type="button" data-install-here>Install</button>
+      </div>
+      <p class="advice" data-advice="ios" hidden>
+        Tap Share
+        <svg class="share" viewBox="0 0 24 24" role="img" aria-label="(the Share icon)"><path d="M12 3v12M8 7l4-4 4 4M7.5 10H6v10.5h12V10h-1.5" fill="none" /></svg>, then Add to Home Screen.
+      </p>
+      <p class="advice" data-advice="touch" hidden>Open your browser's menu, then Add to Home screen or Install.</p>
+      <p class="advice" data-advice="safari" hidden>Choose File, then Add to Dock.</p>
+      <p class="advice" data-advice="mac" hidden>Press <kbd>⌘D</kbd> to bookmark this site.</p>
+      <p class="advice" data-advice="ctrl" hidden>Press <kbd>Ctrl+D</kbd> to bookmark this site.</p>
+      <div class="actions">
+        <button class="btn btn-outline" type="button" data-not-now>Not now</button>
+        <button class="btn btn-outline" type="button" data-never>Don't show again</button>
+      </div>
+    </dialog>
 
     <footer class="site-footer">
       <p>Art and sound by <a href="https://www.kenney.nl">Kenney</a> (CC0). <a href="https://github.com/meirmsn/games">Source on GitHub</a>.</p>
