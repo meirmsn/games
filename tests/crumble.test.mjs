@@ -7,7 +7,7 @@ import { serve } from './serve.mjs';
 import { statSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { chromium } from 'playwright';
+import { launch } from './clock.mjs';
 import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
@@ -18,7 +18,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -739,7 +739,8 @@ test('crumble AC-21: ten levels, each harder than the one before, each a new ter
 // can be split into those that carved and those that didn't. No CPU throttle: a quarter of a 60 fps
 // frame (4.2 ms) stands in for a phone 4× slower. Run once; nothing is retried.
 test('crumble AC-12: the frame holds in CPU time, a blast adds little, and nothing reads the whole canvas back', async () => {
-  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2 });
+  // throttle: false: a CPU-time budget, measured at full speed (specs/slow-tests-harness.md).
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, throttle: false });
   await context.addInitScript(() => {
     window.__pixelTrips = 0; // whole-canvas reads and writes: getImageData / putImageData
     const P = CanvasRenderingContext2D.prototype;
@@ -825,7 +826,8 @@ test('crumble AC-12: the frame holds in CPU time, a blast adds little, and nothi
 // CPU 10× slower, the portrait hold and the landscape resume still behave, because the checks wait on
 // frames and on the game's state, never on milliseconds.
 test('ci-flakes AC-5: the portrait hold and the landscape resume hold with frames coming slowly (CPU 10× slower)', async () => {
-  const { context, page } = await open({ viewport: { width: 390, height: 844 } });
+  // throttle: false: it sets its own 10× and then 1× (specs/slow-tests-harness.md).
+  const { context, page } = await open({ viewport: { width: 390, height: 844 }, throttle: false });
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 10 });
   await page.evaluate(() => {

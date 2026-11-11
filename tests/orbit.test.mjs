@@ -4,7 +4,7 @@
 // manual = true stops the page's own frames from advancing it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { launch } from './clock.mjs';
 import { serve } from './serve.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -16,7 +16,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

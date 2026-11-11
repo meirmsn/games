@@ -4,7 +4,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium, devices } from 'playwright';
+import { devices } from 'playwright';
+import { launch } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import { simulateInsets, PORTRAIT_INSETS, LANDSCAPE_INSETS, STRIP } from './insets.mjs';
 
@@ -15,7 +16,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -1478,7 +1479,8 @@ test('pixel-leap AC-21 and pixel-leap AC-38: every level can be finished; first 
 });
 
 test('pixel-leap AC-22: frames are cheap at 390×844, and the simulation is the same at 60 and 120 fps', async () => {
-  const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true });
+  // throttle: false: it measures frame time; R-7 moves it to CPU time (specs/slow-tests-harness.md).
+  const { context, page } = await open({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: true, throttle: false });
   await goPlay(page);
   await page.evaluate(() => {
     const L = window.__leap;
