@@ -72,8 +72,15 @@ No game code changes. What `specs/pixel-leap.md` promises doesn't change.
   (F-41). Rejected: keeping `throttle: false` (the brief asks for it to go); an unscaled 8 ms (fails
   at 10×). Scaled, the 10× run checks the same ratio as the full-speed one (the game uses about a
   tenth of its budget at both), not a tighter one. Unlike Crumble's, which kept `throttle: false`.
-  **Asked of the owner**, as it reads the promise's "in the test browser" (`specs/pixel-leap.md`
-  ~641) as the test browser at full speed. (Claude, 2026-11-11)
+  CI runs at full speed, so the promise keeps its meaning there: 8 ms in the test browser; its text
+  doesn't change. What the 10× run adds is proof that the test's own waiting, tracing and in-play
+  checks hold when frames come slowly. A code comment says so: at 10× the budget checks the test,
+  not the game. Rejected, besides the above: dividing the CPU time by the rate (the same check, and
+  it presents a nominal rate as a measurement), measuring the throttle and dividing by it (F-41: a
+  short run's throttle varies 0.8× to 15×), checking the budget only at full speed (hides that the
+  10× run checks no budget). The owner asked for an adversarial review to answer this ("do
+  adversarial review about the questions", 2026-11-11); its verdict, 2026-11-11: "A, using
+  scaled(8)." Crumble's frame budget keeping `throttle: false` is a finding, not changed here.
 - **Its guard stalls each frame without using the CPU.** With `throttle: false`, an init script
   makes the first canvas `fillRect` of each frame send a synchronous `XMLHttpRequest` that a
   `context.route` answers 20 ms later: the main thread waits, as a paused browser does, but spends
@@ -167,14 +174,23 @@ spec item each one carries.
 - **`FINDINGS.md`:** F-33 is closed (its row removed, as fixed rows have been) once no
   test file calls `waitForTimeout` without a `// safe:` reason. Anything new this slice notices and
   doesn't fix is a row of its own: the game's `frameWork` that nothing reads after this
-  change.
-- **Proposed, for the owner: the `// clock-checked` check fails an unmarked file that waits.**
+  change, and Crumble's frame budget, which the 10× run doesn't reach.
+- **The `// clock-checked` check fails an unmarked file that waits.**
   `tests/clock-check.test.mjs` now only lists an unmarked file that calls `waitForTimeout`. Once
   R-2 and this slice are in, no such file is left, so the check can fail one instead: a new fixed
   wait can then only come with the file's mark and a `// safe:` reason. Files that call no
   `waitForTimeout` stay as they are. R-2 is on `main` (`tests/walk-on-red.test.mjs` is marked), so
   this turns nothing red. The harness spec left it to this slice ("the whole-suite proof in R-7
-  can decide that"). If the owner says no, AC-10 goes. (Claude, 2026-11-11)
+  can decide that"). The owner asked for an adversarial review to answer this (2026-11-11); its
+  verdict: "P", failing an unmarked file that calls `waitForTimeout(`, not every unmarked browser
+  file (that would claim an audit no slice did). Its conditions, for the build: the new check skips
+  `//` comment lines; `tests/clock-check.test.mjs` stays excluded by name, with a comment why (its
+  waits are in strings and its mark isn't at a line's start); the new check is its own function and
+  test, titled with this spec's AC-10, beside the harness's AC-11 test, which still holds; its cases
+  cover an unmarked file that waits (fails), one that only mentions the call in a comment (passes)
+  and one with no wait (passes); its message names the fix (the mark in the first 10 lines, and a
+  `// safe: <reason>` on each wait); and the file's header comment says unmarked files that wait now
+  fail.
 
 ## Acceptance items
 
