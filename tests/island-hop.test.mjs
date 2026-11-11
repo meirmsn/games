@@ -577,7 +577,7 @@ test('island-hop AC-6: a drag anywhere steers; a second finger is ignored', asyn
   await context.close();
 });
 
-test('island-hop: a drag that starts in the phone\'s edge strips doesn\'t steer (game guidelines, phone hygiene; shared/safe-zone.js)', async () => {
+test('island-hop AC-6: a drag that starts in the phone\'s edge strips doesn\'t steer (shared/safe-zone.js)', async () => {
   const { context, page } = await open({ hasTouch: true });
   await page.evaluate(() => {
     __hop.manual = true;

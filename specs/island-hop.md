@@ -82,6 +82,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - The projection is `createIso({ tileW: 132, tileH: 66 })`, matching the tiles' art; land blocks stand
   16 px above the water. The game has its own pointer handler: one finger is the stick, a second
   finger is ignored, and there is no pinch or wheel zoom (`attachGestures` is not used).
+- A drag that starts in the phone's edge strips doesn't steer: the stick ignores it through
+  `shared/safe-zone.js`, as `main`'s game guidelines ask of every game since its edge-gestures rule
+  (owner, 2026-11-10, on `specs/edge-gestures.md`: "Yes"). Recorded when `main` came in (owner,
+  2026-11-11: "Can you bring the latest main?").
 - The map is hand-made, not generated: a 60 × 60 grid as text rows in `island-hop/map.js`, the
   islands staggered down the grid's diagonal so the archipelago runs top to bottom on a portrait
   screen. Five islands: two large (about 16 × 12, with a road loop, 3 berths and 2–3 parked cars
@@ -181,9 +185,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   `tests/island-hop.test.mjs`.
 - **AC-6** A drag (or the keys) moves the boat, the person or the car in the direction it points on
   screen, at that mode's speed (walk 1.6, car 5, rowboat 2.2, motorboat 3.5, speedboat 5.5 tiles a
-  second); a second finger is ignored; the person slides along walls and can't walk into the sea from
-  a jetty; the car stays on the roads and takes the branch the stick points at; a boat nosed into a
-  cliff gets free in under 2 s — `tests/island-hop.test.mjs`.
+  second); a second finger is ignored, and so is a drag that starts in the phone's edge strips; the
+  person slides along walls and can't walk into the sea from a jetty; the car stays on the roads and
+  takes the branch the stick points at; a boat nosed into a cliff gets free in under 2 s —
+  `tests/island-hop.test.mjs`.
 - **AC-7** A boat heading slowly toward a free berth within 1.5 tiles docks and the person steps
   ashore; sailing past at speed doesn't; a berth holding a boat can't be docked at; walking onto a
   berth holding one of your boats boards it; after leaving the rowboat in the lagoon the motorboat is
