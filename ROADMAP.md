@@ -6,7 +6,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | ID  | Added      | What                                                                        | Status                               |
 | --- | ---------- | --------------------------------------------------------------------------- | ------------------------------------ |
 | R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Done (`specs/slow-tests-harness.md`) |
-| R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open                                 |
+| R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Done                                 |
 | R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Done                                 |
 | R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Done (`slow-tests-crumble-googly`)   |
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
@@ -38,6 +38,10 @@ Its spec: `specs/slow-tests-walk-on-red.md`, numbered from AC-1.
 
 `tests/walk-on-red.test.mjs`: 21 `waitForTimeout` calls; `manual` is set late in `startEmpty`; game
 timers at `walk-on-red/game.js` ~482 and ~987 (a game-code change needs the owner's OK).
+
+Done 2026-11-11: every fixed wait now waits on the input being handled, the game's state or frames,
+and the file is marked `// clock-checked`; no game code changed (the review kept both timers,
+test-only). `manual` wasn't set late after all. The causes per test are in the spec's Decisions.
 
 ## R-3: Slow tests run once: Splat Gallery's tests
 
