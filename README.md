@@ -12,7 +12,7 @@ Small browser games, built one at a time. They're touch-first (phone, then table
 
 | Path | What it is |
 |---|---|
-| `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, and an install button |
+| `index.html`, `assets/` | The landing page: a tile per game, with sound, light and dark themes, an install button, a Home button to https://meirmsn.dev/, and the add-to-home-screen ribbon (`specs/landing-home-and-ribbon.md`) |
 | `assets/previews/` | The pictures a shared link shows (Open Graph and Twitter cards, 1200×630): each game's tile on its card's tone, and `site.jpg`, the landing page's collage of six tiles. `scripts/make-previews.mjs` draws them all from the tiles (`specs/social-previews.md`) |
 | `manifest.webmanifest`, `sw.js` | The PWA: home-screen install, offline play once a page has loaded, and the Update button (below) |
 | `shared/` | Shared by every game: `sound.js` (sound that works on phones, and looping music) and `game-shell.js`/`.css` (the back button, the full-screen frame, and offline play for a game opened straight from a link) and `explosion.js` (one explosion effect for every game, with its art in `explosion/`) |
@@ -36,6 +36,16 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 3. Give it a share picture: run `node scripts/make-previews.mjs`, which draws `assets/previews/<slug>.png` from its tile, and copy the `og:` and `twitter:` tags from another game's `<head>`, with its own title, description, URL and image alt. The fast tier fails without them.
 4. Nothing to do in `sw.js`: a game's files are cached in its own cache the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list, such as the new tile picture.
 5. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
+
+## The add-to-home-screen ribbon
+
+A quiet band across the landing page's bottom-right corner invites returning visitors to add the site
+(`specs/landing-home-and-ribbon.md`). It shows from a person's second visit, or once they've tapped a
+game, and never in the installed app, while the Update notice shows, or if this browser's storage
+can't be used. Tapping it opens a dialog with the steps for the device, or an Install button where the
+browser offers one. "Not now" puts it away for 7 days; when it comes back, the dialog also offers
+"Don't show again", which, like installing, puts it away for good. Its
+state is one `localStorage` key, `ribbon`; deleting it starts over as a first visit.
 
 ## Updates
 
