@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { MISSIONS, runPilot, medalTimes } from '../../island-hop/rules.js';
 
-const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
+const BANDS = [[10, 25], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
 let ok = true;
 console.log('mission  gold route  band       other order  gold medal');
 for (const [i, m] of MISSIONS.entries()) {

@@ -51,7 +51,7 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   each run the gold route is drawn over theirs, so the next run is a better plan, not faster thumbs.
 - **Why the tenth play differs:** six missions over one map with many routes; the splits and the gold
   route drawn at each finish push toward gold.
-- **Form:** short-form, missions of about half a minute to 3½ minutes. **Orientation:** portrait (the archipelago
+- **Form:** short-form, missions of about a quarter of a minute to 3½ minutes. **Orientation:** portrait (the archipelago
   runs top to bottom on screen); landscape on desktop works the same.
 - **What a failure costs:** nothing but time. Rocks and traffic bump you and cost about a second. A
   mission can be restarted any time.
@@ -160,8 +160,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   some ordered: a pickup, then its delivery), where each boat and car starts, and its gold route as
   hand-written waypoints (the order of stops, the berths and the vehicles). Starting or restarting a
   mission resets the clock, the stops, any pickup, and every boat and car; nothing carries over from
-  another mission. Target lengths, as bands for the autopilot's gold route: 1, one island on foot
-  (25–50 s); 2, two islands, two stops on each, and a car (40–75 s) (owner, 2026-11-11: "on level 2, there should be already not that many things, but split between two islands, because it's not fun that it's suddenly a lot in one island. I think it's more fun if you had it in two different islands, 4 items total, like 2 and 2 maybe or something, and then eventually add more items, but that's on an upper level"); 3, two towns, six stops (60–110 s); 4, a pickup in order (65–120 s); 5, a
+  another mission. Target lengths, as bands for the autopilot's gold route: 1, one island and one
+  door, the town hall, on foot (10–25 s) (owner, 2026-11-11: "keep mission 1 single stop, then
+  mission 2 has 2 islands", and "yes confirmed" to "mission 1 is just the Town hall, with a 10–25 s
+  band?"; it had four stops in Port Town and a 25–50 s band); 2, two islands, two stops on each, and a car (40–75 s) (owner, 2026-11-11: "on level 2, there should be already not that many things, but split between two islands, because it's not fun that it's suddenly a lot in one island. I think it's more fun if you had it in two different islands, 4 items total, like 2 and 2 maybe or something, and then eventually add more items, but that's on an upper level"); 3, two towns, six stops (60–110 s); 4, a pickup in order (65–120 s); 5, a
   second boat (75–130 s); 6, everything, with traffic (80–140 s), so a player's run (about 1.2–2× the
   autopilot) stays within about 3½ minutes. Each mission's other order of its stops is slower than its
   gold time (par × 1.1), so planning pays. Any finish opens the next mission. Changed after the go

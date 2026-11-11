@@ -11,7 +11,7 @@
 // Bump MAP_VERSION whenever the map or a mission changes: saved bests and medals from another version are
 // thrown away.
 
-export const MAP_VERSION = 2;
+export const MAP_VERSION = 3;
 
 export const ROWS = [
   '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',

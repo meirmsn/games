@@ -648,7 +648,7 @@ test('island-hop AC-6: on foot, a tree\'s tile is grass: you walk across it, onl
 // --- Pars and the gold routes (Node) ----------------------------------------------------------------------------
 
 test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, lands in its band and on its par; another order of its stops is slower than gold', () => {
-  const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
+  const BANDS = [[10, 25], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
   for (const [i, m] of MISSIONS.entries()) {
     const gold = runPilot(i, m.gold);
     const alt = runPilot(i, m.alt);
@@ -692,7 +692,7 @@ test('island-hop AC-16: the same moves cover the same distance at 60 and 120 fra
 // --- The page (Chromium) ----------------------------------------------------------------------------------------
 
 test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in its band, and Port Town drawn at 50 fps or more at 390×844 (a frame stepped and drawn in 20 ms or less)', async () => {
-  const BANDS = [[25, 50], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
+  const BANDS = [[10, 25], [40, 75], [60, 110], [65, 120], [75, 130], [80, 140]];
   for (const [i, m] of MISSIONS.entries()) {
     const s = runPilot(i, m.gold);
     const [lo, hi] = BANDS[i];

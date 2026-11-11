@@ -7,14 +7,14 @@
 
 export const MISSIONS = [
   {
-    name: 'Errands in Port Town',
+    name: 'First errand',
     start: 'motor',
     boats: { motor: { x: 45, y: 27, h: 200 } },
     cars: [],
-    stops: [{ at: 'C' }, { at: 'A' }, { at: 'D' }, { at: 'B' }],
-    gold: [{ sail: 'portE' }, { walk: 'D' }, { walk: 'B' }, { walk: 'A' }, { walk: 'C' }],
-    alt: [{ sail: 'portW' }, { walk: 'C' }, { walk: 'D' }, { walk: 'B' }, { walk: 'A' }],
-    par: 27.4,
+    stops: [{ at: 'D' }],
+    gold: [{ sail: 'portE' }, { walk: 'D' }],
+    alt: [{ sail: 'portW' }, { walk: 'D' }],
+    par: 12.3,
   },
   {
     name: 'Island to island',
