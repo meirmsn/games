@@ -1,6 +1,6 @@
 # Splat Gallery: a "to go" board that makes the round's goal clear, and a tiny high-value target
 
-**Go:** pending
+**Go:** "go" 2026-11-11, confirming once in rounds 2–3 and twice in 4–6, and the tiny target held back during a frenzy
 
 ## Intent
 
