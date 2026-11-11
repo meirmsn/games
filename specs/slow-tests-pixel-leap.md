@@ -224,6 +224,15 @@ spec item each one carries.
     limit). Now it checks that. Guard: a fixture preloaded through `NODE_OPTIONS` makes each
     `node -e` the script runs before its runner start 6 s late; the run took 26 s with 12 s, the
     file still stopped at 2,004 ms.
+- **The site test's leftover route is fixed in this PR too.** The proof's runs (one file at a time
+  each, 2026-11-11) passed 341 of 341 tests in all five and at 10×, but `tests/site.test.mjs` failed
+  as a file in one of the five and in the 10× run. "A playable tile plays its sound and opens its
+  game" routes `/` through a handler that fetches the real page. The landing page also asks for `/`
+  in the background, and that request can still be in the handler when the test closes its context;
+  Playwright then rejects its `route.fetch` after the test has ended, and Node fails the file. Now
+  the test drops its routes, ignoring a handler still in flight, before it closes. Guard: the same
+  test with that background request held 2 s; without the fix the file fails the same way. Asked,
+  the owner said "ok" (2026-11-11).
 
 ## Acceptance items
 
@@ -255,7 +264,8 @@ spec item each one carries.
   marked `// clock-checked`, and every test file passes it.
 - **AC-11** Outside `tests/pixel-leap.test.mjs`, `tests/clock-check.test.mjs`,
   `tests/googly-faces.test.mjs` (the dot test, AC-12), `tests/harness.test.mjs` and its new fixture
-  `tests/fixtures/slow-start.cjs` (AC-13), the only files that change are
+  `tests/fixtures/slow-start.cjs` (AC-13), `tests/site.test.mjs` (the playable-tile test, AC-14), the
+  only files that change are
   `specs/slow-tests-pixel-leap.md`, `ROADMAP.md` (R-7's row and section) and `FINDINGS.md` (F-32 and
   F-33, and rows this slice adds). No game code changes. — verified by review: the PR's diff.
 - **AC-12** Googly Faces' dot test reads the dot's swell on every frame from the first frame the tap
@@ -265,6 +275,9 @@ spec item each one carries.
 - **AC-13** The harness's hang test checks how long the test runner took to stop each hanging file
   (its `duration_ms`), not the whole run's wall-clock time; a guard test that starts each `node -e`
   of `scripts/check-slow.sh` 6 s late still sees the file stopped within the limit plus 10 s.
+- **AC-14** The playable-tile test in `tests/site.test.mjs` drops its routes, ignoring a handler
+  still in flight, before it closes its context; a guard test that holds the landing page's
+  background request 2 s passes and doesn't fail the file, and fails the file without the fix.
 
 ## Out of scope
 
