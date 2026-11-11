@@ -1,6 +1,6 @@
 # Slow tests run once: Crumble's and Googly Faces' tests
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11, relayed word for word by the parent session, on its summary of R-4 and R-6)
 
 ## Intent
 
