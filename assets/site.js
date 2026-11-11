@@ -99,7 +99,7 @@ export function adviceFor({ installable, ua, platform, touchPoints, coarse }) {
 }
 
 const ribbon = (() => {
-  const KEY = 'ribbon'; // { visits, tapped, until (ms), off }
+  const KEY = 'ribbon'; // { visits, tapped, until (ms), paused (once "Not now"), off }
   const PAUSE = 7 * 24 * 60 * 60 * 1000;
   const el = document.querySelector('[data-ribbon]');
   const band = el.querySelector('button');
@@ -160,6 +160,8 @@ const ribbon = (() => {
     dialog.querySelector('h2').textContent = words();
     for (const a of dialog.querySelectorAll('[data-advice]')) a.hidden = a.dataset.advice !== kind;
     dialog.dataset.kind = kind;
+    // "Don't show again" is offered only once a person has chosen "Not now" before.
+    dialog.querySelector('[data-never]').hidden = !load()?.paused;
   }
 
   band.addEventListener('click', () => {
@@ -172,7 +174,7 @@ const ribbon = (() => {
     if (!el.hidden) band.focus({ preventScroll: true });
   });
   dialog.querySelector('[data-not-now]').addEventListener('click', () => {
-    update({ until: Date.now() + PAUSE });
+    update({ until: Date.now() + PAUSE, paused: true });
     dialog.close();
     refresh();
   });

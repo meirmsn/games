@@ -54,16 +54,22 @@ the design. No game page changes.
   - Another touch device: "Open your browser's menu, then Add to Home screen or Install".
   - Desktop Safari: "Choose File, then Add to Dock".
   - Any other desktop: "Press ⌘D to bookmark this site" on a Mac, "Press Ctrl+D" elsewhere.
-  The dialog has "Not now" (closes; the ribbon stays away for 7 days) and "Don't show again".
+  The dialog has "Not now" (closes; the ribbon stays away for 7 days) and, once "Not now" has been
+  chosen before, "Don't show again".
 - **Changed after the go, by the owner (2026-11-11), on the PR's screenshots:** "Maybe make the first
   button that don't show again, and then on the not now, the one on the right, to make it easier to
   tap for a right-handed, and also that install button, maybe make it larger and center so that you
   don't hit the not now or don't show again by mistake." Then, the same day, on seeing it: "Actually,
   the note now should be first because it's the first one that you read." So "Not now" sits first
   (left) and "Don't show again" second (right), as before, and Install spans the dialog's width,
-  taller than the two below it. The same message
-  showed the ribbon sliding out of its corner while the dialog was open; that was a bug (its corner
-  box could scroll), fixed, not a spec change.
+  taller than the two below it. The first message also showed the ribbon sliding out of its corner
+  while the dialog was open; that was a bug (its corner box could scroll), fixed, not a spec change.
+- **Changed after the go, by the owner (2026-11-11), on the PR:** "Can we make it that if you tap the
+  not now, like we don't show you the don't show again unless you tap not now, and then whenever we
+  show you again this dialogue, which I guess is like 7 days later or something, then we show you the
+  don't show again." So the dialog offers "Don't show again" only once the person has chosen "Not
+  now" before: the first time, "Not now" alone (and Install where offered); when the ribbon comes
+  back after the 7 days, both. AC-6 says so.
 - The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
   "Quiet card colours", "After a week"); rejected: the bold accent band, and returning on the next visit.
 - **How the device cases are tested:** in Playwright's Chromium, by the signals the function reads:
@@ -91,7 +97,7 @@ the design. No game page changes.
   on iPhone and iPad (an iPad reporting as a Mac included); the browser-menu steps on other touch
   devices; File, then Add to Dock in desktop Safari; ⌘D on a Mac and Ctrl+D elsewhere.
 - **AC-6** "Not now" closes the dialog and the ribbon stays hidden for 7 days, then returns; "Don't show again"
-  removes it for good; installing from the dialog or the header removes the ribbon and both Install
+  is offered only once "Not now" has been chosen before, and removes it for good; installing from the dialog or the header removes the ribbon and both Install
   buttons.
 - **AC-7** The dialog closes on Escape and returns focus to the ribbon.
 - **AC-8** The Home button, ribbon and dialog use only the site's theme tokens and read in light and

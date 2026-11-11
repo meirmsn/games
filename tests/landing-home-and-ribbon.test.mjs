@@ -89,6 +89,18 @@ async function openDialog(page) {
   await dialog(page).waitFor({ state: 'visible' });
 }
 
+// "Not now" once, then 7 days and a minute later the ribbon is back: the state in which the dialog
+// offers "Don't show again" too.
+async function notNowOnce(page) {
+  const now = Date.now();
+  await openDialog(page);
+  await dialog(page).getByRole('button', { name: 'Not now' }).click();
+  await page.clock.setFixedTime(now + 7 * DAY + 60 * 1000);
+  await page.reload();
+  await ribbon(page).waitFor();
+}
+const neverBtn = (page) => dialog(page).getByRole('button', { name: "Don't show again" });
+
 test('landing-home-and-ribbon AC-1: the header starts with a 44 px Home button to https://meirmsn.dev/; no game page has one', async (t) => {
   const { page, errors } = await open({}, t);
   const first = page.locator('.site-header .inner a, .site-header .inner button').first();
@@ -271,13 +283,30 @@ test('landing-home-and-ribbon AC-4: never when storage is unavailable', async (t
   assert.equal(await shown(ro.page), false, 'storage that cannot be written');
 });
 
-test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-6: "Don\'t show again" removes it for good, on any later visit', async (t) => {
+test('landing-home-and-ribbon AC-6: the first dialog offers "Not now" alone; "Don\'t show again" comes once "Not now" has been chosen', async (t) => {
   const { page } = await open({ visits: 2 }, t);
   await openDialog(page);
-  await dialog(page).getByRole('button', { name: "Don't show again" }).click();
+  assert.equal(await dialog(page).getByRole('button', { name: 'Not now' }).isVisible(), true);
+  assert.equal(await neverBtn(page).isVisible(), false, 'no "Don\'t show again" the first time');
+  await page.keyboard.press('Escape'); // closing without a choice is no "Not now"
+  await dialog(page).waitFor({ state: 'hidden' });
+  await page.reload();
+  await openDialog(page);
+  assert.equal(await neverBtn(page).isVisible(), false, 'still none after Escape and another visit');
+  await page.keyboard.press('Escape');
+  await notNowOnce(page);
+  await openDialog(page);
+  assert.equal(await neverBtn(page).isVisible(), true, 'offered when the ribbon comes back');
+});
+
+test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-6: "Don\'t show again" removes it for good, on any later visit', async (t) => {
+  const { page } = await open({ visits: 2 }, t);
+  await notNowOnce(page);
+  await openDialog(page);
+  await neverBtn(page).click();
   assert.equal(await dialog(page).isVisible(), false, 'the dialog closes');
   assert.equal(await shown(page), false, 'the ribbon goes');
-  await page.clock.setFixedTime(Date.now() + 30 * DAY);
+  await page.clock.setFixedTime(Date.now() + 40 * DAY);
   for (let i = 0; i < 2; i++) await page.reload();
   await page.waitForLoadState('networkidle');
   assert.equal(await shown(page), false, 'still gone a month later');
@@ -300,6 +329,8 @@ test('landing-home-and-ribbon AC-6: "Not now" closes the dialog and the ribbon s
   await page.clock.setFixedTime(now + 7 * DAY + 60 * 1000);
   await page.reload();
   await ribbon(page).waitFor();
+  await openDialog(page);
+  assert.equal(await neverBtn(page).isVisible(), true, 'back, with "Don\'t show again" now offered');
 });
 
 test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: where the browser offers install, the dialog\'s Install opens its prompt; then the ribbon and both Install buttons go', async (t) => {
@@ -410,6 +441,7 @@ test('landing-home-and-ribbon AC-2: the ribbon stays in its corner when tapped, 
 
 test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Not now" comes first, on the left, then "Don\'t show again"; Install is larger, centred above them', async (t) => {
   const { page } = await open({ visits: 2 }, t);
+  await notNowOnce(page);
   await offerInstall(page);
   await openDialog(page);
   const never = await dialog(page).getByRole('button', { name: "Don't show again" }).boundingBox();
