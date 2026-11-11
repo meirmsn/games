@@ -8,9 +8,9 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Done (`specs/slow-tests-harness.md`) |
 | R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Done                                 |
 | R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Done                                 |
-| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open                                 |
-| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open                                 |
-| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
+| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Done (`slow-tests-crumble-googly`)   |
+| R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
+| R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
@@ -117,6 +117,10 @@ Its spec: `specs/slow-tests-pwa-site.md`, numbered from AC-1.
 `tests/pwa-updates.test.mjs` and `tests/site.test.mjs`: 12 waits. The "nothing happened" waits
 either wait for the version check's response or keep a `// safe: negative bound` comment.
 
+Done (`specs/slow-tests-pwa-site.md`): F-34's cause was a failed pwa-updates test leaving its
+server listening, so the file never exited; each test's site now closes when the test ends. Both
+files are `// clock-checked`.
+
 ## R-6: Slow tests run once: Orbit's, Reef's and Runes' tests
 
 The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
@@ -139,6 +143,9 @@ Its spec: `specs/slow-tests-orbit-reef-runes.md`, numbered from AC-1.
 
 Reef's F-37 and F-8 (game-code changes need the owner's OK); Runes AC-15's ghost runs on
 `performance.now()` (likewise), and runes AC-1 compares two screenshots 300 ms apart.
+
+Done: each test's cause is in the spec's Decisions. F-8 is fixed in Reef's frame loop (approved); F-37
+is kept (not approved); Runes' ghost is fixed in its test only.
 
 ## R-7: Slow tests run once: Pixel Leap's tests, and the whole suite's proof
 

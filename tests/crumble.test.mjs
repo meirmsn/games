@@ -1,13 +1,15 @@
 // End-to-end tests for Crumble. Run: scripts/check-slow.sh.
 // The game exposes window.__crumble (its state, and a step() that advances the simulation without
 // drawing), so these tests can set up a situation and check what the rules do with it.
+// clock-checked: no test waits a fixed time; each waits on a frame, an input the page has seen or
+// the game's state (specs/slow-tests-crumble-googly.md).
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
 import { statSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { launch } from './clock.mjs';
+import { launch, realFrames, waitFor, within } from './clock.mjs';
 import { simulateInsets, LANDSCAPE_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
@@ -26,8 +28,30 @@ after(async () => {
   server?.close();
 });
 
-async function open({ path = 'crumble/', audio = false, ...opts } = {}) {
+// What the page has seen of the pointer, recorded before the game's handlers (capture, on window)
+// and again after each reload: input reaches the page on its own schedule (moves with the next
+// frame), so a test waits on these, not on a time.
+const SEEN = () => {
+  const s = (window.__seen = { down: 0, end: 0, move: null });
+  addEventListener('pointerdown', () => s.down++, true);
+  for (const t of ['pointerup', 'pointercancel']) addEventListener(t, () => s.end++, true);
+  addEventListener('pointermove', (e) => (s.move = [e.clientX, e.clientY]), true);
+};
+
+// Every animation frame takes at least `ms`: frames slow on purpose, on any machine (the guards).
+const SLOW_FRAMES = (ms) => {
+  const busy = () => {
+    const t = performance.now();
+    while (performance.now() - t < ms);
+    requestAnimationFrame(busy);
+  };
+  requestAnimationFrame(busy);
+};
+
+async function open({ path = 'crumble/', audio = false, slowFrames = 0, ...opts } = {}) {
   const context = await browser.newContext({ viewport: { width: 844, height: 390 }, ...opts });
+  await context.addInitScript(SEEN);
+  if (slowFrames) await context.addInitScript(SLOW_FRAMES, slowFrames);
   if (audio) await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
   const errors = [];
@@ -38,17 +62,24 @@ async function open({ path = 'crumble/', audio = false, ...opts } = {}) {
   return { context, page, errors };
 }
 
-// Wait until the page has run `n` animation frames of its own.
-const realFrames = (page, n) =>
-  page.evaluate(
-    (n) =>
-      new Promise((done) => {
-        let k = 0;
-        const tick = () => (++k >= n ? done() : requestAnimationFrame(tick));
-        requestAnimationFrame(tick);
-      }),
-    n
-  );
+const seenCounts = (page) => page.evaluate(() => ({ down: window.__seen.down, end: window.__seen.end }));
+
+// Waits until the page has seen `down` pointerdowns and `end` ends (pointerup or pointercancel) in all.
+const untilSeen = (page, { down, end }) =>
+  waitFor(page, ({ down, end }) => window.__seen.down >= down && window.__seen.end >= end, { down, end }, { what: `the page seeing ${down} pointerdowns and ${end} ends` });
+
+// Runs `act` (a click or tap), then waits until the page has seen its press and its release.
+async function seenAfter(page, act) {
+  const b = await seenCounts(page);
+  await act();
+  await untilSeen(page, { down: b.down + 1, end: b.end + 1 });
+}
+
+const press = (page, selector, options) => seenAfter(page, () => page.click(selector, options));
+
+// Waits until the page has seen a pointermove within 0.5 px of (x, y).
+const untilMoveAt = (page, [x, y]) =>
+  waitFor(page, ([x, y]) => !!window.__seen.move && Math.abs(window.__seen.move[0] - x) <= 0.5 && Math.abs(window.__seen.move[1] - y) <= 0.5, [x, y], { what: `the page seeing a pointermove at (${x}, ${y})` });
 
 // Start a battle on battlefield `field` (0-based) with the test owning the clock, on the player's turn.
 async function battle(page, field = 0, { taught = true } = {}) {
@@ -85,17 +116,48 @@ const settle = (page, max = 12) =>
     return max;
   }, max);
 
-// Real touch through the DevTools protocol, so the page sees pointerType "touch".
+// Real touch through the DevTools protocol, so the page sees pointerType "touch". `send` returns once
+// the page has seen each finger a touchStart adds go down, and each finger a touchEnd lifts come up
+// (or be cancelled): every finger ends once. Moves aren't waited on here: `pull` waits for them.
 async function touch(page) {
   const cdp = await page.context().newCDPSession(page);
-  const send = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y, id]) => ({ x, y, id })) });
+  let fingers = 0;
+  let base = null; // the page's counts when the first finger went down
+  let downs = 0;
+  let ends = 0;
+  const send = async (type, points) => {
+    if (type === 'touchStart' && fingers === 0) {
+      base = await seenCounts(page);
+      downs = ends = 0;
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map(([x, y, id]) => ({ x, y, id })) });
+    if (type === 'touchStart') downs += Math.max(0, points.length - fingers);
+    if (type === 'touchEnd' || type === 'touchCancel') ends += Math.max(0, fingers - points.length);
+    if (type !== 'touchMove') {
+      fingers = points.length;
+      await untilSeen(page, { down: base.down + downs, end: base.end + ends });
+    }
+  };
+  const moves = async (from, to, n) => {
+    for (let i = 1; i <= n; i++) await send('touchMove', [[from[0] + ((to[0] - from[0]) * i) / n, from[1] + ((to[1] - from[1]) * i) / n, 1]]);
+  };
   return {
+    // Nothing is read between the moves and the release, so it waits for the release only: the
+    // page handles the moves still queued before it.
     async drag(from, to, n = 8) {
       await send('touchStart', [[...from, 1]]);
-      for (let i = 1; i <= n; i++) await send('touchMove', [[from[0] + ((to[0] - from[0]) * i) / n, from[1] + ((to[1] - from[1]) * i) / n, 1]]);
-      await page.waitForTimeout(60);
+      await moves(from, to, n);
       await send('touchEnd', []);
-      await page.waitForTimeout(30);
+    },
+    // Pulls from `from` to `to`, and returns the aim as the page has it once it has seen the last
+    // move; then lets go.
+    async pull(from, to, n = 6) {
+      await send('touchStart', [[...from, 1]]);
+      await moves(from, to, n);
+      await untilMoveAt(page, to);
+      const mid = await page.evaluate(() => ({ aim: window.__crumble.tanks[0].aim, power: window.__crumble.tanks[0].power, shown: window.__crumble.aim.shown, phase: window.__crumble.game.phase }));
+      await send('touchEnd', []);
+      return mid;
     },
     send,
   };
@@ -105,18 +167,10 @@ const shots = (page) => page.evaluate(() => window.__crumble.game.shots);
 
 test('edge-gestures AC-9: with iPhone insets in landscape, a pull that starts in an edge strip neither aims nor fires; one in the safe area does', async () => {
   const { context, page } = await open({ hasTouch: true });
-  const cdp = await simulateInsets(context, page, LANDSCAPE_INSETS, () => window.__crumble);
+  await simulateInsets(context, page, LANDSCAPE_INSETS, () => window.__crumble);
   await battle(page);
-  const send = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
-  const pull = async (x, y, dx, dy) => {
-    await send('touchStart', [{ x, y, id: 1 }]);
-    for (let i = 1; i <= 8; i++) await send('touchMove', [{ x: x + (dx * i) / 8, y: y + (dy * i) / 8, id: 1 }]);
-    await page.waitForTimeout(60);
-    const held = await page.evaluate(() => window.__crumble.aim.active ?? null);
-    await send('touchEnd', []);
-    await page.waitForTimeout(30);
-    return held;
-  };
+  const tc = await touch(page);
+  const pull = (x, y, dx, dy) => tc.drag([x, y], [x + dx, y + dy]);
   const bottom = 390 - LANDSCAPE_INSETS.bottom - 20;
   const left = LANDSCAPE_INSETS.left + 10;
   const top = 12;
@@ -144,8 +198,8 @@ test('crumble AC-1: the shore moves behind the start card; Start begins on the p
   await page.waitForFunction((t0) => window.__crumble.game.time > t0 + 0.2, t0);
   // The demo tanks trade shots on the real animation loop (the first lands about 3 s in; the
   // limit is generous for a slow CI machine).
-  await page.waitForFunction(() => window.__crumble.terrain.carves > 0, null, { timeout: 15000 });
-  await page.click('[data-play]');
+  await waitFor(page, () => window.__crumble.terrain.carves > 0, null, { what: "the demo's first crater", timeout: 30000 });
+  await press(page, '[data-play]');
   const s = await page.evaluate(() => ({ mode: window.__crumble.game.mode, phase: window.__crumble.game.phase, turn: window.__crumble.game.turn, taught: window.__crumble.store.taught }));
   assert.deepEqual(s, { mode: 'battle', phase: 'aim', turn: 0, taught: false }, 'the ghost hand shows until the first aiming touch');
   assert.equal(await page.isVisible('[data-screen="start"]'), false);
@@ -160,21 +214,21 @@ test('crumble AC-1: the shore moves behind the start card; Start begins on the p
   await context.close();
 });
 
-test('crumble AC-2: pull back and let go aims and fires; HUD starts, second fingers and short pulls do not', async () => {
-  const { context, page } = await open({ hasTouch: true });
-  await battle(page, 0);
-  const tc = await touch(page);
-  // Pull from (600,150) down-left to (500,220): the shot goes up-right, at full power (122 px > 120).
-  await tc.send('touchStart', [[600, 150, 1]]);
-  for (let i = 1; i <= 6; i++) await tc.send('touchMove', [[600 - (100 * i) / 6, 150 + (70 * i) / 6, 1]]);
-  await page.waitForTimeout(60); // pointer events arrive with the next frame
-  const mid = await page.evaluate(() => ({ aim: window.__crumble.tanks[0].aim, power: window.__crumble.tanks[0].power, shown: window.__crumble.aim.shown, phase: window.__crumble.game.phase }));
+// Pull from (600,150) down-left to (500,220): the shot goes up-right, at full power (122 px > 120).
+async function pullAndFire(page, tc) {
+  const mid = await tc.pull([600, 150], [500, 220]);
   assert.ok(Math.abs(mid.aim - Math.atan2(70, 100)) < 0.02, `aims opposite the pull (${mid.aim})`);
   assert.equal(mid.power, 1, 'capped at full power');
   assert.equal(mid.shown, true, 'the arc preview and power band show');
   assert.equal(mid.phase, 'aim', 'nothing fires before the release');
-  await tc.send('touchEnd', []);
   assert.equal(await shots(page), 1, 'the release fires');
+}
+
+test('crumble AC-2: pull back and let go aims and fires; HUD starts, second fingers and short pulls do not', async () => {
+  const { context, page } = await open({ hasTouch: true });
+  await battle(page, 0);
+  const tc = await touch(page);
+  await pullAndFire(page, tc);
   await settle(page);
   await settle(page); // the CPU's answer
   assert.equal(await page.evaluate(() => window.__crumble.game.phase), 'aim');
@@ -197,6 +251,16 @@ test('crumble AC-2: pull back and let go aims and fires; HUD starts, second fing
   // A drag that ends over the HUD still fires.
   await tc.drag([btn.x - 150, btn.y - 120], [btn.x + btn.width / 2, btn.y + btn.height / 2]);
   assert.equal(await shots(page), before + 1, 'a drag ending over the HUD fires');
+  await context.close();
+});
+
+// The guard for the pull: with every frame 100 ms long, a move reaches the page up to 100 ms after it
+// is sent, so a fixed 60 ms read the aim before it (on main's code, 2026-11-11: "capped at full
+// power"). The pull waits for the last move instead. throttle: false: the frames are slow already.
+test('slow-tests-crumble-googly AC-4: a pull aims and fires with every frame 100 ms long', async () => {
+  const { context, page } = await open({ hasTouch: true, slowFrames: 100, throttle: false });
+  await battle(page, 0);
+  await pullAndFire(page, await touch(page));
   await context.close();
 });
 
@@ -337,7 +401,7 @@ test('crumble AC-5: the Auger drills a wide shaft, does no damage, drops a tank 
   await settle(page);
   for (let i = 0; i < 2; i++) {
     await page.evaluate(() => window.__crumble.startTurn(0));
-    await page.click('[data-weapon="auger"]');
+    await press(page, '[data-weapon="auger"]');
     assert.equal(await page.evaluate(() => window.__crumble.game.weapon), 'auger');
     await page.evaluate(() => window.__crumble.fire(0, window.__crumble.game.weapon, Math.PI - 0.3, 1));
     await settle(page);
@@ -348,7 +412,7 @@ test('crumble AC-5: the Auger drills a wide shaft, does no damage, drops a tank 
     c.startTurn(0);
   });
   assert.equal(await page.textContent('[data-charges]'), '0');
-  await page.click('[data-weapon="auger"]', { force: true });
+  await press(page, '[data-weapon="auger"]', { force: true });
   assert.equal(await page.evaluate(() => window.__crumble.game.weapon), 'shell', 'an empty Auger does nothing');
   await context.close();
 });
@@ -570,7 +634,7 @@ test('crumble AC-9: winning gives stars and the next battlefield; losing offers 
   assert.equal((await end(60, 0)).stars, 3);
   assert.equal(await page.isVisible('[data-result-next]'), true);
   assert.equal(await page.isVisible('[data-result-new]'), false);
-  await page.waitForTimeout(100);
+  await realFrames(page, 1); // showResult() lights the stars in its next frame
   assert.equal(await page.locator('[data-result-stars] i.on').count(), 3);
   await battle(page, 0);
   assert.equal((await end(30, 0)).stars, 2);
@@ -586,11 +650,11 @@ test('crumble AC-9: winning gives stars and the next battlefield; losing offers 
   assert.equal((await end(0, 50)).win, false);
   assert.equal(await page.isVisible('[data-result-again]'), true);
   assert.equal(await page.isVisible('[data-result-new]'), true);
-  await page.click('[data-result-again]');
+  await press(page, '[data-result-again]');
   assert.equal(await page.evaluate(() => window.__crumble.game.seed), seed);
   assert.deepEqual(await page.evaluate(() => Array.from(window.__crumble.heights).filter((_, i) => i % 7 === 0)), heights, 'the same hill');
   await end(0, 50);
-  await page.click('[data-result-new]');
+  await press(page, '[data-result-new]');
   assert.notEqual(await page.evaluate(() => window.__crumble.game.seed), seed, 'a new hill');
 
   // Kept across reloads, and #2 opens Battlefield 2 once reached.
@@ -599,7 +663,7 @@ test('crumble AC-9: winning gives stars and the next battlefield; losing offers 
   await page.waitForFunction(() => window.__crumble);
   assert.equal(await page.textContent('[data-pick-name]'), 'Windy Point');
   assert.equal(await page.locator('[data-pick-stars] i.on').count(), 0);
-  await page.click('[data-prev]');
+  await press(page, '[data-prev]');
   assert.equal(await page.locator('[data-pick-stars] i.on').count(), 3);
   await page.goto(BASE + 'crumble/#3');
   await page.reload();
@@ -837,7 +901,8 @@ test('ci-flakes AC-5: the portrait hold and the landscape resume hold with frame
     c.fire(0, 'shell', 1.2, 0.9);
   });
   const x0 = await page.evaluate(() => window.__crumble.game.projectile.x);
-  await realFrames(page, 30);
+  // Its own 10×, which the harness doesn't scale for: 30 s for 30 and 60 frames.
+  await realFrames(page, 30, { timeout: 30000 });
   assert.equal(await page.evaluate(() => window.__crumble.game.projectile.x), x0, 'the shell holds');
   await page.evaluate(() => {
     const c = window.__crumble;
@@ -846,7 +911,7 @@ test('ci-flakes AC-5: the portrait hold and the landscape resume hold with frame
     c.startTurn(1);
   });
   const t0 = await page.evaluate(() => window.__crumble.game.timer);
-  await realFrames(page, 60);
+  await realFrames(page, 60, { timeout: 30000 });
   assert.equal(await page.evaluate(() => window.__crumble.game.timer), t0, "the CPU's timer holds");
   await page.setViewportSize({ width: 844, height: 390 });
   await page.waitForFunction(() => window.__crumble.game.phase !== 'cpu', null, { timeout: 20000 });
@@ -881,7 +946,8 @@ test('crumble AC-13, ci-flakes AC-4: portrait shows the turn card and pauses a b
   await page.setViewportSize({ width: 844, height: 390 });
   assert.equal(await page.isVisible('[data-rotate]'), false);
   // The CPU fires once its plan is ready and its timer passes the delay: wait for that, not a time.
-  await page.waitForFunction(() => window.__crumble.game.phase !== 'cpu', null, { timeout: 10000 });
+  // It plans in 4 ms a frame on the real loop; the 10× test above waits on the same plan in 20 s.
+  await waitFor(page, () => window.__crumble.game.phase !== 'cpu', null, { what: "the CPU's shot after the resume", timeout: 20000 });
 
   await page.setViewportSize({ width: 640, height: 360 });
   await page.evaluate(() => {
@@ -890,7 +956,9 @@ test('crumble AC-13, ci-flakes AC-4: portrait shows the turn card and pauses a b
     c.game.attempt[1] = 0;
     c.startBattle(1);
   });
-  await page.waitForTimeout(200);
+  // The game's resize handler sets the view in the next frame, before its animation frames run.
+  await waitFor(page, () => innerWidth === 640 && innerHeight === 360, null, { what: 'the 640×360 viewport' });
+  await realFrames(page, 1);
   const boxes = await page.evaluate(() =>
     ['.shell-back', '[data-mute]', '[data-hud-top]', '[data-weapon="shell"]', '[data-weapon="auger"]'].map((s) => {
       const r = document.querySelector(s).getBoundingClientRect();
@@ -933,24 +1001,25 @@ test('crumble AC-13, ci-flakes AC-4: portrait shows the turn card and pauses a b
 
 test('crumble AC-15: a hidden page stops a shell in flight; a tap resumes', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => {
+  const xFired = await page.evaluate(() => {
     const c = window.__crumble;
     c.store.taught = true;
     c.startBattle(0);
     c.fire(0, 'shell', 1.2, 0.9);
+    return c.game.projectile.x;
   });
-  await page.waitForTimeout(150);
+  await waitFor(page, (x) => window.__crumble.game.projectile?.x !== x, xFired, { what: 'the shell flying' });
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { value: true, configurable: true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   const x0 = await page.evaluate(() => window.__crumble.game.projectile.x);
-  await page.waitForTimeout(400);
+  await realFrames(page, 30);
   assert.equal(await page.evaluate(() => window.__crumble.game.projectile.x), x0, 'nothing moves');
   assert.equal(await page.isVisible('[data-paused]'), true);
   await page.evaluate(() => Object.defineProperty(document, 'hidden', { value: false, configurable: true }));
-  await page.mouse.click(400, 200);
-  await page.waitForTimeout(200);
+  await seenAfter(page, () => page.mouse.click(400, 200));
+  await realFrames(page, 5);
   assert.equal(await page.isVisible('[data-paused]'), false);
   const x1 = await page.evaluate(() => window.__crumble.game.projectile?.x ?? Infinity);
   assert.notEqual(x1, x0, 'moving again');
@@ -960,14 +1029,27 @@ test('crumble AC-15: a hidden page stops a shell in flight; a tap resumes', asyn
 test('crumble AC-17: Crumble plays offline once it has been played, a shot and its explosion included', async () => {
   const { context, page } = await open();
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'the service worker being ready');
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__crumble);
-  await page.waitForLoadState('networkidle');
+  // The worker stores what it serves after responding, and fetches the page's list itself: wait for
+  // the cache to hold what the offline game needs, not for the page's network to go quiet.
+  const files = ['./', 'game.js', ...['yellow', 'orange', 'red', 'grey'].map((k) => `../shared/explosion/${k}.png`)];
+  await within(
+    page.evaluate(async (files) => {
+      for (;;) {
+        const found = await Promise.all(files.map((f) => caches.match(new URL(f, location.href).href)));
+        if (found.every(Boolean)) return;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    }, files),
+    `the cache holding ${files.join(', ')}`,
+    20000
+  );
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__crumble);
-  await page.click('[data-play]');
+  await press(page, '[data-play]');
   const r = await page.evaluate(async () => {
     const c = window.__crumble;
     c.manual = true;
@@ -1017,8 +1099,8 @@ test('crumble AC-18: the keyboard alone plays a turn', async () => {
 test('crumble AC-19: firing, an explosion and a tide rise each play their sound', async () => {
   const { context, page } = await open({ audio: true });
   const size = (n) => statSync(new URL(`../crumble/sounds/${n}.mp3`, import.meta.url)).size;
-  await page.waitForFunction(() => window.__decoded >= 14, null, { timeout: 5000 });
-  await page.click('[data-play]'); // the tap unlocks sound
+  await waitFor(page, () => window.__decoded >= 14, null, { what: "the game's 14 sounds decoded", timeout: 20000 });
+  await press(page, '[data-play]'); // the tap unlocks sound
   await page.evaluate(() => {
     const c = window.__crumble;
     c.manual = true;
@@ -1081,7 +1163,7 @@ test('crumble AC-20: each state shows only its own cards and HUD, and the weapon
   assert.deepEqual(await view(), { ...none, paused: true, hud: true, weapons: false }, 'paused');
   assert.equal((await page.textContent('[data-paused]')).trim(), 'Tap to resume');
   await page.evaluate(() => Object.defineProperty(document, 'hidden', { value: false, configurable: true }));
-  await page.mouse.click(400, 200);
+  await seenAfter(page, () => page.mouse.click(400, 200));
   for (const [mine, theirs, label] of [
     [80, 0, 'won'],
     [0, 80, 'lost'],
@@ -1229,18 +1311,31 @@ test('crumble AC-25: the shore is alive: gulls scatter from a blast, the sky sho
   assert.equal(r.text, true);
   // Wind streaks: with wind, many sky pixels turn lighter than the calm sky in the same place.
   const grab = (wind) =>
-    page.evaluate(async (wind) => {
+    within(page.evaluate(async (wind) => {
       const c = window.__crumble;
       c.game.wind = wind;
       c.game.crate = null;
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const cv = document.querySelector('#field');
       return Array.from(cv.getContext('2d').getImageData(0, Math.round(cv.height * 0.2), cv.width, Math.round(cv.height * 0.3)).data);
-    }, wind);
+    }, wind), 'two frames and the sky');
   const calm = await grab(0);
   const windy = await grab(150);
   let lighter = 0;
   for (let i = 0; i < calm.length; i += 4) if (windy[i] + windy[i + 1] + windy[i + 2] > calm[i] + calm[i + 1] + calm[i + 2] + 60) lighter++;
   assert.ok(lighter > 300, `streaks show the wind (${lighter} lighter pixels)`);
   await context.close();
+});
+
+test('slow-tests-crumble-googly AC-1: both files are clock-checked with no fixed waits, and Crumble uses the shared realFrames', () => {
+  const fixedWait = new RegExp('waitFor' + 'Timeout\\(');
+  for (const name of ['crumble', 'googly-faces']) {
+    const src = readFileSync(new URL(`./${name}.test.mjs`, import.meta.url), 'utf8');
+    const head = src.split('\n').slice(0, 10);
+    assert.ok(head.some((l) => /^\s*\/\/\s*clock-checked\b/.test(l)), `${name}: marked in its first 10 lines`);
+    assert.equal(fixedWait.test(src), false, `${name}: no fixed waits`);
+  }
+  const src = readFileSync(new URL('./crumble.test.mjs', import.meta.url), 'utf8');
+  assert.match(src, /^import \{[^}]*\brealFrames\b[^}]*\} from '\.\/clock\.mjs';$/m, 'realFrames comes from tests/clock.mjs');
+  assert.doesNotMatch(src, /(const|let|function)\s+realFrames\b/, 'and has no copy here');
 });
