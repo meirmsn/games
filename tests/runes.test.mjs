@@ -884,3 +884,17 @@ test('slow-tests-orbit-reef-runes AC-9: a tap steps the line even when the page 
   assert.deepEqual(await path(page), [0, 1]);
   await context.close();
 });
+
+// This slice's three files are marked, and the marked-file rule holds in each (the fast tier's
+// tests/clock-check.test.mjs checks the same rule for every marked file).
+test('slow-tests-orbit-reef-runes AC-15: the Orbit, Reef and Runes test files are clock-checked, with no unexplained fixed wait', async () => {
+  const { readFile } = await import('node:fs/promises');
+  for (const name of ['orbit', 'reef', 'runes']) {
+    const lines = (await readFile(new URL(`./${name}.test.mjs`, import.meta.url), 'utf8')).split('\n');
+    assert.ok(lines.slice(0, 10).some((l) => l.includes('// clock-checked')), `${name} is marked`);
+    lines.forEach((l, i) => {
+      if (!/waitForTimeout\(/.test(l) || /^\s*\/\//.test(l) || l.includes("'waitForTimeout(")) return;
+      assert.ok(/\/\/ safe: \w/.test(l) || /\/\/ safe: \w/.test(lines[i - 1] || ''), `${name}.test.mjs:${i + 1} waits a fixed time with no reason`);
+    });
+  }
+});
