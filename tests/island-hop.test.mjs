@@ -744,16 +744,22 @@ test('island-hop AC-6: a drag that starts in the phone\'s edge strips doesn\'t s
       ([type, id, x, y]) => document.getElementById('world').dispatchEvent(new PointerEvent(type, { pointerId: id, pointerType: 'touch', clientX: x, clientY: y, bubbles: true, isPrimary: true })),
       [type, id, x, y]
     );
-  // From the bottom strip (40 px), dragged up: nothing; from mid-screen, the same drag steers.
-  for (const [y0, steers] of [[844 - 10, false], [600, true]]) {
+  // From the bottom strip (40 px), the left-edge strip (20 px) and the top strip (24 px): nothing;
+  // from mid-screen, the same drag steers.
+  for (const [x0, y0, dx, dy, steers] of [
+    [200, 844 - 10, 0, -60, false],
+    [8, 500, 60, 0, false],
+    [200, 10, 0, 60, false],
+    [200, 600, 0, -60, true],
+  ]) {
     await page.evaluate(() => __hop.start(0, { fly: false }));
-    await fire('pointerdown', 1, 200, y0);
-    await fire('pointermove', 1, 200, y0 - 60);
+    await fire('pointerdown', 1, x0, y0);
+    await fire('pointermove', 1, x0 + dx, y0 + dy);
     await page.evaluate(() => { __hop.manual = false; });
     await realFrames(page, 36);
     await page.evaluate(() => { __hop.manual = true; });
-    await fire('pointerup', 1, 200, y0 - 60);
-    assert.equal(await page.evaluate(() => __hop.state.started), steers, `a drag from y ${y0}`);
+    await fire('pointerup', 1, x0 + dx, y0 + dy);
+    assert.equal(await page.evaluate(() => __hop.state.started), steers, `a drag from ${x0},${y0}`);
   }
   await context.close();
 });
