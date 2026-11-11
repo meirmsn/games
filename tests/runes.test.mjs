@@ -1,3 +1,4 @@
+// clock-checked (specs/slow-tests-orbit-reef-runes.md)
 // Tests for Runes. Run: scripts/check-slow.sh.
 // The game exposes window.__runes (the state, the rules, and the actions the player can take), so
 // these tests can set up a board and check what the rules and the input do with it. The level
@@ -5,7 +6,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch, realFrames, waitFor, within } from './clock.mjs';
+import { registerWorker, cachedAll } from './offline.mjs';
 import { simulateInsets, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import * as R from '../runes/rules.js';
@@ -20,7 +22,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -68,19 +70,36 @@ async function drag(page, x, y, dx, dy, { id = 1, end = true, start = true } = {
 }
 const cellSize = (page) => page.evaluate(() => window.__runes.box.cell);
 const center = (page, c) => page.evaluate((c) => window.__runes.center(c), c);
+// A tap: pointerdown and pointerup in one call, so nothing runs between them. The game counts a
+// pointer as a tap only if it lifts within 300 ms, and two round trips to a busy page can take longer.
 async function tapCell(page, c) {
-  const p = await center(page, c);
-  await pointer(page, 'pointerdown', 1, p.x, p.y);
-  await pointer(page, 'pointerup', 1, p.x, p.y);
+  await page.evaluate((c) => {
+    const p = window.__runes.center(c);
+    const canvas = document.querySelector('#pool');
+    for (const type of ['pointerdown', 'pointerup']) {
+      canvas.dispatchEvent(new PointerEvent(type, { pointerId: 1, clientX: p.x, clientY: p.y, bubbles: true, isPrimary: true, pointerType: 'touch' }));
+    }
+  }, c);
 }
+// Waits, bounded, until the element's own animations (a card's slide-in) have finished.
+const settled = (page, sel) =>
+  within(
+    page.evaluate((sel) => Promise.all(document.querySelector(sel).getAnimations({ subtree: true }).map((a) => a.finished)).then(() => true), sel),
+    `${sel}'s animations finish`
+  );
 
 // ---------------------------------------------------------------------------------------------
 
-test('runes AC-1: the pool is already moving before any input, with its buttons, and no errors', async () => {
+test('runes AC-1, slow-tests-orbit-reef-runes AC-10: the pool is already moving before any input, with its buttons, and no errors', async () => {
   const { context, page, errors } = await open();
-  await page.waitForTimeout(300);
+  // Only the pool may change the picture: no ghost light (it shows after 4 s idle on level 1).
+  await page.evaluate(() => (window.__runes.knobs.ghostDelay = Infinity));
+  await realFrames(page, 2);
   const a = await page.screenshot();
-  await page.waitForTimeout(300);
+  // 300 ms on the page's clock, then frames drawn after it, however slowly a busy machine runs them.
+  const t0 = await page.evaluate(() => performance.now());
+  await waitFor(page, (t0) => performance.now() >= t0 + 300, t0, { what: "300 ms on the page's clock" });
+  await realFrames(page, 2);
   const b = await page.screenshot();
   assert.notDeepEqual(a, b, 'two frames 300 ms apart differ');
   for (const sel of ['[data-restart]', '[data-hint]', '[data-levels]', '[data-guidance]']) {
@@ -165,7 +184,7 @@ test('runes AC-2: a relative drag steps the line, a drag back takes nothing back
   await context.close();
 });
 
-test('runes AC-3: taps step; a tap on a lit stone does nothing; Restart clears the line; there is no Undo button', async () => {
+test('runes AC-3, slow-tests-orbit-reef-runes AC-9: taps step; a tap on a lit stone does nothing; Restart clears the line; there is no Undo button', async () => {
   const { context, page } = await open();
   await tapCell(page, 1);
   await tapCell(page, 2);
@@ -298,7 +317,7 @@ test('runes AC-7: each state shows only its own panel, and the board takes input
   await context.close();
 });
 
-test('runes AC-8: with Guidance on (off by default), a line that can no longer finish dims the gate and marks stranded stones; Restart restores it', async () => {
+test('runes AC-8, slow-tests-orbit-reef-runes AC-11: with Guidance on (off by default), a line that can no longer finish dims the gate and marks stranded stones; Restart restores it', async () => {
   const { context, page } = await open({ hash: '2' });
   assert.equal(await page.evaluate(() => window.__runes.guidance()), false, 'Guidance starts off');
   assert.equal(await page.locator('[data-guidance]').getAttribute('aria-pressed'), 'false');
@@ -327,8 +346,9 @@ test('runes AC-8: with Guidance on (off by default), a line that can no longer f
   });
   assert.ok(found, 'level 2 has a line that strands a stone');
   for (const c of found.slice(1)) await page.evaluate((c) => window.__runes.stepTo(c), c);
-  // Guidance off: nothing tells you yet.
-  await page.waitForTimeout(300);
+  // Guidance off: nothing tells you yet. With it on, the check would run on the next frame and then in
+  // a task; wait for both, so a check that ran would have shown.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => setTimeout(done, 0))));
   assert.equal(await page.evaluate(() => window.__runes.game.dead), false, 'no live feedback without Guidance');
   assert.equal(await page.evaluate(() => window.__runes.game.stranded.length), 0);
   // Guidance on (and remembered): the gate dims and the stranded stones show.
@@ -561,7 +581,7 @@ for (const viewport of [
   });
 }
 
-test('runes AC-15: on level 1 a ghost light shows the first steps after a pause, again later, and stops once the line moves', async () => {
+test('runes AC-15, slow-tests-orbit-reef-runes AC-12: on level 1 a ghost light shows the first steps after a pause, again later, and stops once the line moves', async () => {
   const { context, page } = await open();
   await page.evaluate(() => {
     const r = window.__runes;
@@ -569,11 +589,14 @@ test('runes AC-15: on level 1 a ghost light shows the first steps after a pause,
     r.knobs.ghostRepeat = 800;
     r.game.lastInput = performance.now();
   });
-  await page.waitForFunction(() => window.__runes.game.ghost.shows >= 1, null, { timeout: 3000 });
-  await page.waitForFunction(() => window.__runes.game.ghost.shows >= 2, null, { timeout: 5000 });
+  await waitFor(page, () => window.__runes.game.ghost.shows >= 1, null, { what: 'the first ghost' });
+  await waitFor(page, () => window.__runes.game.ghost.shows >= 2, null, { what: 'the second ghost' });
   await page.keyboard.press('ArrowRight');
-  const n = await page.evaluate(() => window.__runes.game.ghost.shows);
-  await page.waitForTimeout(2600);
+  const { n, at } = await page.evaluate(() => ({ n: window.__runes.game.ghost.shows, at: performance.now() }));
+  // Past the repeat delay and a whole show (1.6 s), with a second to spare, on the page's clock; then
+  // frames drawn after it. A ghost still due would have shown by now.
+  await waitFor(page, (t) => performance.now() > t, at + 800 + 1600 + 1000, { what: 'the repeat delay and a show have passed' });
+  await realFrames(page, 30);
   assert.equal(await page.evaluate(() => window.__runes.game.ghost.shows), n, 'no more ghosts once the line moved');
   await context.close();
 });
@@ -611,13 +634,12 @@ test('runes AC-18: with localStorage throwing, the game plays and solves a level
   await context.close();
 });
 
-test('runes AC-19: Runes plays offline once it has been played', async () => {
+test('runes AC-19, slow-tests-orbit-reef-runes AC-4: Runes plays offline once it has been played', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await registerWorker(page);
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__runes);
-  await page.waitForLoadState('networkidle');
+  await cachedAll(page);
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__runes);
@@ -626,7 +648,7 @@ test('runes AC-19: Runes plays offline once it has been played', async () => {
   await context.close();
 });
 
-test('runes AC-20: a line that ends unsolved shows a loud panel below the board with why, and a tip; Try again restarts', async () => {
+test('runes AC-20, slow-tests-orbit-reef-runes AC-13: a line that ends unsolved shows a loud panel below the board with why, and a tip; Try again restarts', async () => {
   const { context, page } = await open({ hash: '2' });
   // Level 2: stepping onto the gate with stones still dark.
   const toGate = await page.evaluate(() => {
@@ -671,7 +693,8 @@ test('runes AC-20: a line that ends unsolved shows a loud panel below the board 
   assert.match(await panel.textContent(), /didn’t make it/);
   assert.match(await panel.textContent(), /still dark/);
   assert.match(await page.locator('[data-result-tip]').textContent(), /Light every stone before you step on the gate/);
-  // The panel sits below the board, never over it.
+  // The panel sits below the board, never over it: measured once its slide-in has finished.
+  await settled(page, '[data-result]');
   const m = await page.evaluate(() => {
     const r = window.__runes;
     return {
@@ -770,7 +793,7 @@ test('runes AC-22: every button at the bottom says what it does on hover', async
   await context.close();
 });
 
-test('runes AC-23: the level select names each chapter with its difficulty, locks what can’t be opened yet, ticks solved levels, and sits on the board', async () => {
+test('runes AC-23, slow-tests-orbit-reef-runes AC-13: the level select names each chapter with its difficulty, locks what can’t be opened yet, ticks solved levels, and sits on the board', async () => {
   const { context, page } = await open({ init: () => localStorage.setItem('runes-solved', '[0,1]') });
   await page.click('[data-levels]');
   const names = await page.locator('.ch-name').allTextContents();
@@ -778,7 +801,7 @@ test('runes AC-23: the level select names each chapter with its difficulty, lock
   assert.equal(await page.locator('.lv.is-locked').count(), 11, 'levels 4 to 14 are locked');
   assert.equal(await page.locator('.lv[data-level="4"] svg').count(), 1, 'a locked level shows a lock');
   assert.equal(await page.locator('.lv.is-solved').count(), 2);
-  await page.waitForTimeout(400); // the card's slide-in
+  await settled(page, '[data-screen="levels"]'); // the card's slide-in
   const m = await page.evaluate(() => {
     const r = window.__runes;
     const card = document.querySelector('[data-screen="levels"]').getBoundingClientRect();
@@ -822,19 +845,18 @@ test('runes AC-25: in Runes, the back button always asks, even before any move, 
   await context.close();
 });
 
-test('runes AC-26: a refresh or closing the tab warns only while there is an unsaved line', async () => {
+test('runes AC-26, slow-tests-orbit-reef-runes AC-14: a refresh or closing the tab warns only while there is an unsaved line', async () => {
   const { context, page } = await open();
+  // Whichever comes first: the warning, or the tab closing.
   const warned = async () => {
-    let type = '';
-    const onDialog = (d) => {
-      type = d.type();
-      d.dismiss().catch(() => {});
-    };
-    page.on('dialog', onDialog);
-    await page.close({ runBeforeUnload: true }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 400));
-    page.off('dialog', onDialog);
-    return type;
+    const dialog = page.waitForEvent('dialog').catch(() => null);
+    const closed = page.waitForEvent('close').then(() => null, () => null);
+    page.close({ runBeforeUnload: true }).catch(() => {});
+    const d = await within(Promise.race([dialog, closed]), 'a beforeunload warning or the tab closing');
+    if (!d) return '';
+    await d.dismiss();
+    await page.evaluate(() => true); // still answers: dismissing it stays
+    return d.type();
   };
   await page.keyboard.press('ArrowRight'); // a line, and the user's gesture the browser asks for
   assert.equal(await warned(), 'beforeunload', 'an unsaved line warns');
@@ -843,4 +865,37 @@ test('runes AC-26: a refresh or closing the tab warns only while there is an uns
   assert.equal(await warned(), '', 'no line, no warning');
   assert.equal(page.isClosed(), true, 'and the tab closes');
   await context.close();
+});
+
+// The game counts a pointer as a tap only if it lifts within 300 ms. A busy page between the test's
+// pointerdown and pointerup (here a 400 ms task queued from each pointerdown) must not turn a tap into
+// nothing: tapCell sends both in one call.
+test('slow-tests-orbit-reef-runes AC-9: a tap steps the line even when the page is busy right after its pointerdown', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() =>
+    document.querySelector('#pool').addEventListener('pointerdown', () =>
+      setTimeout(() => {
+        const end = performance.now() + 400;
+        while (performance.now() < end);
+      }, 0)
+    )
+  );
+  await tapCell(page, 1);
+  assert.deepEqual(await path(page), [0, 1]);
+  await context.close();
+});
+
+// This slice's three files are marked, and the marked-file rule holds in each (the fast tier's
+// tests/clock-check.test.mjs checks the same rule for every marked file).
+test('slow-tests-orbit-reef-runes AC-15: the Orbit, Reef and Runes test files are clock-checked, with no unexplained fixed wait', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const fixed = new RegExp('waitFor' + 'Timeout\\('); // spelled apart, so this line isn't one
+  for (const name of ['orbit', 'reef', 'runes']) {
+    const lines = (await readFile(new URL(`./${name}.test.mjs`, import.meta.url), 'utf8')).split('\n');
+    assert.ok(lines.slice(0, 10).some((l) => l.includes('// clock-checked')), `${name} is marked`);
+    lines.forEach((l, i) => {
+      if (!fixed.test(l) || /^\s*\/\//.test(l)) return;
+      assert.ok(/\/\/ safe: \w/.test(l) || /\/\/ safe: \w/.test(lines[i - 1] || ''), `${name}.test.mjs:${i + 1} waits a fixed time with no reason`);
+    });
+  }
 });

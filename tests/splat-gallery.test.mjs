@@ -1,11 +1,14 @@
 // End-to-end tests for Splat Gallery (specs/splat-gallery.md). Run: scripts/check-slow.sh.
 // The game exposes window.__gallery: its state, step() to advance the simulation without drawing,
 // makeTarget() to place a target, and the aim. A test that sets `manual` owns the clock: the page's
-// frames only draw.
+// frames only draw. Waits are on the input arriving, the game's state or the page's frames, never a
+// fixed time (specs/slow-tests-splat-gallery.md).
+// clock-checked
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch, realFrames, waitFor, within, scaled } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -15,7 +18,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -26,16 +29,103 @@ after(async () => {
 const PORTRAIT = { width: 390, height: 844 };
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function open(opts = {}) {
+// The sound files the page decodes: the game's own, as splat-gallery/game.js names them, and the
+// shell's back sound. A loop or a sound starts only once its file is decoded (shared/sound.js).
+const SOUND_FILES =
+  readFileSync(new URL('../splat-gallery/game.js', import.meta.url), 'utf8')
+    .match(/sounds:\s*\{([^}]*)\}/)[1]
+    .match(/'sounds\/[^']+'/g).length + 1;
+
+// Records the page's last pointer move. A capture listener on window runs before the canvas's own,
+// so it only records; a test checks later (waitFor's poll, a later evaluate), once the game has
+// handled the move too.
+const MOVES = () => {
+  window.__lastMove = null;
+  addEventListener('pointermove', (e) => (window.__lastMove = [e.clientX, e.clientY]), true);
+};
+
+// The guard's page (slow-tests-splat-gallery AC-9): every animation frame takes at least 150 ms, as
+// on a crowded runner. Its own callback is registered before any page script and re-registered
+// first thing each frame, so it runs first; it spins once a frame, not once a callback.
+const STARVE = () => {
+  const raf = window.requestAnimationFrame.bind(window);
+  let spunAt = -1;
+  const spin = (t) => {
+    if (t === spunAt) return;
+    spunAt = t;
+    const end = performance.now() + 150;
+    while (performance.now() < end);
+  };
+  const first = (t) => {
+    raf(first);
+    spin(t);
+  };
+  raf(first);
+};
+
+async function open({ starve = false, ...opts } = {}) {
   const context = await browser.newContext({ viewport: PORTRAIT, ...opts });
   await context.addInitScript(FAKE_AUDIO);
+  await context.addInitScript(MOVES);
+  if (starve) await context.addInitScript(STARVE);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto(BASE + 'splat-gallery/');
   await page.waitForFunction(() => window.__gallery);
+  await waitFor(page, (n) => window.__decoded >= n, SOUND_FILES, { what: `all ${SOUND_FILES} sound files decoded` });
   return { context, page, errors };
+}
+
+// A pointer move reaches the page with its next frame (Chromium holds moves until then), and a busy
+// runner's frames are few and long: so a test waits until the last move it sent has arrived. Matched
+// within 0.5 px (touch points are carried as floats); cleared before each gesture, so a move from an
+// earlier one can't count.
+const clearMoves = (page) => page.evaluate(() => (window.__lastMove = null));
+const moved = (page, x, y) =>
+  waitFor(
+    page,
+    ([x, y]) => {
+      const m = window.__lastMove;
+      return !!m && Math.abs(m[0] - x) <= 0.5 && Math.abs(m[1] - y) <= 0.5;
+    },
+    [x, y],
+    { what: `the pointer move to (${x}, ${y}) reached the page` }
+  );
+
+// Like waitFor, and returns what `fn` returned once it was truthy: read in the frame it became true.
+async function when(page, fn, arg, what, timeout = 10000) {
+  const ms = scaled(timeout);
+  try {
+    return await (await page.waitForFunction(fn, arg, { timeout: ms, polling: 'raf' })).jsonValue();
+  } catch (e) {
+    if (/Timeout/i.test(e.message)) throw new Error(`when: ${what}: not true after ${ms} ms`);
+    throw e;
+  }
+}
+
+// Click Start and read the run as the click left it, in a listener that runs right after the game's
+// own (added later, on the same button), before any frame can move the run on.
+async function clickStart(page) {
+  await page.evaluate(() => {
+    window.__atStart = null;
+    document.querySelector('[data-play]').addEventListener(
+      'click',
+      () => {
+        const g = window.__gallery;
+        const hb = g.hudBounds();
+        window.__atStart = {
+          mode: g.game.mode, round: g.game.round, time: g.game.time, quota: g.game.cfg.quota, hopper: g.game.hopper, n: g.L.n,
+          slingOnCounter: hb.sling.y > hb.counterTop,
+          noGun: !('muzzle' in g) && !('cross' in g) && !('crosshair' in g),
+        };
+      },
+      { once: true }
+    );
+  });
+  await page.click('[data-play]');
+  return when(page, () => window.__atStart, null, 'the Start button handled the click');
 }
 
 // Start a run at `round` with an empty booth that the test fills: nothing spawns, no frenzy comes,
@@ -103,29 +193,32 @@ const steps = (page, seconds) =>
   }, seconds);
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
 
-test('splat-gallery AC-1: the booth moves behind the start card; Start begins round 1 with the slingshot, no gun and no crosshair', async () => {
-  const { context, page, errors } = await open();
+// The checks the guard (slow-tests-splat-gallery AC-9) also runs on a starved page: each takes the
+// options open() takes.
+async function startCardCheck(o = {}) {
+  const { context, page, errors } = await open(o);
   assert.ok(await page.locator('[data-screen="start"]').isVisible());
   const before = await page.evaluate(() => window.__gallery.targets().map((t) => [t.id, t.x]));
   assert.ok(before.length > 0, 'targets are in the lanes');
-  await page.waitForTimeout(1000);
-  const after = await page.evaluate(() => Object.fromEntries(window.__gallery.targets().map((t) => [t.id, t.x])));
-  assert.ok(before.some(([id, x]) => after[id] !== undefined && Math.abs(after[id] - x) > 10), 'a target moved in a second');
-  await page.click('[data-play]');
-  const s = await page.evaluate(() => {
-    const g = window.__gallery;
-    const hb = g.hudBounds();
-    return {
-      round: g.game.round, time: g.game.time, quota: g.game.cfg.quota, hopper: g.game.hopper, n: g.L.n,
-      slingOnCounter: hb.sling.y > hb.counterTop,
-      noGun: !('muzzle' in g) && !('cross' in g) && !('crosshair' in g),
-    };
-  });
+  // Movers advance only as frames run, at most 0.05 s of game time a frame.
+  await waitFor(
+    page,
+    (before) => {
+      const now = Object.fromEntries(window.__gallery.targets().map((t) => [t.id, t.x]));
+      return before.some(([id, x]) => now[id] !== undefined && Math.abs(now[id] - x) > 10);
+    },
+    before,
+    { what: 'a target moved more than 10 units behind the start card' }
+  );
+  const { mode, ...s } = await clickStart(page);
+  assert.equal(mode, 'intro');
   assert.deepEqual(s, { round: 1, time: 30, quota: 7, hopper: 6, n: 5, slingOnCounter: true, noGun: true });
   assert.ok(await page.locator('[data-screen="start"]').isHidden());
   assert.deepEqual(errors, []);
   await context.close();
-});
+}
+
+test('splat-gallery AC-1: the booth moves behind the start card; Start begins round 1 with the slingshot, no gun and no crosshair [slow-tests-splat-gallery AC-5]', () => startCardCheck());
 
 test('splat-gallery AC-2: a pull lands the ball by a separable, linear rule at any height; the pouch follows the pull', async () => {
   const { context, page } = await open();
@@ -172,17 +265,18 @@ test('splat-gallery AC-2: a pull lands the ball by a separable, linear rule at a
   await context.close();
 });
 
-test('splat-gallery AC-3: on touch, a pull from the counter stretches the slingshot and letting go fires; a short pull or a touch on the lanes does nothing', async () => {
-  const { context, page } = await open({ hasTouch: true });
+async function touchPullCheck(o = {}) {
+  const { context, page } = await open({ hasTouch: true, ...o });
   await ready(page);
   const cdp = await context.newCDPSession(page);
   const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
   const pad = await page.evaluate(() => window.__gallery.hudBounds().counterTop + 20);
   const k = await page.evaluate(() => window.__gallery.stage().k);
   // Pull 30 px left and 60 px down from where the finger lands, then let go.
+  await clearMoves(page);
   await touch('touchStart', [{ x: 200, y: pad, id: 1 }]);
   for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x: 200 - i * 5, y: pad + i * 10, id: 1 }]);
-  await page.waitForTimeout(50); // the last move arrives with the next frame
+  await moved(page, 170, pad + 60);
   const held = await page.evaluate(() => ({ px: window.__gallery.aim.px, py: window.__gallery.aim.py, active: window.__gallery.aim.active, balls: window.__gallery.balls().length }));
   assert.ok(near(held.px, -30 / k, 0.01) && near(held.py, 60 / k, 0.01), `the pull follows the finger: ${JSON.stringify(held)}`);
   assert.deepEqual([held.active, held.balls], [true, 0], 'nothing flies while held');
@@ -193,23 +287,31 @@ test('splat-gallery AC-3: on touch, a pull from the counter stretches the slings
   assert.ok(near(b[0].x1, target.x, 0.01) && near(b[0].y1, target.y, 0.01));
   // A short pull fires nothing.
   await page.evaluate(() => (window.__gallery.game.lastFire = -1));
+  await clearMoves(page);
   await touch('touchStart', [{ x: 200, y: pad, id: 2 }]);
   await touch('touchMove', [{ x: 203, y: pad + 4, id: 2 }]);
+  await moved(page, 203, pad + 4);
   await touch('touchEnd', []);
   assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'a short pull is no shot');
   // A pull starting on the lanes does nothing.
+  await clearMoves(page);
   await touch('touchStart', [{ x: 200, y: 300, id: 3 }]);
   await touch('touchMove', [{ x: 160, y: 400, id: 3 }]);
+  await moved(page, 160, 400);
   assert.equal(await page.evaluate(() => window.__gallery.aim.active), false);
   await touch('touchEnd', []);
   assert.equal(await page.evaluate(() => window.__gallery.balls().length), 1, 'the lanes are not for touching');
   await context.close();
-});
+}
+
+test('splat-gallery AC-3: on touch, a pull from the counter stretches the slingshot and letting go fires; a short pull or a touch on the lanes does nothing [slow-tests-splat-gallery AC-2]', () => touchPullCheck());
 
 // An iPhone's safe-area insets, simulated over the DevTools protocol before the page lays out.
-async function openInset(viewport, insets) {
+async function openInset(viewport, insets, { starve = false } = {}) {
   const context = await browser.newContext({ viewport, hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
+  await context.addInitScript(MOVES);
+  if (starve) await context.addInitScript(STARVE);
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { left: 0, right: 0, ...insets } });
@@ -218,13 +320,13 @@ async function openInset(viewport, insets) {
   return { context, page, cdp };
 }
 
-test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch starting in the bottom or left strip starts no pull; a pull from the safe counter still reaches the full far pull', async () => {
+async function insetPullCheck(o = {}) {
   for (const [viewport, insets] of [
     [{ width: 390, height: 844 }, { top: 47, bottom: 34 }],
     [{ width: 430, height: 932 }, { top: 59, bottom: 34 }],
     [{ width: 844, height: 390 }, { top: 0, bottom: 21, left: 47, right: 47 }],
   ]) {
-    const { context, page, cdp } = await openInset(viewport, insets);
+    const { context, page, cdp } = await openInset(viewport, insets, o);
     await ready(page);
     const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points });
     const at = () => page.evaluate(() => ({ active: window.__gallery.aim.active, py: window.__gallery.aim.py, balls: window.__gallery.balls().length }));
@@ -238,10 +340,11 @@ test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch st
     assert.ok(stripTop - b.counterTop >= base - 1, `${label}: the counter's whole face shows above the strip`);
     // A touch on the counter's foot, in the bottom strip, pulls nothing and fires nothing.
     for (const [x, y] of [[viewport.width / 2, stripTop + 12], [viewport.width / 2, viewport.height - insets.bottom - 4], [(insets.left || 0) + 10, (b.counterTop + stripTop) / 2]]) {
+      await clearMoves(page);
       await touch('touchStart', [{ x, y, id: 1 }]);
       for (let i = 1; i <= 6; i++) await touch('touchMove', [{ x, y: Math.min(viewport.height - 1, y + i * 3), id: 1 }]);
       await touch('touchMove', [{ x: x + 40, y: y - 80, id: 1 }]);
-      await page.waitForTimeout(30);
+      await moved(page, x + 40, y - 80);
       const held = await at();
       await touch('touchEnd', []);
       assert.equal(held.active, false, `${label}: a touch starting at (${x}, ${y}) starts no pull`);
@@ -254,16 +357,19 @@ test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch st
     const reach = b.range.y * b.k;
     const y0 = b.counterTop + 6;
     assert.ok(y0 + reach <= viewport.height - 1, `${label}: the full pull fits below the counter's top`);
+    await clearMoves(page);
     await touch('touchStart', [{ x: b.sling.x, y: y0, id: 2 }]);
     for (let i = 1; i <= 10; i++) await touch('touchMove', [{ x: b.sling.x, y: y0 + (reach * i) / 10, id: 2 }]);
-    await page.waitForTimeout(50);
+    await moved(page, b.sling.x, y0 + reach);
     const full = await at();
     assert.ok(full.active && near(full.py, b.range.y, 0.05), `${label}: the pull is the full far pull (${JSON.stringify(full)})`);
     await touch('touchEnd', []);
     assert.equal((await at()).balls, 1, `${label}: letting go fires`);
     await context.close();
   }
-});
+}
+
+test('edge-gestures AC-3: with iPhone insets, portrait and landscape, a touch starting in the bottom or left strip starts no pull; a pull from the safe counter still reaches the full far pull [slow-tests-splat-gallery AC-2]', () => insetPullCheck());
 
 test('edge-gestures AC-3: in Safari (no bottom inset) the counter keeps its height', async () => {
   for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
@@ -276,14 +382,15 @@ test('edge-gestures AC-3: in Safari (no bottom inset) the counter keeps its heig
   }
 });
 
-test('splat-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go', async () => {
-  const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
+async function mousePullCheck(o = {}) {
+  const { context, page } = await open({ viewport: { width: 1024, height: 700 }, ...o });
   await ready(page);
   const k = await page.evaluate(() => window.__gallery.stage().k);
+  await clearMoves(page);
   await page.mouse.move(500, 300);
   await page.mouse.down();
   await page.mouse.move(530, 340, { steps: 5 });
-  await page.waitForTimeout(50);
+  await moved(page, 530, 340);
   const held = await page.evaluate(() => ({ px: window.__gallery.aim.px, py: window.__gallery.aim.py }));
   assert.ok(near(held.px, 30 / k, 0.01) && near(held.py, 40 / k, 0.01), JSON.stringify(held));
   await page.mouse.up();
@@ -308,7 +415,9 @@ test('splat-gallery AC-4: the mouse pulls and releases the slingshot; the arrow 
   assert.equal(r.shots, 2, 'Space fires, twice with the same pull');
   assert.deepEqual([r.kx, r.ky], [kb.kx, kb.ky], 'the pull stayed');
   await context.close();
-});
+}
+
+test('splat-gallery AC-4: the mouse pulls and releases the slingshot; the arrow keys set a pull that stays, and Space lets go [slow-tests-splat-gallery AC-2]', () => mousePullCheck());
 
 test('splat-gallery AC-5: the ball flies 0.18 s just above the counter up to 0.45 s at the top, and is judged when it lands', async () => {
   const { context, page } = await open();
@@ -611,36 +720,49 @@ test('splat-gallery AC-13: rounds bring in their elements as in the table', asyn
   await context.close();
 });
 
-test('splat-gallery AC-14: the layout follows the screen; turning mid-run freezes play under a veil; turning back resumes; Restart starts over in the new layout', async () => {
-  const { context, page } = await open({ viewport: LANDSCAPE });
+// The resize event arrives with a frame and the game holds a turn for 0.4 s of real time before the
+// veil (splat-gallery/game.js onResize); the count-in after it runs on frames. So each step waits for
+// the state it checks, never a time.
+const turnedTo = (page, turned, what) => waitFor(page, (t) => window.__gallery.game.turned === t, turned, { what });
+
+async function turningCheck(o = {}) {
+  const { context, page } = await open({ viewport: LANDSCAPE, ...o });
   assert.deepEqual(await page.evaluate(() => [window.__gallery.stage().orient, window.__gallery.L.n]), ['landscape', 3]);
   // On the start card, the booth just lays itself out again.
   await page.setViewportSize(PORTRAIT);
-  await page.waitForTimeout(100);
+  await waitFor(page, () => window.__gallery.stage().orient === 'portrait', null, { what: 'the start card laid out for portrait' });
   assert.deepEqual(await page.evaluate(() => [window.__gallery.stage().orient, window.__gallery.L.n]), ['portrait', 5]);
   assert.ok(await page.locator('[data-screen="turned"]').isHidden());
   await page.click('[data-play]');
   await page.evaluate(() => (window.__gallery.game.assist = 0.42));
-  await page.waitForTimeout(1400);
+  // Mid-run means in play: past the round's 1.2 s intro.
+  await waitFor(page, () => window.__gallery.game.mode === 'play', null, { what: 'the round in play after its intro' });
   // Turned mid-run: the veil, play frozen.
   await page.setViewportSize(LANDSCAPE);
-  await page.waitForTimeout(600);
+  await turnedTo(page, true, 'the veil after turning to landscape');
   assert.ok(await page.locator('[data-screen="turned"]').isVisible());
   assert.equal(await page.locator('[data-turned-text]').textContent(), 'Restart in landscape?');
   const t0 = await page.evaluate(() => window.__gallery.game.T);
-  await page.waitForTimeout(400);
-  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'frozen under the veil');
-  // Turned back: play goes on after the count-in, in the same 5-lane run.
+  await realFrames(page, 20);
+  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'frozen under the veil, for 20 frames');
+  // Turned back: play goes on after the count-in, in the same 5-lane run. Read in the frame the veil goes.
   await page.setViewportSize(PORTRAIT);
-  await page.waitForTimeout(150);
-  assert.ok(await page.locator('[data-screen="turned"]').isHidden());
-  assert.ok(await page.evaluate(() => window.__gallery.game.resumeT > 0));
-  await page.waitForTimeout(1300);
-  assert.ok((await page.evaluate(() => window.__gallery.game.T)) > t0, 'play goes on');
+  const back = await when(
+    page,
+    () => {
+      const g = window.__gallery;
+      return !g.game.turned && { veil: g.ui().turned, resumeT: g.game.resumeT };
+    },
+    null,
+    'the veil gone after turning back'
+  );
+  assert.equal(back.veil, false, 'the veil is hidden');
+  assert.ok(back.resumeT > 0, `the count-in runs: ${back.resumeT}`);
+  await waitFor(page, (t0) => window.__gallery.game.T > t0, t0, { what: 'play going on after the count-in' });
   assert.equal(await page.evaluate(() => window.__gallery.L.n), 5);
   // Turned again, and Restart: a new run in landscape, the assist as it was.
   await page.setViewportSize(LANDSCAPE);
-  await page.waitForTimeout(600);
+  await turnedTo(page, true, 'the veil after turning to landscape again');
   await page.click('[data-restart]');
   const r = await page.evaluate(() => ({ n: window.__gallery.L.n, orient: window.__gallery.stage().orient, round: window.__gallery.game.round, score: window.__gallery.game.score, assist: window.__gallery.game.assist }));
   assert.deepEqual(r, { n: 3, orient: 'landscape', round: 1, score: 0, assist: 0.3 });
@@ -649,7 +771,9 @@ test('splat-gallery AC-14: the layout follows the screen; turning mid-run freeze
   const best = await page.evaluate(() => Object.keys(window.__gallery.memory.best).sort());
   assert.deepEqual(best, ['landscape', 'portrait']);
   await context.close();
-});
+}
+
+test('splat-gallery AC-14: the layout follows the screen; turning mid-run freezes play under a veil; turning back resumes; Restart starts over in the new layout [slow-tests-splat-gallery AC-3]', () => turningCheck());
 
 const hide = (page) =>
   page.evaluate(() => {
@@ -659,27 +783,45 @@ const hide = (page) =>
     document.dispatchEvent(new Event('visibilitychange'));
   });
 
-test('splat-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in', async () => {
-  const { context, page } = await open({ hasTouch: true });
+async function pauseCheck(o = {}) {
+  const { context, page } = await open({ hasTouch: true, ...o });
   await hide(page);
   assert.ok(await page.locator('[data-screen="pause"]').isHidden(), 'no pause card on the start card');
   await page.click('[data-play]');
-  await page.waitForTimeout(1500);
+  await waitFor(page, () => window.__gallery.game.mode === 'play', null, { what: 'the round in play after its intro' });
   await hide(page);
   assert.ok(await page.locator('[data-screen="pause"]').isVisible());
   const t0 = await page.evaluate(() => window.__gallery.game.T);
-  await page.waitForTimeout(300);
-  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'nothing moves while paused');
+  await realFrames(page, 20);
+  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'nothing moves while paused, for 20 frames');
   const hopper = (await state(page)).hopper;
+  // From here until play goes on, every frame's game time, count-in and pause. The recorder stops
+  // once the time moves, or after 600 frames.
+  await page.evaluate((t0) => {
+    const g = window.__gallery.game;
+    const rec = (window.__resumed = { frames: [], done: false });
+    const tick = () => {
+      rec.frames.push({ T: g.T, resumeT: g.resumeT, paused: g.paused });
+      if (g.T === t0 && rec.frames.length < 600) requestAnimationFrame(tick);
+      else rec.done = true;
+    };
+    requestAnimationFrame(tick);
+  }, t0);
   await page.locator('[data-screen="pause"]').tap();
-  assert.ok(await page.locator('[data-screen="pause"]').isHidden());
+  // The click a tap makes can arrive after tap() returns.
+  await waitFor(page, () => !window.__gallery.ui().pause, null, { what: 'the pause card hidden by the resuming tap' });
   assert.equal((await state(page)).hopper, hopper, 'the resuming tap does not fire');
-  await page.waitForTimeout(500);
-  assert.equal(await page.evaluate(() => window.__gallery.game.T), t0, 'frozen through the count-in');
-  await page.waitForTimeout(800);
-  assert.ok((await page.evaluate(() => window.__gallery.game.T)) > t0, 'and then it goes on');
+  await waitFor(page, () => window.__resumed.done, null, { what: 'play going on after the count-in', timeout: 60000 });
+  const frames = await page.evaluate(() => window.__resumed.frames);
+  const countIn = frames.flatMap((f, i) => (!f.paused && f.resumeT > 0 ? [i] : []));
+  assert.ok(countIn.length > 0, 'the count-in ran on at least one frame');
+  assert.deepEqual(countIn.filter((i) => frames[i].T !== t0), [], 'frozen on every frame of the count-in');
+  const moves = frames.findIndex((f) => f.T !== t0);
+  assert.ok(moves > countIn.at(-1), `and then it goes on (the time moved on frame ${moves} of ${frames.length})`);
   await context.close();
-});
+}
+
+test('splat-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in [slow-tests-splat-gallery AC-4]', () => pauseCheck());
 
 test('splat-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in round 6', async () => {
   const { context, page } = await open();
@@ -730,13 +872,14 @@ test('splat-gallery AC-17: the best score is kept across reloads', async () => {
   await context.close();
 });
 
-test('splat-gallery AC-18: each state shows only its own card, banner and HUD', async () => {
-  const { context, page } = await open();
+async function statesCheck(o = {}) {
+  const { context, page } = await open(o);
   const ui = () => page.evaluate(() => window.__gallery.ui());
   const row = (u) => [u.start, u.over, u.pause, u.turned, u.banner, u.hud, u.pips, u.timer];
   assert.deepEqual(row(await ui()), [true, false, false, false, null, false, 'hidden', 'hidden'], 'start');
-  await page.click('[data-play]');
+  // The test owns the clock from before Start, so no real frame runs the intro on.
   await page.evaluate(() => (window.__gallery.manual = true));
+  await page.click('[data-play]');
   let u = await ui();
   assert.deepEqual(row(u), [false, false, false, false, 'Round 1', true, 'shown', 'running'], 'round intro');
   assert.equal(u.bannerSub, 'Warm-up');
@@ -786,15 +929,16 @@ test('splat-gallery AC-18: each state shows only its own card, banner and HUD', 
   assert.deepEqual(row(await ui()), [false, true, false, false, null, true, 'shown', 'running'], 'over');
   await context.close();
   // Turned: only the veil.
-  const L = await open({ viewport: PORTRAIT });
+  const L = await open({ viewport: PORTRAIT, ...o });
   await L.page.click('[data-play]');
-  await L.page.waitForTimeout(300);
   await L.page.setViewportSize(LANDSCAPE);
-  await L.page.waitForTimeout(600);
+  await waitFor(L.page, () => window.__gallery.ui().turned, null, { what: 'the veil after turning mid-run' });
   const v = await L.page.evaluate(() => window.__gallery.ui());
   assert.deepEqual([v.start, v.over, v.pause, v.turned, v.banner, v.hud, v.greyed], [false, false, false, true, null, true, true], 'turned: the HUD shown, greyed');
   await L.context.close();
-});
+}
+
+test('splat-gallery AC-18: each state shows only its own card, banner and HUD [slow-tests-splat-gallery AC-6]', () => statesCheck());
 
 test('splat-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, a round start, the quota, the frenzy target and the time running out have their sounds', async () => {
   const { context, page } = await open();
@@ -850,20 +994,19 @@ test('splat-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, 
   await context.close();
 });
 
-test('splat-gallery AC-21: the gallery plays offline once it has been played', async () => {
+test('splat-gallery AC-21: the gallery plays offline once it has been played [slow-tests-splat-gallery AC-5, slow-tests-splat-gallery AC-7]', async () => {
   const context = await browser.newContext({ viewport: PORTRAIT });
   const page = await context.newPage();
   await page.goto(BASE + 'splat-gallery/');
   await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'the service worker ready', 10000);
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__gallery);
   await page.waitForLoadState('networkidle');
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__gallery);
-  await page.click('[data-play]');
-  assert.equal(await page.evaluate(() => window.__gallery.game.mode), 'intro');
+  assert.equal((await clickStart(page)).mode, 'intro');
   await context.close();
 });
 
@@ -1560,14 +1703,20 @@ test('splat-gallery AC-34: no pink lights in a frenzy or on its target, which we
   await context.close();
 });
 
-test('splat-gallery AC-35: the slingshot answers only while the clock runs: once time is up it can’t be pulled or fired, and a pull held as time runs out is dropped', async () => {
-  const { context, page } = await open({ viewport: { width: 1024, height: 700 } });
-  await ready(page);
-  // A pull held as the time runs out is dropped, and letting go fires nothing.
+// Press at (500, 300) and drag to (530, 360), then wait until the page has that last move.
+async function drag(page) {
+  await clearMoves(page);
   await page.mouse.move(500, 300);
   await page.mouse.down();
   await page.mouse.move(530, 360, { steps: 5 });
-  await page.waitForTimeout(50);
+  await moved(page, 530, 360);
+}
+
+async function timeUpCheck(o = {}) {
+  const { context, page } = await open({ viewport: { width: 1024, height: 700 }, ...o });
+  await ready(page);
+  // A pull held as the time runs out is dropped, and letting go fires nothing.
+  await drag(page);
   assert.equal(await page.evaluate(() => window.__gallery.aim.active), true, 'pulled while playing');
   await page.evaluate(() => {
     const g = window.__gallery;
@@ -1577,15 +1726,13 @@ test('splat-gallery AC-35: the slingshot answers only while the clock runs: once
   const lost = await page.evaluate(() => ({ mode: window.__gallery.game.mode, active: window.__gallery.aim.active, live: window.__gallery.slingLive() }));
   assert.deepEqual(lost, { mode: 'lost', active: false, live: false }, 'time up: the pull is dropped');
   await page.mouse.move(540, 380, { steps: 3 });
+  await moved(page, 540, 380);
   await page.mouse.up();
   assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, 'letting go after time is up fires nothing');
   // A fresh pull after time is up, and on the over card, does nothing.
   for (const mode of ['lost', 'won', 'over', 'intro']) {
     await page.evaluate((m) => (window.__gallery.game.mode = m), mode);
-    await page.mouse.move(500, 300);
-    await page.mouse.down();
-    await page.mouse.move(530, 360, { steps: 5 });
-    await page.waitForTimeout(50);
+    await drag(page);
     const r = await page.evaluate(() => ({ active: window.__gallery.aim.active, px: window.__gallery.aim.px, py: window.__gallery.aim.py }));
     await page.mouse.up();
     assert.deepEqual(r, { active: false, px: 0, py: 0 }, `no pull in ${mode}`);
@@ -1602,20 +1749,19 @@ test('splat-gallery AC-35: the slingshot answers only while the clock runs: once
       G.turned = h === 'turned';
       G.resumeT = h === 'resumeT' ? 1 : 0;
     }, hold);
-    await page.mouse.move(500, 300);
-    await page.mouse.down();
-    await page.mouse.move(530, 360, { steps: 5 });
-    await page.waitForTimeout(50);
+    await drag(page);
     const r = await page.evaluate(() => ({ active: window.__gallery.aim.active, live: window.__gallery.slingLive() }));
     await page.mouse.up();
     assert.deepEqual(r, { active: false, live: false }, `no pull when ${hold}`);
     assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, `nothing fires when ${hold}`);
   }
   await context.close();
-});
+}
 
-test('splat-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy’s galop plays at least twice as loud as the waltz', async () => {
-  const { context, page } = await open();
+test('splat-gallery AC-35: the slingshot answers only while the clock runs: once time is up it can’t be pulled or fired, and a pull held as time runs out is dropped [slow-tests-splat-gallery AC-2]', () => timeUpCheck());
+
+async function musicCheck(o = {}) {
+  const { context, page } = await open(o);
   await ready(page);
   const r = await page.evaluate(() => {
     const g = window.__gallery;
@@ -1653,25 +1799,34 @@ test('splat-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy
     return { speed: g.musicSpeed(), mode: g.game.mode };
   });
   assert.deepEqual(next, { speed: 1, mode: 'play' });
-  // The shared sound's loops take the speed: a loop set faster starts (and plays) at that rate.
-  const rate = await page.evaluate(async () => {
+  // The shared sound's loops take the speed: a loop set faster starts (and plays) at that rate. It
+  // starts once its file is fetched and decoded, so the test waits for its own source: a looping one
+  // made after its loop() call (the waltz's sources, and its own 1.3, came before).
+  await page.evaluate(async () => {
     const { createSound } = await import('../shared/sound.js');
+    const from = { sources: window.__sources.length, played: window.__played.length };
     const s = createSound({ tune: 'sounds/chime.mp3' });
     const stop = s.loop('tune');
     stop.setRate(1.3);
-    await new Promise((res) => setTimeout(res, 600));
-    const startedAt = window.__played.filter((p) => p.rate !== 1).map((p) => p.rate);
+    window.__tune = { from, stop };
+  });
+  await waitFor(page, () => window.__sources.slice(window.__tune.from.sources).some((x) => x.loop), null, { what: 'the loop set to 1.3 started' });
+  const rate = await page.evaluate(() => {
+    const { from, stop } = window.__tune;
+    const src = window.__sources.slice(from.sources).find((x) => x.loop);
+    const startedAt = window.__played.slice(from.played).filter((p) => p.bytes === src.buffer.bytes).map((p) => p.rate);
     // And one already playing changes speed at once.
-    const src = window.__sources[window.__sources.length - 1];
     stop.setRate(1.45);
     const playing = src.playbackRate.value;
     stop();
     return { startedAt, playing };
   });
-  assert.ok(rate.startedAt.includes(1.3), `a loop set faster starts at that rate: ${rate.startedAt}`);
+  assert.deepEqual(rate.startedAt, [1.3], 'a loop set faster starts at that rate');
   assert.equal(rate.playing, 1.45, 'a playing loop changes speed');
   await context.close();
-});
+}
+
+test('splat-gallery AC-36: the waltz speeds up at 10, 5 and 3 s left; the frenzy’s galop plays at least twice as loud as the waltz [slow-tests-splat-gallery AC-8]', () => musicCheck());
 
 test('splat-gallery AC-37: targets cross faster from 10, 5 and 3 s left; a frenzy opens with a snare roll, and its galop carries drums', async () => {
   const { context, page } = await open();
@@ -1869,4 +2024,43 @@ test('splat-gallery AC-40: the game is named Splat Gallery on its page, its shar
   assert.equal(await tile.locator('img').getAttribute('src'), 'assets/tiles/splat-gallery.png');
   assert.doesNotMatch(await page.content(), /shooting/i, 'the landing page never says "shooting"');
   await context.close();
+});
+
+// A crowded runner runs few, long frames; Chromium's CPU throttle reproduces that only by chance
+// (FINDINGS F-41). So the guard runs the checks above on a page whose every frame takes at least
+// 150 ms (about 6 a second), which also delays its timers and input.
+const STARVED = [
+  ['the booth moves, and Start begins round 1', startCardCheck],
+  ['a touch pull from the counter', touchPullCheck],
+  ['with iPhone insets, a pull from the safe counter', insetPullCheck],
+  ['the mouse pulls and releases', mousePullCheck],
+  ['turning mid-run, and back', turningCheck],
+  ['hiding the page, and the count-in', pauseCheck],
+  ['each state shows only its own card', statesCheck],
+  ['the slingshot answers only while the clock runs', timeUpCheck],
+  ['the waltz speeds up; a loop starts at its rate', musicCheck],
+];
+
+test('slow-tests-splat-gallery AC-9: on a page whose every animation frame takes at least 150 ms, the frame-paced checks still pass', async (t) => {
+  const { context, page } = await open({ starve: true });
+  // Read when each callback runs, not its frame's time stamp, which can be earlier than that on a
+  // busy machine: each reading comes after the next frame's spin, so they are over 150 ms apart.
+  const gaps = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        const at = [];
+        const tick = () => (at.push(performance.now()), at.length > 6 ? done(at.slice(1).map((x, i) => x - at[i])) : requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+      })
+  );
+  await context.close();
+  assert.ok(Math.min(...gaps) >= 150, `the starved page's frames are at least 150 ms apart: ${gaps.map(Math.round)}`);
+  for (const [name, check] of STARVED) await t.test(name, () => check({ starve: true }));
+});
+
+test('slow-tests-splat-gallery AC-1: this file is marked clock-checked and keeps no unexplained fixed wait', () => {
+  const lines = readFileSync(new URL(import.meta.url), 'utf8').split('\n');
+  assert.ok(lines.slice(0, 10).some((l) => /^\s*\/\/\s*clock-checked\b/.test(l)), 'marked in its first 10 lines');
+  const unexplained = lines.filter((l, i) => /waitForTimeout\(/.test(l) && !/^\s*\/\//.test(l) && !/\/\/\s*safe:\s*\S/.test(l + (lines[i - 1] ?? '')));
+  assert.deepEqual(unexplained, []);
 });

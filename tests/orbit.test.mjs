@@ -1,10 +1,14 @@
+// clock-checked (specs/slow-tests-orbit-reef-runes.md)
 // End-to-end tests for Orbit. Run: scripts/check-slow.sh.
 // The game exposes window.__orbit: its state, and update(dt), which advances the game without
 // drawing, so a test can set up a situation and check what the rules do with it. Setting
-// manual = true stops the page's own frames from advancing it.
+// manual = true stops the page's own frames from advancing it. open() sets it before the first frame
+// (window.__orbitManual), so every test starts from the state its system starts in, however long the
+// page took to load; only a test that checks the page's own frames opens it { live: true }.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright';
+import { launch, waitFor, realFrames } from './clock.mjs';
+import { registerWorker, cachedAll } from './offline.mjs';
 import { serve } from './serve.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -16,7 +20,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -24,8 +28,9 @@ after(async () => {
   server?.close();
 });
 
-async function open({ hash = '', viewport = { width: 390, height: 844 }, init = [], hasTouch = true } = {}) {
+async function open({ hash = '', viewport = { width: 390, height: 844 }, init = [], hasTouch = true, live = false } = {}) {
   const context = await browser.newContext({ viewport, hasTouch });
+  if (!live) await context.addInitScript(() => (window.__orbitManual = true));
   for (const fn of init) await context.addInitScript(fn);
   const page = await context.newPage();
   const errors = [];
@@ -93,14 +98,21 @@ const pointer = (page, type, x, y, id = 1) =>
     [type, x, y, id]
   );
 
-test('orbit AC-1: System 1 is alive before any touch: planets turn, the probe circles, the ring is drawn', async () => {
-  const { context, page, errors } = await open();
+test('orbit AC-1, slow-tests-orbit-reef-runes AC-2: System 1 is alive before any touch: planets turn, the probe circles, the ring is drawn', async () => {
+  const { context, page, errors } = await open({ live: true });
   const s = await state(page);
   assert.deepEqual([s.sys, s.leg, s.mode], [0, 0, 'idle']);
   const a = await page.evaluate(() => window.__orbit.probeWorld());
-  await page.waitForTimeout(500);
-  const b = await page.evaluate(() => window.__orbit.probeWorld());
-  assert.ok(Math.hypot(a.x - b.x, a.y - b.y) > 5, 'the probe circles');
+  // On the page's own frames, however few a busy machine runs in a given time.
+  await waitFor(
+    page,
+    (a) => {
+      const b = window.__orbit.probeWorld();
+      return Math.hypot(a.x - b.x, a.y - b.y) > 5;
+    },
+    a,
+    { what: 'the probe circles more than 5 units on its own' }
+  );
   // the planets and the target ring are on the canvas
   const lit = await page.evaluate(() => {
     const o = window.__orbit;
@@ -683,16 +695,17 @@ test('orbit AC-15: the URL starts a system; anything else starts System 1; a new
   await context.close();
 });
 
-test('orbit AC-17: after one visit that plays only System 1, Orbit opens offline at #s3 with its planets, nebula and sounds', async () => {
+test('orbit AC-17, slow-tests-orbit-reef-runes AC-3, slow-tests-orbit-reef-runes AC-4: after one visit that plays only System 1, Orbit opens offline at #s3 with its planets, nebula and sounds', async () => {
   const { context, page } = await open({ init: [FAKE_AUDIO] });
-  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(() => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))]));
+  await registerWorker(page);
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__orbit && 'ready' in document.body.dataset);
-  await page.waitForLoadState('networkidle');
+  await cachedAll(page);
   await context.setOffline(true);
   await page.goto(BASE + 'orbit/#s3');
   await page.waitForFunction(() => window.__orbit && 'ready' in document.body.dataset);
+  // `ready` waits for the images; the sounds decode on their own.
+  await waitFor(page, () => window.__decoded >= 11, null, { what: 'every sound decoded offline' });
   const r = await page.evaluate(() => {
     const o = window.__orbit;
     const imgs = o.game.level.bodies.map((b) => o.images[`planet${b.img}`].naturalWidth);
@@ -901,6 +914,19 @@ test('ci-flakes AC-5: with the flag set before the first frame, real frames add 
   );
   const r = await page.evaluate(() => ({ manual: window.__orbit.manual, idle: window.__orbit.game.idleAge, hint: !document.querySelector('[data-hint]').hidden }));
   assert.deepEqual(r, { manual: true, idle: 0, hint: false });
+  await context.close();
+});
+
+// The drift behind the tests that take the clock after load: until a test sets manual, the page's own
+// frames move the game (the probe, the moons' clock, the idle time). open() takes it from the first frame.
+test("slow-tests-orbit-reef-runes AC-1: after open(), the page's own frames leave the game as its system starts", async () => {
+  const { context, page } = await open();
+  await realFrames(page, 90); // about 1.5 s of frames, as on a slow load (any number works)
+  const r = await page.evaluate(() => {
+    const g = window.__orbit.game;
+    return { manual: window.__orbit.manual, idle: g.idleAge, atStart: g.clock === g.legStart, mode: g.mode };
+  });
+  assert.deepEqual(r, { manual: true, idle: 0, atStart: true, mode: 'idle' });
   await context.close();
 });
 

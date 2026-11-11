@@ -5,9 +5,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { chromium } from 'playwright';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import { serve } from './serve.mjs';
+import { launch } from './clock.mjs';
 import { ROWS, ISLANDS, CARS, MAP_VERSION } from '../island-hop/map.js';
 import { ATLAS } from '../island-hop/atlas.js';
 import {
@@ -41,7 +41,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -519,7 +519,8 @@ test('island-hop AC-20: the timed playtest: each mission\'s autopilot time in it
     const [lo, hi] = BANDS[i];
     assert.ok(s.phase === 'done' && s.clock >= lo && s.clock <= hi, `mission ${i + 1}: ${s.clock.toFixed(1)} s in ${lo}–${hi}`);
   }
-  const { context, page } = await open({ deviceScaleFactor: 2 });
+  // It measures speed, so it runs at the CPU's own speed, never under the test throttle.
+  const { context, page } = await open({ deviceScaleFactor: 2, throttle: false });
   // Mission 2's gold route: in Port Town from about 20 s, on foot and then by car round the ring road.
   await page.evaluate(() => {
     __hop.manual = true;

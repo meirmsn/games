@@ -1,10 +1,12 @@
+// clock-checked (specs/slow-tests-orbit-reef-runes.md)
 // End-to-end tests for Reef. Run: scripts/check-slow.sh.
 // The game exposes window.__reef (state, and a step() that advances the simulation without
 // drawing), so these tests can set up a situation and check what the rules do with it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { serve } from './serve.mjs';
-import { chromium } from 'playwright';
+import { launch, realFrames, waitFor } from './clock.mjs';
+import { registerWorker, cachedAll } from './offline.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS, STRIP } from './insets.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -14,7 +16,7 @@ let browser;
 before(async () => {
   server = await serve();
   BASE = server.base;
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
@@ -22,8 +24,9 @@ after(async () => {
   server?.close();
 });
 
-async function open(opts = {}) {
+async function open({ init, ...opts } = {}) {
   const context = await browser.newContext({ viewport: { width: 1024, height: 700 }, ...opts });
+  if (init) await context.addInitScript(init);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -87,7 +90,7 @@ async function meet(page, species, size, frames = 30) {
   );
 }
 
-test('reef AC-1: the reef opens behind a start card; Start begins L1, and nothing bites until you move', async () => {
+test('reef AC-1, slow-tests-orbit-reef-runes AC-5: the reef opens behind a start card; Start begins L1, and nothing bites until you move', async () => {
   const { context, page, errors } = await open();
   const s = await page.evaluate(() => ({
     mode: window.__reef.game.mode,
@@ -114,7 +117,7 @@ test('reef AC-1: the reef opens behind a start card; Start begins L1, and nothin
   // The first move wakes it.
   await page.mouse.move(300, 300);
   assert.equal(await page.evaluate(() => window.__reef.player.waiting), false);
-  await page.waitForTimeout(300);
+  await realFrames(page, 20); // the awake player drawn, however slowly frames come
   assert.deepEqual(errors, []);
   await context.close();
 });
@@ -412,15 +415,12 @@ test('edge-gestures AC-6: with iPhone insets, a touch drag that starts in an edg
   await context.close();
 });
 
-test('reef AC-10: the reef works offline once it has been played', async () => {
+test('reef AC-10, slow-tests-orbit-reef-runes AC-4: the reef works offline once it has been played', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await page.evaluate(
-    () => Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(r, 10000))])
-  );
+  await registerWorker(page);
   await page.reload(); // controlled now: this load caches the game's files
   await page.waitForFunction(() => window.__reef);
-  await page.waitForLoadState('networkidle');
+  await cachedAll(page);
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__reef);
@@ -632,7 +632,7 @@ test('reef AC-22: each world looks different from the one before', async () => {
   await context.close();
 });
 
-test('reef AC-23: currents: a gentle drift at L4, a rip across the top third at L6, the whole sea at L7', async () => {
+test('reef AC-23, slow-tests-orbit-reef-runes AC-8: currents: a gentle drift at L4, a rip across the top third at L6, the whole sea at L7', async () => {
   const { context, page } = await open();
   const flows = await page.evaluate(() => {
     const r = window.__reef;
@@ -654,7 +654,8 @@ test('reef AC-23: currents: a gentle drift at L4, a rip across the top third at 
   });
   assert.deepEqual(flows.calm, [0, 0, 0, 0, 0], 'no current at L1, L2, L3, L5 or L8');
   assert.ok(flows.l4 > 20 && flows.l4 < 50, `L4 drifts gently: ${flows.l4}`);
-  assert.ok(flows.l6top > 90 && flows.l6low === 0, `L6: ${flows.l6top} at the top, ${flows.l6low} below`);
+  // The rip swells and slackens with the reef's clock, 120 x (1 + 0.25 sin): 90 at its slackest.
+  assert.ok(flows.l6top >= 90 && flows.l6low === 0, `L6: ${flows.l6top} at the top, ${flows.l6low} below`);
   assert.ok(flows.l7top < -40 && flows.l7low < -40, `L7: ${flows.l7top} and ${flows.l7low}, both flowing left`);
   // A fish left alone at L7 is carried along with it.
   await page.evaluate(() => window.__reef.startGame(6));
@@ -710,12 +711,13 @@ test('reef AC-25: orange food fish are golden, clearly unlike the player\'s oran
   await context.close();
 });
 
-test('reef AC-26: a bite sounds clearly: the thud, then a short falling phrase, but not on the last life', async () => {
+test('reef AC-26, slow-tests-orbit-reef-runes AC-7: a bite sounds clearly: the thud, then a short falling phrase, but not on the last life', async () => {
   const { context, page } = await open();
   await startEmpty(page);
   await page.evaluate(() => (window.__reef.heard.length = 0));
   await meet(page, 'blue', 70, 3);
-  await page.waitForTimeout(250); // the phrase follows the thud
+  // The phrase follows the thud on a real-time timer (90 ms), however late a busy machine runs it.
+  await waitFor(page, () => window.__reef.heard.includes('hurt'), null, { what: 'the falling phrase after the thud' });
   assert.deepEqual(await page.evaluate(() => window.__reef.heard.filter((n) => n === 'caught' || n === 'hurt')), ['caught', 'hurt']);
   await ready(page);
   await page.evaluate(() => {
@@ -723,8 +725,41 @@ test('reef AC-26: a bite sounds clearly: the thud, then a short falling phrase, 
     window.__reef.heard.length = 0;
   });
   await meet(page, 'blue', 70, 3);
-  await page.waitForTimeout(700);
+  // The jingle's timer (500 ms) is set in the same call that would have set the phrase's (90 ms), so
+  // once the jingle is heard, a phrase would have been too.
+  await waitFor(page, () => window.__reef.heard.includes('gameover'), null, { what: 'the game-over jingle' });
   const last = await page.evaluate(() => window.__reef.heard.slice());
   assert.ok(!last.includes('hurt') && last.includes('gameover'), `the last bite: ${last}`);
+  await context.close();
+});
+
+// F-8: a first frame stamped before the loop's start ran the reef's clock backwards, and the waiting
+// pulse's radius went negative. Here it is stamped 20 s early: the clock must still not go below 0.
+test('slow-tests-orbit-reef-runes AC-6: a first frame stamped early never runs the reef\'s time backwards', async () => {
+  const { context, page, errors } = await open({
+    init: () => {
+      const raf = window.requestAnimationFrame.bind(window);
+      let first = true;
+      window.requestAnimationFrame = (cb) =>
+        raf((now) => {
+          if (first && cb.name === 'frameLoop') {
+            first = false;
+            return cb(now - 20000);
+          }
+          return cb(now);
+        });
+    },
+  });
+  await page.evaluate(() => {
+    const r = window.__reef;
+    r.manual = true;
+    r.startGame(0); // the player waits, its pulse drawn on every frame
+  });
+  await realFrames(page, 5);
+  assert.deepEqual(errors, [], 'the waiting player draws');
+  await startEmpty(page);
+  await meet(page, 'pink', 22);
+  const t = await page.evaluate(() => window.__reef.game.lastEat); // the reef's time at the meal
+  assert.ok(t >= 0, `the reef's time is ${t}`);
   await context.close();
 });
