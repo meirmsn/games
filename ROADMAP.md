@@ -12,6 +12,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Done (`specs/slow-tests-pixel-leap.md`) |
+| R-8 | 2026-11-11 | Tests check what a player sees, and a red slow run is explained, not re-run | Open |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
@@ -147,34 +148,29 @@ Reef's F-37 and F-8 (game-code changes need the owner's OK); Runes AC-15's ghost
 Done: each test's cause is in the spec's Decisions. F-8 is fixed in Reef's frame loop (approved); F-37
 is kept (not approved); Runes' ghost is fixed in its test only.
 
-## R-7: Slow tests run once: Pixel Leap's tests, and the whole suite's proof
+## R-8: Tests check what a player sees, and a red slow run is explained, not re-run
 
-The whole, asked 2026-11-10, in chat (after the go on `specs/ci-flakes.md`):
-
-```text
-we shouldn't be running 3 times. We should only run it once, and we should understand the source of the flakiness and put the test around that. Or change the code so that it is easier, reliable to test.
-```
-
-The split, which the owner delegated on 2026-11-11, in chat:
+Asked 2026-11-11, in chat, after R-7's whole-suite proof:
 
 ```text
-Do an adversarial review about the split and pick whatever makes sense.
+I wonder if we need to have those tests so specific and so reliable. And if yes, if we're missing the bigger picture on what actually is a good test. Or are we testing the 1 in 10 million type of thing?
 ```
 
-Slice 7 of 7, last: after R-1 to R-6 and Pixel Leap's AC-40 fix (meirmsn/games#36, merged).
+Then, on the adversarial review's answer and Claude's recommendation:
+
+```text
+Let's not do the nightly stress. The rest go with your recommendation.
+```
 
 ### Claude's notes
 
-Its spec: `specs/slow-tests-pixel-leap.md`, numbered from AC-1.
+The recommendation, from the review recorded in `specs/slow-tests-pixel-leap.md`, without the
+nightly stress run:
 
-`pixel-leap AC-22` moves to CPU time from a trace (F-32), checked to hold up under throttle; the
-single-pixel read at `tests/pixel-leap.test.mjs` ~951; 4 waits. This slice, or whichever merges
-last, carries the whole-suite proof (five `scripts/check-slow.sh` runs started together, plus one
-at 10× CPU throttle, with zero failures) and closes F-33.
-
-Done 2026-11-11: every wait now waits on frames, the game's state or a signal, and the file is
-marked `// clock-checked`; the frame budget is CPU time from a trace, under the throttle, its budget
-scaled by the rate (the owner's adversarial review). Guards that hold frames back while the page is
-idle, or stall frames without CPU, fail the old waits. No game code changed. An unmarked test file
-that calls `waitForTimeout` now fails the fast tier. The whole suite's proof is in the PR; F-33 is
-closed. The causes per test are in the spec's Decisions.
+- One CI run of the slow tier, no retries (as since `specs/ci-flakes.md`).
+- A red slow run on `main` gets a `FINDINGS.md` row with its cause before anyone re-runs it.
+- One guard test per kind of wait (frames held back, frames stalled, a request held), not one per
+  fixed test; trim the per-test guards the seven slices added.
+- Tests check each game's promises, what a player sees, rather than tuning numbers (Googly Faces'
+  1.8× dot swell, its 0.05 eye-radii pupil move); start with a short `specs/googly-faces.md`, since
+  Googly Faces has none.
