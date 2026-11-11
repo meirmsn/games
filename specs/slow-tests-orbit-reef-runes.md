@@ -1,6 +1,6 @@
 # Orbit's, Reef's and Runes' slow tests run once
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11)
 
 ## Intent
 
