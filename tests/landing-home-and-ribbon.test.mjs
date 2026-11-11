@@ -215,18 +215,23 @@ test('landing-home-and-ribbon AC-2: the ribbon is on the landing page only: neve
   assert.deepEqual(errors, []);
 });
 
-test('landing-home-and-ribbon AC-2: a ctrl- or cmd-click on a tile, opening the game in a new tab, counts as tapping a game (the owner, 2026-11-11)', async (t) => {
-  const { context, page } = await open({ hasTouch: false }, t);
-  await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
-  await page.waitForLoadState('networkidle');
-  const tapped = () => page.evaluate(() => !!JSON.parse(localStorage.getItem('ribbon') || '{}').tapped);
-  assert.equal(await tapped(), false);
-  const opened = context.waitForEvent('page');
-  await page.locator('a.tile[href="reef/"]').click({ modifiers: ['ControlOrMeta'] });
-  await opened; // the game opened in a new tab
-  assert.equal(page.url(), BASE, 'the landing page stays');
-  assert.equal(await tapped(), true, 'it counts as tapping a game');
-});
+for (const [name, modifier] of [
+  ['ctrl- or cmd-click', 'ControlOrMeta'],
+  ['shift-click', 'Shift'],
+]) {
+  test(`landing-home-and-ribbon AC-2: a ${name} on a tile, opening the game in a new tab or window, counts as tapping a game (the owner, 2026-11-11)`, async (t) => {
+    const { context, page } = await open({ hasTouch: false }, t);
+    await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
+    await page.waitForLoadState('networkidle');
+    const tapped = () => page.evaluate(() => !!JSON.parse(localStorage.getItem('ribbon') || '{}').tapped);
+    assert.equal(await tapped(), false);
+    const opened = context.waitForEvent('page');
+    await page.locator('a.tile[href="reef/"]').click({ modifiers: [modifier] });
+    await opened; // the game opened in a new tab or window
+    assert.equal(page.url(), BASE, 'the landing page stays');
+    assert.equal(await tapped(), true, 'it counts as tapping a game');
+  });
+}
 
 for (const [w, h] of [
   [320, 568],
