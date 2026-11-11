@@ -9,7 +9,8 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { serve } from './serve.mjs';
-import { launch, realFrames, waitFor, within } from './clock.mjs';
+import { launch, realFrames, waitFor } from './clock.mjs';
+import { registerWorker, cachedAll } from './offline.mjs';
 import { simulateInsets, touchDrag, PORTRAIT_INSETS } from './insets.mjs';
 
 let BASE; // set in before(), from tests/serve.mjs
@@ -959,19 +960,12 @@ test('walk-on-red AC-16: each state shows only its own card, HUD and banner [slo
 
 test('walk-on-red AC-17: the game works offline once it has been played [slow-tests-walk-on-red AC-6]', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => navigator.serviceWorker.register('../sw.js'));
-  await within(page.evaluate(() => navigator.serviceWorker.ready.then(() => true)), 'the service worker ready');
+  await registerWorker(page);
   await page.reload();
   await page.waitForFunction(() => window.__walkOnRed);
   // The service worker writes each file into its cache after answering for it, which no load state
-  // shows: wait until the files the game needs offline are there.
-  await within(
-    page.evaluate(async () => {
-      const urls = [location.href, new URL('game.js', location.href).href, new URL('img/vehicles.png', location.href).href];
-      while (!(await Promise.all(urls.map((u) => caches.match(u)))).every(Boolean)) await new Promise((r) => setTimeout(r, 50));
-    }),
-    'the page, game.js and img/vehicles.png cached'
-  );
+  // shows: wait until every file the page loaded (the page, game.js, the sprite sheet…) is there.
+  await cachedAll(page);
   await context.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__walkOnRed);
