@@ -2908,6 +2908,10 @@ test('pixel-leap AC-40: Scribble is drawn smooth at 70 in line art: the monster 
     const frames = ['stand0', 'run1', 'rise', 'fall', 'land'].map((p) => allGrey(L.lineArtFrame(p, 0)));
     const slimes = [0, 1, 3, 4].map((c) => allGrey(L.lineSlime(c, 0)));
     // The line boils: the wobble in use changes within 1/8 s, and two wobbles differ.
+    // The wobble is floor(t * 8) % BOILS, and 15 steps of 1/120 s sum to a hair under 1/8 s in
+    // floating point. From a start on a 1/8 s boundary (t = 0, 0.625, 11.25… on the step grid)
+    // the floor doesn't move, so the clock starts mid-wobble, 1/16 s, where 1/8 s always crosses one.
+    L.game.t = 1 / 16;
     const b0 = L.boilNow();
     L.steps(15);
     const b1 = L.boilNow();
