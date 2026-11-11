@@ -2443,3 +2443,51 @@ test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny t
   assert.equal((await goal(page)).flying, 0);
   await context.close();
 });
+
+test('splat-gallery-goal-and-tiny-target AC-2: the board through the states table: round won keeps the gold bar and rim; a game over lands a flying "+N" at once; paused or turned, a "+N" and the board hold still', async () => {
+  const { context, page } = await open();
+  await ready(page, 3);
+  // Round won: the quota met as the time runs out; between rounds the bar stays gold and rimmed.
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.pips = 18;
+    g.game.goalShown = 18;
+    g.game.bonus = true;
+    g.game.time = 0.01;
+    g.step(1 / 60);
+  });
+  assert.equal((await state(page)).mode, 'won');
+  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold', flying: 0 });
+  // A game over with a "+N" in flight: it lands at once, so the board under the card reads as it ended.
+  await ready(page, 3);
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 0);
+  assert.equal((await goal(page)).flying, 1);
+  await page.evaluate(() => window.__gallery.gameOver());
+  const over = await goal(page);
+  assert.deepEqual([over.text, over.flying], ['3', 0], 'the "+3" landed as the run ended');
+  // Paused, then turned: real frames run, and neither the "+N" nor the board moves.
+  for (const flag of ['paused', 'turned']) {
+    await ready(page, 3);
+    const t2 = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+    await shoot(page, t2.x + t2.w * 0.38, 0);
+    const before = await page.evaluate((flag) => {
+      const g = window.__gallery;
+      g.game[flag] = true;
+      g.manual = false; // the page's own frames would step the game, if it weren't held
+      return g.fx().find((f) => f.type === 'pip').t;
+    }, flag);
+    await realFrames(page, 10);
+    const after = await page.evaluate((flag) => {
+      const g = window.__gallery;
+      const f = g.fx().find((f) => f.type === 'pip');
+      const r = { t: f ? f.t : null, text: g.ui().goalText, colour: g.ui().goalColour };
+      g.manual = true;
+      g.game[flag] = false;
+      return r;
+    }, flag);
+    assert.deepEqual(after, { t: before, text: '0', colour: 'green' }, `${flag}: the "+3" holds still and the board shows`);
+  }
+  await context.close();
+});
+

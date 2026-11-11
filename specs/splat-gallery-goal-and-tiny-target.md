@@ -32,15 +32,17 @@ follow-up docs PR (R-9), not here: see AC-12.
 
 ## Decisions
 
-- **The "to go" board:** a second bulb board built like the timer (`drawTimerBoard`: a nailed plank,
-  a black panel, two seven-segment digits of bulbs), at the top right, left of the sound button
-  (`[data-mute]`), the score sign between the two boards. Its bulbs are **green** (`#8fbf6a`, a bottle green; added to
-  `BULB` as `green`), never the timer's cream, yellow, orange or red, so the two never read as one. It
-  shows the pips still needed, `max(0, quota − pips)`, and counts **down**, so the two boards race to
-  zero (counts up since the owner's change below). A small painted caption "TO GO" sits on the plank under the panel (the plank grows by the
-  caption's height; the timer doesn't change). Its right edge is the sound button's left edge less 8
+- **The count board** (as built, after the owner's two changes below): a second bulb board built like
+  the timer (`drawTimerBoard`: a nailed plank, a black panel, two seven-segment digits of bulbs), at
+  the top right, left of the sound button (`[data-mute]`), the score sign between the two boards. Its
+  bulbs are a bottle **green** (`#8fbf6a`, added to `BULB` as `green`), never the timer's cream,
+  yellow, orange or red, so the two never read as one. It counts **up** the pips scored this round,
+  and under its panel the quota's brass bar fills toward the quota (the plank is a little taller than
+  the timer for it; the timer doesn't change). Its right edge is the sound button's left edge less 8
   CSS px, converted to stage units; it may be narrower than the timer where the width needs it, never
-  narrower than its two digits. (Claude, proposed 2026-11-11; owner "go with that" 2026-11-11.)
+  narrower than its two digits. Claude first proposed a board counting **down** the pips still to go
+  with a "TO GO" caption, in a bright green (owner "go with that", 2026-11-11); the owner changed
+  both during the build.
 - **Changed by the owner, 2026-11-11, during the build:** "I don't like the green. It looks too not
   analog. So we need another color in there. Or if you do green, make it like the green that is
   analog, which is not that bright." The bright `#7dff8a` became a bottle green, `#8fbf6a`, like
