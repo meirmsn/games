@@ -8,7 +8,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-1 | 2026-11-11 | Slow tests run once: the harness (hang timeout, serve fixes, clock helpers) | Done (`specs/slow-tests-harness.md`) |
 | R-2 | 2026-11-11 | Slow tests run once: Walk on Red's tests wait on frames and state, not time | Open                                 |
 | R-3 | 2026-11-11 | Slow tests run once: Splat Gallery's tests wait on frames and state         | Open                                 |
-| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Open                                 |
+| R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Done (`slow-tests-crumble-googly`)   |
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Open                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Open                                 |
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
