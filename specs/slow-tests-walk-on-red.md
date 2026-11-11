@@ -33,10 +33,11 @@ step arithmetic; (7) real-time `setTimeout`s in game code that `manual` doesn't 
     (`walk-on-red/game.js` `frame`, ~2007), so a hop needs 3 or more frames. An input sent before
     the last hop has landed is queued, and a second one overwrites the first (`doHop`, ~1065), so
     the next check is off by a row. Playwright's key, mouse and touch calls wait for frames
-    themselves (a key press returned with its hop 0.83 landed), so the 200 ms wait only has to hold
-    the hop's last frame: it loses when a frame takes longer than 200 ms. In the edge-strip test the
+    themselves (a key press returned with its hop 0.83 landed), so in the tap-and-swipe test the 200 ms
+    wait only has to hold the hop's last frame: it loses when a frame takes longer than 200 ms. In the edge-strip test the
     five "hops nowhere" checks pass whether or not the swipe was handled at all, so for them a
-    fixed wait proves nothing; only the last check (~172) depends on a hop landing.
+    fixed wait proves nothing; only the last check (~172) depends on a hop, and it reads col and row,
+    which a hop sets at once, a dozen or more frames after the hop before it.
   - "traffic drives behind the start card" (~115, the start-card test), 500 ms and 300 ms (cause
     1): the street is full before `window.__walkOnRed` exists (`showStart()` runs `setupLevel`,
     which simulates the traffic, in the same callback that sets it, ~2053), so the first wait waits
@@ -126,13 +127,25 @@ step arithmetic; (7) real-time `setTimeout`s in game code that `manual` doesn't 
   which also delays the page's timers and input as a busy main thread does; the guard checks that
   the frames it measured were that far apart. Tried on `main`'s file: at 150 ms a frame the
   tap-and-swipe test passes; at 300 ms it fails (a key sent mid-hop is queued, the next overwrites
-  it, and he ends a row off). The edge-strip test passed at 300 ms, since its 4-step drags span
-  several frames; the guard runs it too, as the same bet. Rejected: a higher CPU throttle, which
+  it, and he ends a row off). The edge-strip test can't be failed this way: each of its drags spans the same frames (17 for a
+  4-step drag, 9 for a tap) at 300 ms and at 1000 ms a frame, since every CDP touch event waits for
+  frames, and it passes on `main` with its 200 ms waits removed. So the guard runs only the
+  tap-and-swipe checks; the edge-strip test gets the same fix, for its "hops nowhere" checks, and
+  no guard (below). Rejected: a higher CPU throttle, which
   slows frames only by chance. (Claude, 2026-11-11)
-- **The guard test runs the edge-strip and tap-and-swipe checks themselves:** each test's body is a
-  function the test and the guard both call, so the guard can't drift from the tests it guards.
-  The frame-starving script stays in this file, not `tests/clock.mjs`, so slices built in parallel
-  don't collide there; a `FINDINGS.md` row says so, for R-7 to share it. (Claude, 2026-11-11)
+- **The guard runs the tap-and-swipe checks only, not the edge-strip test's.** The owner, asked
+  whether the guard should also run the edge-strip test, 2026-11-11: "Do an adversarial review to
+  figure out". The review found it shouldn't: no frame starvation fails `main`'s edge-strip test
+  (above), so guarding it would prove nothing, against the slice's rule that the guard fails on the
+  old code, and cost about 40 s a run. Its weakness, "hops nowhere" checks that can't tell whether
+  the swipe was handled, is fixed by the input count, which the review checks. The tap-and-swipe
+  test's body is a function the test and the guard both call, so the guard can't drift from it, and
+  both tests wait through one helper, so the guard exercises the edge-strip test's wait too.
+  Rejected: guarding both; finding another guard for the edge-strip test, which would test the
+  harness rather than the game. (Adversarial review as the owner asked, 2026-11-11)
+- **The frame-starving script stays in this file,** not `tests/clock.mjs`, so slices built in
+  parallel don't collide there; a `FINDINGS.md` row says so, for R-7 to share it. (Claude,
+  2026-11-11)
 
 ## Acceptance items
 
@@ -141,7 +154,7 @@ step arithmetic; (7) real-time `setTimeout`s in game code that `manual` doesn't 
 - **AC-2** In the edge-strip and tap-and-swipe tests, each position check comes after the page has
   handled every input sent so far and the player's hop has landed, with the game's own frame loop
   running the hops (`manual` off).
-- **AC-3** A guard test runs the edge-strip and tap-and-swipe checks on pages whose animation
+- **AC-3** A guard test runs the tap-and-swipe checks on pages whose animation
   frames it measured at least 300 ms apart, and passes. — verified by review: the PR shows the
   tap-and-swipe checks with `main`'s 200 ms waits failing on such a page.
 - **AC-4** The start-card test reads the mode, level, walk light, followers and row in a listener
@@ -167,4 +180,5 @@ step arithmetic; (7) real-time `setTimeout`s in game code that `manual` doesn't 
   lower bound on `dt` (the coordinator logs that one).
 - Changing what `specs/walk-on-red.md` or `specs/edge-gestures.md` promises.
 - Other games' tests, `tests/clock.mjs` and `tests/insets.mjs`.
-- Running the whole file on a starved page: the guard covers the two tests whose cause is frames.
+- Running the whole file, or the edge-strip test, on a starved page: the guard covers the test
+  whose cause is frames.
