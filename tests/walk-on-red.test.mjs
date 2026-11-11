@@ -1292,14 +1292,17 @@ test('walk-on-red AC-26: the game is called Gotta Go!, and nothing the player se
   await context.close();
 });
 
-test('walk-on-red AC-28: a run has 3 lives in the HUD; a hit empties one, a follower hit or running out of time none; the next level keeps them; a new run has 3 [slow-tests-walk-on-red AC-7]', async () => {
+test('walk-on-red AC-28, walk-on-red-heart-loss AC-3: a run has 3 lives in the HUD; a hit empties one as the heart over him does, a follower hit or running out of time none; the next level keeps them; a new run has 3 [slow-tests-walk-on-red AC-7]', async () => {
   const { context, page } = await open();
   await startEmpty(page, 2);
   assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true });
   assert.ok(await hitOnce(page));
   await run(page, 0.1);
+  // walk-on-red-heart-loss AC-3: the HUD's heart empties as the one over his head does, not at the hit.
+  assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true }, 'still full while the heart over him is');
+  await run(page, 0.6);
   assert.deepEqual(await hearts(page), { full: 2, lost: 1, label: '2 lives left', shown: true }, 'a hit empties one');
-  await run(page, 1.3);
+  await run(page, 0.6);
   assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'play');
   // Too slow: the level again, no life lost.
   await page.evaluate(() => (window.__walkOnRed.game.red = 0.05));
@@ -1433,4 +1436,208 @@ test('slow-tests-walk-on-red AC-1: this file is marked clock-checked and has no 
     lines.filter((l) => /waitForTimeout\(/.test(l) && !/^\s*\/\//.test(l)),
     []
   );
+});
+
+// ---------- specs/walk-on-red-heart-loss.md ----------
+
+// The heart over his head, its beat, and the HUD, after one drawn frame (the test owns the clock,
+// so frames only draw).
+const heartNow = (page) =>
+  page.evaluate(async () => {
+    const t = window.__walkOnRed;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const h = t.heart();
+    const el = document.querySelector('[data-lives]');
+    return { beat: h && h.beat, drawn: t.drawn.heart, box: t.drawn.heartBox, hud: el.querySelectorAll('svg:not(.lost)').length };
+  });
+
+// The colours of the street's own pixels inside the drawn heart's box.
+const heartColours = (page) =>
+  page.evaluate(async () => {
+    const t = window.__walkOnRed;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const b = t.drawn.heartBox;
+    const d = t.low.getContext('2d').getImageData(b.x, b.y, b.w, b.h).data;
+    const seen = new Set();
+    for (let k = 0; k < d.length; k += 4) if (d[k + 3] === 255) seen.add('#' + [d[k], d[k + 1], d[k + 2]].map((v) => v.toString(16).padStart(2, '0')).join(''));
+    return [...seen];
+  });
+
+test('walk-on-red-heart-loss AC-1, walk-on-red-heart-loss AC-2, walk-on-red-heart-loss AC-3, walk-on-red-heart-loss AC-8: a hit shows a full heart over him, then an X, then the empty one as the HUD empties; gone once he is up, and he plays on as before', async () => {
+  const { context, page, errors } = await open();
+  await startEmpty(page, 2);
+  const cards = () => page.evaluate(() => ['start', 'paused', 'over'].map((n) => !document.querySelector(`[data-screen="${n}"]`).hidden));
+  assert.ok(await hitOnce(page));
+  const full = await heartNow(page);
+  assert.equal(full.beat, 'full');
+  assert.equal(full.drawn, 'full');
+  assert.equal(full.hud, 3, 'the HUD still shows the life full');
+  assert.ok((await heartColours(page)).includes('#ff4b4b'), 'a red heart');
+  // Over him, inside the view, the HUD heart's 7×6 art at 2 street px each.
+  // Centred on him, its bottom 2 px above his head (17 above his feet), in view px.
+  const pos = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const b = t.drawn.heartBox;
+    return { mid: b.x + b.w / 2, bottom: b.y + b.h, x: t.px(t.player.vx), feet: t.py(t.player.vy) };
+  });
+  assert.ok(Math.abs(pos.mid - pos.x) <= 1, `centred on him: ${JSON.stringify(pos)}`);
+  assert.equal(pos.bottom, pos.feet - 17, 'just above his head');
+  assert.deepEqual([full.box.w, full.box.h], [14, 12]);
+  assert.ok(full.box.x >= 0 && full.box.y >= 0 && full.box.x + 14 <= full.box.LW && full.box.y + 12 <= full.box.LH, 'inside the view');
+  await run(page, 0.35);
+  const x = await heartNow(page);
+  assert.deepEqual([x.box.x, x.box.y], [full.box.x, full.box.y], 'it stays put');
+  assert.equal(x.beat, 'x');
+  assert.equal(x.hud, 3);
+  const xc = await heartColours(page);
+  assert.ok(xc.includes('#ffffff') && xc.includes('#ff4b4b'), 'a white X across the red heart');
+  await run(page, 0.3);
+  const empty = await heartNow(page);
+  assert.equal(empty.beat, 'empty');
+  assert.equal(empty.hud, 2, 'the HUD empties with it');
+  const ec = await heartColours(page);
+  assert.ok(!ec.includes('#ff4b4b') && !ec.includes('#ffffff'), 'no red, no X: the empty container');
+  assert.deepEqual(await cards(), [false, false, false], 'no card');
+  await run(page, 0.5);
+  const gone = await heartNow(page);
+  assert.deepEqual([gone.beat, gone.drawn], [null, null], 'gone by the time he is up');
+  // 1.2 s after the hit he is up and can hop.
+  await run(page, 0.1);
+  const up = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const row = t.player.row;
+    t.move('up');
+    t.step(1 / 60);
+    return { mode: t.game.mode, down: t.player.down, moved: t.player.row === row - 1 };
+  });
+  assert.deepEqual(up, { mode: 'play', down: 0, moved: true });
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('walk-on-red-heart-loss AC-2: hit on the top lane, the heart is still inside the view', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 2);
+  const box = await page.evaluate(async () => {
+    const t = window.__walkOnRed;
+    const row = 1;
+    t.put(row);
+    const v = t.spawnVehicle(row, 'sedan');
+    const want = t.colX(t.player.col);
+    v.s = v.dir === 1 ? want + v.w / 2 + t.ENTRY : t.PLAY_W + t.ENTRY - (want - v.w / 2);
+    v.speed = 0;
+    v.v = 0;
+    t.step(1 / 60);
+    t.vehicles().length = 0;
+    for (let i = 0; i < 50; i++) t.step(1 / 60);
+    t.pause();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return t.drawn.heartBox;
+  });
+  assert.ok(box, 'a heart');
+  assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.w <= box.LW && box.y + box.h <= box.LH, 'inside the view');
+  await context.close();
+});
+
+test('walk-on-red-heart-loss AC-4: paused, the heart and the HUD hold; resumed, they carry on', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 2);
+  assert.ok(await hitOnce(page));
+  await run(page, 0.4);
+  const before = await page.evaluate(() => window.__walkOnRed.heart());
+  await page.evaluate(() => window.__walkOnRed.pause());
+  await run(page, 3);
+  const during = await page.evaluate(() => window.__walkOnRed.heart());
+  assert.deepEqual([during.t, during.beat], [before.t, 'x'], 'nothing moves while paused');
+  assert.equal((await hearts(page)).full, 3);
+  await page.evaluate(() => window.__walkOnRed.resume());
+  await run(page, 0.3);
+  assert.equal(await page.evaluate(() => window.__walkOnRed.heart().beat), 'empty');
+  assert.equal((await hearts(page)).full, 2);
+  await context.close();
+});
+
+test('walk-on-red-heart-loss AC-5: on the last hit the empty heart shows before Game over', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 4);
+  for (let i = 0; i < 2; i++) {
+    assert.ok(await hitOnce(page));
+    await run(page, 1.3);
+  }
+  assert.ok(await hitOnce(page));
+  await run(page, 0.7);
+  const s = await page.evaluate(() => ({ beat: window.__walkOnRed.heart().beat, mode: window.__walkOnRed.game.mode, over: !document.querySelector('[data-screen="over"]').hidden }));
+  assert.deepEqual(s, { beat: 'empty', mode: 'out', over: false });
+  assert.deepEqual(await hearts(page), { full: 0, lost: 3, label: '0 lives left', shown: true });
+  await run(page, 0.7);
+  assert.equal(await page.evaluate(() => window.__walkOnRed.game.mode), 'over');
+  await context.close();
+});
+
+test('walk-on-red-heart-loss AC-6: time running out, a new level or a new run mid-heart: the HUD ends on the lives left and the heart goes', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 2);
+  // Time runs out mid-heart: the heart plays on and the HUD lands on 2.
+  await page.evaluate(() => (window.__walkOnRed.game.red = 0.2));
+  assert.ok(await hitOnce(page));
+  await run(page, 1.5);
+  assert.equal(await page.evaluate(() => window.__walkOnRed.heart()), null);
+  assert.deepEqual(await hearts(page), { full: 2, lost: 1, label: '2 lives left', shown: true });
+  // A new level mid-heart removes it.
+  await startEmpty(page, 2);
+  assert.ok(await hitOnce(page));
+  await page.evaluate(() => window.__walkOnRed.startLevel(3));
+  assert.equal(await page.evaluate(() => window.__walkOnRed.heart()), null);
+  assert.equal((await hearts(page)).full, 2, 'the lives left, at once');
+  // A new run mid-heart: 3 and no heart.
+  assert.ok(await hitOnce(page));
+  await startEmpty(page, 0);
+  assert.equal(await page.evaluate(() => window.__walkOnRed.heart()), null);
+  assert.deepEqual(await hearts(page), { full: 3, lost: 0, label: '3 lives left', shown: true });
+  // One heart at a time: a hit just as he gets up replaces it.
+  assert.ok(await hitOnce(page));
+  await run(page, 1.25);
+  assert.ok(await hitOnce(page));
+  const h = await page.evaluate(() => window.__walkOnRed.heart());
+  assert.ok(h.t < 0.05 && h.beat === 'full', 'a fresh one');
+  await context.close();
+});
+
+test('walk-on-red-heart-loss AC-7: a follower hit or running out of time shows no heart; nor does the tile picture', async () => {
+  const { context, page } = await open();
+  await startEmpty(page, 7);
+  const none = await page.evaluate(() => {
+    const t = window.__walkOnRed;
+    const p = t.copiers()[0];
+    p.state = 'go';
+    p.row = t.layout().bottom - 1;
+    p.hopT = 99;
+    t.put(t.layout().bottom - 2);
+    const v = t.spawnVehicle(p.row, 'sedan');
+    const want = t.colX(p.col);
+    v.s = v.dir === 1 ? want + v.w / 2 + t.ENTRY : t.PLAY_W + t.ENTRY - (want - v.w / 2);
+    v.speed = 0;
+    v.v = 0;
+    t.step(1 / 60);
+    const follower = [p.state, t.heart()];
+    t.vehicles().length = 0;
+    t.put(t.layout().bottom);
+    t.game.red = 0.05;
+    for (let i = 0; i < 30; i++) t.step(1 / 60);
+    return { follower, slow: t.heart(), lives: t.game.lives };
+  });
+  assert.deepEqual(none, { follower: ['down', null], slow: null, lives: 3 });
+  await context.close();
+  // The tile picture: the street only; even a hit draws no heart.
+  const tile = await open();
+  await tile.page.goto(tile.page.url().split('?')[0] + '?tile');
+  await tile.page.waitForFunction(() => window.__walkOnRed);
+  const drawnHeart = await tile.page.evaluate(async () => {
+    const t = window.__walkOnRed;
+    t.game.heart = { t: 0.1, x: t.colX(t.PCOL), y: 100 };
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return t.drawn.heart;
+  });
+  assert.equal(drawnHeart, null);
+  await tile.context.close();
 });

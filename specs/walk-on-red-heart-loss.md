@@ -39,8 +39,11 @@ outline) and the game's existing white pop-up colour for the X.
   a one-street-pixel `#c9ccd6` edge, at 0.8 opacity, matching the HUD's lost heart. It is drawn in
   street pixels, so on screen it is the street's scale, not the HUD's 14×12 CSS px (Claude,
   2026-11-11).
-- Placement: centred on him where the game's "!" pop-up goes (22 street px above his feet),
-  rising like the other pop-ups, kept inside the view (Claude, 2026-11-11).
+- Placement: centred on him, its bottom 2 street px above his head (17 above his feet), not
+  drifting, kept inside the view; changed after the go from "where the '!' goes, rising", on the
+  owner's words: "Can we make the heart show up right above the position of the player? … not at
+  the center of the screen, but right, near and above the head of the player position" (owner,
+  2026-11-11).
 - The last hit plays it too, before Game over shows (Claude, 2026-11-11).
 
 ## Acceptance items
@@ -48,8 +51,10 @@ outline) and the game's existing white pop-up colour for the X.
 - **AC-1** When a car hits him, a heart is drawn over him in three beats, in order: full
   (`#ff4b4b`) from the hit, with a white X from 0.3 s, empty (fill `#1b1e29`, edge `#c9ccd6`) from
   0.6 s, and gone by 1.1 s; the test hook `window.__walkOnRed` reports the beat it is on.
-- **AC-2** The heart's pixels are the HUD heart's shape (`walk-on-red/index.html`'s 7×6 path), each
-  art pixel 2×2 street pixels, and the whole heart is inside the view wherever he is hit.
+- **AC-2** The heart sits centred on him with its bottom edge 2 street px above his head (17 above
+  his feet) and doesn't drift. Its pixels are the HUD heart's shape (`walk-on-red/index.html`'s 7×6
+  path), each art pixel 2×2 street pixels, and the whole heart is inside the view wherever he is
+  hit.
 - **AC-3** After a hit the HUD still shows the lost life full (and its label the old count) until
   the heart over him turns empty; from then it shows it in the `lost` style with a label one life
   fewer. The lives test (the walk-on-red spec's twenty-eighth item) checks both moments.
