@@ -105,13 +105,23 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   which can't promise those trade-offs (adversarial review, 2026-11-10).
 - Land is drawn as the pack's raised grass and sand blocks over its water, so the coast shows as low
   cliffs with no edge pieces; roads, buildings and car parks sit on land tiles. Water and cliffs are
-  walls to the person, who slides along them; a jetty's end is a wall too.
+  walls to the person, who slides along them; a jetty's end is a wall too. A tree's tile is grass
+  you can walk across: only a circle of 0.2 tiles round its trunk stops you, and walking straight at
+  the trunk steps round it (owner, 2026-11-11: "there is a bug on the tiles that have an tree. You
+  cannot get to the tile ... Most of the grid is mainly grass. So you should be able to walk on the
+  grass. I don't know, maybe we can make it so that the part you cannot walk is a circle in the
+  center"). The autopilot's paths still go round tree tiles.
 - Movement, one config object (`island-hop/rules.js`), speeds in tiles a second: walking 1.6; car 5,
   on the road network only, following its centre line and taking the branch the stick points at
   junctions, passing through parked cars; rowboat 2.2 (turning 150° a second), motorboat 3.5 (120°),
   speedboat 5.5 (72°). Boats turn toward the stick at their rate and the stick's length is the
   throttle; with the stick pointing more than 120° away from the bow, a boat turns on the spot, so it
-  never wedges against a coast. The person moves in 8 directions. Rejected: free driving off the
+  never wedges against a coast. The person moves in 8 directions, along the grid's lines and
+  diagonals, and a boat steers for the same 8, so two arrow keys or a slanted drag sail along the
+  grid's lines as they walk along them (owner, 2026-11-11: "When moving diagonally, like pressing the
+  two arrows. It doesn't move with the grid when you're on the boat ... If it's not because of wind
+  and it's a bug, then fix it so that when you're moving, it has to be moving with the grid"). The
+  autopilot steers boats freely. Rejected: free driving off the
   roads, fiddly on a phone (adversarial review, 2026-11-10).
 - Transitions are automatic and take about 0.3 s, with no buttons:
   - A boat heading toward a free berth, within 1.5 tiles and under half its top speed, is pulled in and
@@ -195,9 +205,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   an `<audio>` element fed a copy fetched as the page loads, so it plays offline and is never decoded
   whole. It starts on the first tap or key, as browsers require, and stops while muted, paused or
   hidden. `scripts/island-hop/make-music.sh` evens their loudness and makes them 64 kbps stereo
-  (about 1.2 MB each). The island's track is to be swapped for a faster one (owner, 2026-11-11: "The
-  music on the island is too slow. I think it should be much faster. I feel more like a bustling
-  city, or like you're running an errand but you're hasty"); until then the first take plays.
+  (the sea's 2½ minutes, 1.2 MB; the island's 1 minute, 0.5 MB). The island's track is the owner's
+  faster second take, "town rush" (owner, 2026-11-11, of the first: "The music on the island is too
+  slow. I think it should be much faster. I feel more like a bustling city, or like you're running
+  an errand but you're hasty").
 - Interruptible: hiding the page pauses the mission, the clock and a fly-over in progress; it resumes
   on a tap.
 - The game exposes `window.__hop` (its state, `start(mission)`, and a `step(dt)` that advances
@@ -228,7 +239,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-6** A drag (or the keys) moves the boat, the person or the car in the direction it points on
   screen, at that mode's speed (walk 1.6, car 5, rowboat 2.2, motorboat 3.5, speedboat 5.5 tiles a
   second); a second finger is ignored, and so is a drag that starts in the phone's edge strips; the
-  person slides along walls and can't walk into the sea from a jetty; the car stays on the roads and
+  person slides along walls and can't walk into the sea from a jetty; a boat, like the person, goes in
+  the nearest of the grid's 8 directions; only a tree's trunk, not its tile, stops the person; the car stays on the roads and
   takes the branch the stick points at; a boat nosed into a cliff gets free in under 2 s —
   `tests/island-hop.test.mjs`.
 - **AC-7** A boat heading slowly toward a free berth within 1.5 tiles docks and the person steps
@@ -288,8 +300,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   boat behind an island is drawn over the boat — `tests/island-hop.test.mjs`. (Added after the go;
   the owner's words on the island's edge above.)
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
-  plays before a tap, while muted or while the page is hidden; each track is about 2½ minutes at
-  64 kbps — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
+  plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
+  about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
 
 ## Core flow
 

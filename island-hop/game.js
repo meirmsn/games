@@ -29,6 +29,9 @@ import {
   createPilot,
   pilotStick,
   canTick,
+  stickToGrid,
+  gridToStick,
+  walkDir,
 } from './rules.js';
 
 // --- Page, shell and sound -----------------------------------------------------------------------
@@ -248,7 +251,18 @@ const STICK_R = 56; // px of drag for a full stick
 let pointer = null; // { id, x0, y0, x, y }
 let keyStick = { x: 0, y: 0 };
 const keys = new Set();
+// Afloat, the stick turns to the nearest of the 8 grid directions, as on foot, so the boat sails
+// along the grid's lines (and its picture, drawn at those 8 headings, points where it goes) (owner,
+// 2026-11-11: "on the boat, there seems to be an offset ... it has to be moving with the grid").
 function stick() {
+  const s = rawStick();
+  if (!world || world.mode !== 'boat') return s;
+  const g = stickToGrid(s);
+  if (!g.len) return s;
+  const d = walkDir(g);
+  return gridToStick(d.x, d.y, g.len);
+}
+function rawStick() {
   if (pointer) {
     const dx = pointer.x - pointer.x0;
     const dy = pointer.y - pointer.y0;
@@ -1010,7 +1024,7 @@ function drawStick() {
   ctx.beginPath();
   ctx.arc(pointer.x0, pointer.y0, STICK_R, 0, Math.PI * 2);
   ctx.stroke();
-  const s = stick();
+  const s = rawStick(); // the knob sits under the finger
   ctx.fillStyle = '#fff';
   ctx.beginPath();
   ctx.arc(pointer.x0 + s.x * STICK_R, pointer.y0 + s.y * STICK_R, 18, 0, Math.PI * 2);

@@ -34,6 +34,7 @@ import {
   trafficAt,
   leisureAt,
   obstaclesAt,
+  TRUNK_R,
   TRAFFIC_R,
 } from '../island-hop/rules.js';
 
@@ -622,6 +623,28 @@ test('island-hop AC-21: in every mission at least six small leisure boats sail, 
     }
 });
 
+test('island-hop AC-6: on foot, a tree\'s tile is grass: you walk across it, only its trunk stops you, and walking straight at the trunk steps round it', () => {
+  // The tree at (13,5) in Port Town, grass on either side.
+  assert.equal(tileAt(13, 5), 'T');
+  const s = play(0);
+  const trunk = { x: 13.5, y: 5.5 };
+  let closest = Infinity;
+  const track = (st) => {
+    closest = Math.min(closest, Math.hypot(st.person.x - trunk.x, st.person.y - trunk.y));
+    return gridToStick(1, 0);
+  };
+  // Across the tile's edge, clear of the trunk.
+  ashore(s, 12.5, 5.92);
+  run(s, 1.5, track);
+  assert.ok(s.person.x > 14.2, `across the tree's tile: x ${s.person.x.toFixed(2)}`);
+  // Straight at the trunk: round it and on.
+  closest = Infinity;
+  ashore(s, 12.3, 5.5);
+  run(s, 2.5, track);
+  assert.ok(s.person.x > 14.2, `round the trunk: x ${s.person.x.toFixed(2)}`);
+  assert.ok(closest >= TRUNK_R + RULES.personR - 1e-6, `never into the trunk: ${closest.toFixed(3)}`);
+});
+
 // --- Pars and the gold routes (Node) ----------------------------------------------------------------------------
 
 test('island-hop AC-11: each mission\'s gold route, flown by the autopilot, lands in its band and on its par; another order of its stops is slower than gold', () => {
@@ -733,6 +756,26 @@ test('island-hop AC-4: the page opens on the moving archipelago behind the missi
   const c = await page.evaluate(() => ({ clock: __hop.state.clock, started: __hop.state.started }));
   assert.ok(c.started && c.clock > 0.4, `the clock runs: ${c.clock}`);
   assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('island-hop AC-6: afloat, two arrow keys sail along the grid\'s lines, as on foot', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => {
+    __hop.start(0, { fly: false });
+    Object.assign(__hop.state.boats[0], { x: 45, y: 25, h: -Math.PI / 2, v: 0 }); // open water east of Port Town
+  });
+  await page.keyboard.down('ArrowUp');
+  await page.keyboard.down('ArrowRight');
+  await waitFor(page, () => __hop.state.clock > 1, null, { what: 'a second under way' });
+  const a = await page.evaluate(() => ({ x: __hop.state.boats[0].x, y: __hop.state.boats[0].y }));
+  await waitFor(page, (y) => __hop.state.boats[0].y < y - 1.5, a.y, { what: '1.5 tiles further' });
+  const b = await page.evaluate(() => ({ x: __hop.state.boats[0].x, y: __hop.state.boats[0].y, h: __hop.state.boats[0].h }));
+  await page.keyboard.up('ArrowUp');
+  await page.keyboard.up('ArrowRight');
+  // Up and right on screen is the grid's -y line: x doesn't change.
+  assert.ok(Math.abs(b.x - a.x) < 0.05, `along the grid line: moved ${(b.x - a.x).toFixed(3)} across it, ${(b.y - a.y).toFixed(2)} along`);
+  assert.ok(Math.abs(b.h + Math.PI / 2) < 0.02, `heading along it: ${b.h.toFixed(3)}`);
   await context.close();
 });
 
@@ -1193,11 +1236,11 @@ test('island-hop AC-23: the sea\'s music plays afloat and the island\'s ashore, 
   await context.close();
 });
 
-test('island-hop AC-23: the two tracks are the owner\'s, 64 kbps and about 2½ minutes each', () => {
-  for (const name of ['sea', 'land']) {
+test('island-hop AC-23: the two tracks are the owner\'s at 64 kbps: the sea\'s about 2½ minutes, the island\'s about 1 minute', () => {
+  for (const [name, secs] of [['sea', 150], ['land', 60]]) {
     const bytes = readFileSync(new URL(`../island-hop/sounds/music-${name}.mp3`, import.meta.url)).length;
-    // 64 kbps for 150 s is 1.2 MB.
-    assert.ok(bytes > 1.1e6 && bytes < 1.3e6, `music-${name}.mp3 is ${bytes} bytes`);
+    const want = (64000 / 8) * secs; // 64 kbps
+    assert.ok(Math.abs(bytes - want) < want * 0.05, `music-${name}.mp3 is ${bytes} bytes, about ${want} for ${secs} s at 64 kbps`);
   }
 });
 

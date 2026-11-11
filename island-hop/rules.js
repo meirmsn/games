@@ -404,12 +404,24 @@ function tryDock(s, b) {
 }
 
 // --- On foot ------------------------------------------------------------------------------------------
+// On foot, a tree's tile is grass with a trunk in the middle: only a circle round the trunk stops
+// you (owner, 2026-11-11: "You cannot get to the tile ... Most of the grid is mainly grass. So you
+// should be able to walk on the grass"). Paths (walkPath) still go round tree tiles, so the
+// autopilot's routes are unchanged.
+export const TRUNK_R = 0.2;
+const onFoot = (ch) => isWalkable(ch) || ch === 'T';
 function blocked(x, y) {
   const r = RULES.personR;
-  for (const [dx, dy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (!isWalkable(tileAt(x + dx, y + dy))) return true;
+  for (const [dx, dy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (!onFoot(tileAt(x + dx, y + dy))) return true;
+  for (let ty = Math.floor(y) - 1; ty <= Math.floor(y) + 1; ty++)
+    for (let tx = Math.floor(x) - 1; tx <= Math.floor(x) + 1; tx++)
+      if (tileAt(tx, ty) === 'T' && Math.hypot(x - tx - 0.5, y - ty - 0.5) < TRUNK_R + r) return true;
   return false;
 }
 export const personBlocked = blocked;
+function nearTrunk(x, y) {
+  return tileAt(Math.floor(x), Math.floor(y)) === 'T' && Math.hypot(x - Math.floor(x) - 0.5, y - Math.floor(y) - 0.5) < TRUNK_R + RULES.personR + 0.1;
+}
 // The person walks in the 8 grid directions nearest the stick.
 export function walkDir(g) {
   const a = Math.round(Math.atan2(g.y, g.x) / (45 * D)) * 45 * D;
@@ -421,10 +433,24 @@ function walkStep(s, g, dt) {
     const d = walkDir(g);
     p.dir = Math.atan2(d.y, d.x);
     const v = RULES.walk * g.len;
+    const x0 = p.x;
+    const y0 = p.y;
     const nx = p.x + d.x * v * dt;
     if (!blocked(nx, p.y)) p.x = nx;
     const ny = p.y + d.y * v * dt;
     if (!blocked(p.x, ny)) p.y = ny;
+    // Walking straight into a trunk: step round it, to whichever side is open.
+    if (p.x === x0 && p.y === y0) {
+      for (const side of [1, -1]) {
+        const sx = p.x - d.y * side * v * dt;
+        const sy = p.y + d.x * side * v * dt;
+        if (!blocked(sx, sy) && nearTrunk(p.x + d.x * 0.3, p.y + d.y * 0.3)) {
+          p.x = sx;
+          p.y = sy;
+          break;
+        }
+      }
+    }
     s.walkT += dt;
     if (s.walkT > 0.38) {
       s.walkT = 0;
