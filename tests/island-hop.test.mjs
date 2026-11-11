@@ -913,21 +913,31 @@ test('island-hop: each state shows only its own cards and HUD, as in the spec\'s
       finish: !document.querySelector('[data-screen="finish"]').hidden,
       pause: !document.querySelector('[data-screen="pause"]').hidden,
     }));
-  assert.deepEqual(await vis(), { card: true, hud: false, finish: false, pause: false });
+  assert.deepEqual(await vis(), { card: true, hud: false, finish: false, pause: false }, 'Start');
+  const hide = (h) =>
+    page.evaluate((h) => {
+      Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, h);
   await page.click('[data-start]');
-  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false });
-  await page.evaluate(() => {
-    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
-  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: true });
+  assert.equal(await page.evaluate(() => __hop.state.phase), 'fly');
+  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false }, 'Fly-over');
+  // Playing: once the fly-over has ended.
+  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 5000 });
+  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false }, 'Playing');
+  // Paused, from play.
+  await hide(true);
+  assert.equal(await page.evaluate(() => __hop.state.phase), 'play');
+  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: true }, 'Paused');
+  await hide(false);
   await page.click('[data-resume]');
+  assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false }, 'Playing again');
   await page.evaluate(() => {
     __hop.manual = true;
     __hop.start(0, { fly: false });
     __hop.autopilot('gold');
     __hop.step(60);
   });
-  assert.deepEqual(await vis(), { card: false, hud: false, finish: true, pause: false });
+  assert.deepEqual(await vis(), { card: false, hud: false, finish: true, pause: false }, 'Finished');
   await context.close();
 });

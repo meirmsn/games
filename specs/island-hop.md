@@ -83,9 +83,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   16 px above the water. The game has its own pointer handler: one finger is the stick, a second
   finger is ignored, and there is no pinch or wheel zoom (`attachGestures` is not used).
 - A drag that starts in the phone's edge strips doesn't steer: the stick ignores it through
-  `shared/safe-zone.js`, as `main`'s game guidelines ask of every game since its edge-gestures rule
-  (owner, 2026-11-10, on `specs/edge-gestures.md`: "Yes"). Recorded when `main` came in (owner,
-  2026-11-11: "Can you bring the latest main?").
+  `shared/safe-zone.js`. This isn't a new choice for Island Hop: `main`'s game guidelines
+  (`discussion/game-guidelines.md`, Phone hygiene) require it of every game: "No drag or swipe
+  starts in the left-edge or top strip. Games use `shared/safe-zone.js` to ignore such starts", and a
+  control that takes "any swipe down sits clear of the bottom strip". The stick takes a swipe in any
+  direction, so it ignores starts in the bottom strip too. Recorded when `main` came in, so the owner
+  can check it (Claude, 2026-11-11).
 - The map is hand-made, not generated: a 60 × 60 grid as text rows in `island-hop/map.js`, the
   islands staggered down the grid's diagonal so the archipelago runs top to bottom on a portrait
   screen. Five islands: two large (about 16 × 12, with a road loop, 3 berths and 2–3 parked cars
