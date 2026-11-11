@@ -693,7 +693,7 @@ function draw() {
       const depth = iso.depth(x + 0.5, y + 0.5);
       if (isBuilding(c)) {
         const name = buildingSprite(x, y);
-        items.push({ depth, building: true, box: spriteBox(name, p.x, p.y), draw: (a) => spr(name, p.x, p.y, 1, a) });
+        items.push({ depth, stand: true, building: true, box: spriteBox(name, p.x, p.y), draw: (a) => spr(name, p.x, p.y, 1, a) });
         continue;
       }
       const g = groundSprite(x, y);
@@ -703,7 +703,7 @@ function draw() {
       }
       if (c === 'T' && !coarse) {
         const t = treeSprite(x, y);
-        items.push({ depth: depth + 0.01, building: true, box: spriteBox(t, p.x, p.y), draw: (a) => spr(t, p.x, p.y, 1, a) });
+        items.push({ depth: depth + 0.01, stand: true, building: true, box: spriteBox(t, p.x, p.y), draw: (a) => spr(t, p.x, p.y, 1, a) });
       }
     }
   for (const m of MOORED) items.push({ depth: iso.depth(m.x, m.y), draw: () => drawBoat(m.craft, m.x, m.y, frameHeading(m.frame)) });
@@ -724,7 +724,7 @@ function draw() {
     const p = iso.toScreen(c.x, c.y, LAND_Z);
     const kind = c.kind;
     const f = frameOf(c.dir.x, c.dir.y);
-    items.push({ depth: iso.depth(c.x, c.y) + 0.002, draw: () => spr(`${kind}${f}`, p.x, p.y + 3) });
+    items.push({ depth: iso.depth(c.x, c.y) + 0.002, stand: true, draw: () => spr(`${kind}${f}`, p.x, p.y + 3) });
   }
   let personDepth = null;
   let personBox = null;
@@ -737,12 +737,16 @@ function draw() {
     personDepth = iso.depth(p.x, p.y) + 0.003;
     const sp = iso.toScreen(p.x, p.y, z);
     personBox = { x: sp.x, y: sp.y - PERSON_H / 2 };
-    items.push({ depth: personDepth, draw: () => drawPerson(p.x, p.y, z) });
+    items.push({ depth: personDepth, stand: true, draw: () => drawPerson(p.x, p.y, z) });
   }
   // The ghost of the best run.
   const gp = ghostAt();
-  if (gp) items.push({ depth: iso.depth(gp.x, gp.y), draw: () => drawPerson(gp.x, gp.y, gp.z, 0.45, true) });
-  for (const it of sortByDepth(items)) {
+  if (gp) items.push({ depth: iso.depth(gp.x, gp.y), stand: !!gp.z, draw: () => drawPerson(gp.x, gp.y, gp.z, 0.45, true) });
+  // Two passes: first the ground and everything at sea level, back to front (so a cliff in front
+  // hides a boat behind it); then what stands on the land (buildings, trees, cars, you), back to
+  // front, so a flat ground tile in front never cuts across the person's feet.
+  const order = [...sortByDepth(items.filter((it) => !it.stand)), ...sortByDepth(items.filter((it) => it.stand))];
+  for (const it of order) {
     // A building drawn after you whose shape covers you fades to 35%.
     let a = 1;
     if (it.building && personBox && it.depth > personDepth && it.box) {

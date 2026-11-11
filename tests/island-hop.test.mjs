@@ -602,6 +602,35 @@ test('island-hop AC-6: a drag that starts in the phone\'s edge strips doesn\'t s
   await context.close();
 });
 
+test('island-hop: a ground tile in front never covers the person standing behind it', async () => {
+  const { context, page } = await open();
+  // On open grass in Port Town (the screenshot the owner sent: the next tile cut across the body),
+  // the person's body is still drawn: its pink shows just above the feet.
+  const pink = await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    const s = __hop.state;
+    s.mode = 'walk';
+    const out = [];
+    for (const [x, y] of [[10.3, 7.4], [10.5, 7.3], [10.2, 7.6], [10.7, 7.7]]) {
+      s.person.x = x;
+      s.person.y = y;
+      __hop.step(1.5, null);
+      __hop.draw();
+      const v = __hop.view;
+      const cv = document.getElementById('world');
+      const k = cv.width / innerWidth;
+      const fx = ((x - y) * 66 - v.x) * v.zoom + innerWidth / 2;
+      const fy = ((x + y) * 33 - 16 - v.y) * v.zoom + innerHeight / 2;
+      const d = cv.getContext('2d').getImageData(Math.round(fx * k), Math.round((fy - 6 * v.zoom) * k), 1, 1).data;
+      out.push([d[0], d[1], d[2]]);
+    }
+    return out;
+  });
+  for (const [r, g, b] of pink) assert.ok(r > 200 && g < 140 && b > 110, `the person's body shows: rgb(${r}, ${g}, ${b})`);
+  await context.close();
+});
+
 test('island-hop AC-8: walking onto an ordered stop too soon pulses its beam and flashes the pickup\'s icon', async () => {
   const { context, page } = await open({ mem: { map: MAP_VERSION, open: 5, best: {} }, hash: '#m=4' });
   await page.evaluate(() => {
