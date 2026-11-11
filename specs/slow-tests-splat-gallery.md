@@ -1,6 +1,6 @@
 # Splat Gallery's tests wait on frames and state, not time
 
-**Go:** pending
+**Go:** "go" (owner, 2026-11-11)
 
 ## Intent
 
