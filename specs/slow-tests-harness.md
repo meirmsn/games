@@ -55,6 +55,17 @@ cause; this one gives them what they need to do it and to prove it:
   unknown; the hang was seen in a whole-suite run, not pwa-updates alone. Every wait in it that
   couldn't end on its own is now bounded, and any file that hangs is stopped and named, so if it
   comes back it names itself. F-34 stays in `FINDINGS.md`, updated, for R-5. (Claude, 2026-11-11)
+- **F-34, a candidate cause (2026-11-11).** With pwa-updates' old `close()`, a connection to its
+  server still mid-request when the test ends is never dropped, and the file's process stays open
+  after its tests pass, until the new per-file limit stops it. Seen with a half-sent request made by
+  the `slow-tests-harness AC-4` test, not with the browser; so it is a way the old file could hang,
+  not proof of what hung. The new `close()` drops such connections. (Claude, 2026-11-11)
+- **AC-10's hidden page is a page that runs no frames (2026-11-11).** Headless Chromium keeps every
+  page visible: a page behind another tab still runs frames, and CDP won't freeze a visible page
+  (both tried in this build). So the test makes a page that runs no frames, its
+  `requestAnimationFrame` never calling back, as a hidden page doesn't. The item's point holds:
+  `realFrames` fails within its time-out instead of waiting for ever, a bound kept in Node, so it
+  doesn't matter why the frames stopped. The item's words are unchanged. (Claude, 2026-11-11)
 - **The CPU throttle is applied by `launch()` in `tests/clock.mjs`, not by each file's `open()`.**
   The split named a `newContext()` wrapper and a one-line `open()` change per file, but 11 contexts
   in 7 files are made with `browser.newContext()` outside `open()` (Crumble, Googly Faces, PWA

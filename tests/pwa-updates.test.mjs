@@ -8,6 +8,8 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import net from 'node:net';
+import { once } from 'node:events';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname, normalize } from 'node:path';
@@ -108,6 +110,7 @@ async function site({ legacy = false } = {}) {
   return {
     dir,
     base,
+    server,
     context,
     async page(path = '') {
       const page = await context.newPage();
@@ -484,19 +487,20 @@ test('pwa-updates AC-10: a game opened straight from a link is cached into its o
   await s.close();
 });
 
-test('slow-tests-harness AC-4: the test server closes within 2 s while a keep-alive connection is still open', async () => {
+test('slow-tests-harness AC-4: the test server drops a connection still open and has closed when close() returns', async () => {
   const s = await site();
-  const page = await s.page();
-  await page.waitForLoadState('load');
-  // A client that keeps its connection open after the response, as a browser's idle socket does.
-  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
-  await new Promise((resolve, reject) =>
-    http.get(s.base + 'manifest.webmanifest', { agent }, (res) => res.resume().on('end', resolve)).on('error', reject)
-  );
+  await s.page();
+  // A request whose headers never finish: an active connection, which server.close() alone keeps
+  // open, so the old close() returned with the server still holding it (and the file kept running).
+  const raw = net.connect(s.server.address().port, '127.0.0.1');
+  await once(raw, 'connect');
+  raw.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n');
+  const dropped = once(raw, 'close');
+  const serverClosed = once(s.server, 'close');
   const start = Date.now();
-  await within(s.close(), 'the server closing', 2000);
+  await within(s.close(), 'close()', 2000);
+  assert.equal(s.server.listening, false, 'the server stopped listening');
+  await within(Promise.all([dropped, serverClosed]), 'the open connection dropped and the server closed', 500);
   assert.ok(Date.now() - start < 2000, `closed in ${Date.now() - start} ms`);
-  // Closed, not just returned: a new connection is refused.
-  await assert.rejects(fetch(s.base), 'the server no longer accepts connections');
-  agent.destroy();
+  raw.destroy();
 });
