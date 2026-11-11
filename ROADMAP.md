@@ -11,7 +11,7 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-4 | 2026-11-11 | Slow tests run once: Crumble's and Googly Faces' tests                      | Done (`slow-tests-crumble-googly`)   |
 | R-5 | 2026-11-11 | Slow tests run once: the PWA-update and landing-page tests                  | Done                                 |
 | R-6 | 2026-11-11 | Slow tests run once: Orbit's, Reef's and Runes' tests                       | Done (`specs/slow-tests-orbit-reef-runes.md`) |
-| R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Open                                 |
+| R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Done (`specs/slow-tests-pixel-leap.md`) |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
@@ -171,3 +171,10 @@ Its spec: `specs/slow-tests-pixel-leap.md`, numbered from AC-1.
 single-pixel read at `tests/pixel-leap.test.mjs` ~951; 4 waits. This slice, or whichever merges
 last, carries the whole-suite proof (five `scripts/check-slow.sh` runs started together, plus one
 at 10× CPU throttle, with zero failures) and closes F-33.
+
+Done 2026-11-11: every wait now waits on frames, the game's state or a signal, and the file is
+marked `// clock-checked`; the frame budget is CPU time from a trace, under the throttle, its budget
+scaled by the rate (the owner's adversarial review). Guards that hold frames back while the page is
+idle, or stall frames without CPU, fail the old waits. No game code changed. An unmarked test file
+that calls `waitForTimeout` now fails the fast tier. The whole suite's proof is in the PR; F-33 is
+closed. The causes per test are in the spec's Decisions.
