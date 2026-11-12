@@ -44,7 +44,7 @@ async function open(path = '', opts = {}) {
 test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable but High Seas', async () => {
   const { context, page, errors } = await open();
   assert.deepEqual(await page.locator('.tile h2').allTextContents(), [
-    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Orbit', 'Googly Faces', 'Crumble', 'High Seas', 'Reef',
+    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Googly Faces', 'Orbit', 'Crumble', 'High Seas', 'Reef',
   ]);
   for (const tile of await page.locator('.tiles > li > .tile').all()) {
     const soon = (await tile.locator('h2').textContent()) === 'High Seas';

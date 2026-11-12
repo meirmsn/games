@@ -19,7 +19,7 @@ changes (there is no `DESIGN.md`).
 
 ## Decisions
 
-- The order, top to bottom: Splat Gallery, Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces,
+- The order as first built (#55; Googly Faces and Orbit later swapped, see below), top to bottom: Splat Gallery, Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces,
   Crumble, High Seas, Reef. The reason: the top two spots go to the owner's top two, and the owner's
   #3 (Reef) is the last tile, so someone who flicks straight to the bottom on a phone (one column)
   also lands on a good game. Rejected: strict best-to-worst (Crumble last), and the unplayable High
@@ -33,10 +33,13 @@ changes (there is no `DESIGN.md`).
   old specs are left as the record of their own changes, and this spec is where the order now lives
   (Claude, 2026-11-12).
 
+- **Changed after the merge (#55), by the owner (2026-11-12):** "Swap Google Faces with Orbit in
+  the order." So Googly Faces is fifth and Orbit sixth; AC-1 says so.
+
 ## Acceptance items
 
 - **AC-1** The landing page's tiles, read top to bottom in document order, are named Splat Gallery,
-  Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces, Crumble, High Seas, Reef.
+  Gotta Go!, Runes, Pixel Leap, Googly Faces, Orbit, Crumble, High Seas, Reef.
 - **AC-2** High Seas stays a coming-soon tile, and every other tile is a playable link.
 - **AC-3** Each tile keeps its link, art, text and tone — verified by review: the diff to
   `index.html` only moves whole `<li>` items.
