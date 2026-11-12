@@ -1650,27 +1650,40 @@ test('splat-gallery-near-water AC-3: the strip as hit-tested is the strip as dra
     const r = await page.evaluate(async () => {
       const g = window.__gallery;
       const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-      // A quarter cycle on: the water is at its farthest from rest.
-      for (let i = 0; i < 45; i++) g.step(1 / 60);
+      // A quarter of the 4 s cycle on: the water is at its farthest from rest.
+      for (let i = 0; i < 60; i++) g.step(1 / 60);
       await frame();
       const cv = document.querySelector('#booth');
       const c = cv.getContext('2d');
       const { k, ox, oy, SW } = g.stage();
       const dpr = cv.width / innerWidth;
       const px = (ux, uy) => Array.from(c.getImageData(Math.round((ux * k + ox) * dpr), Math.round((uy * k + oy) * dpr), 1, 1).data);
-      const blue = ([r, gg, b]) => b > 180 && r < 120 && gg > 130 && gg < 200; // the water's #3ea3df, give or take its shading
+      // What the strip itself draws: there the frame turns black when the strip is drawn black.
       const out = [];
       for (const lane of g.L.lanes.filter((l) => l.kind === 'water')) {
         const offset = g.sway(lane);
+        const spots = [];
         for (let x = SW * 0.3; x < SW * 0.7; x += 7) {
           const crest = g.stripY(lane, x);
-          // The drawn crest at x: water just under its outline (about 5 units thick), none above it.
-          const below = blue(px(x, crest + 8));
-          const above = blue(px(x, crest - 3));
-          // And the judge agrees, without a target in the way.
-          const hitBelow = g.resolve(x, crest + 1);
-          const hitAbove = g.resolve(x, crest - 1);
-          out.push({ lane: lane.i, offset, below, above, judged: hitBelow.what === 'strip' && hitBelow.lane === lane.i && !(hitAbove.what === 'strip' && hitAbove.lane === lane.i), x });
+          spots.push([x, crest + 3], [x, crest - 3]);
+        }
+        const withIt = spots.map(([a, b]) => px(a, b));
+        g.stripsMarked.add(lane.i);
+        await frame();
+        const black = spots.map(([a, b]) => px(a, b));
+        g.stripsMarked.delete(lane.i);
+        await frame();
+        const drawn = (i) => withIt[i][0] + withIt[i][1] + withIt[i][2] - (black[i][0] + black[i][1] + black[i][2]) > 150;
+        for (let i = 0; i < spots.length; i += 2) {
+          const [x, below] = spots[i];
+          const hitBelow = g.resolve(x, below - 2);
+          const hitAbove = g.resolve(x, below - 4);
+          out.push({
+            lane: lane.i, offset, x,
+            below: drawn(i), // 3 units under the crest: the strip
+            above: drawn(i + 1), // 3 units over it: not the strip
+            judged: hitBelow.what === 'strip' && hitBelow.lane === lane.i && !(hitAbove.what === 'strip' && hitAbove.lane === lane.i),
+          });
         }
       }
       return out;
@@ -1679,7 +1692,7 @@ test('splat-gallery-near-water AC-3: the strip as hit-tested is the strip as dra
     assert.ok(r.every((p) => Math.abs(p.offset) > 5), `${where}: the water is swayed (${r[0].offset})`);
     assert.ok(r.every((p) => p.judged), `${where}: the judge's crest is stripY's: ${JSON.stringify(r.filter((p) => !p.judged).slice(0, 5))}`);
     const bad = r.filter((p) => !p.below || p.above);
-    assert.ok(bad.length <= r.length * 0.05, `${where}: the drawn water starts at stripY's crest: ${JSON.stringify(bad.slice(0, 5))}`);
+    assert.equal(bad.length, 0, `${where}: the strip is drawn 3 units under stripY's crest and not 3 units over it: ${JSON.stringify(bad.slice(0, 5))}`);
     await context.close();
   }
   // Shots: just below the swayed crest lands on the strip, just above it doesn't.

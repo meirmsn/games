@@ -1512,6 +1512,7 @@ function drawWall() {
   for (const d of decor) sprite(d.name, d.x, d.y, d.w, d.h);
 }
 
+const stripsMarked = new Set(); // lanes whose strip is drawn black, to find its pixels: for the tests only
 function drawStrip(lane) {
   const name = stripName(lane);
   const [w, h] = size(name);
@@ -1521,6 +1522,7 @@ function drawStrip(lane) {
   const part = 0.6;
   const th = h * sc * part;
   ctx.save();
+  if (stripsMarked.has(lane.i)) ctx.filter = 'brightness(0)';
   ctx.translate(sway(lane), swayY(lane));
   ctx.fillStyle = lane.kind === 'water' ? '#3ea3df' : '#3c9f45';
   const edge = 4 + SWAY_AMP; // the fill's ends stay off the stage however far it sways
@@ -2522,7 +2524,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, sway, swayY, swayPeriod, waveDepth, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, sway, swayY, swayPeriod, waveDepth, stripsMarked, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
