@@ -37,14 +37,28 @@ strips.
   re-mapping the pull to the lanes' new span, which would change every lane's feel for a layout fix
   (Claude, 2026-11-11).
 - Only the water sways, as asked; the grass stays still (Claude, 2026-11-11).
-- The sway: each water strip slides left and right on a sine, as if on a crank, 6 units each way
-  every 3 s, consecutive water lanes (lanes 0 and 2, 2 and 4) in opposite directions. The water's
+- The sway: each water strip slides left and right on a sine, as if on a crank, 6 units each way,
+  consecutive water lanes (lanes 0 and 2, 2 and 4) in opposite directions. Changed after the go
+  (below): a cycle takes 4 s, or 3 s in a frenzy and in a round's last 3 s; the change of pace
+  never jumps the strip, which carries on from where it is. The water's
   solid fill under the waves is wide enough that its ends never show. It runs on the game's own clock, so
   it moves on the start card and stops while the game is paused, like the targets (Claude,
   2026-11-11).
 - What sits on the water moves with it: paint that lands on a water strip rides with the strip, a
   shot is judged against the crest where it is drawn at that moment, and paint stays clipped to
   the moving crest. Targets keep their own motion (Claude, 2026-11-11).
+- Changed after the go, on the owner's words of 2026-11-12, in chat: "I think the current speed is
+  good for the frenzy, and it should be a little bit slower for the normal. And I think there should
+  also be vertical movement, and it probably be on phase with the horizontal one. Like, well, I
+  don't know, but there should be also a vertical movement. Definitely smaller in amplitude. Also,
+  when the time is running out and the targets start moving faster, you can also move faster and
+  faster the water. Maybe in the last 3 seconds, maybe the simplest is in the last 3 seconds you
+  move it again to the speed of the frenzy." So: the 3 s cycle is kept for a frenzy and for a
+  round's last 3 s, and the normal cycle is 4 s; each water strip also rises and falls 2 units each
+  way, in phase with its own slide (it is highest at its farthest one way, lowest at its farthest
+  the other), so it moves on a slant. The layout leaves room for the 2 units, so the near water
+  still shows twice its waves' depth at its lowest (owner, 2026-11-12; the 4 s and the 2 units are
+  Claude's reading of "a little bit slower" and "definitely smaller").
 - "The water ones" read as the water strips, not the ducks on them (the ducks already bob); the owner
   gave a plain "go" on this reading (Claude, 2026-11-11; go 2026-11-12).
 
@@ -55,16 +69,19 @@ strips.
   least `stripY` across the stage) is above the counter's top by at least twice its waves' depth,
   and the top of a target or a duck standing on the far lane's line is at or below the booth's top
   (`L.T`).
-- **AC-2** On the game's clock (manual stepping), a water strip's offset reaches between 5 and 7
-  units each way over a 3 s cycle; consecutive water lanes are offset in opposite directions at the
-  same moment; grass strips never move; and the offset doesn't change while the game is paused or
-  turned.
+- **AC-2** On the game's clock (manual stepping), a water strip's sideways offset reaches between 5
+  and 7 units each way; a cycle takes 4 s in normal play and on the start card, and 3 s in a frenzy
+  and when 3 s or less are left in a round; a change of pace moves the strip by less than half a
+  unit in a frame; consecutive water lanes are offset sideways in opposite directions at the same
+  moment; each also rises and falls between 1.5 and 2.5 units each way, rising as its own sideways
+  offset grows one way and falling as it grows the other; grass strips never move; and the offset
+  doesn't change while the game is paused or turned.
 - **AC-3** The strip as hit-tested is the strip as drawn: with the water swayed away from its rest
   position, a shot just below the crest `stripY` reports lands on the strip and one just above it
   doesn't, and on the drawn canvas pixels 3 units above that crest are not water and 3 units below
   are.
 - **AC-4** Paint that lands on a water strip moves with it: half a cycle later its drawn position
-  has shifted by the strip's change in offset, and it still shows only below the crest.
+  has shifted by the strip's change in offset, sideways and up or down, and it still shows only below the crest.
 - **AC-5** The other Splat Gallery tests still pass. The paint-clip test (the one titled "paint on the water or grass shows only below its crest")
   reads its pixels at the same sway it took its crest spots at; nothing else in it changes.
 

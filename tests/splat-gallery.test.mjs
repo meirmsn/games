@@ -1463,12 +1463,12 @@ test('splat-gallery AC-31: paint on the water or grass shows only below its cres
     const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     // The flight's time to land, so the shot is aimed at the crest as it will be then (the water
     // sways: specs/splat-gallery-near-water.md).
-    const T0 = g.game.T;
+    const ph0 = g.game.swayPh;
     let n = 0;
     while (n / 60 < g.flightTime(g.stripY(lane, x) + 2)) n++;
-    g.game.T = T0 + n / 60;
+    g.game.swayPh = ph0 + ((2 * Math.PI) / g.swayPeriod()) * (n / 60);
     const landY = g.stripY(lane, x) + 2;
-    g.game.T = T0;
+    g.game.swayPh = ph0;
     g.aimAt(x, landY);
     g.game.lastLand = null;
     g.fire();
@@ -1539,50 +1539,95 @@ test('splat-gallery-near-water AC-1: the near lane shows its whole wave and as m
   }
 });
 
-test('splat-gallery-near-water AC-2: water strips sway about 6 units each way over 3 s, consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
+test('splat-gallery-near-water AC-2: water strips sway about 6 units each way and 2 up and down, a 4 s cycle, 3 s in a frenzy and the last 3 s, without a jump; consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
   for (const viewport of [PORTRAIT, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await ready(page);
     const r = await page.evaluate(() => {
       const g = window.__gallery;
+      const G = g.game;
       const water = g.L.lanes.filter((l) => l.kind === 'water');
       const grass = g.L.lanes.filter((l) => l.kind === 'grass');
+      // How long one cycle takes now: frames until lane 0's offset has crossed zero upward twice.
+      const cycle = (hold = () => {}) => {
+        let ups = 0;
+        let prev = g.sway(water[0]);
+        let first = -1;
+        for (let i = 1; i < 60 * 12; i++) {
+          hold();
+          g.step(1 / 60);
+          const v = g.sway(water[0]);
+          if (prev < 0 && v >= 0) {
+            ups++;
+            if (ups === 1) first = i;
+            if (ups === 2) return (i - first) / 60;
+          }
+          prev = v;
+        }
+        return -1;
+      };
+      G.time = 60; // well before the last 3 s
       const lo = water.map(() => Infinity);
       const hi = water.map(() => -Infinity);
+      const loY = water.map(() => Infinity);
+      const hiY = water.map(() => -Infinity);
       let against = true;
+      let slant = true;
       let grassMoved = false;
-      let peakAt = -1;
-      for (let i = 0; i < 180; i++) {
+      for (let i = 0; i < 240; i++) {
         g.step(1 / 60);
-        const o = water.map((l) => g.sway(l));
-        o.forEach((v, j) => {
-          lo[j] = Math.min(lo[j], v);
-          hi[j] = Math.max(hi[j], v);
+        water.forEach((l, j) => {
+          const x = g.sway(l);
+          const y = g.swayY(l);
+          lo[j] = Math.min(lo[j], x);
+          hi[j] = Math.max(hi[j], x);
+          loY[j] = Math.min(loY[j], y);
+          hiY[j] = Math.max(hiY[j], y);
+          // Up (negative y) as it slides one way, down as it slides the other: in phase.
+          if (Math.abs(x) > 0.5 && Math.sign(y) !== -Math.sign(x)) slant = false;
         });
+        const o = water.map((l) => g.sway(l));
         for (let j = 1; j < o.length; j++) if (Math.abs(o[j]) > 0.01 && Math.sign(o[j]) === Math.sign(o[j - 1])) against = false;
-        if (grass.some((l) => g.sway(l) !== 0)) grassMoved = true;
-        if (peakAt < 0 && o[0] >= hi[0] && i > 0 && o[0] > 5.9) peakAt = i;
+        if (grass.some((l) => g.sway(l) !== 0 || g.swayY(l) !== 0)) grassMoved = true;
       }
-      // One more cycle: it comes back to where it was after 3 s.
-      const at = water.map((l) => g.sway(l));
-      for (let i = 0; i < 180; i++) g.step(1 / 60);
-      const again = water.map((l) => g.sway(l));
-      return { n: water.length, lo, hi, against, grassMoved, at, again };
+      const normal = cycle(() => (G.time = 60));
+      const frenzy = cycle(() => (G.frenzy = 99));
+      G.frenzy = 0;
+      G.time = 60;
+      // Into the last 3 s: the pace changes, the strip doesn't jump.
+      let jump = 0;
+      let prev = g.sway(water[0]);
+      G.time = 3.5;
+      for (let i = 0; i < 60; i++) {
+        g.step(1 / 60);
+        const v = g.sway(water[0]);
+        jump = Math.max(jump, Math.abs(v - prev));
+        prev = v;
+      }
+      // Hold the round's clock at 2.9 s left while measuring the last seconds' pace.
+      const lastSecs = cycle(() => (G.time = 2.9));
+      return { n: water.length, lo, hi, loY, hiY, against, slant, grassMoved, normal, frenzy, lastSecs, jump };
     });
     const where = `${viewport.width}×${viewport.height}`;
     assert.ok(r.n >= 2, where);
     for (let j = 0; j < r.n; j++) {
       assert.ok(r.hi[j] >= 5 && r.hi[j] <= 7 && r.lo[j] <= -5 && r.lo[j] >= -7, `${where}: water lane ${j} sways ${r.lo[j].toFixed(2)}..${r.hi[j].toFixed(2)}`);
-      assert.ok(Math.abs(r.at[j] - r.again[j]) < 0.05, `${where}: a 3 s cycle (${r.at[j]} then ${r.again[j]})`);
+      assert.ok(r.hiY[j] >= 1.5 && r.hiY[j] <= 2.5 && r.loY[j] <= -1.5 && r.loY[j] >= -2.5, `${where}: water lane ${j} rises and falls ${r.loY[j].toFixed(2)}..${r.hiY[j].toFixed(2)}`);
     }
+    assert.ok(Math.abs(r.normal - 4) < 0.05, `${where}: a 4 s cycle in normal play (${r.normal})`);
+    assert.ok(Math.abs(r.frenzy - 3) < 0.05, `${where}: a 3 s cycle in a frenzy (${r.frenzy})`);
+    assert.ok(Math.abs(r.lastSecs - 3) < 0.05, `${where}: a 3 s cycle in the last 3 s (${r.lastSecs})`);
+    assert.ok(r.jump < 0.5, `${where}: the change of pace doesn't jump the strip (${r.jump.toFixed(3)} a frame)`);
     assert.ok(r.against, `${where}: consecutive water lanes sway against each other`);
+    assert.ok(r.slant, `${where}: each rises as it slides one way and dips as it slides the other`);
     assert.equal(r.grassMoved, false, `${where}: the grass stays still`);
     await context.close();
   }
-  // On real frames: it moves, and holds while paused or turned.
+  // The start card's pace, and on real frames: it moves, and holds while paused or turned.
   const { context, page } = await open();
+  assert.equal(await page.evaluate(() => window.__gallery.swayPeriod()), 4, 'a 4 s cycle on the start card');
   await ready(page);
-  const swayNow = () => page.evaluate(() => window.__gallery.sway(window.__gallery.L.lanes[0]) + ':' + window.__gallery.game.T);
+  const swayNow = () => page.evaluate(() => window.__gallery.sway(window.__gallery.L.lanes[0]) + ':' + window.__gallery.swayY(window.__gallery.L.lanes[0]));
   await page.evaluate(() => (window.__gallery.manual = false));
   const a = await swayNow();
   await realFrames(page, 10);
@@ -1647,12 +1692,12 @@ test('splat-gallery-near-water AC-3: the strip as hit-tested is the strip as dra
     for (const dy of [3, -3]) {
       for (const x of [120, 170, 230]) {
         // Aim where the crest will be when the ball lands.
-        const T0 = g.game.T;
+        const ph0 = g.game.swayPh;
         let n = 0;
         while (n / 60 < g.flightTime(g.stripY(lane, x))) n++;
-        g.game.T = T0 + n / 60;
+        g.game.swayPh = ph0 + ((2 * Math.PI) / g.swayPeriod()) * (n / 60);
         const y = g.stripY(lane, x) + dy;
-        g.game.T = T0;
+        g.game.swayPh = ph0;
         g.aimAt(x, y);
         g.game.lastFire = -1;
         g.game.lastLand = null;
@@ -1687,23 +1732,31 @@ test('splat-gallery-near-water AC-4: paint on the water rides with it and still 
     for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
     const p = g.paint()[g.paint().length - 1];
     const drawnAt = () => p.x + g.sway(lane);
+    const drawnY = () => p.y + g.swayY(lane);
     const at0 = drawnAt();
+    const y0 = drawnY();
     const s0 = g.sway(lane);
+    const v0 = g.swayY(lane);
     for (let i = 0; i < 90; i++) g.step(1 / 60);
     const at1 = drawnAt();
+    const y1 = drawnY();
     const s1 = g.sway(lane);
+    const v1 = g.swayY(lane);
     const clip = [];
     for (let xx = 60; xx < 340; xx += 17) {
       const crest = g.stripY(lane, xx);
       clip.push(!g.paintShowsAt(2, xx, crest - 2) && g.paintShowsAt(2, xx, crest + 2));
     }
-    return { landed: g.game.lastLand, layer: p.layer, at0, at1, s0, s1, x, clip };
+    return { landed: g.game.lastLand, layer: p.layer, at0, at1, s0, s1, x, y, y0, y1, v0, v1, clip };
   });
   assert.equal(r.landed.what, 'strip');
   assert.equal(r.layer, 2);
   assert.ok(Math.abs(r.at0 - r.x) < 1.5, `it lands where it was aimed: ${r.at0} vs ${r.x}`);
   assert.ok(Math.abs(r.s1 - r.s0) > 2, `the water moved: ${r.s0} → ${r.s1}`);
   assert.ok(Math.abs(r.at1 - r.at0 - (r.s1 - r.s0)) < 1e-6, `the paint moved with it: ${r.at0} → ${r.at1}`);
+  assert.ok(Math.abs(r.y0 - r.y) < 1.5, `it lands at the height aimed: ${r.y0} vs ${r.y}`);
+  assert.ok(Math.abs(r.v1 - r.v0) > 0.5, `the water rose or fell: ${r.v0} → ${r.v1}`);
+  assert.ok(Math.abs(r.y1 - r.y0 - (r.v1 - r.v0)) < 1e-6, `the paint rose or fell with it: ${r.y0} → ${r.y1}`);
   assert.ok(r.clip.every(Boolean), 'clipped at the moving crest');
   await context.close();
 });

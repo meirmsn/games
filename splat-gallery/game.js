@@ -195,7 +195,7 @@ function layoutStage(o) {
   // line stays low enough that its targets (142 units a side at its scale) clear the valance
   // (specs/splat-gallery-near-water.md).
   const near = { i: n - 1, s: sNear, kind: 'water' };
-  const room = L.C - L.T - 142 * sNear * 0.74 - (2 * waveDepth(near) + crestDrop(near)); // far line to near line, plus the far line's drop
+  const room = L.C - L.T - 142 * sNear * 0.74 - (2 * waveDepth(near) + crestDrop(near) + SWAY_RISE); // far line to near line, plus the far line's drop
   const farHalf = 71 * sFar;
   let band = (L.C - L.T) / n;
   let drop = band * 0.36; // from a band's top to its line
@@ -310,18 +310,23 @@ function waveDepth(lane) {
 function crestDrop(lane) {
   return Math.min(...masks[stripName(lane)].top) * size(stripName(lane))[1] * stripScale(lane);
 }
-// The water sways left and right as if on a crank, consecutive water lanes against each other; the
-// grass stays still (specs/splat-gallery-near-water.md). On the game's clock, so it stops in a pause.
+// The water sways as if on a crank: left and right, rising a little at one end of the slide and
+// dipping at the other, consecutive water lanes against each other; the grass stays still
+// (specs/splat-gallery-near-water.md). Its phase moves on with the game's clock, so it stops in a
+// pause; a frenzy and a round's last 3 s turn the crank faster, without a jump.
 const SWAY_AMP = 6;
-const SWAY_PERIOD = 3;
+const SWAY_RISE = 2;
+const swayPeriod = () => (game.frenzy > 0 || (game.mode === 'play' && game.time <= 3) ? 3 : 4);
 function sway(lane) {
   if (lane.kind !== 'water') return 0;
   const rank = L.lanes.filter((l) => l.kind === 'water' && l.i < lane.i).length;
-  return (rank % 2 ? -1 : 1) * SWAY_AMP * Math.sin((2 * Math.PI * game.T) / SWAY_PERIOD);
+  return (rank % 2 ? -1 : 1) * SWAY_AMP * Math.sin(game.swayPh || 0);
 }
+// Up (negative) as the strip slides one way, down as it slides the other.
+const swayY = (lane) => (-SWAY_RISE / SWAY_AMP) * sway(lane);
 // The crest at x as drawn now, sway and all.
 function stripY(lane, x) {
-  return restY(lane, x - sway(lane));
+  return restY(lane, x - sway(lane)) + swayY(lane);
 }
 // The crest at x with the strip at rest: the strip's own frame, where its paint and clip live.
 function restY(lane, x) {
@@ -931,8 +936,9 @@ function hitAssist() {
 const splatSize = (laneIdx) => 30 + 26 * L.lanes[laneIdx].s;
 // A splat on the scenery: `layer` is the lane whose strip it's on, or -1 for the wall. On a strip
 // it's kept in the strip's own frame, so it rides with the water's sway.
-function addPaint(x0, y, layer, colour, aimedLane) {
+function addPaint(x0, y0, layer, colour, aimedLane) {
   const x = layer >= 0 ? x0 - sway(L.lanes[layer]) : x0;
+  const y = layer >= 0 ? y0 - swayY(L.lanes[layer]) : y0;
   const sz = splatSize(aimedLane);
   const shape = Math.floor(rng() * 36);
   const px = sz * k * dpr;
@@ -1377,6 +1383,7 @@ function update(dt) {
   }
   updateMusicTempo();
   game.T += dt;
+  game.swayPh = ((game.swayPh || 0) + (2 * Math.PI * dt) / swayPeriod()) % (2 * Math.PI);
   game.modeT += dt;
   if (game.banner) {
     game.banner.t += dt;
@@ -1514,10 +1521,10 @@ function drawStrip(lane) {
   const part = 0.6;
   const th = h * sc * part;
   ctx.save();
-  ctx.translate(sway(lane), 0);
+  ctx.translate(sway(lane), swayY(lane));
   ctx.fillStyle = lane.kind === 'water' ? '#3ea3df' : '#3c9f45';
   const edge = 4 + SWAY_AMP; // the fill's ends stay off the stage however far it sways
-  ctx.fillRect(-edge, lane.strip + th - 1, SW + 2 * edge, Math.max(0, L.C - lane.strip - th + 1));
+  ctx.fillRect(-edge, lane.strip + th - 1, SW + 2 * edge, Math.max(0, L.C - lane.strip - th + 1 + SWAY_RISE));
   const off = lane.i * 37;
   let x = (((off % tw) + tw) % tw) - 2 * tw;
   for (; x < SW + 2 * tw; x += tw) ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * part, x, lane.strip, tw + 0.5, th);
@@ -1546,13 +1553,13 @@ let clipCtx = null;
 function paintShowsAt(laneIdx, x, y) {
   clipCtx = clipCtx || document.createElement('canvas').getContext('2d');
   const lane = L.lanes[laneIdx];
-  return clipCtx.isPointInPath(stripClip(lane), x - sway(lane), y);
+  return clipCtx.isPointInPath(stripClip(lane), x - sway(lane), y - swayY(lane));
 }
 let paintClipped = 0;
 function drawPaint(layer) {
   if (layer >= 0) {
     ctx.save();
-    ctx.translate(sway(L.lanes[layer]), 0);
+    ctx.translate(sway(L.lanes[layer]), swayY(L.lanes[layer]));
     ctx.clip(stripClip(L.lanes[layer]));
     paintClipped++;
   }
@@ -2515,7 +2522,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, sway, waveDepth, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, sway, swayY, swayPeriod, waveDepth, paintAlpha,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
