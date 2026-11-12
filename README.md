@@ -43,9 +43,10 @@ A quiet band across the landing page's bottom-right corner invites returning vis
 (`specs/landing-home-and-ribbon.md`). It shows from a person's second visit, or once they've tapped a
 game, and never in the installed app, while the Update notice shows, or if this browser's storage
 can't be used. Tapping it opens a dialog with the steps for the device, or an Install button where the
-browser offers one. "Not now" puts it away for 7 days; when it comes back, the dialog also offers
-"Don't show again", which, like installing, puts it away for good. Its
-state is one `localStorage` key, `ribbon`; deleting it starts over as a first visit.
+browser offers one, and a Close button. After that first look it shows on every visit; installing
+hides it for the rest of that visit. When it appears on a page that's already open (after a ctrl- or
+cmd-click on a game, or once the Update notice goes), it slides in from its corner. Its state is one
+`localStorage` key, `ribbon`; deleting it starts over as a first visit.
 
 ## Updates
 

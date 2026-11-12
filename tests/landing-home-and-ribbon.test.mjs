@@ -353,7 +353,6 @@ test('landing-home-and-ribbon AC-6: the ribbon shows on every later visit, even 
   assert.equal(await shown(page), true);
 });
 
-
 test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: where the browser offers install, the dialog\'s Install opens its prompt; then the ribbon and both Install buttons go', async (t) => {
   const { page, errors } = await open({ visits: 2 }, t);
   await ribbon(page).waitFor();
