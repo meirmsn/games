@@ -1024,17 +1024,19 @@ test('island-hop AC-10: the finish shows the time, the medal, the pars, the best
 
 test('island-hop AC-10: at the finish the camera follows your route from its start, drawing it as it goes, then pulls back to the whole map', async () => {
   const { context, page } = await open();
-  await page.evaluate(() => {
+  // Read where the replay starts before any real frame runs it on.
+  const { first, start } = await page.evaluate(() => {
     __hop.manual = true;
     __hop.start(1, { fly: false });
     __hop.autopilot('gold');
     __hop.step(60);
     __hop.autopilot(null);
+    const first = __hop.view.replay;
+    const start = __hop.state.trail[0];
     __hop.manual = false;
+    return { first, start };
   });
-  const first = await page.evaluate(() => __hop.view.replay);
   assert.ok(first && first.dur >= 4 && first.dur <= 9, `a replay of 4–9 s: ${JSON.stringify(first)}`);
-  const start = await page.evaluate(() => __hop.state.trail[0]);
   assert.ok(Math.hypot(first.head.x - start[0], first.head.y - start[1]) < 1, 'it starts where you started');
   await waitFor(page, () => __hop.view.replay && __hop.view.replay.head.n > 20 && Math.abs(__hop.view.tilesAcross - 16) < 1, null, { what: 'the camera close, 16 tiles across, following the route' });
   const mid = await page.evaluate(() => ({ head: __hop.view.replay.head, x: __hop.view.x, y: __hop.view.y }));
