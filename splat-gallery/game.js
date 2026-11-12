@@ -199,15 +199,33 @@ function layoutStage(o) {
   L.counterH = (land ? 104 : 168) + L.lift;
   L.C = SH - bottom - L.counterH; // the counter's top edge: the thumb's pad, never a target
   const n = land ? 3 : 5;
-  const band = (L.C - L.T) / n;
   const [sFar, sNear] = land ? [0.38, 0.52] : [0.36, 0.6];
+  // The lanes share the space between the valance and the counter evenly, unless that would leave
+  // the near lane's water mostly behind the counter (a short or wide stage): then they sit closer,
+  // just enough that its whole wave and as much water again show above the counter. The far lane's
+  // line stays low enough that its targets (142 units a side at its scale) clear the valance
+  // (specs/splat-gallery-near-water.md).
+  const near = { i: n - 1, s: sNear, kind: 'water' };
+  const room = L.C - L.T - 142 * sNear * 0.74 - (2 * waveDepth(near) + crestDrop(near) + SWAY_RISE); // far line to near line, plus the far line's drop
+  const farHalf = 71 * sFar;
+  let band = (L.C - L.T) / n;
+  let drop = band * 0.36; // from a band's top to its line
+  if (drop + (n - 1) * band > room) {
+    band = room / (n - 1 + 0.36);
+    drop = band * 0.36;
+    if (drop < farHalf) {
+      drop = farHalf;
+      band = (room - farHalf) / (n - 1);
+    }
+  }
+  L.band = band;
   L.lanes = [];
   for (let i = 0; i < n; i++) {
     const s = lerp(sFar, sNear, n === 1 ? 1 : i / (n - 1));
     const top0 = L.T + i * band;
     // Targets stand high enough that a length of their stick always shows above the strip: the
     // crest sits below the biggest target's bottom by about a third of its size.
-    const lineY = top0 + band * 0.36;
+    const lineY = top0 + drop;
     const D = 142 * s;
     L.lanes.push({
       i,
@@ -266,6 +284,40 @@ function makeMasks() {
     }
     masks[name] = { w, h, a, top };
   }
+  for (const name of ['water1', 'water2', 'grass1']) makeTile(name);
+}
+
+// A strip's tile, made to meet itself (specs/splat-gallery-near-water.md): the grass tile's first
+// column in the atlas is nearly transparent, and its outline ends two rows lower on its right edge
+// than it starts on its left, so tiled as it is every join showed a see-through line and a step.
+// So the tile drops its transparent edge columns, and its last columns ease up by the step, a
+// little more each, until its right edge leads into its left. Drawing, hits and the paint's clip
+// all use this tile and its outline (`top`, as a share of the height, per column).
+const tiles = {};
+function makeTile(name) {
+  const m = masks[name];
+  const [x0, y0, , h] = FRAMES[name];
+  let a = 0;
+  let b = m.w;
+  while (a < b && m.top[a] >= 1) a++;
+  while (b > a && m.top[b - 1] >= 1) b--;
+  const n = b - a;
+  const row = (i) => m.top[a + i] * h; // the outline's row in column i
+  const slope = (row(n - 1) - row(n - 5)) / 4;
+  const step = row(n - 1) + slope - row(0); // how far the right edge would land below the left
+  const ease = Math.min(24, n >> 2); // the columns that take it up
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = h;
+  const g = c.getContext('2d');
+  const top = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = i - (n - ease);
+    const lift = k < 0 ? 0 : (step * (k + 1)) / ease;
+    g.drawImage(atlas, x0 + a + i, y0, 1, h, i, -lift, 1, h);
+    top[i] = (row(i) - lift) / h;
+  }
+  tiles[name] = { canvas: c, n, h, top };
 }
 function maskAt(name, u, v) {
   const m = masks[name];
@@ -290,14 +342,51 @@ function sprite(name, x, y, w, h, flip = false) {
 // A lane's strip: a row of water or grass tiles, scaled with the lane.
 const stripName = (lane) => (lane.kind === 'water' ? (lane.i % 4 === 0 ? 'water2' : 'water1') : 'grass1');
 const stripScale = (lane) => 0.32 + lane.s * 0.45;
+// How deep a strip's waves are: from its highest crest to its lowest trough, at its scale.
+function waveDepth(lane) {
+  let lo = 1;
+  let hi = 0;
+  for (const v of tiles[stripName(lane)].top) {
+    lo = Math.min(lo, v);
+    hi = Math.max(hi, v);
+  }
+  return (hi - lo) * size(stripName(lane))[1] * stripScale(lane);
+}
+// How far a strip's highest crest sits below its tile's top edge.
+function crestDrop(lane) {
+  return Math.min(...tiles[stripName(lane)].top) * size(stripName(lane))[1] * stripScale(lane);
+}
+// The water sways as if on a crank: each strip goes round a flat oval, sliding left and right and
+// rising and falling a quarter cycle behind (highest and lowest mid-slide, level at the ends);
+// consecutive water lanes slide against each other and rise and fall together; the grass stays still
+// (specs/splat-gallery-near-water.md). Its phase moves on with the game's clock, so it stops in a
+// pause; a frenzy and a round's last 3 s turn the crank faster, without a jump.
+const SWAY_AMP = 6;
+const SWAY_RISE = 1.5;
+const swayPeriod = () => (game.frenzy > 0 || (game.mode === 'play' && game.time <= 3) ? 6 : 8);
+function sway(lane) {
+  if (lane.kind !== 'water') return 0;
+  const rank = L.lanes.filter((l) => l.kind === 'water' && l.i < lane.i).length;
+  return (rank % 2 ? -1 : 1) * SWAY_AMP * Math.sin(game.swayPh || 0);
+}
+// Up (negative) and down, a quarter cycle behind the slide: the oval the owner chose ("A3").
+const swayY = (lane) => (lane.kind === 'water' ? -SWAY_RISE * Math.cos(game.swayPh || 0) : 0);
+// The crest at x as drawn now, sway and all.
 function stripY(lane, x) {
+  return restY(lane, x - sway(lane)) + swayY(lane);
+}
+// How wide one of a strip's tiles is drawn; its joins fall at `lane.i * 37` plus whole tiles.
+const tileWidth = (lane) => (size(stripName(lane))[0] * stripScale(lane) * tiles[stripName(lane)].n) / masks[stripName(lane)].w;
+// The crest at x with the strip at rest: the strip's own frame, where its paint and clip live.
+function restY(lane, x) {
   const name = stripName(lane);
-  const [w, h] = size(name);
+  const h = size(name)[1];
   const sc = stripScale(lane);
-  const tw = w * sc;
+  const t = tiles[name];
+  const tw = tileWidth(lane);
   const off = lane.i * 37;
   const u = ((((x - off) % tw) + tw) % tw) / tw;
-  return lane.strip + masks[name].top[Math.floor(u * masks[name].w)] * h * sc;
+  return lane.strip + t.top[Math.min(t.n - 1, Math.floor(u * t.n))] * h * sc;
 }
 
 // A splat, tinted: drawn once into its own small canvas.
@@ -729,10 +818,10 @@ const pullLen = () => Math.hypot(aim.px, aim.py);
 function flightTime(y) {
   return lerp(FLIGHT_NEAR, FLIGHT_FAR, clamp((L.C - y) / (L.C - L.T), 0, 1));
 }
-// The lane whose band holds a height.
+// The lane whose band holds a height; below the near lane's band, down to the counter, it's still
+// the near lane.
 function laneAt(y) {
-  const band = (L.C - L.T) / L.n;
-  return clamp(Math.floor((y - L.T) / band), 0, L.n - 1);
+  return clamp(Math.floor((y - L.T) / L.band), 0, L.n - 1);
 }
 // Where the pouch is drawn: it follows the pull, a little less than the finger.
 function pouch() {
@@ -929,8 +1018,11 @@ function hitAssist() {
 // ---------- Paint ----------
 
 const splatSize = (laneIdx) => 30 + 26 * L.lanes[laneIdx].s;
-// A splat on the scenery: `layer` is the lane whose strip it's on, or -1 for the wall.
-function addPaint(x, y, layer, colour, aimedLane) {
+// A splat on the scenery: `layer` is the lane whose strip it's on, or -1 for the wall. On a strip
+// it's kept in the strip's own frame, so it rides with the water's sway.
+function addPaint(x0, y0, layer, colour, aimedLane) {
+  const x = layer >= 0 ? x0 - sway(L.lanes[layer]) : x0;
+  const y = layer >= 0 ? y0 - swayY(L.lanes[layer]) : y0;
   const sz = splatSize(aimedLane);
   const shape = Math.floor(rng() * 36);
   const px = sz * k * dpr;
@@ -1389,6 +1481,7 @@ function update(dt) {
   }
   updateMusicTempo();
   game.T += dt;
+  game.swayPh = ((game.swayPh || 0) + (2 * Math.PI * dt) / swayPeriod()) % (2 * Math.PI);
   game.modeT += dt;
   if (game.banner) {
     game.banner.t += dt;
@@ -1523,32 +1616,40 @@ function drawWall() {
   for (const d of decor) sprite(d.name, d.x, d.y, d.w, d.h);
 }
 
+const stripsMarked = new Set(); // lanes whose strip is drawn black, to find its pixels: for the tests only
 function drawStrip(lane) {
   const name = stripName(lane);
-  const [w, h] = size(name);
+  const h = size(name)[1];
   const f = FRAMES[name];
   const sc = stripScale(lane);
-  const tw = w * sc;
+  const t = tiles[name];
+  const tw = tileWidth(lane);
   const part = 0.6;
   const th = h * sc * part;
+  ctx.save();
+  if (stripsMarked.has(lane.i)) ctx.filter = 'brightness(0)';
+  ctx.translate(sway(lane), swayY(lane));
   ctx.fillStyle = lane.kind === 'water' ? '#3ea3df' : '#3c9f45';
-  ctx.fillRect(-4, lane.strip + th - 1, SW + 8, Math.max(0, L.C - lane.strip - th + 1));
+  const edge = 4 + SWAY_AMP; // the fill's ends stay off the stage however far it sways
+  ctx.fillRect(-edge, lane.strip + th - 1, SW + 2 * edge, Math.max(0, L.C - lane.strip - th + 1 + SWAY_RISE));
   const off = lane.i * 37;
-  let x = (((off % tw) + tw) % tw) - tw;
-  for (; x < SW + tw; x += tw) ctx.drawImage(atlas, f[0], f[1], f[2], f[3] * part, x, lane.strip, tw + 0.5, th);
+  let x = (((off % tw) + tw) % tw) - 2 * tw;
+  for (; x < SW + 2 * tw; x += tw) ctx.drawImage(t.canvas, 0, 0, t.n, f[3] * part, x, lane.strip, tw + 0.5, th);
+  ctx.restore();
 }
 
 // A strip's paint shows only on the water or grass itself: it's clipped to the strip's own crest, so
 // a splat that lands on the edge loses the part that would hang in the air, as if it had gone over
-// the back and run off.
+// the back and run off. The clip is in the strip's own frame, so it sways with it.
 const stripClips = new WeakMap();
 function stripClip(lane) {
   let c = stripClips.get(lane);
   if (!c) {
     c = new Path2D();
-    c.moveTo(-4, SH + 4);
-    for (let x = -4; x <= SW + 4; x += 1) c.lineTo(x, stripY(lane, x));
-    c.lineTo(SW + 4, SH + 4);
+    const e = 4 + SWAY_AMP;
+    c.moveTo(-e, SH + 4);
+    for (let x = -e; x <= SW + e; x += 1) c.lineTo(x, restY(lane, x));
+    c.lineTo(SW + e, SH + 4);
     c.closePath();
     stripClips.set(lane, c);
   }
@@ -1558,12 +1659,14 @@ let clipCtx = null;
 // Whether a strip's paint can show at (x, y) (for the tests).
 function paintShowsAt(laneIdx, x, y) {
   clipCtx = clipCtx || document.createElement('canvas').getContext('2d');
-  return clipCtx.isPointInPath(stripClip(L.lanes[laneIdx]), x, y);
+  const lane = L.lanes[laneIdx];
+  return clipCtx.isPointInPath(stripClip(lane), x - sway(lane), y - swayY(lane));
 }
 let paintClipped = 0;
 function drawPaint(layer) {
   if (layer >= 0) {
     ctx.save();
+    ctx.translate(sway(L.lanes[layer]), swayY(L.lanes[layer]));
     ctx.clip(stripClip(L.lanes[layer]));
     paintClipped++;
   }
@@ -2586,8 +2689,8 @@ window.addEventListener('resize', onResize);
 Promise.all([atlas.decode(), splatImg.decode()]).then(
   () => {
     readInsets();
+    makeMasks(); // the layout reads the water's wave depth from them
     layoutStage(screenOrient());
-    makeMasks();
     makeDecor();
     // The booth is already moving behind the start card.
     game.spawn = { movers: L.lanes.map(() => rand(2, 4)) };
@@ -2602,7 +2705,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
