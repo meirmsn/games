@@ -94,6 +94,9 @@ the design. No game page changes.
     notice going), the band slides in diagonally out of its corner, in 0.3 s, easing out. At page
     load it is simply there. The site's reduced-motion rule (`assets/base.css`) cuts the slide to
     nothing.
+  - Asked whether a shift-click (a new window) should slide it in too, the owner chose "Yes, same as
+    cmd-click" (2026-11-12). A page coming back from the browser's cache counts as a page load: no
+    slide (Claude, 2026-11-12).
   AC-4, AC-6 and AC-9 say so; the decisions above about "Not now", "Don't show again" and the
   pause stand as the record of what #49 built (Claude, 2026-11-12).
 - The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
@@ -129,9 +132,10 @@ the design. No game page changes.
 - **AC-7** The dialog closes on Escape and returns focus to the ribbon.
 - **AC-8** The Home button, ribbon and dialog use only the site's theme tokens and read in light and
   dark.
-- **AC-9** When the ribbon appears on a page that's already showing (after a ctrl- or cmd-click on
-  a tile, or when the Update notice goes), its band slides in diagonally from outside its corner, in
-  0.3 s; when it shows at page load, it doesn't slide.
+- **AC-9** When the ribbon appears on a page that's already showing (after a ctrl-, cmd- or
+  shift-click on a tile, or when the Update notice goes), its band slides in diagonally from outside
+  its corner, in 0.3 s; when it shows at page load, or as the page comes back from the browser's
+  cache, it doesn't slide, and with reduced motion asked for, it doesn't visibly slide.
 
 ## Core flow
 

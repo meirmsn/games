@@ -225,13 +225,17 @@ for (const [name, modifier] of [
   });
 }
 
-test('landing-home-and-ribbon AC-9: after a ctrl- or cmd-click on a first visit, the ribbon slides in from its corner; at page load it does not', async (t) => {
+for (const [name, modifier] of [
+  ['ctrl- or cmd-click', 'ControlOrMeta'],
+  ['shift-click', 'Shift'],
+]) {
+test(`landing-home-and-ribbon AC-9: after a ${name} on a first visit, the ribbon slides in from its corner; at page load it does not`, async (t) => {
   const { context, page } = await open({ hasTouch: false }, t);
   await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
   await page.waitForLoadState('networkidle');
   assert.equal(await shown(page), false, 'a first visit: no ribbon');
   const opened = context.waitForEvent('page');
-  await page.locator('a.tile[href="reef/"]').click({ modifiers: ['ControlOrMeta'] });
+  await page.locator('a.tile[href="reef/"]').click({ modifiers: [modifier] });
   await opened;
   await ribbon(page).waitFor();
   const anim = await band(page).evaluate((b) => {
@@ -252,6 +256,19 @@ test('landing-home-and-ribbon AC-9: after a ctrl- or cmd-click on a first visit,
   await ribbon(page).waitFor();
   assert.equal(await sliding(page), false, 'shown at page load, it does not slide');
   assert.equal(await band(page).evaluate((b) => b.getAnimations().length), 0);
+});
+}
+
+test('landing-home-and-ribbon AC-9: with reduced motion asked for, the ribbon appears without a visible slide', async (t) => {
+  const { context, page } = await open({ hasTouch: false, reducedMotion: 'reduce' }, t);
+  await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
+  await page.waitForLoadState('networkidle');
+  const opened = context.waitForEvent('page');
+  await page.locator('a.tile[href="reef/"]').click({ modifiers: ['ControlOrMeta'] });
+  await opened;
+  await ribbon(page).waitFor();
+  const duration = await band(page).evaluate((b) => parseFloat(getComputedStyle(b).animationDuration) * 1000);
+  assert.ok(duration < 1, `the slide takes no visible time (${duration} ms)`);
 });
 
 for (const [w, h] of [

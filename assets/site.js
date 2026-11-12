@@ -186,7 +186,13 @@ const ribbon = (() => {
   }
   coarse.addEventListener('change', refresh);
   // Back from a game through the browser's cache: the page didn't reload, so look again.
-  window.addEventListener('pageshow', (e) => e.persisted && refresh());
+  // It counts as a page load: the ribbon is simply there, no slide.
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    loaded = false;
+    refresh();
+    loaded = true;
+  });
   refresh();
   loaded = true;
 
