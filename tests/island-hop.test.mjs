@@ -1337,6 +1337,20 @@ test('island-hop AC-24: in the car, 2 s without moving brings a thought bubble o
   const h = await hintAfter(0.4);
   assert.equal(h?.kind, 'car', 'after 2 s');
   assert.match(h.text, /Click or press Space to get out/, 'a mouse and keys: click or Space');
+  // In pictures: a finger over a small car and, with a keyboard, "or" and a space bar with its own
+  // finger; the fingers move (tap) from one frame to the next.
+  const parts = await page.evaluate(() => {
+    const seen = [];
+    for (let k = 0; k < 13; k++) {
+      __hop.step(0.12); // a whole tap, 1.4 s, in steps shorter than the 0.21 s press
+      __hop.draw();
+      seen.push(__hop.hintParts);
+    }
+    return seen;
+  });
+  assert.ok(parts.every((p) => p && /^(taxi|police|ambulance)\d$/.test(p.car) && p.or && p.space && p.fingers.length === 2), `car, or, space and two fingers: ${JSON.stringify(parts[0])}`);
+  assert.ok(new Set(parts.map((p) => p.fingers[0])).size > 2, `the car's finger moves: ${parts.map((p) => p.fingers[0])}`);
+  assert.ok(parts.some((p) => p.space.pressed) && parts.some((p) => !p.space.pressed), 'the space bar goes down and up');
   assert.equal(await hintAfter(0.2, { x: 0, y: -1 }), null, 'moving hides it');
   assert.equal((await hintAfter(2.2))?.kind, 'car', 'back after 2 s more');
   await page.keyboard.press('Space');
@@ -1371,9 +1385,11 @@ test('island-hop AC-24: on a touch screen the bubble says to tap', async () => {
     __hop.autopilot(null);
     for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
     for (let k = 0; k < 150; k++) __hop.step(1 / 60);
-    return __hop.hint?.text;
+    __hop.draw();
+    return { text: __hop.hint?.text, parts: __hop.hintParts };
   });
-  assert.equal(text, 'Tap to get out');
+  assert.equal(text.text, 'Tap to get out');
+  assert.ok(text.parts?.car && text.parts.fingers.length === 1 && !text.parts.or && !text.parts.space, `only the car and its finger: ${JSON.stringify(text.parts)}`);
   await context.close();
 });
 

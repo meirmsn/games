@@ -604,6 +604,7 @@ function hintPoint() {
   return { x: d.x / dpr, y: d.y / dpr };
 }
 function drawHint(p) {
+  hintParts = null;
   ctx.save();
   ctx.globalAlpha = Math.min(1, hint.t / 0.2);
   if (hint.kind === 'car') drawCarHint(p);
@@ -643,6 +644,7 @@ function drawTextHint(p, text) {
 // with a keyboard, "or" and a space bar a finger presses, half a beat later. On a touch screen, only
 // the car.
 const TAP_PERIOD = 1.4; // seconds for one tap
+let hintParts = null; // for tests: what the car's bubble drew last frame
 function tapPhase(t) {
   // 0..1 down (eased), then the press, then back up: the finger's height above its target (0 = touching)
   const f = (t % TAP_PERIOD) / TAP_PERIOD;
@@ -683,9 +685,11 @@ function drawCarHint(p) {
   const cx = bx + 42;
   const cy = by + h - 16;
   const a = tapPhase(t);
-  sprite(`${car?.kind || 'taxi'}${frameOf(1, 0)}`, cx, cy + 4, 0.75);
+  const carSprite = `${car?.kind || 'taxi'}${frameOf(1, 0)}`;
+  sprite(carSprite, cx, cy + 4, 0.75);
   ripple(cx, cy - 6, a.ripple);
   finger(cx, cy - 8, a.lift);
+  hintParts = { car: carSprite, fingers: [Math.round(a.lift * 100) / 100], ripple: a.ripple >= 0, or: false, space: null };
   if (!keys) return;
   // "or", then the space bar, pressed half a beat later.
   ctx.fillStyle = '#1d3557';
@@ -711,6 +715,8 @@ function drawCarHint(p) {
   ctx.font = '600 11px system-ui, sans-serif';
   ctx.fillText('space', kx + 33, ky + 11);
   finger(kx + 33, ky + 4, b.lift);
+  Object.assign(hintParts, { or: true, space: { pressed: !!b.press } });
+  hintParts.fingers.push(Math.round(b.lift * 100) / 100);
 }
 
 // --- Camera -----------------------------------------------------------------------------------------------
@@ -1077,6 +1083,7 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (world.phase === 'play' && !finishView && !mapHeld) drawEdgeArrows();
   if (hintAt) drawHint(hintAt); // over the edge arrows
+  else hintParts = null;
   if (pointer && world.phase === 'play') drawStick();
 }
 let fadedNow = false;
@@ -1316,6 +1323,9 @@ window.__hop = {
   },
   get hint() {
     return hint && { kind: hint.kind, text: HINTS[hint.kind] };
+  },
+  get hintParts() {
+    return hintParts;
   },
   get music() {
     return Object.fromEntries(Object.entries(music).map(([k, m]) => [k, { level: m.level, playing: !m.el.paused, ready: !!m.el.src }]));
