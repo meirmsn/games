@@ -33,10 +33,13 @@ changes (there is no `DESIGN.md`).
   old specs are left as the record of their own changes, and this spec is where the order now lives
   (Claude, 2026-11-12).
 
+- **Changed after the merge (#55), by the owner (2026-11-12):** "Swap Google Faces with Orbit in
+  the order." So Googly Faces is fifth and Orbit sixth; AC-1 says so.
+
 ## Acceptance items
 
 - **AC-1** The landing page's tiles, read top to bottom in document order, are named Splat Gallery,
-  Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces, Crumble, High Seas, Reef.
+  Gotta Go!, Runes, Pixel Leap, Googly Faces, Orbit, Crumble, High Seas, Reef.
 - **AC-2** High Seas stays a coming-soon tile, and every other tile is a playable link.
 - **AC-3** Each tile keeps its link, art, text and tone — verified by review: the diff to
   `index.html` only moves whole `<li>` items.
