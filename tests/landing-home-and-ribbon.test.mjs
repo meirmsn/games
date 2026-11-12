@@ -90,6 +90,50 @@ async function openDialog(page) {
 }
 const closeBtn = (page) => dialog(page).getByRole('button', { name: 'Close' });
 
+// A modified click's game opening somewhere other than the landing page: a page load of `url` in
+// another frame. Not Playwright's 'page' event, which about one run in seven never fires for a tab
+// opened this way, though the browser opens it and loads the game (seen 6 times in 40 runs,
+// 2026-11-12). Service workers are blocked in these tests, so the load is the new tab's own, not
+// a worker's fetch. The landing page's own frame loading it would be a failed test, as before.
+function openedElsewhere(context, page, url) {
+  return context.waitForEvent('request', {
+    predicate: (r) => {
+      if (r.url() !== url || !r.isNavigationRequest()) return false;
+      try {
+        const f = r.frame();
+        return !f.parentFrame() && f.page() !== page; // another tab's own page, not a frame in this one
+      } catch {
+        return true; // a frame Playwright never attached: the new tab it didn't report
+      }
+    },
+  });
+}
+
+// Hold the ribbon's slide still the moment it starts, so a slow machine can't finish its 0.3 s
+// before it's measured (it did at 10× CPU throttle, 2026-11-12). The observer runs once the page's
+// own refresh has shown the ribbon, before anything is drawn.
+const holdSlide = (page) =>
+  page.evaluate(() => {
+    const el = document.querySelector('[data-ribbon]');
+    new MutationObserver(() => {
+      if (!el.classList.contains('slide-in')) return;
+      el.querySelector('button').getAnimations().find((a) => a.animationName === 'ribbon-in')?.pause();
+    }).observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+
+// Watch whether the landing page itself starts leaving (the Navigation API's navigate event fires
+// as a page starts any navigation of its own, a new tab's being another page's).
+const watchLeaving = (page) =>
+  page.evaluate(() => {
+    window.__leaving = [];
+    navigation.addEventListener('navigate', (e) => window.__leaving.push(e.destination.url));
+  });
+// Whether it did, once the tile's own 90 ms timer (assets/site.js) has had its turn: a timer set
+// after the click for longer runs after it, on the page's own clock, so this is ordering, not a
+// guess at how long things take.
+const leftAfterTimer = (page) =>
+  page.evaluate(() => new Promise((done) => setTimeout(() => done(window.__leaving), 200)));
+
 // Whether the ribbon's band is sliding in (its slide-in animation running).
 const sliding = (page) => page.evaluate(() => document.querySelector('[data-ribbon]').classList.contains('slide-in'));
 
@@ -212,14 +256,16 @@ for (const [name, modifier] of [
   ['shift-click', 'Shift'],
 ]) {
   test(`landing-home-and-ribbon AC-2: a ${name} on a tile, opening the game in a new tab or window, counts as tapping a game (the owner, 2026-11-11)`, async (t) => {
-    const { context, page } = await open({ hasTouch: false }, t);
+    const { context, page } = await open({ hasTouch: false, serviceWorkers: 'block' }, t);
     await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
     await page.waitForLoadState('networkidle');
     const tapped = () => page.evaluate(() => !!JSON.parse(localStorage.getItem('ribbon') || '{}').tapped);
     assert.equal(await tapped(), false);
-    const opened = context.waitForEvent('page');
+    await watchLeaving(page);
+    const opened = openedElsewhere(context, page, BASE + 'reef/');
     await page.locator('a.tile[href="reef/"]').click({ modifiers: [modifier] });
     await opened; // the game opened in a new tab or window
+    assert.deepEqual(await leftAfterTimer(page), [], 'the landing page stays: it never starts to leave');
     assert.equal(page.url(), BASE, 'the landing page stays');
     assert.equal(await tapped(), true, 'it counts as tapping a game');
   });
@@ -230,11 +276,12 @@ for (const [name, modifier] of [
   ['shift-click', 'Shift'],
 ]) {
 test(`landing-home-and-ribbon AC-9: after a ${name} on a first visit, the ribbon slides in from its corner; at page load it does not`, async (t) => {
-  const { context, page } = await open({ hasTouch: false }, t);
+  const { context, page } = await open({ hasTouch: false, serviceWorkers: 'block' }, t);
   await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
   await page.waitForLoadState('networkidle');
   assert.equal(await shown(page), false, 'a first visit: no ribbon');
-  const opened = context.waitForEvent('page');
+  await holdSlide(page);
+  const opened = openedElsewhere(context, page, BASE + 'reef/');
   await page.locator('a.tile[href="reef/"]').click({ modifiers: [modifier] });
   await opened;
   await ribbon(page).waitFor();
@@ -274,14 +321,19 @@ test('landing-home-and-ribbon AC-9: a page coming back from the browser\'s cache
 });
 
 test('landing-home-and-ribbon AC-9: with reduced motion asked for, the ribbon appears without a visible slide', async (t) => {
-  const { context, page } = await open({ hasTouch: false, reducedMotion: 'reduce' }, t);
+  const { context, page } = await open({ hasTouch: false, reducedMotion: 'reduce', serviceWorkers: 'block' }, t);
   await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
   await page.waitForLoadState('networkidle');
-  const opened = context.waitForEvent('page');
+  await holdSlide(page);
+  const opened = openedElsewhere(context, page, BASE + 'reef/');
   await page.locator('a.tile[href="reef/"]').click({ modifiers: ['ControlOrMeta'] });
   await opened;
   await ribbon(page).waitFor();
-  const duration = await band(page).evaluate((b) => parseFloat(getComputedStyle(b).animationDuration) * 1000);
+  // The slide itself, held at its start: it runs, and takes no visible time.
+  const duration = await band(page).evaluate(
+    (b) => b.getAnimations().find((a) => a.animationName === 'ribbon-in')?.effect.getTiming().duration ?? null
+  );
+  assert.notEqual(duration, null, 'the ribbon-in animation runs');
   assert.ok(duration < 1, `the slide takes no visible time (${duration} ms)`);
 });
 
