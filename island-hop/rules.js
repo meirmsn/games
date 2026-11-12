@@ -308,7 +308,15 @@ function sailStep(s, b, g, dt) {
   if (b.v > 0) {
     const nx = b.x + Math.cos(b.h) * b.v * dt;
     const ny = b.y + Math.sin(b.h) * b.v * dt;
-    const fits = (x, y) => boatFits(b.kind, x, y) && boatFits(b.kind, x + Math.cos(b.h) * spec.radius, y + Math.sin(b.h) * spec.radius);
+    // The bow, and both sides a little in, must be on water: so the hull never slides over the shore
+    // as it runs along an island's edge (owner, 2026-11-12: "if you go to the bottom left edge of an
+    // island, you can get the boat to be on top of it visually while you navigate along the edge").
+    const side = spec.radius * 0.25;
+    const fits = (x, y) =>
+      boatFits(b.kind, x, y) &&
+      boatFits(b.kind, x + Math.cos(b.h) * spec.radius, y + Math.sin(b.h) * spec.radius) &&
+      boatFits(b.kind, x - Math.sin(b.h) * side, y + Math.cos(b.h) * side) &&
+      boatFits(b.kind, x + Math.sin(b.h) * side, y - Math.cos(b.h) * side);
     if (fits(nx, ny)) {
       b.x = nx;
       b.y = ny;

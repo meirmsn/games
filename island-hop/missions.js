@@ -127,7 +127,7 @@ export const MISSIONS = [
       { sail: 'portS' },
       { walk: 'F' },
     ],
-    par: 74.1,
+    par: 74.6,
   },
   {
     name: 'The keeper’s lamp',

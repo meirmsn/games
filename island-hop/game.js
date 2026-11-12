@@ -570,7 +570,7 @@ function handleEvents() {
 // after a certain amount of time that you do nothing, like I don't know, maybe 2 seconds, we show you
 // like a thought bubble saying to what to tap the car so that you ... get out of the car, and or
 // spacebar"); any move or getting out hides it. A boat too deep for the lagoon's shallows says so.
-const CAR_IDLE = 2;
+const CAR_IDLE = 3; // owner, 2026-11-12: "it's a little bit trigger happy ... maybe 3 seconds"
 const SHALLOW_HINT = 2.5;
 const touchFirst = matchMedia('(pointer: coarse)').matches;
 const HINTS = {
@@ -579,19 +579,15 @@ const HINTS = {
 };
 let hint = null; // { kind, t }
 let carIdle = 0;
-let carMoved = false; // driven since getting in
 function showHint(kind) {
   hint = { kind, t: 0 };
 }
 function syncHints(dt, input) {
   const len = input && typeof input === 'object' ? Math.hypot(input.x || 0, input.y || 0) : 0;
   const driving = world.phase === 'play' && world.mode === 'car' && !world.trans;
-  if (!driving) carMoved = false;
-  else if (len >= RULES.dead) carMoved = true;
   carIdle = driving && len < RULES.dead && !pilot ? carIdle + dt : 0;
-  // Once you've driven, it shows the moment the car stops; sitting in a car you haven't moved, after
-  // 2 s (owner, 2026-11-12: "we should show it as soon as the car moves the next time it stops").
-  if (driving && carIdle > 0 && (carMoved || carIdle >= CAR_IDLE)) {
+  // 3 s after the car stops (or after getting in), whether or not you've driven it.
+  if (driving && carIdle >= CAR_IDLE) {
     if (!hint || hint.kind !== 'car') showHint('car');
   } else if (hint && hint.kind === 'car') hint = null;
   if (hint) {
@@ -681,47 +677,85 @@ function ripple(x, y, r) {
 }
 function drawCarHint(p) {
   const keys = !touchFirst;
-  const w = keys ? 190 : 84;
-  const h = 74;
+  const w = keys ? 196 : 150;
+  const h = 140;
   const { bx, by } = bubble(p, w, h);
   const t = hint.t;
-  // The car, tapped.
+  const mid = bx + w / 2;
   const car = youCar(world);
-  const cx = bx + 42;
-  const cy = by + h - 16;
-  const a = tapPhase(t);
   const carSprite = `${car?.kind || 'taxi'}${frameOf(1, 0)}`;
-  sprite(carSprite, cx, cy + 4, 0.75);
-  ripple(cx, cy - 6, a.ripple);
-  finger(cx, cy - 8, a.lift);
-  hintParts = { car: carSprite, fingers: [Math.round(a.lift * 100) / 100], ripple: a.ripple >= 0, or: false, space: null };
+  // Top row: getting out, in a picture: the car, a curved arrow from it, and you beside it, stepping
+  // out along the arrow and back (owner, 2026-11-12: "show the car with an arrow coming out of it and
+  // the guy next to it ... The arrow can be a little bit like curved, and that you show at the top
+  // center").
+  const ty = by + 52;
+  sprite(carSprite, mid - 34, ty + 6, 0.8);
+  ctx.strokeStyle = '#ff5e9a';
+  ctx.fillStyle = '#ff5e9a';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  const ax0 = mid - 18;
+  const ay0 = ty - 24;
+  const ax1 = mid + 20;
+  const ay1 = ty - 6;
+  ctx.beginPath();
+  ctx.moveTo(ax0, ay0);
+  ctx.quadraticCurveTo(mid + 4, ay0 - 22, ax1, ay1);
+  ctx.stroke();
+  const ang = Math.atan2(ay1 - (ay0 - 22), ax1 - (mid + 4));
+  ctx.beginPath();
+  ctx.moveTo(ax1 + Math.cos(ang) * 4, ay1 + Math.sin(ang) * 4);
+  ctx.lineTo(ax1 + Math.cos(ang + 2.5) * 9, ay1 + Math.sin(ang + 2.5) * 9);
+  ctx.lineTo(ax1 + Math.cos(ang - 2.5) * 9, ay1 + Math.sin(ang - 2.5) * 9);
+  ctx.closePath();
+  ctx.fill();
+  const step = (Math.sin((t * Math.PI * 2) / TAP_PERIOD) + 1) / 2; // 0..1, out and back
+  miniPerson(mid + 36 + step * 4, ty + 10);
+  // Second row: how, as before: a finger tapping a small car, and with a keyboard "or" and a space bar.
+  const ry = by + h - 14;
+  const a = tapPhase(t);
+  const cx = keys ? bx + 42 : mid;
+  sprite(carSprite, cx, ry + 2, 0.55);
+  ripple(cx, ry - 6, a.ripple);
+  finger(cx, ry - 8, a.lift);
+  hintParts = { out: { car: carSprite, arrow: true, person: Math.round(step * 100) / 100 }, car: carSprite, fingers: [Math.round(a.lift * 100) / 100], ripple: a.ripple >= 0, or: false, space: null };
   if (!keys) return;
-  // "or", then the space bar, pressed half a beat later.
   ctx.fillStyle = '#1d3557';
   ctx.font = '600 15px system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('or', bx + 92, by + h / 2 + 4);
+  ctx.fillText('or', bx + 92, ry - 10);
   const b = tapPhase(t + TAP_PERIOD / 2);
-  const kx = bx + 112;
-  const ky = by + h - 27 + b.press * 2;
+  const kx = bx + 116;
+  const ky = ry - 18 + b.press * 2;
   ctx.fillStyle = b.press ? '#d9dee8' : '#eef1f6';
   ctx.strokeStyle = '#1d3557';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.roundRect(kx, ky, 66, 22, 5);
+  ctx.roundRect(kx, ky, 62, 20, 5);
   ctx.fill();
   ctx.stroke();
   if (!b.press) {
     ctx.fillStyle = '#9aa5b8';
-    ctx.fillRect(kx + 3, ky + 22, 60, 2.5); // the key's edge, hidden when it's down
+    ctx.fillRect(kx + 3, ky + 20, 56, 2.5); // the key's edge, hidden when it's down
   }
   ctx.fillStyle = '#1d3557';
   ctx.font = '600 11px system-ui, sans-serif';
-  ctx.fillText('space', kx + 33, ky + 11);
-  finger(kx + 33, ky + 4, b.lift);
+  ctx.fillText('space', kx + 31, ky + 10);
+  finger(kx + 31, ky + 4, b.lift);
   Object.assign(hintParts, { or: true, space: { pressed: !!b.press } });
   hintParts.fingers.push(Math.round(b.lift * 100) / 100);
+}
+// The little person, small, for the bubble: standing at (x, y), feet there.
+function miniPerson(x, y) {
+  ctx.fillStyle = '#ff5e9a';
+  ctx.beginPath();
+  ctx.roundRect(x - 5, y - 15, 10, 13, 4);
+  ctx.fill();
+  ctx.fillStyle = '#ffd8b0';
+  ctx.beginPath();
+  ctx.arc(x, y - 19, 5, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // --- Camera -----------------------------------------------------------------------------------------------
@@ -984,8 +1018,13 @@ function draw() {
       const p = iso.toScreen(x + 0.5, y + 0.5, LAND_Z);
       const depth = iso.depth(x + 0.5, y + 0.5);
       if (isBuilding(c)) {
+        // A building's picture has its own land block under it. That block goes with the ground, so
+        // the tiles in front cover its sides as they cover each other's; what stands above its
+        // tile's top goes with the standing things, so it still hides you behind it (owner,
+        // 2026-11-12: "some buildings look drawn on top of the street").
         const name = buildingSprite(x, y);
-        items.push({ depth, stand: true, building: true, tag: `building:${x},${y}`, box: spriteBox(name, p.x, p.y), draw: (a) => spr(name, p.x, p.y, 1, a) });
+        items.push({ depth, ground: true, x, y, draw: () => spr(name, p.x, p.y) });
+        items.push({ depth, stand: true, building: true, tag: `building:${x},${y}`, box: spriteBox(name, p.x, p.y), draw: (a) => aboveTile(x, y, () => spr(name, p.x, p.y, 1, a)) });
         continue;
       }
       const g = groundSprite(x, y);
@@ -1098,6 +1137,23 @@ const frameHeading = (f) => {
   const g = iso.screenDirToGrid(Math.cos(ang), Math.sin(ang));
   return Math.atan2(g.y, g.x);
 };
+// Draw only what is above a land tile's top face: clipped below its two front edges.
+function aboveTile(x, y, draw) {
+  const w = iso.toScreen(x, y + 1, LAND_Z);
+  const sC = iso.toScreen(x + 1, y + 1, LAND_Z);
+  const e = iso.toScreen(x + 1, y, LAND_Z);
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(w.x - 1, w.y);
+  ctx.lineTo(sC.x, sC.y);
+  ctx.lineTo(e.x + 1, e.y);
+  ctx.lineTo(e.x + 1, e.y - 4000);
+  ctx.lineTo(w.x - 1, w.y - 4000);
+  ctx.closePath();
+  ctx.clip();
+  draw();
+  ctx.restore();
+}
 function diamondMat(x, y) {
   const inset = 0.22;
   const a = iso.toScreen(x + inset, y + inset, LAND_Z);

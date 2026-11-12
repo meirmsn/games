@@ -1257,6 +1257,11 @@ test('island-hop AC-22: a boat in front of a building on the shore is drawn over
   const behind = await orderAt(15, 1.6, 0);
   const at = behind.indexOf('boat:motor');
   assert.ok(at >= 0 && behind.indexOf('ground:15,2', at) > at, `the north shore over the boat: ${behind.join(' ')}`);
+  // A building's own land block goes with the ground, before the tile in front of it, so that tile
+  // covers it; what stands above it is drawn after (the house at (18,5), grass in front at (18,6)).
+  assert.equal(ROWS[5][18], 'H');
+  const [bg, fg, bs] = ['ground:18,5', 'ground:18,6', 'building:18,5'].map((n) => behind.indexOf(n));
+  assert.ok(bg >= 0 && fg > bg && bs > fg, `the house's block, then the grass in front, then the house: ${bg} ${fg} ${bs}`);
   // Nothing is drawn twice: no tile pops over what was drawn after it.
   for (const o of [front, behind]) {
     const ground = o.filter((n) => n.startsWith('ground:'));
@@ -1324,7 +1329,7 @@ test('island-hop AC-23: the two tracks are the owner\'s at 64 kbps: the sea\'s a
   }
 });
 
-test('island-hop AC-24: in the car, a thought bubble on how to get out: 2 s after getting in without driving, and as soon as the car stops once driven; a boat too deep for the shallows says so', async () => {
+test('island-hop AC-24: in the car, a thought bubble on how to get out, 3 s after it stops (or after getting in); a boat too deep for the shallows says so', async () => {
   const { context, page } = await open();
   // Mission 2's taxi: in, and left alone.
   await page.evaluate(() => {
@@ -1344,12 +1349,13 @@ test('island-hop AC-24: in the car, a thought bubble on how to get out: 2 s afte
       },
       [secs, stick]
     );
-  assert.equal(await hintAfter(1.4), null, 'sitting in it: not before 2 s');
+  assert.equal(await hintAfter(2.4), null, 'sitting in it: not before 3 s');
   const h = await hintAfter(0.8);
-  assert.equal(h?.kind, 'car', 'sitting in it: after 2 s');
-  // Driven, then stopped: at once.
+  assert.equal(h?.kind, 'car', 'sitting in it: after 3 s');
+  // Driven, then stopped: again after 3 s, not at once.
   assert.equal(await hintAfter(1.5, { x: 0, y: -1 }), null, 'gone while driving');
-  assert.equal((await hintAfter(1 / 60))?.kind, 'car', 'the moment it stops');
+  assert.equal(await hintAfter(2.8), null, 'not before 3 s stopped');
+  assert.equal((await hintAfter(0.4))?.kind, 'car', '3 s after it stops');
   assert.match(h.text, /Click or press Space to get out/, 'a mouse and keys: click or Space');
   // In pictures: a finger over a small car and, with a keyboard, "or" and a space bar with its own
   // finger; the fingers move (tap) from one frame to the next.
@@ -1362,11 +1368,13 @@ test('island-hop AC-24: in the car, a thought bubble on how to get out: 2 s afte
     }
     return seen;
   });
-  assert.ok(parts.every((p) => p && /^(taxi|police|ambulance)\d$/.test(p.car) && p.or && p.space && p.fingers.length === 2), `car, or, space and two fingers: ${JSON.stringify(parts[0])}`);
+  assert.ok(parts.every((p) => p && p.out && p.out.arrow && /^(taxi|police|ambulance)\d$/.test(p.out.car)), `on top, the car with an arrow out to you: ${JSON.stringify(parts[0])}`);
+  assert.ok(new Set(parts.map((p) => p.out.person)).size > 2, 'you step out along the arrow and back');
+  assert.ok(parts.every((p) => p && /^(taxi|police|ambulance)\d$/.test(p.car) && p.or && p.space && p.fingers.length === 2), `below, car, or, space and two fingers: ${JSON.stringify(parts[0])}`);
   assert.ok(new Set(parts.map((p) => p.fingers[0])).size > 2, `the car's finger moves: ${parts.map((p) => p.fingers[0])}`);
   assert.ok(parts.some((p) => p.space.pressed) && parts.some((p) => !p.space.pressed), 'the space bar goes down and up');
   assert.equal(await hintAfter(0.2, { x: 0, y: -1 }), null, 'moving hides it');
-  assert.equal((await hintAfter(1 / 60))?.kind, 'car', 'and stopping shows it again');
+  assert.equal((await hintAfter(3.2))?.kind, 'car', 'and 3 s stopped shows it again');
   await page.keyboard.press('Space');
   await page.evaluate(() => {
     __hop.manual = false;
@@ -1398,12 +1406,12 @@ test('island-hop AC-24: on a touch screen the bubble says to tap', async () => {
     for (let t = 0; t < 60 && __hop.state.mode !== 'car'; t += 0.1) __hop.step(0.1);
     __hop.autopilot(null);
     for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
-    __hop.step(1 / 60);
+    for (let k = 0; k < 190; k++) __hop.step(1 / 60);
     __hop.draw();
     return { text: __hop.hint?.text, parts: __hop.hintParts };
   });
   assert.equal(text.text, 'Tap to get out');
-  assert.ok(text.parts?.car && text.parts.fingers.length === 1 && !text.parts.or && !text.parts.space, `only the car and its finger: ${JSON.stringify(text.parts)}`);
+  assert.ok(text.parts?.out?.arrow && text.parts.car && text.parts.fingers.length === 1 && !text.parts.or && !text.parts.space, `the car with its arrow out, then only the car and its finger: ${JSON.stringify(text.parts)}`);
   await context.close();
 });
 

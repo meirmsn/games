@@ -327,9 +327,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
   about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
-- **AC-24** In the car, a thought bubble over it shows how to get out: as soon as it stops once you
-  have driven it (owner, 2026-11-12: "we should show it as soon as the car moves the next time it
-  stops"), or 2 s after getting in if you haven't, in
+- **AC-24** In the car, a thought bubble over it shows how to get out, 3 s after the car stops or
+  after getting in (owner, 2026-11-12: "we should show it as soon as the car moves the next time it
+  stops", then "it's a little bit trigger happy ... maybe 3 seconds"). On top, the car with a curved
+  arrow out to you beside it, stepping out (owner, 2026-11-12: "show the car with an arrow coming out
+  of it and the guy next to it ... The arrow can be a little bit like curved, and that you show at
+  the top center, and then on the second row ... a tab or space"); below, in
   pictures: a finger gliding down to tap a small car, with a ripple; with a keyboard, then "or" and a
   space bar a finger presses (its words, for tests and screen readers: "Tap to get out" on a touch
   screen, "Click or press Space to get out" otherwise; owner, 2026-11-12: "I wonder if there's a
@@ -343,6 +346,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   Cay's lagoon drawn as blocks: "sometimes the islands are impossible to reach ... it has like solid
   ground tiles around the dock. It's impossible to get to it. Make sure that doesn't happen". The
   shallows are now drawn as flat, light, clear water, and the hint names the boat that fits.)
+  Buildings: each building's own land block is drawn with the ground and what stands above its tile
+  with the standing things, so a building never draws over the street in front of it (owner,
+  2026-11-12: "some buildings look drawn on top of the street"); and a boat's sides, a tenth of a
+  tile in, must be on water too, so its hull doesn't slide over the shore along an island's edge.
 
 ## Core flow
 
