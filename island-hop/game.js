@@ -604,34 +604,113 @@ function hintPoint() {
   return { x: d.x / dpr, y: d.y / dpr };
 }
 function drawHint(p) {
-  const k = 1; // drawn in CSS pixels, after the world
-  const text = HINTS[hint.kind];
   ctx.save();
-  ctx.font = `600 ${15 * k}px system-ui, sans-serif`;
-  const w = ctx.measureText(text).width + 24 * k;
-  const h = 34 * k;
-  const bx = p.x - w / 2;
-  const by = p.y - 70 * k - h;
   ctx.globalAlpha = Math.min(1, hint.t / 0.2);
+  if (hint.kind === 'car') drawCarHint(p);
+  else drawTextHint(p, HINTS[hint.kind]);
+  ctx.restore();
+}
+// The bubble and its trail of two puffs down to the vehicle; returns the bubble's box.
+function bubble(p, w, h) {
+  const bx = p.x - w / 2;
+  const by = p.y - 70 - h;
   ctx.fillStyle = '#ffffff';
   ctx.strokeStyle = '#1d3557';
-  ctx.lineWidth = 2 * k;
-  // The thought's trail: two small puffs down to the vehicle.
-  for (const [dx, dy, r] of [[-6, 22, 4], [-12, 36, 2.5]]) {
+  ctx.lineWidth = 2;
+  for (const [dx, dy, r] of [[-6, 8, 4], [-12, 22, 2.5]]) {
     ctx.beginPath();
-    ctx.arc(p.x + dx * k, by + h + dy * k - 14 * k, r * k, 0, Math.PI * 2);
+    ctx.arc(p.x + dx, by + h + dy, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
   ctx.beginPath();
-  ctx.roundRect(bx, by, w, h, h / 2);
+  ctx.roundRect(bx, by, w, h, Math.min(h / 2, 22));
   ctx.fill();
   ctx.stroke();
+  return { bx, by, w, h };
+}
+function drawTextHint(p, text) {
+  ctx.font = '600 15px system-ui, sans-serif';
+  const { by, h } = bubble(p, ctx.measureText(text).width + 24, 34);
   ctx.fillStyle = '#1d3557';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, p.x, by + h / 2);
+}
+// How to get out of the car, in pictures (owner, 2026-11-12: "show like a finger, maybe doing, uh,
+// smooth animation into tapping a car ... And then the word or and show the space bar and then a
+// finger also pressing on it"): a finger glides down and taps a small car, a ripple where it lands;
+// with a keyboard, "or" and a space bar a finger presses, half a beat later. On a touch screen, only
+// the car.
+const TAP_PERIOD = 1.4; // seconds for one tap
+function tapPhase(t) {
+  // 0..1 down (eased), then the press, then back up: the finger's height above its target (0 = touching)
+  const f = (t % TAP_PERIOD) / TAP_PERIOD;
+  if (f < 0.45) {
+    const e = f / 0.45;
+    return { lift: 1 - e * e * (3 - 2 * e), press: 0, ripple: -1 };
+  }
+  if (f < 0.6) return { lift: 0, press: 1, ripple: (f - 0.45) / 0.45 };
+  const e = (f - 0.6) / 0.4;
+  return { lift: e * e * (3 - 2 * e), press: 0, ripple: f < 0.9 ? (f - 0.45) / 0.45 : -1 };
+}
+function finger(x, y, lift) {
+  ctx.save();
+  ctx.font = '24px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('👇', x + 4, y - 2 - lift * 14);
   ctx.restore();
+}
+function ripple(x, y, r) {
+  if (r < 0) return;
+  ctx.save();
+  ctx.strokeStyle = `rgba(255, 94, 154, ${1 - r})`;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 6 + r * 16, (6 + r * 16) / 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+function drawCarHint(p) {
+  const keys = !touchFirst;
+  const w = keys ? 190 : 84;
+  const h = 74;
+  const { bx, by } = bubble(p, w, h);
+  const t = hint.t;
+  // The car, tapped.
+  const car = youCar(world);
+  const cx = bx + 42;
+  const cy = by + h - 16;
+  const a = tapPhase(t);
+  sprite(`${car?.kind || 'taxi'}${frameOf(1, 0)}`, cx, cy + 4, 0.75);
+  ripple(cx, cy - 6, a.ripple);
+  finger(cx, cy - 8, a.lift);
+  if (!keys) return;
+  // "or", then the space bar, pressed half a beat later.
+  ctx.fillStyle = '#1d3557';
+  ctx.font = '600 15px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('or', bx + 92, by + h / 2 + 4);
+  const b = tapPhase(t + TAP_PERIOD / 2);
+  const kx = bx + 112;
+  const ky = by + h - 27 + b.press * 2;
+  ctx.fillStyle = b.press ? '#d9dee8' : '#eef1f6';
+  ctx.strokeStyle = '#1d3557';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(kx, ky, 66, 22, 5);
+  ctx.fill();
+  ctx.stroke();
+  if (!b.press) {
+    ctx.fillStyle = '#9aa5b8';
+    ctx.fillRect(kx + 3, ky + 22, 60, 2.5); // the key's edge, hidden when it's down
+  }
+  ctx.fillStyle = '#1d3557';
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.fillText('space', kx + 33, ky + 11);
+  finger(kx + 33, ky + 4, b.lift);
 }
 
 // --- Camera -----------------------------------------------------------------------------------------------

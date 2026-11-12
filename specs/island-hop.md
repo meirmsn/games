@@ -324,9 +324,13 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
   about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
-- **AC-24** In the car, 2 s with no stick shows a thought bubble over it on how to get out ("Tap to
-  get out" on a touch screen, "Click or press Space to get out" otherwise), gone on any move or once
-  out; a boat too deep for the lagoon's shallows that noses into them shows "Too shallow: only the
+- **AC-24** In the car, 2 s with no stick shows a thought bubble over it on how to get out, in
+  pictures: a finger gliding down to tap a small car, with a ripple; with a keyboard, then "or" and a
+  space bar a finger presses (its words, for tests and screen readers: "Tap to get out" on a touch
+  screen, "Click or press Space to get out" otherwise; owner, 2026-11-12: "I wonder if there's a
+  graphical way to show that on the thought bubble ... show like a finger, maybe doing, uh, smooth
+  animation into tapping a car or tapping the car. And then the word or and show the space bar and
+  then a finger also pressing on it maybe"), gone on any move or once out; a boat too deep for the lagoon's shallows that noses into them shows "Too shallow: only the
   rowboat fits" — `tests/island-hop.test.mjs`. (Added after the go, owner, 2026-11-12: "once you
   stop after a certain amount of time that you do nothing, like I don't know, maybe 2 seconds, we
   show you like a thought bubble saying to what to tap the car so that you or click or tap the car so
