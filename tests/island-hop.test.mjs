@@ -746,7 +746,7 @@ test('island-hop AC-4: the page opens on the moving archipelago behind the missi
   await waitFor(page, () => __hop.state.fly >= 1.5, null, { what: '1.5 s of the fly-over' });
   assert.equal(await page.evaluate(() => __hop.state.phase), 'fly', 'still flying at 1.5 s');
   assert.equal(await page.textContent('[data-clock]'), '0:00');
-  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 3000 });
+  await waitFor(page, () => __hop.state.phase === 'play', null, { what: 'the fly-over over and the boat yours' });
   assert.equal(await page.evaluate(() => __hop.state.mode), 'boat');
   await realFrames(page, 45);
   assert.equal(await page.evaluate(() => __hop.state.clock), 0, 'no move, no clock');
@@ -785,15 +785,15 @@ test('island-hop AC-4: the mission card and a big banner when you take control s
   assert.equal(await page.isVisible('[data-goal]'), true);
   await page.click('[data-start]');
   assert.equal(await page.isVisible('[data-banner]'), false, 'not during the fly-over');
-  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 5000 });
-  await page.waitForFunction(() => !document.querySelector('[data-banner]').hidden, null, { timeout: 2000 });
+  await waitFor(page, () => __hop.state.phase === 'play', null, { what: 'the fly-over over and the boat yours' });
+  await waitFor(page, () => !document.querySelector('[data-banner]').hidden, null, { what: 'the goal banner shown' });
   const b = await page.evaluate(() => {
     const el = document.querySelector('[data-banner]');
     return { text: el.textContent, size: parseFloat(getComputedStyle(el).fontSize) };
   });
   assert.match(b.text, /Collect them all,\s*as fast as you can!/);
   assert.ok(b.size >= 28, `big: ${b.size}px`);
-  await page.waitForFunction(() => document.querySelector('[data-banner]').hidden, null, { timeout: 5000 });
+  await waitFor(page, () => document.querySelector('[data-banner]').hidden, null, { what: 'the goal banner gone' });
   await context.close();
 });
 
@@ -811,7 +811,7 @@ test('island-hop AC-7: a tap on the screen, or Space, while driving gets you out
     });
     if (how === 'tap') await page.touchscreen.tap(200, 500);
     else await page.keyboard.press('Space');
-    await page.waitForFunction(() => __hop.state.mode === 'walk', null, { timeout: 3000 });
+    await waitFor(page, () => __hop.state.mode === 'walk', null, { what: 'out of the car' });
   }
   await context.close();
 });
@@ -1054,7 +1054,7 @@ test('island-hop AC-13: #m=N opens mission N if it is open, and mission 1 otherw
 });
 
 test('island-hop AC-14: hiding the page pauses the mission, the clock and a fly-over; only a tap resumes; restart resets everything', async () => {
-  const { context, page } = await open();
+  const { context, page, errors } = await open();
   const hide = (h) =>
     page.evaluate((h) => {
       Object.defineProperty(document, 'hidden', { value: h, configurable: true });
@@ -1072,7 +1072,10 @@ test('island-hop AC-14: hiding the page pauses the mission, the clock and a fly-
   await realFrames(page, 24);
   assert.equal(await page.evaluate(() => __hop.paused), true, 'coming back alone doesn\'t resume');
   await page.click('[data-resume]');
-  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 4000 });
+  await waitFor(page, () => __hop.state.phase === 'play', null, { what: 'the rest of the fly-over after the tap' });
+  // The resume tap sets the frame clock after the next frame's stamp: that frame's step is never
+  // negative (a negative one once set the music's volume below 0, which threw and stopped the game).
+  assert.deepEqual(errors, [], 'no page errors after resuming');
   // In play, with the clock running.
   await page.keyboard.down('ArrowLeft');
   await waitFor(page, () => __hop.state.clock > 0.3, null, { what: 'the clock running' });
@@ -1348,7 +1351,7 @@ test('island-hop: each state shows only its own cards and HUD, as in the spec\'s
   assert.equal(await page.evaluate(() => __hop.state.phase), 'fly');
   assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false }, 'Fly-over');
   // Playing: once the fly-over has ended.
-  await page.waitForFunction(() => __hop.state.phase === 'play', null, { timeout: 5000 });
+  await waitFor(page, () => __hop.state.phase === 'play', null, { what: 'the fly-over over and the boat yours' });
   assert.deepEqual(await vis(), { card: false, hud: true, finish: false, pause: false }, 'Playing');
   // Paused, from play.
   await hide(true);

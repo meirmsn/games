@@ -109,7 +109,7 @@ function syncMusic(dt) {
   for (const [name, m] of Object.entries(music)) {
     const target = go && name === want ? 1 : 0;
     const step = dt / MUSIC_FADE;
-    m.level = go ? (target > m.level ? Math.min(target, m.level + step) : Math.max(target, m.level - step)) : 0;
+    m.level = go ? Math.min(1, Math.max(0, target > m.level ? Math.min(target, m.level + step) : Math.max(target, m.level - step))) : 0;
     m.el.volume = m.level * MUSIC_VOLUME;
     const on = go && m.level > 0;
     if (on && !m.on && m.el.src) {
@@ -1048,7 +1048,7 @@ let frames = 0;
 let fpsT = 0;
 let fps = 0;
 function frame(now) {
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); // never back in time: a resume sets `last` after this frame's stamp
   last = now;
   advance(dt);
   fadedNow = false;
