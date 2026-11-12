@@ -7,6 +7,7 @@
   --glass: rgb(16 38 60 / 62%);
   --card: rgb(255 255 255 / 94%);
   --accent: #ff8a3d;
+  --accent-ink: #c2410c; /* the accent as text on the light cards: 5:1, where #ff8a3d is 2.3:1 */
   --gold: #f5c542;
   --silver: #c9d3dc;
   --bronze: #d08a4f;
@@ -377,7 +378,7 @@ button:focus-visible {
   font-size: 22px;
   font-weight: 800;
   line-height: 1.2;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .banner {
