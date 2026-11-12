@@ -41,7 +41,7 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('landing-tile-order AC-1, AC-2: the tiles run best first, a strong game last, each playable but High Seas', async () => {
+test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable but High Seas', async () => {
   const { context, page, errors } = await open();
   assert.deepEqual(await page.locator('.tile h2').allTextContents(), [
     'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Orbit', 'Googly Faces', 'Crumble', 'High Seas', 'Reef',
