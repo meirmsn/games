@@ -1,6 +1,6 @@
 # Landing page: the games in the owner's order, best first and a strong one last
 
-**Go:** pending
+**Go:** "go" 2026-11-12
 
 ## Intent
 
