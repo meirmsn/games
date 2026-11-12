@@ -32,7 +32,7 @@ const SHELL = [
   'assets/tiles/walk-on-red.png',
   'assets/tiles/pixel-leap.png',
   'assets/tiles/splat-gallery.png',
-  'assets/tiles/high-seas.png',
+  'assets/tiles/island-hop.png', // high-seas.png when v5 shipped; Island Hop's tile took its place
   'assets/tiles/runes.png',
   'assets/tiles/orbit.png',
 ];

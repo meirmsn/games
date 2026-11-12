@@ -41,15 +41,30 @@ async function open(path = '', opts = {}) {
   return { context, page, errors };
 }
 
-test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable but High Seas', async () => {
+// No game on the live landing page is coming soon any more (Island Hop took the last one's place),
+// but the page still handles one. Tests of that behaviour serve the page with Orbit's tile turned
+// into a coming-soon tile, as a game waiting for its PR would be.
+async function withSoonTile(page) {
+  await page.route(BASE, async (route) => {
+    const res = await route.fetch();
+    const html = (await res.text()).replace(
+      /<a class="tile ([^"]*)" href="orbit\/">([\s\S]*?)<\/div>\s*<\/a>/,
+      '<article class="tile is-soon $1" aria-label="Orbit, coming soon">$2<span class="badge">Coming soon</span></div></article>'
+    );
+    await route.fulfill({ response: res, body: html });
+  });
+}
+
+// Island Hop takes High Seas's place in the order (meirmsn/games#17 turns that coming-soon tile into
+// Island Hop), and is playable, so no tile is coming soon.
+test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable', async () => {
   const { context, page, errors } = await open();
   assert.deepEqual(await page.locator('.tile h2').allTextContents(), [
-    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Googly Faces', 'Orbit', 'Crumble', 'High Seas', 'Reef',
+    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Googly Faces', 'Orbit', 'Crumble', 'Island Hop', 'Reef',
   ]);
   for (const tile of await page.locator('.tiles > li > .tile').all()) {
-    const soon = (await tile.locator('h2').textContent()) === 'High Seas';
-    assert.equal(await tile.evaluate((el) => el.tagName), soon ? 'ARTICLE' : 'A');
-    assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), soon);
+    assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+    assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
   }
   await page.waitForLoadState('networkidle');
   assert.deepEqual(errors, []);
@@ -131,7 +146,10 @@ test('pixel-leap AC-20: the Pixel Leap tile is playable and opens pixel-leap/', 
 });
 
 test('a coming-soon tile nudges and does not navigate', async () => {
-  const { context, page } = await open();
+  const context = await browser.newContext({ hasTouch: true });
+  const page = await context.newPage();
+  await withSoonTile(page);
+  await page.goto(BASE);
   const tile = page.locator('.tile.is-soon').first();
   await tile.click();
   assert.ok(await tile.evaluate((el) => el.classList.contains('nudge')));
@@ -253,25 +271,25 @@ test('Escape in a game goes back to the landing page, after asking', async () =>
   await context.close();
 });
 
-async function openWithFakeAudio(path = '') {
+async function openWithFakeAudio(path = '', { soon = false } = {}) {
   const context = await browser.newContext({ hasTouch: true });
   await context.addInitScript(FAKE_AUDIO);
   const page = await context.newPage();
+  if (soon) await withSoonTile(page);
   await page.goto(BASE + path);
   await page.waitForFunction((n) => window.__decoded >= n, 3); // tap, soon and toggle
   return { context, page };
 }
 
 test("the very first tap's sound plays, and mute silences it", async () => {
-  const { context, page } = await openWithFakeAudio();
+  const { context, page } = await openWithFakeAudio('', { soon: true });
   await page.locator('.tile.is-soon').first().click();
   let played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'first tap plays a sound');
   assert.equal(played[0].state, 'running', 'audio was unlocked by that tap');
 
   await page.locator('[data-sound-toggle]').click(); // mute (its own sound is muted too)
-  // The same tile again: since Splat Gallery went live, High Seas is the only coming-soon tile.
-  await page.locator('.tile.is-soon').first().click();
+  await page.locator('.tile.is-soon').first().click(); // the same tile again
   played = await page.evaluate(() => window.__played);
   assert.equal(played.length, 1, 'nothing plays while muted');
 
@@ -320,13 +338,11 @@ test('the Install button appears when the browser offers install, and hides afte
 // (specs/slow-tests-pixel-leap.md). `slowBackground` holds that request back 2 s (the guard).
 async function playableTile(context, { slowBackground = false } = {}) {
   const page = await context.newPage();
+  // Serve the landing page with Orbit's tile pointing at the test game (no tile is coming soon now).
   await page.route(BASE, async (route) => {
     if (slowBackground && route.request().resourceType() !== 'document') await new Promise((r) => setTimeout(r, 2000));
     const res = await route.fetch();
-    const html = (await res.text()).replace(
-      /<article class="tile is-soon ([^"]*)"([^>]*)>([\s\S]*?)<\/article>/,
-      '<a class="tile $1" href="tests/fixtures/game/">$3</a>'
-    );
+    const html = (await res.text()).replace('href="orbit/"', 'href="tests/fixtures/game/"');
     await route.fulfill({ response: res, body: html });
   });
   await page.goto(BASE);
@@ -395,5 +411,15 @@ test('slow-tests-pwa-site AC-9: Escape in a text field does not leave the game',
   await page.keyboard.press('Escape');
   assert.equal(await leaveAsked(page), false, 'Escape in the field did not ask to leave');
   assert.equal(page.url(), BASE + 'tests/fixtures/game/');
+  await context.close();
+});
+
+test('island-hop AC-18: the Island Hop tile is playable and the page keeps its nine tiles', async () => {
+  const { context, page } = await open();
+  assert.equal(await page.locator('.tiles > li').count(), 9);
+  const tile = page.locator('a.tile[href="island-hop/"]');
+  assert.equal(await tile.count(), 1);
+  assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  assert.equal(await tile.locator('.badge').count(), 0, 'no "Coming soon" badge');
   await context.close();
 });

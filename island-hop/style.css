@@ -1,0 +1,434 @@
+/* Island Hop: the canvas fills the screen; the HUD and the cards float over it.
+   Its own palette, from the Kenney art (sea blue, grass green, sand), the same in light and dark. */
+
+:root {
+  --sea: #9cd4e2;
+  --ink: #17324a;
+  --glass: rgb(16 38 60 / 62%);
+  --card: rgb(255 255 255 / 94%);
+  --accent: #ff8a3d;
+  --accent-ink: #c2410c; /* the accent as text on the light cards: 5:1, where #ff8a3d is 2.3:1 */
+  --gold: #f5c542;
+  --silver: #c9d3dc;
+  --bronze: #d08a4f;
+  --ahead: #44d17a;
+  --behind: #ff6b6b;
+}
+
+body {
+  background: var(--sea);
+  color: #fff;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+#world {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  font: inherit;
+}
+
+button:active {
+  transform: scale(0.96);
+}
+
+button:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+.round {
+  position: fixed;
+  z-index: 10;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: rgb(20 22 31 / 55%);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 25%);
+  cursor: pointer;
+}
+
+.round svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mute {
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+
+.mute .i-off,
+.mute[aria-pressed='true'] .i-on {
+  display: none;
+}
+
+.mute[aria-pressed='true'] .i-off {
+  display: block;
+}
+
+/* The map and restart buttons sit up top too, clear of the thumb. */
+.map-btn {
+  top: calc(env(safe-area-inset-top) + 68px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+
+.restart-btn {
+  top: calc(env(safe-area-inset-top) + 124px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+
+.map-btn.held {
+  background: var(--accent);
+}
+
+/* HUD: the clock, the stops left as icons, and what you carry. */
+.hud {
+  position: fixed;
+  z-index: 6;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 136px);
+  pointer-events: none;
+}
+
+.clock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.clock {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.split {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.split.ahead {
+  color: var(--ahead);
+}
+
+.split.behind {
+  color: var(--behind);
+}
+
+.stops,
+.card-stops {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stops li {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--glass);
+  font-size: 17px;
+}
+
+.stops li.done {
+  opacity: 0.35;
+}
+
+.stops li.flash,
+.carrying span.flash {
+  animation: flash 0.5s ease-in-out 3;
+}
+
+@keyframes flash {
+  50% {
+    background: var(--accent);
+    transform: scale(1.25);
+  }
+}
+
+.stops li .needs,
+.card-stops li .needs {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  font-size: 12px;
+}
+
+.carrying {
+  display: flex;
+  gap: 4px;
+}
+
+.carrying span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 85%);
+  font-size: 17px;
+}
+
+/* Cards: the mission, pause and finish. */
+.card {
+  position: fixed;
+  z-index: 8;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 24px);
+  transform: translateX(-50%);
+  width: min(360px, calc(100vw - 32px));
+  box-sizing: border-box;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 20px;
+  border-radius: 24px;
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: 0 8px 30px rgb(0 0 0 / 25%);
+  text-align: center;
+}
+
+.card h1,
+.card h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.card h1 {
+  display: grid;
+}
+
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.arrow {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgb(23 50 74 / 8%);
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.arrow:disabled {
+  opacity: 0.25;
+}
+
+.card-stops li {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgb(23 50 74 / 8%);
+  font-size: 24px;
+}
+
+.card-stops li.then::before {
+  content: '→';
+  position: absolute;
+  left: -10px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.best {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 15px;
+  opacity: 0.75;
+}
+
+.play {
+  min-width: 160px;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.link {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  color: var(--ink);
+  background: none;
+  font-size: 16px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.finish .medal {
+  margin: 0;
+  font-size: 44px;
+  line-height: 1;
+}
+
+.finish .time {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pars {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pars li.got {
+  font-weight: 800;
+}
+
+.legend {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.legend span {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  margin: 0 4px 2px 8px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+
+.you-line {
+  background: #ff5e9a;
+}
+
+.gold-line {
+  background: var(--gold);
+}
+
+/* The goal: on the mission card, and as a big banner when you take control. */
+.goal {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: var(--accent-ink);
+}
+
+.banner {
+  position: fixed;
+  z-index: 7;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px));
+  margin: 0;
+  padding: 18px 20px;
+  border-radius: 24px;
+  color: #fff;
+  background: rgb(16 38 60 / 78%);
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1.15;
+  text-align: center;
+  pointer-events: none;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 30%);
+}
+
+.banner.show {
+  animation: banner 2.6s ease-out both;
+}
+
+@keyframes banner {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  12%,
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner.show {
+    animation: none;
+  }
+
+  .stops li.flash,
+  .carrying span.flash {
+    animation: none;
+    outline: 2px solid var(--accent);
+  }
+}
