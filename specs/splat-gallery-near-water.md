@@ -68,6 +68,11 @@ strips.
   and fall a quarter cycle behind the slide, so it is highest and lowest in the middle of its slide
   and level at its ends. Consecutive water lanes still slide in opposite directions, and they rise
   and fall together. This replaces the slant and the 2 units; the paces stay (owner, 2026-11-12).
+- AC-5 reworded after the go, on the owner's words of 2026-11-12, in chat: "reword + checks". Its
+  old words said nothing else in the paint-clip test changed, while the test also aims at the
+  landing-time crest; an adversarial review found no check loosened and each change needed, and
+  the owner chose to reword it and add two checks: the shot landed on the strip it aimed at, and
+  the splat taken out for the "before" reading is that strip's (owner, 2026-11-12).
 - "The water ones" read as the water strips, not the ducks on them (the ducks already bob); the owner
   gave a plain "go" on this reading (Claude, 2026-11-11; go 2026-11-12).
 
@@ -92,8 +97,12 @@ strips.
   are.
 - **AC-4** Paint that lands on a water strip moves with it: half a cycle later its drawn position
   has shifted by the strip's change in offset, sideways and up or down, and it still shows only below the crest.
-- **AC-5** The other Splat Gallery tests still pass. The paint-clip test (the one titled "paint on the water or grass shows only below its crest")
-  reads its pixels at the same sway it took its crest spots at; nothing else in it changes.
+- **AC-5** The other Splat Gallery tests still pass. The paint-clip test (the one titled "paint on
+  the water or grass shows only below its crest") aims its shot where the crest will be when it
+  lands, and takes its crest spots and both pixel readings at that landing sway, the "before"
+  reading being the same frame with the new splat taken out; it checks the shot landed on the strip
+  it aimed at and the splat taken out is that strip's; its spots, checks and tolerances are
+  otherwise unchanged. (Reworded after the go; see Decisions.)
 
 ## Out of scope
 

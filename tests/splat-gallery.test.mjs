@@ -1482,6 +1482,7 @@ test('splat-gallery AC-31: paint on the water or grass shows only below its cres
       spots.push([x + dx, crest - 3], [x + dx, crest + 3]);
     }
     const splat = g.paint().pop();
+    const splatLayer = splat ? splat.layer : null;
     await frame();
     const before = spots.map(([a, b]) => px(a, b));
     if (splat) g.paint().push(splat);
@@ -1490,9 +1491,11 @@ test('splat-gallery AC-31: paint on the water or grass shows only below its cres
     const same = (i) => before[i].every((v, j) => Math.abs(v - after[i][j]) <= 2);
     const aboveKept = spots.filter((_, i) => i % 2 === 0 && !same(i)).length;
     const belowPainted = spots.filter((_, i) => i % 2 === 1 && !same(i)).length;
-    return { out, landed: g.game.lastLand, clipped: g.paintClipped(), lanes: g.L.n, aboveKept, belowPainted };
+    return { out, landed: g.game.lastLand, splatLayer, clipped: g.paintClipped(), lanes: g.L.n, aboveKept, belowPainted };
   });
   assert.equal(r.landed.what, 'strip');
+  assert.equal(r.landed.lane, 2, 'the shot landed on the strip it aimed at');
+  assert.equal(r.splatLayer, 2, "the splat taken out for the before reading is that strip's");
   assert.equal(r.aboveKept, 0, 'no paint is drawn above the crest');
   assert.ok(r.belowPainted >= 5, `the paint shows below it: ${r.belowPainted} of 9`);
   assert.ok(r.out.every((p) => !p.above && p.below), `clipped at the crest: ${JSON.stringify(r.out.filter((p) => p.above || !p.below))}`);
