@@ -85,9 +85,10 @@ window.addEventListener('appinstalled', () => {
 
 // ---- The add-to-home-screen ribbon (specs/landing-home-and-ribbon.md) ----
 // A quiet band across the bottom-right corner, from a person's second visit or after they've tapped a
-// game, never in the installed app, after "Don't show again" or installing, or while the Update
-// notice shows. "Not now" puts it away for 7 days. Kept in localStorage; if that can't be read or
-// written, the ribbon never shows.
+// game, every time after; never in the installed app or while the Update notice shows, and not for
+// the rest of a visit in which the site was installed. Visits and taps are kept in localStorage; if
+// that can't be read or written, the ribbon never shows. Appearing on a page that's already showing,
+// the band slides in from its corner.
 
 // Which advice fits this device, from the browser's signals.
 export function adviceFor({ installable, ua, platform, touchPoints, coarse }) {
@@ -99,8 +100,7 @@ export function adviceFor({ installable, ua, platform, touchPoints, coarse }) {
 }
 
 const ribbon = (() => {
-  const KEY = 'ribbon'; // { visits, tapped, until (ms), paused (once "Not now"), off }
-  const PAUSE = 7 * 24 * 60 * 60 * 1000;
+  const KEY = 'ribbon'; // { visits, tapped }; older keys (until, paused, off) are ignored
   const el = document.querySelector('[data-ribbon]');
   const band = el.querySelector('button');
   const dialog = document.querySelector('[data-add-dialog]');
@@ -134,21 +134,25 @@ const ribbon = (() => {
   const s = load();
   if (s) usable = save({ ...s, visits: (Number(s.visits) || 0) + 1 });
 
+  let installedNow = false; // installed during this visit
+  let loaded = false; // past the first look at page load: from then on, appearing slides
   const words = () => (coarse.matches ? 'Add to home screen' : 'Bookmark this site');
   function wanted() {
     const s = usable && load();
-    if (!s || standalone() || s.off) return false;
-    if (Number(s.until) > Date.now()) return false;
+    if (!s || standalone() || installedNow) return false;
     return s.visits >= 2 || !!s.tapped;
   }
   function refresh() {
     const notice = document.querySelector('[data-update]');
     const show = wanted() && !!notice?.hidden;
     band.textContent = words();
+    if (show && el.hidden && loaded) el.classList.add('slide-in');
+    if (!show) el.classList.remove('slide-in');
     el.hidden = !show;
     document.body.classList.toggle('has-ribbon', show);
     if (dialog.open) fill();
   }
+  band.addEventListener('animationend', () => el.classList.remove('slide-in'));
   function fill() {
     const kind = adviceFor({
       installable: !!deferred,
@@ -160,8 +164,6 @@ const ribbon = (() => {
     dialog.querySelector('h2').textContent = words();
     for (const a of dialog.querySelectorAll('[data-advice]')) a.hidden = a.dataset.advice !== kind;
     dialog.dataset.kind = kind;
-    // "Don't show again" is offered only once a person has chosen "Not now" before.
-    dialog.querySelector('[data-never]').hidden = !load()?.paused;
   }
 
   band.addEventListener('click', () => {
@@ -173,28 +175,25 @@ const ribbon = (() => {
   dialog.addEventListener('close', () => {
     if (!el.hidden) band.focus({ preventScroll: true });
   });
-  dialog.querySelector('[data-not-now]').addEventListener('click', () => {
-    update({ until: Date.now() + PAUSE, paused: true });
-    dialog.close();
-    refresh();
-  });
-  dialog.querySelector('[data-never]').addEventListener('click', () => {
-    update({ off: true });
-    dialog.close();
-    refresh();
-  });
+  dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+  // A ctrl- or cmd-click opens the game in a new tab and leaves this page showing: the ribbon may
+  // appear here now, sliding in.
   for (const tile of document.querySelectorAll('a.tile')) {
-    tile.addEventListener('click', () => update({ tapped: true }));
+    tile.addEventListener('click', (e) => {
+      update({ tapped: true });
+      if (e.metaKey || e.ctrlKey || e.shiftKey) refresh();
+    });
   }
   coarse.addEventListener('change', refresh);
   // Back from a game through the browser's cache: the page didn't reload, so look again.
   window.addEventListener('pageshow', (e) => e.persisted && refresh());
   refresh();
+  loaded = true;
 
   return {
     refresh,
     installed() {
-      update({ off: true });
+      installedNow = true;
       if (dialog.open) dialog.close();
       refresh();
     },

@@ -331,6 +331,22 @@ body.has-update {
   transition: none;
 }
 
+/* Appearing on a page that's already showing, the band slides in diagonally out of its corner (the
+ * corner box clips it); 5rem on each axis starts it wholly outside. The base reduced-motion rule cuts
+ * it to nothing. */
+.ribbon.slide-in > button {
+  animation: ribbon-in 0.3s ease-out;
+}
+
+@keyframes ribbon-in {
+  from {
+    transform: translate(5rem, 5rem) rotate(-45deg);
+  }
+  to {
+    transform: rotate(-45deg);
+  }
+}
+
 /* The base pressed state scales the control; the band keeps its angle and only dims. */
 .ribbon > button:active {
   transform: rotate(-45deg);
@@ -364,7 +380,7 @@ body.has-ribbon {
   margin: 0 0 var(--space-4);
 }
 
-/* Install is the big, centred choice, well apart from the two below it. */
+/* Install is the big, centred choice, well apart from Close below it. */
 .add-dialog [data-install-here] {
   width: 100%;
   min-height: calc(var(--tap) + var(--space-2));

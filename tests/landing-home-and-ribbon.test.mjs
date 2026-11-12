@@ -88,18 +88,10 @@ async function openDialog(page) {
   await band(page).click();
   await dialog(page).waitFor({ state: 'visible' });
 }
+const closeBtn = (page) => dialog(page).getByRole('button', { name: 'Close' });
 
-// "Not now" once, then 7 days and a minute later the ribbon is back: the state in which the dialog
-// offers "Don't show again" too.
-async function notNowOnce(page) {
-  const now = Date.now();
-  await openDialog(page);
-  await dialog(page).getByRole('button', { name: 'Not now' }).click();
-  await page.clock.setFixedTime(now + 7 * DAY + 60 * 1000);
-  await page.reload();
-  await ribbon(page).waitFor();
-}
-const neverBtn = (page) => dialog(page).getByRole('button', { name: "Don't show again" });
+// Whether the ribbon's band is sliding in (its slide-in animation running).
+const sliding = (page) => page.evaluate(() => document.querySelector('[data-ribbon]').classList.contains('slide-in'));
 
 test('landing-home-and-ribbon AC-1: the header starts with a 44 px Home button to https://meirmsn.dev/; no game page has one', async (t) => {
   const { page, errors } = await open({}, t);
@@ -233,6 +225,35 @@ for (const [name, modifier] of [
   });
 }
 
+test('landing-home-and-ribbon AC-9: after a ctrl- or cmd-click on a first visit, the ribbon slides in from its corner; at page load it does not', async (t) => {
+  const { context, page } = await open({ hasTouch: false }, t);
+  await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));
+  await page.waitForLoadState('networkidle');
+  assert.equal(await shown(page), false, 'a first visit: no ribbon');
+  const opened = context.waitForEvent('page');
+  await page.locator('a.tile[href="reef/"]').click({ modifiers: ['ControlOrMeta'] });
+  await opened;
+  await ribbon(page).waitFor();
+  const anim = await band(page).evaluate((b) => {
+    const a = b.getAnimations().find((x) => x.animationName === 'ribbon-in');
+    if (!a) return null;
+    a.pause();
+    a.currentTime = 0;
+    const start = new DOMMatrix(getComputedStyle(b).transform);
+    a.currentTime = 299;
+    const end = new DOMMatrix(getComputedStyle(b).transform);
+    return { duration: a.effect.getTiming().duration, start: [start.e, start.f], end: [end.e, end.f] };
+  });
+  assert.ok(anim, 'the band slides in');
+  assert.equal(anim.duration, 300);
+  const [dx, dy] = [anim.start[0] - anim.end[0], anim.start[1] - anim.end[1]];
+  assert.ok(dx >= 70 && Math.abs(dx - dy) < 1, `it starts down and right, out of the corner, along the diagonal (${dx}, ${dy})`);
+  await page.reload();
+  await ribbon(page).waitFor();
+  assert.equal(await sliding(page), false, 'shown at page load, it does not slide');
+  assert.equal(await band(page).evaluate((b) => b.getAnimations().length), 0);
+});
+
 for (const [w, h] of [
   [320, 568],
   [390, 844],
@@ -301,55 +322,37 @@ test('landing-home-and-ribbon AC-4: never when storage is unavailable', async (t
   assert.equal(await shown(ro.page), false, 'storage that cannot be written');
 });
 
-test('landing-home-and-ribbon AC-6: the first dialog offers "Not now" alone; "Don\'t show again" comes once "Not now" has been chosen', async (t) => {
+test('landing-home-and-ribbon AC-6: the dialog\'s only buttons are Close and, where offered, Install; Close leaves the ribbon', async (t) => {
   const { page } = await open({ visits: 2 }, t);
   await openDialog(page);
-  assert.equal(await dialog(page).getByRole('button', { name: 'Not now' }).isVisible(), true);
-  assert.equal(await neverBtn(page).isVisible(), false, 'no "Don\'t show again" the first time');
-  await page.keyboard.press('Escape'); // closing without a choice is no "Not now"
+  const names = () => dialog(page).getByRole('button').evaluateAll((bs) => bs.filter((b) => b.checkVisibility()).map((b) => b.textContent.trim()));
+  assert.deepEqual(await names(), ['Close']);
+  assert.equal(await closeBtn(page).evaluate((b) => b.classList.contains('btn-outline')), true, 'an outline button');
+  await closeBtn(page).click();
   await dialog(page).waitFor({ state: 'hidden' });
-  await page.reload();
+  assert.equal(await shown(page), true, 'Close leaves the ribbon showing');
+  assert.equal(await band(page).evaluate((b) => b === document.activeElement), true, 'focus is back on the ribbon');
+  await offerInstall(page);
   await openDialog(page);
-  assert.equal(await neverBtn(page).isVisible(), false, 'still none after Escape and another visit');
-  await page.keyboard.press('Escape');
-  await notNowOnce(page);
-  await openDialog(page);
-  assert.equal(await neverBtn(page).isVisible(), true, 'offered when the ribbon comes back');
+  assert.deepEqual(await names(), ['Install', 'Close']);
 });
 
-test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-6: "Don\'t show again" removes it for good, on any later visit', async (t) => {
+test('landing-home-and-ribbon AC-6: the ribbon shows on every later visit, even where an older version stored "Not now" or "Don\'t show again"', async (t) => {
   const { page } = await open({ visits: 2 }, t);
-  await notNowOnce(page);
   await openDialog(page);
-  await neverBtn(page).click();
-  assert.equal(await dialog(page).isVisible(), false, 'the dialog closes');
-  assert.equal(await shown(page), false, 'the ribbon goes');
+  await closeBtn(page).click();
   await page.clock.setFixedTime(Date.now() + 40 * DAY);
-  for (let i = 0; i < 2; i++) await page.reload();
-  await page.waitForLoadState('networkidle');
-  assert.equal(await shown(page), false, 'still gone a month later');
-});
-
-test('landing-home-and-ribbon AC-6: "Not now" closes the dialog and the ribbon stays away for 7 days, then returns', async (t) => {
-  const { page } = await open({ visits: 2 }, t);
-  const now = Date.now();
-  await openDialog(page);
-  await dialog(page).getByRole('button', { name: 'Not now' }).click();
-  assert.equal(await dialog(page).isVisible(), false, 'the dialog closes');
-  assert.equal(await shown(page), false, 'the ribbon goes');
-  await page.reload();
-  await page.waitForLoadState('networkidle');
-  assert.equal(await shown(page), false, 'the next visit');
-  await page.clock.setFixedTime(now + 7 * DAY - 60 * 1000);
-  await page.reload();
-  await page.waitForLoadState('networkidle');
-  assert.equal(await shown(page), false, 'a minute short of 7 days');
-  await page.clock.setFixedTime(now + 7 * DAY + 60 * 1000);
+  for (let i = 0; i < 2; i++) {
+    await page.reload();
+    await ribbon(page).waitFor();
+  }
+  // What the old dialog's choices stored: a 7-day pause, and "Don't show again".
+  await page.evaluate((until) => localStorage.setItem('ribbon', JSON.stringify({ visits: 5, until, paused: true, off: true })), Date.now() + 7 * DAY);
   await page.reload();
   await ribbon(page).waitFor();
-  await openDialog(page);
-  assert.equal(await neverBtn(page).isVisible(), true, 'back, with "Don\'t show again" now offered');
+  assert.equal(await shown(page), true);
 });
+
 
 test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: where the browser offers install, the dialog\'s Install opens its prompt; then the ribbon and both Install buttons go', async (t) => {
   const { page, errors } = await open({ visits: 2 }, t);
@@ -366,8 +369,8 @@ test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: where the bro
   assert.equal(await header.isVisible(), false, "the header's Install goes");
   assert.equal(await page.locator('[data-install-here]').evaluate((b) => b.hidden), true, "the dialog's Install goes");
   await page.reload();
-  await page.waitForLoadState('networkidle');
-  assert.equal(await shown(page), false, 'not back on a later visit');
+  await ribbon(page).waitFor();
+  assert.equal(await shown(page), true, 'back on the next visit in a browser');
   assert.deepEqual(errors, []);
 });
 
@@ -383,14 +386,13 @@ test("landing-home-and-ribbon AC-6: installing from the header's Install removes
   assert.equal(await page.locator('[data-install-here]').evaluate((b) => b.hidden), true);
 });
 
-test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-6: installing another way (appinstalled) removes the ribbon for good', async (t) => {
+test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-6: installing another way (appinstalled) removes the ribbon for the rest of the visit', async (t) => {
   const { page } = await open({ visits: 2 }, t);
   await ribbon(page).waitFor();
   await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
   await ribbon(page).waitFor({ state: 'hidden' });
   await page.reload();
-  await page.waitForLoadState('networkidle');
-  assert.equal(await shown(page), false);
+  await ribbon(page).waitFor();
 });
 
 test('landing-home-and-ribbon AC-6: a dismissed install prompt leaves the ribbon, its dialog falling back to the device\'s steps', async (t) => {
@@ -457,21 +459,18 @@ test('landing-home-and-ribbon AC-2: the ribbon stays in its corner when tapped, 
   assert.deepEqual(await where(), at, 'unmoved when focused');
 });
 
-test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: "Not now" comes first, on the left, then "Don\'t show again"; Install is larger, centred above them', async (t) => {
+test('landing-home-and-ribbon AC-5 / landing-home-and-ribbon AC-6: Install is larger, centred above Close', async (t) => {
   const { page } = await open({ visits: 2 }, t);
-  await notNowOnce(page);
   await offerInstall(page);
   await openDialog(page);
-  const never = await dialog(page).getByRole('button', { name: "Don't show again" }).boundingBox();
-  const notNow = await dialog(page).getByRole('button', { name: 'Not now' }).boundingBox();
+  const close = await closeBtn(page).boundingBox();
   const install = await dialog(page).getByRole('button', { name: 'Install' }).boundingBox();
   const box = await dialog(page).boundingBox();
-  assert.ok(notNow.x + notNow.width <= never.x, '"Not now" left of "Don\'t show again"');
-  assert.ok(install.height > notNow.height, `Install is taller (${install.height} vs ${notNow.height})`);
-  assert.ok(install.width > never.width + notNow.width, 'Install is wider than both together');
+  assert.ok(install.height > close.height, `Install is taller (${install.height} vs ${close.height})`);
+  assert.ok(install.width > close.width, 'Install is wider');
   const centre = install.x + install.width / 2 - (box.x + box.width / 2);
   assert.ok(Math.abs(centre) <= 1, `Install is centred (off by ${centre} px)`);
-  assert.ok(install.y + install.height <= Math.min(never.y, notNow.y) - 16, 'well apart from the two below it');
+  assert.ok(install.y + install.height <= close.y - 16, 'well apart from Close below it');
 });
 
 test('landing-home-and-ribbon AC-7: Escape closes the dialog and returns focus to the ribbon', async (t) => {
