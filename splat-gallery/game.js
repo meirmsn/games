@@ -323,20 +323,21 @@ function waveDepth(lane) {
 function crestDrop(lane) {
   return Math.min(...masks[stripName(lane)].top) * size(stripName(lane))[1] * stripScale(lane);
 }
-// The water sways as if on a crank: left and right, rising a little at one end of the slide and
-// dipping at the other, consecutive water lanes against each other; the grass stays still
+// The water sways as if on a crank: each strip goes round a flat oval, sliding left and right and
+// rising and falling a quarter cycle behind (highest and lowest mid-slide, level at the ends);
+// consecutive water lanes slide against each other and rise and fall together; the grass stays still
 // (specs/splat-gallery-near-water.md). Its phase moves on with the game's clock, so it stops in a
 // pause; a frenzy and a round's last 3 s turn the crank faster, without a jump.
 const SWAY_AMP = 6;
-const SWAY_RISE = 2;
+const SWAY_RISE = 1.5;
 const swayPeriod = () => (game.frenzy > 0 || (game.mode === 'play' && game.time <= 3) ? 3 : 4);
 function sway(lane) {
   if (lane.kind !== 'water') return 0;
   const rank = L.lanes.filter((l) => l.kind === 'water' && l.i < lane.i).length;
   return (rank % 2 ? -1 : 1) * SWAY_AMP * Math.sin(game.swayPh || 0);
 }
-// Up (negative) as the strip slides one way, down as it slides the other.
-const swayY = (lane) => (-SWAY_RISE / SWAY_AMP) * sway(lane);
+// Up (negative) and down, a quarter cycle behind the slide: the oval the owner chose ("A3").
+const swayY = (lane) => (lane.kind === 'water' ? -SWAY_RISE * Math.cos(game.swayPh || 0) : 0);
 // The crest at x as drawn now, sway and all.
 function stripY(lane, x) {
   return restY(lane, x - sway(lane)) + swayY(lane);

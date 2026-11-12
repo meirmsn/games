@@ -1507,10 +1507,10 @@ async function nearWater(page) {
     const g = window.__gallery;
     const { SW } = g.stage();
     const near = g.L.lanes[g.L.n - 1];
-    // At both ends of the sway, so the near water's lowest point of its rise and fall counts.
+    // Round the oval, so the near water's lowest point of its rise and fall counts.
     let show = Infinity;
     const ph0 = g.game.swayPh;
-    for (const ph of [Math.PI / 2, -Math.PI / 2]) {
+    for (const ph of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
       g.game.swayPh = ph;
       let tip = Infinity;
       for (let x = 0; x <= SW; x += 1) tip = Math.min(tip, g.stripY(near, x));
@@ -1548,7 +1548,7 @@ test('splat-gallery-near-water AC-1: the near lane shows its whole wave and as m
   }
 });
 
-test('splat-gallery-near-water AC-2: water strips sway about 6 units each way and 2 up and down, a 4 s cycle, 3 s in a frenzy and the last 3 s, without a jump; consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
+test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 units each way and 1.5 up and down, a 4 s cycle, 3 s in a frenzy and the last 3 s, without a jump; consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
   for (const viewport of [PORTRAIT, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await ready(page);
@@ -1581,7 +1581,8 @@ test('splat-gallery-near-water AC-2: water strips sway about 6 units each way an
       const loY = water.map(() => Infinity);
       const hiY = water.map(() => -Infinity);
       let against = true;
-      let slant = true;
+      let oval = true;
+      let together = true;
       let grassMoved = false;
       for (let i = 0; i < 240; i++) {
         g.step(1 / 60);
@@ -1592,9 +1593,12 @@ test('splat-gallery-near-water AC-2: water strips sway about 6 units each way an
           hi[j] = Math.max(hi[j], x);
           loY[j] = Math.min(loY[j], y);
           hiY[j] = Math.max(hiY[j], y);
-          // Up (negative y) as it slides one way, down as it slides the other: in phase.
-          if (Math.abs(x) > 0.5 && Math.sign(y) !== -Math.sign(x)) slant = false;
+          // An oval: level at the ends of the slide, at its highest or lowest mid-slide.
+          if (Math.abs(x) > 5.99 && Math.abs(y) > 0.1) oval = false;
+          if (Math.abs(x) < 0.05 && Math.abs(y) < 1.45) oval = false;
         });
+        const ys = water.map((l) => g.swayY(l));
+        if (ys.some((v) => Math.abs(v - ys[0]) > 1e-9)) together = false;
         const o = water.map((l) => g.sway(l));
         for (let j = 1; j < o.length; j++) if (Math.abs(o[j]) > 0.01 && Math.sign(o[j]) === Math.sign(o[j - 1])) against = false;
         if (grass.some((l) => g.sway(l) !== 0 || g.swayY(l) !== 0)) grassMoved = true;
@@ -1615,20 +1619,21 @@ test('splat-gallery-near-water AC-2: water strips sway about 6 units each way an
       }
       // Hold the round's clock at 2.9 s left while measuring the last seconds' pace.
       const lastSecs = cycle(() => (G.time = 2.9));
-      return { n: water.length, lo, hi, loY, hiY, against, slant, grassMoved, normal, frenzy, lastSecs, jump };
+      return { n: water.length, lo, hi, loY, hiY, against, oval, together, grassMoved, normal, frenzy, lastSecs, jump };
     });
     const where = `${viewport.width}×${viewport.height}`;
     assert.ok(r.n >= 2, where);
     for (let j = 0; j < r.n; j++) {
       assert.ok(r.hi[j] >= 5 && r.hi[j] <= 7 && r.lo[j] <= -5 && r.lo[j] >= -7, `${where}: water lane ${j} sways ${r.lo[j].toFixed(2)}..${r.hi[j].toFixed(2)}`);
-      assert.ok(r.hiY[j] >= 1.5 && r.hiY[j] <= 2.5 && r.loY[j] <= -1.5 && r.loY[j] >= -2.5, `${where}: water lane ${j} rises and falls ${r.loY[j].toFixed(2)}..${r.hiY[j].toFixed(2)}`);
+      assert.ok(r.hiY[j] >= 1.2 && r.hiY[j] <= 1.8 && r.loY[j] <= -1.2 && r.loY[j] >= -1.8, `${where}: water lane ${j} rises and falls ${r.loY[j].toFixed(2)}..${r.hiY[j].toFixed(2)}`);
     }
     assert.ok(Math.abs(r.normal - 4) < 0.05, `${where}: a 4 s cycle in normal play (${r.normal})`);
     assert.ok(Math.abs(r.frenzy - 3) < 0.05, `${where}: a 3 s cycle in a frenzy (${r.frenzy})`);
     assert.ok(Math.abs(r.lastSecs - 3) < 0.05, `${where}: a 3 s cycle in the last 3 s (${r.lastSecs})`);
     assert.ok(r.jump < 0.5, `${where}: the change of pace doesn't jump the strip (${r.jump.toFixed(3)} a frame)`);
     assert.ok(r.against, `${where}: consecutive water lanes sway against each other`);
-    assert.ok(r.slant, `${where}: each rises as it slides one way and dips as it slides the other`);
+    assert.ok(r.oval, `${where}: each goes round an oval, level at the ends of its slide and highest or lowest mid-slide`);
+    assert.ok(r.together, `${where}: the water lanes rise and fall together`);
     assert.equal(r.grassMoved, false, `${where}: the grass stays still`);
     await context.close();
   }

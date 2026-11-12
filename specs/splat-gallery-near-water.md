@@ -59,6 +59,15 @@ strips.
   the other), so it moves on a slant. The layout leaves room for the 2 units, so the near water
   still shows twice its waves' depth at its lowest (owner, 2026-11-12; the 4 s and the 2 units are
   Claude's reading of "a little bit slower" and "definitely smaller").
+- Changed again, on the owner's words of 2026-11-12, in chat, after the slant: "Because the
+  frequency is the same for the horizontal and vertical movement of the water, then the movement is
+  diagonal, so it looks bad." They asked for local videos to choose from before anything went on the
+  PR. From three rounds of recordings (an oval as from a crank, an arc as from a pendulum and a
+  figure-eight; then different sizes; then different offsets between the rows), the owner chose
+  "A3": each water strip moves in an oval, 6 units each way sideways and 1.5 up and down, the rise
+  and fall a quarter cycle behind the slide, so it is highest and lowest in the middle of its slide
+  and level at its ends. Consecutive water lanes still slide in opposite directions, and they rise
+  and fall together. This replaces the slant and the 2 units; the paces stay (owner, 2026-11-12).
 - "The water ones" read as the water strips, not the ducks on them (the ducks already bob); the owner
   gave a plain "go" on this reading (Claude, 2026-11-11; go 2026-11-12).
 
@@ -73,8 +82,9 @@ strips.
   and 7 units each way; a cycle takes 4 s in normal play and on the start card, and 3 s in a frenzy
   and when 3 s or less are left in a round; a change of pace moves the strip by less than half a
   unit in a frame; consecutive water lanes are offset sideways in opposite directions at the same
-  moment; each also rises and falls between 1.5 and 2.5 units each way, rising as its own sideways
-  offset grows one way and falling as it grows the other; grass strips never move; and the offset
+  moment; each also rises and falls between 1.2 and 1.8 units each way on an oval: it is at its
+  highest or lowest as it passes the middle of its slide and level (within a tenth of a unit) at
+  its ends; consecutive water lanes rise and fall together; grass strips never move; and the offset
   doesn't change while the game is paused or turned.
 - **AC-3** The strip as hit-tested is the strip as drawn: with the water swayed away from its rest
   position, a shot just below the crest `stripY` reports lands on the strip and one just above it
