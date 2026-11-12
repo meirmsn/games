@@ -594,13 +594,17 @@ function syncHints(dt, input) {
     if (hint.kind === 'shallow' && (hint.t > SHALLOW_HINT || world.mode !== 'boat')) hint = null;
   }
 }
-function drawHint() {
-  if (!hint || world.phase !== 'play') return;
+// Where the bubble's vehicle is, in CSS pixels (read while the world's transform is still set).
+function hintPoint() {
+  if (!hint || world.phase !== 'play') return null;
   const at = hint.kind === 'car' ? youCar(world) : youBoat(world);
-  if (!at) return;
-  const z = hint.kind === 'car' ? LAND_Z : 0;
-  const p = iso.toScreen(at.x, at.y, z);
-  const k = 1 / cam.zoom; // sizes in screen pixels
+  if (!at) return null;
+  const w = iso.toScreen(at.x, at.y, hint.kind === 'car' ? LAND_Z : 0);
+  const d = ctx.getTransform().transformPoint(new DOMPoint(w.x, w.y));
+  return { x: d.x / dpr, y: d.y / dpr };
+}
+function drawHint(p) {
+  const k = 1; // drawn in CSS pixels, after the world
   const text = HINTS[hint.kind];
   ctx.save();
   ctx.font = `600 ${15 * k}px system-ui, sans-serif`;
@@ -974,7 +978,7 @@ function draw() {
   }
   // 4. The open stops' beams, over everything.
   if (world.phase !== 'card') drawBeams();
-  drawHint();
+  const hintAt = hintPoint();
   // 5. The finish: your route and the gold route.
   if (finishView) {
     drawRoute(finishView.gold, '#f5c542', 7);
@@ -993,6 +997,7 @@ function draw() {
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (world.phase === 'play' && !finishView && !mapHeld) drawEdgeArrows();
+  if (hintAt) drawHint(hintAt); // over the edge arrows
   if (pointer && world.phase === 'play') drawStick();
 }
 let fadedNow = false;
