@@ -1734,44 +1734,71 @@ test('splat-gallery-near-water AC-3: the strip as hit-tested is the strip as dra
 test('splat-gallery-near-water AC-4: paint on the water rides with it and still shows only below the crest', async () => {
   const { context, page } = await open();
   await ready(page);
-  const r = await page.evaluate(() => {
+  const r = await page.evaluate(async () => {
     const g = window.__gallery;
+    const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const lane = g.L.lanes[2];
     const x = 200;
-    const y = lane.strip + 30;
+    g.game.time = 60; // well before the last 3 s: the 4 s cycle
+    // Aim just under the crest as it will be when the ball lands, so the clip cuts the splat.
+    const ph0 = g.game.swayPh;
+    let n = 0;
+    while (n / 60 < g.flightTime(g.stripY(lane, x) + 4)) n++;
+    g.game.swayPh = ph0 + ((2 * Math.PI) / g.swayPeriod()) * (n / 60);
+    const y = g.stripY(lane, x) + 4;
+    g.game.swayPh = ph0;
     g.aimAt(x, y);
     g.game.lastFire = -1;
     g.game.lastLand = null;
     g.fire();
     for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
-    const p = g.paint()[g.paint().length - 1];
-    const drawnAt = () => p.x + g.sway(lane);
-    const drawnY = () => p.y + g.swayY(lane);
-    const at0 = drawnAt();
-    const y0 = drawnY();
-    const s0 = g.sway(lane);
-    const v0 = g.swayY(lane);
-    for (let i = 0; i < 90; i++) g.step(1 / 60);
-    const at1 = drawnAt();
-    const y1 = drawnY();
-    const s1 = g.sway(lane);
-    const v1 = g.swayY(lane);
-    const clip = [];
-    for (let xx = 60; xx < 340; xx += 17) {
-      const crest = g.stripY(lane, xx);
-      clip.push(!g.paintShowsAt(2, xx, crest - 2) && g.paintShowsAt(2, xx, crest + 2));
-    }
-    return { landed: g.game.lastLand, layer: p.layer, at0, at1, s0, s1, x, y, y0, y1, v0, v1, clip };
+    for (let i = 0; i < 70; i++) g.step(1 / 60); // let it settle
+    const cv = document.querySelector('#booth');
+    const c = cv.getContext('2d');
+    const { k, ox, oy } = g.stage();
+    const dpr = cv.width / innerWidth;
+    // The splat's own pixels, in stage units: where the frame changes when it is taken out.
+    const R = 40;
+    const X0 = Math.round((x - R) * k * dpr + ox * dpr);
+    const Y0 = Math.round((y - R) * k * dpr + oy * dpr);
+    const S = Math.round(2 * R * k * dpr);
+    const splatPixels = async () => {
+      await frame();
+      const on = c.getImageData(X0, Y0, S, S).data;
+      const p = g.paint().pop();
+      await frame();
+      const off = c.getImageData(X0, Y0, S, S).data;
+      g.paint().push(p);
+      await frame();
+      const pts = [];
+      for (let j = 0; j < S; j++)
+        for (let i = 0; i < S; i++) {
+          const q = (j * S + i) * 4;
+          if (Math.abs(on[q] - off[q]) + Math.abs(on[q + 1] - off[q + 1]) + Math.abs(on[q + 2] - off[q + 2]) > 60) {
+            pts.push([(X0 + i + 0.5) / dpr / k - ox / k, (Y0 + j + 0.5) / dpr / k - oy / k]); // pixel centres
+          }
+        }
+      // None of it above the crest as drawn now (one device pixel for the clip edge's smoothing).
+      const aboveP = pts.filter(([px, py]) => py < g.stripY(lane, px) - 1 / (k * dpr));
+      const above = aboveP.length;
+      const worst = aboveP.reduce((m, [px, py]) => Math.max(m, g.stripY(lane, px) - py), 0);
+      const cx = pts.reduce((t, q) => t + q[0], 0) / pts.length;
+      const cy = pts.reduce((t, q) => t + q[1], 0) / pts.length;
+      return { n: pts.length, cx, cy, above, worst, sx: g.sway(lane), sy: g.swayY(lane) };
+    };
+    const a = await splatPixels();
+    for (let i = 0; i < 120; i++) g.step(1 / 60); // half the 4 s cycle
+    const b = await splatPixels();
+    return { landed: g.game.lastLand, a, b, kk: k };
   });
   assert.equal(r.landed.what, 'strip');
-  assert.equal(r.layer, 2);
-  assert.ok(Math.abs(r.at0 - r.x) < 1.5, `it lands where it was aimed: ${r.at0} vs ${r.x}`);
-  assert.ok(Math.abs(r.s1 - r.s0) > 2, `the water moved: ${r.s0} → ${r.s1}`);
-  assert.ok(Math.abs(r.at1 - r.at0 - (r.s1 - r.s0)) < 1e-6, `the paint moved with it: ${r.at0} → ${r.at1}`);
-  assert.ok(Math.abs(r.y0 - r.y) < 1.5, `it lands at the height aimed: ${r.y0} vs ${r.y}`);
-  assert.ok(Math.abs(r.v1 - r.v0) > 0.5, `the water rose or fell: ${r.v0} → ${r.v1}`);
-  assert.ok(Math.abs(r.y1 - r.y0 - (r.v1 - r.v0)) < 1e-6, `the paint rose or fell with it: ${r.y0} → ${r.y1}`);
-  assert.ok(r.clip.every(Boolean), 'clipped at the moving crest');
+  assert.ok(r.a.n > 50 && r.b.n > 50, `the splat shows: ${r.a.n} and ${r.b.n} pixels`);
+  assert.ok(Math.abs(r.b.sx - r.a.sx) > 4, `the water moved: ${r.a.sx} → ${r.b.sx}`);
+  const tol = 1 / r.kk + 0.05; // a device pixel's rounding, in units
+  assert.ok(Math.abs(r.b.cx - r.a.cx - (r.b.sx - r.a.sx)) < tol, `the drawn splat moved sideways with the water: ${(r.b.cx - r.a.cx).toFixed(2)} vs ${(r.b.sx - r.a.sx).toFixed(2)}`);
+  assert.ok(Math.abs(r.b.cy - r.a.cy - (r.b.sy - r.a.sy)) < tol, `and up or down with it: ${(r.b.cy - r.a.cy).toFixed(2)} vs ${(r.b.sy - r.a.sy).toFixed(2)}`);
+  assert.equal(r.a.above, 0, `no paint drawn above the crest: ${JSON.stringify(r.a)}`);
+  assert.equal(r.b.above, 0, 'nor half a cycle later, above the moved crest');
   await context.close();
 });
 
