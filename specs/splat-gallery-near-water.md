@@ -1,6 +1,6 @@
 # Splat Gallery: the near water always shows, and the water sways like a machine
 
-**Go:** pending
+**Go:** "go" 2026-11-12
 
 ## Intent
 
