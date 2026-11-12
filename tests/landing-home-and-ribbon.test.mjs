@@ -259,6 +259,20 @@ test(`landing-home-and-ribbon AC-9: after a ${name} on a first visit, the ribbon
 });
 }
 
+test('landing-home-and-ribbon AC-9: a page coming back from the browser\'s cache shows a due ribbon without a slide', async (t) => {
+  const { page } = await open({ hasTouch: false }, t);
+  await page.waitForLoadState('networkidle');
+  assert.equal(await shown(page), false, 'a first visit: no ribbon');
+  // A game was tapped while the page sat in the cache; now it comes back (pageshow, persisted).
+  await page.evaluate(() => {
+    localStorage.setItem('ribbon', JSON.stringify({ visits: 1, tapped: true }));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
+  await ribbon(page).waitFor();
+  assert.equal(await sliding(page), false, 'no slide-in');
+  assert.equal(await band(page).evaluate((b) => b.getAnimations().length), 0, 'no animation runs');
+});
+
 test('landing-home-and-ribbon AC-9: with reduced motion asked for, the ribbon appears without a visible slide', async (t) => {
   const { context, page } = await open({ hasTouch: false, reducedMotion: 'reduce' }, t);
   await context.route(BASE + 'reef/', (route) => route.fulfill({ contentType: 'text/html', body: '<p>A game</p>' }));

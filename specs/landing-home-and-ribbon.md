@@ -28,7 +28,7 @@ the design. No game page changes.
   and as its tooltip. Landing page only: inside a game, top left stays the back button to the games
   list (owner, 2026-11-10). Its icon is one inline SVG, so a cuter one later is a one-line swap. In the
   installed app, the link leaves the app's scope, so the system opens it in a browser view; accepted.
-- **The ribbon:** a diagonal band at 45° across the bottom-right corner, fixed to the screen above the
+- **The ribbon:** (Partly superseded by the changes after the merge of 2026-11-12, below.) a diagonal band at 45° across the bottom-right corner, fixed to the screen above the
   safe area (`env(safe-area-inset-bottom)` and `-right`), 44 px tall, about 13rem long, its text
   0.875rem; the band itself is the tap target. Quiet colours: `--card` with `--card-foreground` text,
   a `--border` edge and the `--shadow`, no animation. While it shows, the page gets bottom padding so
@@ -36,7 +36,7 @@ the design. No game page changes.
   and a line under the intro (owner chose the ribbon, 2026-11-10).
 - **Its words:** "Add to home screen" on a touch device (`pointer: coarse`); "Bookmark this site" on
   desktop.
-- **When it shows:** on the landing page only, from a person's second visit to it, or after they've
+- **When it shows:** (Partly superseded by the changes after the merge of 2026-11-12, below.) on the landing page only, from a person's second visit to it, or after they've
   tapped a game tile, whichever comes first. Visits and tile taps are counted on the landing page in
   `localStorage`; if storage can't be read or written, the ribbon never shows. Never when the site
   runs as an installed app (`display-mode: standalone`, or iOS's `navigator.standalone`), never after
@@ -46,7 +46,7 @@ the design. No game page changes.
 - **Decided after the merge (#49), by the owner (2026-11-11):** a ctrl-, cmd- or shift-click on a
   tile, which opens the game in a new tab, counts as tapping a game: "I think it's good that if they
   control click, it still counts as if they open the game to play." As built.
-- **What tapping it does:** it opens a small dialog (`<dialog>`, opened with `showModal()`, Escape
+- **What tapping it does:** (Partly superseded by the changes after the merge of 2026-11-12, below.) it opens a small dialog (`<dialog>`, opened with `showModal()`, Escape
   closes it, focus returns to the ribbon) whose advice fits the device, worked out by one small
   function from the browser's signals:
   - The browser offered to install (`beforeinstallprompt` fired, Chrome, Edge, Android): an Install
@@ -59,7 +59,7 @@ the design. No game page changes.
   - Any other desktop: "Press ⌘D to bookmark this site" on a Mac, "Press Ctrl+D" elsewhere.
   The dialog has "Not now" (closes; the ribbon stays away for 7 days) and, once "Not now" has been
   chosen before, "Don't show again".
-- **Changed after the go, by the owner (2026-11-11), on the PR's screenshots:** "Maybe make the first
+- **Changed after the go, by the owner (2026-11-11), on the PR's screenshots:** (Superseded by the changes after the merge of 2026-11-12, below.) "Maybe make the first
   button that don't show again, and then on the not now, the one on the right, to make it easier to
   tap for a right-handed, and also that install button, maybe make it larger and center so that you
   don't hit the not now or don't show again by mistake." Then, the same day, on seeing it: "Actually,
@@ -67,7 +67,7 @@ the design. No game page changes.
   (left) and "Don't show again" second (right), as before, and Install spans the dialog's width,
   taller than the two below it. The first message also showed the ribbon sliding out of its corner
   while the dialog was open; that was a bug (its corner box could scroll), fixed, not a spec change.
-- **Changed after the go, by the owner (2026-11-11), on the PR:** "Can we make it that if you tap the
+- **Changed after the go, by the owner (2026-11-11), on the PR:** (Superseded by the changes after the merge of 2026-11-12, below.) "Can we make it that if you tap the
   not now, like we don't show you the don't show again unless you tap not now, and then whenever we
   show you again this dialogue, which I guess is like 7 days later or something, then we show you the
   don't show again." So the dialog offers "Don't show again" only once the person has chosen "Not
@@ -99,7 +99,7 @@ the design. No game page changes.
     slide (Claude, 2026-11-12).
   AC-4, AC-6 and AC-9 say so; the decisions above about "Not now", "Don't show again" and the
   pause stand as the record of what #49 built (Claude, 2026-11-12).
-- The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
+- (Partly superseded by the changes after the merge of 2026-11-12, below.) The ribbon's quiet card colours and the 7-day pause after "Not now" are the owner's (2026-11-10,
   "Quiet card colours", "After a week"); rejected: the bold accent band, and returning on the next visit.
 - **How the device cases are tested:** in Playwright's Chromium, by the signals the function reads:
   a synthetic `beforeinstallprompt` with a stub `prompt()`; an iPhone or iPad user agent with
