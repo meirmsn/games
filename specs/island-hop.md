@@ -145,8 +145,11 @@ grab a car, drive to the door, and back to the boat. The route is yours.
     click in and the click out ... there's no way I can stay in the car", and "I don't think it
     should leave the car automatically because it's too trigger happy and it leaves all the time").
     A tap on the screen (or Space or Enter) gets you out wherever the car is (owner, 2026-11-11: "I don't know how to get
-    out of the car. Maybe it should be that if you tap on the car, then it comes out of the car"). A
-    car stays where you leave it.
+    out of the car. Maybe it should be that if you tap on the car, then it comes out of the car"). You
+    step out beside the car, from the first frame of the step (owner, 2026-11-12: "when you get out of
+    the car by tapping ... Visually, you see the guy flashing on the position where you initially
+    enter the car, and that breaks the illusion. That should not happen"). A car stays where you
+    leave it.
   - Walking onto a stop's doormat ticks it, and so does walking up to its building from any side
     (within 0.15 tiles of its walls); the doormat stays as a hint. (Owner, 2026-11-11: "when I go to
     the building that had the, the emoji, nothing happens. So I'm not sure how it's supposed to work,
@@ -327,9 +330,11 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
   about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
-- **AC-24** In the car, a thought bubble over it shows how to get out, 3 s after the car stops or
+- **AC-24** In the car, a thought bubble over it shows how to get out, 1.5 s after the car stops or
   after getting in (owner, 2026-11-12: "we should show it as soon as the car moves the next time it
-  stops", then "it's a little bit trigger happy ... maybe 3 seconds"). On top, the car with a curved
+  stops", then "it's a little bit trigger happy ... maybe 3 seconds", then of 3 s: "it takes now too
+  long to show the thought bubble with the instructions on how to get out of the car. So before it
+  was too fast, now it's too slow. Maybe do somewhere in between"). On top, the car with a curved
   arrow out to you beside it, stepping out (owner, 2026-11-12: "show the car with an arrow coming out
   of it and the guy next to it ... The arrow can be a little bit like curved, and that you show at
   the top center, and then on the second row ... a tab or space"); below, in

@@ -278,6 +278,9 @@ function tick(s, dt, stick) {
   // A tap while driving gets you out, wherever the car is.
   if (s.mode === 'car' && stick && stick.out) {
     s.trans = { kind: 'carOut', t: 0, car: s.you.car };
+    const c = youCar(s);
+    s.person.x = c.x; // beside the car from the very first frame drawn
+    s.person.y = c.y;
     return;
   }
   if (s.mode === 'boat') sailStep(s, youBoat(s), g, dt);
@@ -632,6 +635,10 @@ function runTransition(s, dt) {
     }
   } else if (tr.kind === 'carOut') {
     const c = s.cars.find((x) => x.id === tr.car);
+    // You step out where the car is, from its first frame: never seen back where you got in (owner,
+    // 2026-11-12: "you see the guy flashing on the position where you initially enter the car").
+    s.person.x = c.x;
+    s.person.y = c.y;
     if (k >= 1) {
       s.person.x = c.x;
       s.person.y = c.y;

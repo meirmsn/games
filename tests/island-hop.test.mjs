@@ -368,8 +368,16 @@ test('island-hop AC-7: a tap while driving gets you out wherever the car is, and
   Object.assign(car, { x: 9.5, y: 5.5, node: { x: 9, y: 5 }, target: null }); // mid-road, nothing in reach
   run(s, 0.3, null);
   assert.equal(s.mode, 'car', 'letting go mid-road keeps you in');
+  s.person.x = 14.5; // where you got in, far from here
+  s.person.y = 13.5;
   step(s, RULES.dt, { x: 0, y: 0, out: true });
-  run(s, 0.5, null);
+  // From the first frame of getting out, you're at the car, never back where you got in.
+  const seen = [];
+  run(s, 0.5, (st) => {
+    seen.push(Math.hypot(st.person.x - car.x, st.person.y - car.y));
+    return null;
+  });
+  assert.ok(Math.max(...seen) < 0.01, `beside the car all the way out: ${Math.max(...seen).toFixed(2)} tiles off at most`);
   assert.equal(s.mode, 'walk', 'the tap got you out');
   assert.deepEqual({ x: car.x, y: car.y }, { x: 9.5, y: 5.5 });
 });
@@ -1329,7 +1337,7 @@ test('island-hop AC-23: the two tracks are the owner\'s at 64 kbps: the sea\'s a
   }
 });
 
-test('island-hop AC-24: in the car, a thought bubble on how to get out, 3 s after it stops (or after getting in); a boat too deep for the shallows says so', async () => {
+test('island-hop AC-24: in the car, a thought bubble on how to get out, 1.5 s after it stops (or after getting in); a boat too deep for the shallows says so', async () => {
   const { context, page } = await open();
   // Mission 2's taxi: in, and left alone.
   await page.evaluate(() => {
@@ -1349,13 +1357,13 @@ test('island-hop AC-24: in the car, a thought bubble on how to get out, 3 s afte
       },
       [secs, stick]
     );
-  assert.equal(await hintAfter(2.4), null, 'sitting in it: not before 3 s');
-  const h = await hintAfter(0.8);
-  assert.equal(h?.kind, 'car', 'sitting in it: after 3 s');
-  // Driven, then stopped: again after 3 s, not at once.
+  assert.equal(await hintAfter(0.9), null, 'sitting in it: not before 1.5 s (0.4 s of it went to the door)');
+  const h = await hintAfter(0.4);
+  assert.equal(h?.kind, 'car', 'sitting in it: after 1.5 s');
+  // Driven, then stopped: again after 1.5 s, not at once.
   assert.equal(await hintAfter(1.5, { x: 0, y: -1 }), null, 'gone while driving');
-  assert.equal(await hintAfter(2.8), null, 'not before 3 s stopped');
-  assert.equal((await hintAfter(0.4))?.kind, 'car', '3 s after it stops');
+  assert.equal(await hintAfter(1.3), null, 'not before 1.5 s stopped');
+  assert.equal((await hintAfter(0.4))?.kind, 'car', '1.5 s after it stops');
   assert.match(h.text, /Click or press Space to get out/, 'a mouse and keys: click or Space');
   // In pictures: a finger over a small car and, with a keyboard, "or" and a space bar with its own
   // finger; the fingers move (tap) from one frame to the next.
@@ -1374,7 +1382,7 @@ test('island-hop AC-24: in the car, a thought bubble on how to get out, 3 s afte
   assert.ok(new Set(parts.map((p) => p.fingers[0])).size > 2, `the car's finger moves: ${parts.map((p) => p.fingers[0])}`);
   assert.ok(parts.some((p) => p.space.pressed) && parts.some((p) => !p.space.pressed), 'the space bar goes down and up');
   assert.equal(await hintAfter(0.2, { x: 0, y: -1 }), null, 'moving hides it');
-  assert.equal((await hintAfter(3.2))?.kind, 'car', 'and 3 s stopped shows it again');
+  assert.equal((await hintAfter(1.7))?.kind, 'car', 'and 1.5 s stopped shows it again');
   await page.keyboard.press('Space');
   await page.evaluate(() => {
     __hop.manual = false;

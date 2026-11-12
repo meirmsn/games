@@ -570,7 +570,7 @@ function handleEvents() {
 // after a certain amount of time that you do nothing, like I don't know, maybe 2 seconds, we show you
 // like a thought bubble saying to what to tap the car so that you ... get out of the car, and or
 // spacebar"); any move or getting out hides it. A boat too deep for the lagoon's shallows says so.
-const CAR_IDLE = 3; // owner, 2026-11-12: "it's a little bit trigger happy ... maybe 3 seconds"
+const CAR_IDLE = 1.5; // owner, 2026-11-12: at once was "a little bit trigger happy", 3 s "too slow ... Maybe do somewhere in between"
 const SHALLOW_HINT = 2.5;
 const touchFirst = matchMedia('(pointer: coarse)').matches;
 const HINTS = {
@@ -586,7 +586,7 @@ function syncHints(dt, input) {
   const len = input && typeof input === 'object' ? Math.hypot(input.x || 0, input.y || 0) : 0;
   const driving = world.phase === 'play' && world.mode === 'car' && !world.trans;
   carIdle = driving && len < RULES.dead && !pilot ? carIdle + dt : 0;
-  // 3 s after the car stops (or after getting in), whether or not you've driven it.
+  // 1.5 s after the car stops (or after getting in), whether or not you've driven it.
   if (driving && carIdle >= CAR_IDLE) {
     if (!hint || hint.kind !== 'car') showHint('car');
   } else if (hint && hint.kind === 'car') hint = null;
