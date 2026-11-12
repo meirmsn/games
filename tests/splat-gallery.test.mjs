@@ -1011,7 +1011,7 @@ test('splat-gallery AC-21: the gallery plays offline once it has been played [sl
   await context.close();
 });
 
-test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, the timer’s digits beat the score’s, far targets are at least 44 px, and the counter holds no target', async () => {
+test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, the timer’s digits beat the score’s, far targets are at least 44 px (the tiny target at least 30), and the counter holds no target', async () => {
   for (const viewport of [PORTRAIT, { width: 360, height: 640 }, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await page.click('[data-play]');
@@ -1019,6 +1019,7 @@ test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, t
       const g = window.__gallery;
       const { k } = g.stage();
       const far = g.makeTarget('target', { lane: 0, x: 200, speed: 0 });
+      const tiny = g.makeTarget('tiny', { lane: 0, x: 120, speed: 0, turn: false, big: g.tinyScale() });
       const lowest = Math.max(
         ...g.L.lanes.map((l) => {
           const d = g.makeTarget('duck', { lane: l.i, speed: 0 });
@@ -1028,6 +1029,7 @@ test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, t
       const hb = g.hudBounds();
       return {
         far: g.dims(far)[0] * k,
+        tiny: g.dims(tiny)[0] * k,
         lowest: g.toClient(0, lowest).y,
         hb,
         n: g.L.n,
@@ -1038,6 +1040,7 @@ test('splat-gallery AC-22: at 390×844, 360×640 and 844×390 everything fits, t
     const where = `${viewport.width}×${viewport.height}`;
     assert.equal(m.n, viewport.width > viewport.height ? 3 : 5, where);
     assert.ok(m.far >= 44, `far targets ${m.far} px at ${where}`);
+    assert.ok(m.tiny >= 30 - 1e-6 && m.tiny < m.far, `the tiny target, the one exception, ${m.tiny} px at ${where}`);
     for (const key of ['hopper', 'sling', 'slingFoot']) {
       assert.ok(m.hb[key].x <= viewport.width && m.hb[key].y <= viewport.height, `${key} fits at ${where}`);
     }
