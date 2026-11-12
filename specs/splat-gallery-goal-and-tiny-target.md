@@ -207,7 +207,8 @@ follow-up docs PR (R-9), not here: see AC-12.
 | Round won, between rounds | as it ended, bar gold, gold rim             | none               |
 | Time up, quota missed     | as it ended, bar flashing red               | none               |
 | Game over card            | as it ended, under the card                 | none               |
-| Paused or turned (veil)   | as it was, greyed                           | frozen             |
+| Paused                    | as it was, dimmed under the pause card      | frozen             |
+| Turned (the veil)         | as it was, greyed under the veil            | frozen             |
 
 ## Out of scope
 

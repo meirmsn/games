@@ -2431,8 +2431,19 @@ test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny t
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-2: the board through the states table: round won keeps the gold bar and rim; the game over card keeps it as it ended; paused or turned, it holds still', async () => {
+test('splat-gallery-goal-and-tiny-target AC-2: the board through the states table: the intro at 0; round won keeps the gold bar and rim; no tiny target between rounds or after; the game over card keeps it as it ended; paused or turned, it and a tiny target hold still', async () => {
   const { context, page } = await open();
+  await ready(page, 3);
+  // The round's intro: the board at 0, its bar empty, no tiny target even if one were due.
+  const intro = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.startRound(3);
+    g.game.spawn.tiny = [0];
+    for (let i = 0; i < 60 * 2; i++) g.step(1 / 60);
+    return { mode: g.game.mode, tiny: g.targets().filter((o) => o.kind === 'tiny').length };
+  });
+  assert.deepEqual(intro, { mode: 'intro', tiny: 0 });
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
   await ready(page, 3);
   // Round won: the quota met as the time runs out; between rounds the bar stays gold and rimmed.
   await page.evaluate(() => {
@@ -2444,6 +2455,30 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
   });
   assert.equal((await state(page)).mode, 'won');
   assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold' });
+  // Between rounds, a tiny target that falls due never rises.
+  const afterWon = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.spawn.tiny = [g.game.elapsed];
+    for (let i = 0; i < 60; i++) g.step(1 / 60);
+    return { mode: g.game.mode, tiny: g.targets().filter((o) => o.kind === 'tiny').length };
+  });
+  assert.deepEqual(afterWon, { mode: 'won', tiny: 0 });
+  // Time up short, and the game over card after it: none either.
+  await ready(page, 3);
+  const lost = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.pips = 5;
+    g.game.time = 0.01;
+    g.step(1 / 60);
+    g.game.spawn.tiny = [g.game.elapsed];
+    const out = [];
+    for (let i = 0; i < 60 * 2; i++) {
+      g.step(1 / 60);
+      if (i === 30 || i === 119) out.push({ mode: g.game.mode, tiny: g.targets().filter((o) => o.kind === 'tiny').length });
+    }
+    return out;
+  });
+  assert.deepEqual(lost, [{ mode: 'lost', tiny: 0 }, { mode: 'over', tiny: 0 }]);
   // A game over: the board under the card reads as the round ended.
   await ready(page, 3);
   const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
@@ -2451,27 +2486,43 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
   await page.evaluate(() => window.__gallery.gameOver());
   assert.equal((await page.evaluate(() => window.__gallery.ui().over)), true);
   assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown' });
-  // Paused, then turned: real frames run, and neither the board nor its swell moves.
+  // Paused (the pause card, dimming the booth), then turned (the grey veil): real frames run, and
+  // neither the board, its swell nor a tiny target that's up moves.
   for (const flag of ['paused', 'turned']) {
     await ready(page, 3);
-    const t2 = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+    const t2 = await place(page, 'target', { lane: 0, x: 120, face: 'target_red1' });
     await shoot(page, t2.x + t2.w * 0.38, 0);
     const before = await page.evaluate((flag) => {
       const g = window.__gallery;
-      g.game[flag] = true;
+      const tiny = g.launchTiny();
+      tiny.popT = 0.2; // rising
+      g.step(1 / 60);
+      if (flag === 'paused') g.pause();
+      else {
+        g.game.turned = true;
+        document.querySelector('[data-screen="turned"]').hidden = false; // the veil, as a turn shows it
+      }
       g.manual = false; // the page's own frames would step the game, if it weren't held
-      return { pulse: g.ui().goalPulse, text: g.ui().goalText };
+      const u = g.ui();
+      return { pulse: u.goalPulse, text: u.goalText, tinyY: tiny.y, tinyT: tiny.popT, card: u.pause, greyed: u.greyed };
     }, flag);
     await realFrames(page, 10);
     const after = await page.evaluate((flag) => {
       const g = window.__gallery;
-      const r = { pulse: g.ui().goalPulse, text: g.ui().goalText };
+      const tiny = g.targets().find((o) => o.kind === 'tiny');
+      const u = g.ui();
+      const r = { pulse: u.goalPulse, text: u.goalText, tinyY: tiny.y, tinyT: tiny.popT, card: u.pause, greyed: u.greyed };
       g.manual = true;
-      g.game[flag] = false;
+      g.game.paused = false;
+      g.game.turned = false;
+      document.querySelector('[data-screen="pause"]').hidden = true;
+      document.querySelector('[data-screen="turned"]').hidden = true;
       return r;
     }, flag);
-    assert.deepEqual(after, before, `${flag}: the board holds still`);
+    assert.deepEqual(after, before, `${flag}: the board and the tiny target hold still`);
     assert.ok(before.pulse > 0 && before.text === '3');
+    if (flag === 'paused') assert.equal(before.card, true, 'paused: under the pause card');
+    else assert.equal(before.greyed, true, 'turned: greyed under the veil');
   }
   await context.close();
 });
