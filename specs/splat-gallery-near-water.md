@@ -39,7 +39,7 @@ strips.
 - Only the water sways, as asked; the grass stays still (Claude, 2026-11-11).
 - The sway: each water strip slides left and right on a sine, as if on a crank, 6 units each way,
   consecutive water lanes (lanes 0 and 2, 2 and 4) in opposite directions. Changed after the go
-  (below): a cycle takes 4 s, or 3 s in a frenzy and in a round's last 3 s; the change of pace
+  (below): a cycle takes 8 s, or 6 s in a frenzy and in a round's last 3 s; the change of pace
   never jumps the strip, which carries on from where it is. The water's
   solid fill under the waves is wide enough that its ends never show. It runs on the game's own clock, so
   it moves on the start card and stops while the game is paused, like the targets (Claude,
@@ -68,6 +68,17 @@ strips.
   and fall a quarter cycle behind the slide, so it is highest and lowest in the middle of its slide
   and level at its ends. Consecutive water lanes still slide in opposite directions, and they rise
   and fall together. This replaces the slant and the 2 units; the paces stay (owner, 2026-11-12).
+- Changed again, on the owner's words of 2026-11-12, in chat, with a screenshot of the grass: "There
+  is a lot of movement. I think the water speed movement should be at least half. Let's try with
+  that. And also the tidying of the grass has an issue. There's like jagged edges multiple times.
+  And on top of that, sometimes where the paint goes, it leaves like a weird vertical line." So:
+  the sway runs at half its speed, 8 s a cycle and 6 s in a frenzy and the last 3 s (Claude's
+  reading of "at least half" as all paces halved). The jagged edges and the line are one fault, on
+  `main` before this change: the grass tile's first column in the atlas is nearly transparent
+  (alpha 26) and its outline doesn't quite meet its other edge, so each join between tiles shows a
+  see-through line and a step in the crest, and the line shows through the paint drawn over it
+  (paint is at 80%). A strip tile is now drawn without its transparent edge columns, and its crest
+  for hits and the paint's clip uses the same columns (owner, 2026-11-12).
 - AC-5 reworded after the go, on the owner's words of 2026-11-12, in chat: "reword + checks". Its
   old words said nothing else in the paint-clip test changed, while the test also aims at the
   landing-time crest; an adversarial review found no check loosened and each change needed, and
@@ -84,7 +95,7 @@ strips.
   and the top of a target or a duck standing on the far lane's line is at or below the booth's top
   (`L.T`).
 - **AC-2** On the game's clock (manual stepping), a water strip's sideways offset reaches between 5
-  and 7 units each way; a cycle takes 4 s in normal play and on the start card, and 3 s in a frenzy
+  and 7 units each way; a cycle takes 8 s in normal play and on the start card, and 6 s in a frenzy
   and when 3 s or less are left in a round; a change of pace moves the strip by less than half a
   unit in a frame; consecutive water lanes are offset sideways in opposite directions at the same
   moment; each also rises and falls between 1.2 and 1.8 units each way on an oval: it is at its
@@ -103,6 +114,10 @@ strips.
   reading being the same frame with the new splat taken out; it checks the shot landed on the strip
   it aimed at and the splat taken out is that strip's; its spots, checks and tolerances are
   otherwise unchanged. (Reworded after the go; see Decisions.)
+- **AC-6** No strip shows a seam where its tiles join (added after the go; see Decisions): along
+  every strip the crest `stripY` never jumps by more than one unit between points a tenth of a
+  unit apart, and on the drawn canvas each tile join's column of pixels just under the crest matches
+  its neighbours on both sides.
 
 ## Out of scope
 

@@ -1554,7 +1554,7 @@ test('splat-gallery-near-water AC-1: the near lane shows its whole wave and as m
   }
 });
 
-test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 units each way and 1.5 up and down, a 4 s cycle, 3 s in a frenzy and the last 3 s, without a jump; consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
+test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 units each way and 1.5 up and down, an 8 s cycle, 6 s in a frenzy and the last 3 s, without a jump; consecutive ones against each other; grass never moves; a pause or a turn holds it', async () => {
   for (const viewport of [PORTRAIT, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
     await ready(page);
@@ -1568,7 +1568,7 @@ test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 unit
         let ups = 0;
         let prev = g.sway(water[0]);
         let first = -1;
-        for (let i = 1; i < 60 * 12; i++) {
+        for (let i = 1; i < 60 * 20; i++) {
           hold();
           g.step(1 / 60);
           const v = g.sway(water[0]);
@@ -1590,7 +1590,7 @@ test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 unit
       let oval = true;
       let together = true;
       let grassMoved = false;
-      for (let i = 0; i < 240; i++) {
+      for (let i = 0; i < 480; i++) {
         g.step(1 / 60);
         water.forEach((l, j) => {
           const x = g.sway(l);
@@ -1633,9 +1633,9 @@ test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 unit
       assert.ok(r.hi[j] >= 5 && r.hi[j] <= 7 && r.lo[j] <= -5 && r.lo[j] >= -7, `${where}: water lane ${j} sways ${r.lo[j].toFixed(2)}..${r.hi[j].toFixed(2)}`);
       assert.ok(r.hiY[j] >= 1.2 && r.hiY[j] <= 1.8 && r.loY[j] <= -1.2 && r.loY[j] >= -1.8, `${where}: water lane ${j} rises and falls ${r.loY[j].toFixed(2)}..${r.hiY[j].toFixed(2)}`);
     }
-    assert.ok(Math.abs(r.normal - 4) < 0.05, `${where}: a 4 s cycle in normal play (${r.normal})`);
-    assert.ok(Math.abs(r.frenzy - 3) < 0.05, `${where}: a 3 s cycle in a frenzy (${r.frenzy})`);
-    assert.ok(Math.abs(r.lastSecs - 3) < 0.05, `${where}: a 3 s cycle in the last 3 s (${r.lastSecs})`);
+    assert.ok(Math.abs(r.normal - 8) < 0.05, `${where}: an 8 s cycle in normal play (${r.normal})`);
+    assert.ok(Math.abs(r.frenzy - 6) < 0.05, `${where}: a 6 s cycle in a frenzy (${r.frenzy})`);
+    assert.ok(Math.abs(r.lastSecs - 6) < 0.05, `${where}: a 6 s cycle in the last 3 s (${r.lastSecs})`);
     assert.ok(r.jump < 0.5, `${where}: the change of pace doesn't jump the strip (${r.jump.toFixed(3)} a frame)`);
     assert.ok(r.against, `${where}: consecutive water lanes sway against each other`);
     assert.ok(r.oval, `${where}: each goes round an oval, level at the ends of its slide and highest or lowest mid-slide`);
@@ -1645,7 +1645,7 @@ test('splat-gallery-near-water AC-2: water strips go round an oval, about 6 unit
   }
   // The start card's pace, and on real frames: it moves, and holds while paused or turned.
   const { context, page } = await open();
-  assert.equal(await page.evaluate(() => window.__gallery.swayPeriod()), 4, 'a 4 s cycle on the start card');
+  assert.equal(await page.evaluate(() => window.__gallery.swayPeriod()), 8, 'an 8 s cycle on the start card');
   await ready(page);
   const swayNow = () => page.evaluate(() => window.__gallery.sway(window.__gallery.L.lanes[0]) + ':' + window.__gallery.swayY(window.__gallery.L.lanes[0]));
   await page.evaluate(() => (window.__gallery.manual = false));
@@ -1670,8 +1670,8 @@ test('splat-gallery-near-water AC-3: the strip as hit-tested is the strip as dra
     const r = await page.evaluate(async () => {
       const g = window.__gallery;
       const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
-      // A quarter of the 4 s cycle on: the water is at its farthest from rest.
-      for (let i = 0; i < 60; i++) g.step(1 / 60);
+      // A quarter of the 8 s cycle on: the water is at its farthest from rest.
+      for (let i = 0; i < 120; i++) g.step(1 / 60);
       await frame();
       const cv = document.querySelector('#booth');
       const c = cv.getContext('2d');
@@ -1758,7 +1758,7 @@ test('splat-gallery-near-water AC-4: paint on the water rides with it and still 
     const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const lane = g.L.lanes[2];
     const x = 200;
-    g.game.time = 60; // well before the last 3 s: the 4 s cycle
+    g.game.time = 60; // well before the last 3 s: the 8 s cycle
     // Aim just under the crest as it will be when the ball lands, so the clip cuts the splat.
     const ph0 = g.game.swayPh;
     let n = 0;
@@ -1806,7 +1806,10 @@ test('splat-gallery-near-water AC-4: paint on the water rides with it and still 
       return { n: pts.length, cx, cy, above, worst, sx: g.sway(lane), sy: g.swayY(lane) };
     };
     const a = await splatPixels();
-    for (let i = 0; i < 120; i++) g.step(1 / 60); // half the 4 s cycle
+    for (let i = 0; i < 240; i++) {
+      g.game.time = 60;
+      g.step(1 / 60);
+    } // half the 8 s cycle
     const b = await splatPixels();
     return { landed: g.game.lastLand, a, b, kk: k };
   });
@@ -1819,6 +1822,57 @@ test('splat-gallery-near-water AC-4: paint on the water rides with it and still 
   assert.equal(r.a.above, 0, `no paint drawn above the crest: ${JSON.stringify(r.a)}`);
   assert.equal(r.b.above, 0, 'nor half a cycle later, above the moved crest');
   await context.close();
+});
+
+test('splat-gallery-near-water AC-6: no strip shows a seam where its tiles join: the crest never jumps, and the join looks like its neighbours', async () => {
+  for (const viewport of [PORTRAIT, { width: 1440, height: 900 }]) {
+    const { context, page } = await open({ viewport });
+    await ready(page);
+    const r = await page.evaluate(async () => {
+      const g = window.__gallery;
+      const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+      await frame();
+      const cv = document.querySelector('#booth');
+      const c = cv.getContext('2d');
+      const { k, ox, oy, SW } = g.stage();
+      const dpr = cv.width / innerWidth;
+      const px = (ux, uy) => Array.from(c.getImageData(Math.round((ux * k + ox) * dpr), Math.round((uy * k + oy) * dpr), 1, 1).data);
+      const out = [];
+      for (const lane of g.L.lanes) {
+        let jump = 0;
+        let at = 0;
+        for (let x = 0; x < SW; x += 0.1) {
+          const d = Math.abs(g.stripY(lane, x + 0.1) - g.stripY(lane, x));
+          if (d > jump) [jump, at] = [d, x];
+        }
+        // Each join on the stage, as drawn now (the water's sway moves it).
+        const tw = g.tileWidth(lane);
+        const joins = [];
+        for (let x = (((lane.i * 37) % tw) + tw) % tw; x < SW + tw; x += tw) joins.push(x + g.sway(lane));
+        const odd = [];
+        const inside = joins.filter((x) => x > 30 && x < SW - 30);
+        for (const x of inside) {
+          // Under the outline, in the strip's own colour: the join's column against 2 units either side.
+          for (const dy of [12, 20]) {
+            const y = Math.max(g.stripY(lane, x - 2), g.stripY(lane, x), g.stripY(lane, x + 2)) + dy;
+            if (y >= g.L.C - 1) continue;
+            const [m, l, rr] = [px(x, y), px(x - 2, y), px(x + 2, y)];
+            const off = (p) => Math.max(...[0, 1, 2].map((j) => Math.abs(p[j] - m[j])));
+            if (Math.min(off(l), off(rr)) > 6) odd.push({ x: +x.toFixed(1), dy, m, l, r: rr });
+          }
+        }
+        out.push({ lane: lane.i, kind: lane.kind, jump: +jump.toFixed(3), at: +at.toFixed(1), joins: inside.length, odd });
+      }
+      return out;
+    });
+    const where = `${viewport.width}×${viewport.height}`;
+    for (const l of r) {
+      assert.ok(l.joins >= 1, `${where}: lane ${l.lane} has a join on the stage`);
+      assert.ok(l.jump <= 1, `${where}: lane ${l.lane} (${l.kind}) crest jumps ${l.jump} units at x=${l.at}`);
+      assert.deepEqual(l.odd, [], `${where}: lane ${l.lane} (${l.kind}) shows a seam at its joins`);
+    }
+    await context.close();
+  }
 });
 
 test('splat-gallery AC-32: a target’s stick stays in the background: its tones are soft, far less contrasting than the target', async () => {
