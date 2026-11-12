@@ -46,21 +46,22 @@ owner found "0 / 18" on the counter didn't say it was the goal to clear the roun
 pips, not hits.
 
 - **The count board.** A second bulb board at the top right, left of the sound button, built like
-  the timer with **bottle-green** bulbs (none of the timer's colours; "make it like the green that is
-  analog, which is not that bright"). It counts **up** the pips scored this round ("So that you're
-  adding"), and under its digits the quota's brass bar fills toward the quota ("maybe the bar could
-  be filling below it"): gold in the bonus, its groove flashing red when the time runs out short.
-  It climbs the moment a paid hit's ball lands, with a short swell; the hit itself shows only its
-  points where it lands ("it's great that it shows you the points ... but don't show the plus one,
-  plus two, plus three"). At the quota the board gets a gold brass rim and keeps counting. It is as wide as the timer where there's room beside a 99,999 score,
-  narrower where there isn't.
+  the timer with **bottle-green** bulbs (none of the timer's colours; "make it like the green that
+  is analog, which is not that bright"). It counts **up** the pips scored this round ("So that
+  you're adding"), and under its digits the quota's brass bar fills toward the quota ("maybe the bar
+  could be filling below it"): gold in the bonus, its groove flashing red when the time runs out
+  short. It climbs the moment a paid hit's ball lands, with a short swell; the hit itself shows only
+  its points where it lands ("it's great that it shows you the points ... but don't show the plus
+  one, plus two, plus three"). At the quota the board gets a gold brass rim and keeps counting. It
+  is as wide as the timer where there's room beside a 99,999 score, narrower where there isn't.
 - **No gauge on the counter.** The bar that was there moved to the board ("Remove it"); the counter
   holds the round's sign, the hopper under it, and the slingshot.
 - **The round's banner** has two more lines, its goal ("18 to clear") and a tip, "Tip: far targets
   count more" ("put like a pro tip there about like you know further target count more"), and holds
   the booth still, its clock stopped, for 2.2 s instead of 1.2 s ("just give enough time to read
   it").
-- **The tiny target**, from round 2: see the rounds and scoring below.
+- **The tiny target**, from round 2: see the rounds and scoring below. AC-22's 44 px floor for far
+  targets exempts it (at least 30 px).
 
 ### The owner's fourteenth playtest (owner, 2026-11-10)
 
@@ -403,9 +404,10 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   on after a 1 s count-in. On the start or over card the booth simply lays itself out again. A
   restart from the veil doesn't count as a lost run for the assist. Each layout keeps its own best.
 - **A timer.** "there should be like a timer as well." Each round lasts 30 s, shown as a draining
-  bar on the counter (since replaced by the bulb timer at the top left). The timer is the only way to lose: a round whose quota isn't met when its
-  time runs out ends the run (Claude, from the review: a second way to lose, running out of paint,
-  punished the learning that no-crosshair aim needs).
+  bar on the counter (since replaced by the bulb timer at the top left). The timer is the only way
+  to lose: a round whose quota isn't met when its time runs out ends the run (Claude, from the
+  review: a second way to lose, running out of paint, punished the learning that no-crosshair aim
+  needs).
 - **Paint, not shells.** The hopper holds 6 balls and refills one every 0.6 s; a bullseye puts one
   back at once; an empty hopper just clicks. It paces the shooting rather than ending the run
   (Claude, from the review).
@@ -474,8 +476,8 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   and is off in round 6.
 - **No written tips.** The start card shows Start and the best; each round opens with its name on a
   banner, with its goal under it ("18 to clear", in the count board's green) and the tip that far
-  targets count more; mid-play banners ("Bonus!", "Frenzy!") are slim pills on the counter, where nothing can
-  be hit.
+  targets count more; mid-play banners ("Bonus!", "Frenzy!") are slim pills on the counter, where
+  nothing can be hit.
 - **Interruptible.** Hiding the page during a round (its intro, play, a frenzy or the moment between
   rounds) pauses play and music under a "Tap to go on" card; the tap that resumes counts in 1 s,
   with play frozen, and never fires. On the start or over card it only pauses the sound.
@@ -576,8 +578,8 @@ moment 8–18 s into rounds 2 to 6.
 - **AC-21** The game plays offline once it has been played — `tests/splat-gallery.test.mjs`.
 - **AC-22** At 390×844 and 360×640 (5 lanes) and 844×390 (3 lanes) the booth, the slingshot, the
   hopper, the pips and the timer fit without scrolling, the timer's digits are larger than the
-  score's, the far targets (except the tiny target, at least 30 px) are at least 44 px wide, and the counter, where the thumb works, holds no
-  target — `tests/splat-gallery.test.mjs`.
+  score's, the far targets (except the tiny target, at least 30 px) are at least 44 px wide, and the
+  counter, where the thumb works, holds no target — `tests/splat-gallery.test.mjs`.
 - **AC-23** The timer shows the whole seconds left in light bulbs on a board at the top left; at
   half time it chimes and swells; at 10 s a hand bell rings and its bulbs turn yellow; at 5 s a bell
   strikes in climbing pairs and they turn orange; at 3 s they turn red and a klaxon blares at 3, 2
