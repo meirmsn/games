@@ -579,14 +579,19 @@ const HINTS = {
 };
 let hint = null; // { kind, t }
 let carIdle = 0;
+let carMoved = false; // driven since getting in
 function showHint(kind) {
   hint = { kind, t: 0 };
 }
 function syncHints(dt, input) {
   const len = input && typeof input === 'object' ? Math.hypot(input.x || 0, input.y || 0) : 0;
   const driving = world.phase === 'play' && world.mode === 'car' && !world.trans;
+  if (!driving) carMoved = false;
+  else if (len >= RULES.dead) carMoved = true;
   carIdle = driving && len < RULES.dead && !pilot ? carIdle + dt : 0;
-  if (driving && carIdle >= CAR_IDLE) {
+  // Once you've driven, it shows the moment the car stops; sitting in a car you haven't moved, after
+  // 2 s (owner, 2026-11-12: "we should show it as soon as the car moves the next time it stops").
+  if (driving && carIdle > 0 && (carMoved || carIdle >= CAR_IDLE)) {
     if (!hint || hint.kind !== 'car') showHint('car');
   } else if (hint && hint.kind === 'car') hint = null;
   if (hint) {

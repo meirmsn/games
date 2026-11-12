@@ -374,7 +374,7 @@ test('island-hop AC-7: a tap while driving gets you out wherever the car is, and
   assert.deepEqual({ x: car.x, y: car.y }, { x: 9.5, y: 5.5 });
 });
 
-test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board; a parked car gets you in and lets you out by a car park, jetty or door, and stays there', () => {
+test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board; a parked car gets you in, letting go only stops it (even at its car park), a tap gets you out, and it stays there', () => {
   // You came to Lagoon Isle by motorboat (moored at Port Town's west berth), took the rowboat out into
   // the channel and docked it back; the motorboat is still at its berth and boards.
   {
@@ -408,9 +408,17 @@ test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at
     const s = play(3); // Fresh fish: the bakery (A) is a stop, and the south car park has a car
     const car = s.cars.find((c) => c.id === 'portS'); // at (12,13), Port Town's south car park
     ashore(s, 14.5, 13.5);
-    run(s, 2, toward({ x: 14.5, y: 13.5 }, car));
-    assert.equal(s.mode, 'car');
-    assert.equal(events(s, 'door').length, 1);
+    // Walk into it, and let go the moment you're in: at its own car park, you stay in, never thrown
+    // straight back out.
+    let inAt = null;
+    run(s, 3, (st) => {
+      if (st.mode === 'car' && inAt === null) inAt = st.t;
+      return inAt === null && st.mode === 'walk' && !st.trans ? toward(st.person, car) : null;
+    });
+    assert.ok(inAt !== null, 'got in');
+    near(car.x, 12.5, 0.01, 'still at its car park');
+    assert.equal(s.mode, 'car', 'still in the car at its car park');
+    assert.equal(events(s, 'door').length, 1, 'one door: in, and not out again');
     // Drive down the ring's west side and let go mid-road, away from any car park, jetty or door: it
     // just stops.
     Object.assign(car, { x: 9.5, y: 4.5, node: { x: 9, y: 4 }, target: null });
@@ -418,9 +426,12 @@ test('island-hop AC-7: leaving the rowboat in the lagoon leaves the motorboat at
     run(s, 0.5, null);
     near(car.y, 5.5, 0.01, 'the car stopped where you let go');
     assert.equal(s.mode, 'car', 'mid-road the car just stops');
-    // Back to beside the bakery's door (14,11): let go, and out you get; the car stays.
+    // Back to beside the bakery's door (14,11): letting go still only stops it; a tap gets you out,
+    // and the car stays.
     Object.assign(car, { x: 14.5, y: 12.5, node: { x: 14, y: 12 }, target: null });
     run(s, 0.5, null);
+    assert.equal(s.mode, 'car', 'by a door, letting go just stops the car too');
+    run(s, 0.5, { x: 0, y: 0, out: true });
     assert.equal(s.mode, 'walk');
     const at = { x: car.x, y: car.y };
     run(s, 1, gridToStick(0, -1));
@@ -1313,16 +1324,16 @@ test('island-hop AC-23: the two tracks are the owner\'s at 64 kbps: the sea\'s a
   }
 });
 
-test('island-hop AC-24: in the car, 2 s without moving brings a thought bubble on how to get out; a boat too deep for the shallows says so', async () => {
+test('island-hop AC-24: in the car, a thought bubble on how to get out: 2 s after getting in without driving, and as soon as the car stops once driven; a boat too deep for the shallows says so', async () => {
   const { context, page } = await open();
-  // Mission 2's taxi, driven away from the car park, then left alone.
+  // Mission 2's taxi: in, and left alone.
   await page.evaluate(() => {
     __hop.manual = true;
     __hop.start(1, { fly: false });
     __hop.autopilot('gold');
     for (let t = 0; t < 60 && __hop.state.mode !== 'car'; t += 0.1) __hop.step(0.1);
     __hop.autopilot(null);
-    for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
+    __hop.step(0.4); // the door's transition
   });
   assert.equal(await page.evaluate(() => __hop.state.mode), 'car');
   const hintAfter = (secs, stick = null) =>
@@ -1333,9 +1344,12 @@ test('island-hop AC-24: in the car, 2 s without moving brings a thought bubble o
       },
       [secs, stick]
     );
-  assert.equal(await hintAfter(1.8), null, 'not before 2 s');
-  const h = await hintAfter(0.4);
-  assert.equal(h?.kind, 'car', 'after 2 s');
+  assert.equal(await hintAfter(1.4), null, 'sitting in it: not before 2 s');
+  const h = await hintAfter(0.8);
+  assert.equal(h?.kind, 'car', 'sitting in it: after 2 s');
+  // Driven, then stopped: at once.
+  assert.equal(await hintAfter(1.5, { x: 0, y: -1 }), null, 'gone while driving');
+  assert.equal((await hintAfter(1 / 60))?.kind, 'car', 'the moment it stops');
   assert.match(h.text, /Click or press Space to get out/, 'a mouse and keys: click or Space');
   // In pictures: a finger over a small car and, with a keyboard, "or" and a space bar with its own
   // finger; the fingers move (tap) from one frame to the next.
@@ -1352,7 +1366,7 @@ test('island-hop AC-24: in the car, 2 s without moving brings a thought bubble o
   assert.ok(new Set(parts.map((p) => p.fingers[0])).size > 2, `the car's finger moves: ${parts.map((p) => p.fingers[0])}`);
   assert.ok(parts.some((p) => p.space.pressed) && parts.some((p) => !p.space.pressed), 'the space bar goes down and up');
   assert.equal(await hintAfter(0.2, { x: 0, y: -1 }), null, 'moving hides it');
-  assert.equal((await hintAfter(2.2))?.kind, 'car', 'back after 2 s more');
+  assert.equal((await hintAfter(1 / 60))?.kind, 'car', 'and stopping shows it again');
   await page.keyboard.press('Space');
   await page.evaluate(() => {
     __hop.manual = false;
@@ -1384,7 +1398,7 @@ test('island-hop AC-24: on a touch screen the bubble says to tap', async () => {
     for (let t = 0; t < 60 && __hop.state.mode !== 'car'; t += 0.1) __hop.step(0.1);
     __hop.autopilot(null);
     for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
-    for (let k = 0; k < 150; k++) __hop.step(1 / 60);
+    __hop.step(1 / 60);
     __hop.draw();
     return { text: __hop.hint?.text, parts: __hop.hintParts };
   });

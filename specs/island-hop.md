@@ -139,9 +139,12 @@ grab a car, drive to the door, and back to the boat. The route is yours.
     while standing on its jetty end, so you can get straight back in after docking (the owner's words
     above). Your boats each stay where you left them,
     so leaving the rowboat in the lagoon leaves the motorboat at its berth, ready to board.
-  - Walking into a parked car gets in. Letting go of the stick with the car within 1 tile of a car
-    park, a jetty or a stop's door gets out; anywhere else, the car just stops. A tap on the screen
-    (or Space or Enter) gets you out wherever the car is (owner, 2026-11-11: "I don't know how to get
+  - Walking into a parked car gets in. Letting go of the stick only stops the car, wherever it is;
+    it no longer gets you out by a car park, jetty or door, which threw you out of a parked car the
+    moment you got in (owner, 2026-11-12: "I cannot get in the car. When I touch the car, I hear the
+    click in and the click out ... there's no way I can stay in the car", and "I don't think it
+    should leave the car automatically because it's too trigger happy and it leaves all the time").
+    A tap on the screen (or Space or Enter) gets you out wherever the car is (owner, 2026-11-11: "I don't know how to get
     out of the car. Maybe it should be that if you tap on the car, then it comes out of the car"). A
     car stays where you leave it.
   - Walking onto a stop's doormat ticks it, and so does walking up to its building from any side
@@ -268,8 +271,8 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   a berth holding a boat can't be docked at; walking onto a berth holding one of your boats boards
   it, and right after docking, pushing back toward the boat boards it; right after leaving a berth,
   turning back into it docks; after leaving the rowboat in the lagoon the motorboat is still at its
-  berth and boards; walking into a parked car gets in; letting go with the car within 1 tile of a car
-  park, jetty or door gets out, a tap (or Space) gets out anywhere, and the car stays there —
+  berth and boards; walking into a parked car gets in; letting go only stops the car, even at its car
+  park, a tap (or Space) gets out anywhere, and the car stays there —
   `tests/island-hop.test.mjs`.
 - **AC-8** Walking onto a stop's doormat, or up to its building from any side, ticks it with a chime
   and a split; an ordered stop isn't
@@ -324,7 +327,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
   about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
-- **AC-24** In the car, 2 s with no stick shows a thought bubble over it on how to get out, in
+- **AC-24** In the car, a thought bubble over it shows how to get out: as soon as it stops once you
+  have driven it (owner, 2026-11-12: "we should show it as soon as the car moves the next time it
+  stops"), or 2 s after getting in if you haven't, in
   pictures: a finger gliding down to tap a small car, with a ripple; with a keyboard, then "or" and a
   space bar a finger presses (its words, for tests and screen readers: "Tap to get out" on a touch
   screen, "Click or press Space to get out" otherwise; owner, 2026-11-12: "I wonder if there's a

@@ -28,7 +28,7 @@ export const RULES = {
   bump: 0.6, // seconds held still after hitting a rock or traffic
   personR: 0.2,
   carReach: 0.5, // walking this close to a parked car gets in
-  outReach: 1.05, // a car stopped within 1 tile of a car park, jetty or door lets you out
+  outReach: 1.05, // the autopilot drives to within 1 tile of a car park, jetty or door, then gets out
   dead: 0.15, // stick lengths under this are no input
   flyover: 3,
   trailEvery: 0.2, // your route, for the finish's map: a point every 0.2 s
@@ -532,20 +532,12 @@ const AXES = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 export function roadNeighbours(x, y) {
   return AXES.filter(([dx, dy]) => isRoad(tileAt(x + dx, y + dy))).map(([dx, dy]) => ({ x: dx, y: dy }));
 }
-// The car stops within reach of a car park, a jetty or a stop's door: you can get out there.
-export function canGetOut(s, c) {
-  const near = (t) => dist(c, centre(t)) <= RULES.outReach;
-  return (
-    WORLD.parks.some(near) ||
-    WORLD.jetties.some(near) ||
-    s.stops.some((st) => near(WORLD.stops[st.at].mat))
-  );
-}
+// Letting go of the stick only stops the car: a tap (or Space) gets you out. Letting go by a car park
+// used to get you out too, which threw you out of a parked car the moment you got in (owner,
+// 2026-11-12: "When I touch the car, I hear the click in and the click out ... there's no way I can
+// stay in the car").
 function driveStep(s, c, g, dt) {
-  if (g.len === 0) {
-    if (canGetOut(s, c)) s.trans = { kind: 'carOut', t: 0, car: c.id };
-    return;
-  }
+  if (g.len === 0) return;
   let left = RULES.car * g.len * dt;
   for (let guard = 0; guard < 8 && left > 1e-9; guard++) {
     if (!c.target) {
@@ -831,7 +823,7 @@ export function pilotStick(s, pilot) {
     const last = path[path.length - 1];
     if (!c.target && c.node.x === last.x && c.node.y === last.y) {
       pilot.drove = true;
-      return null; // let go: out you get
+      return { x: 0, y: 0, out: true }; // there: out, as a tap does
     }
     if (c.target) return gridToStick(c.dir.x, c.dir.y, 1);
     const i = path.findIndex((t) => t.x === c.node.x && t.y === c.node.y);
