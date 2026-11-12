@@ -17,6 +17,7 @@ import {
   step as rulesStep,
   youAt,
   youBoat,
+  youCar,
   isLand,
   isRoad,
   isShallow,
@@ -542,6 +543,7 @@ function handleEvents() {
     else if (e.type === 'board') play('creak', { rate: 1.15 });
     else if (e.type === 'door') play('door');
     else if (e.type === 'bump') play('bump');
+    else if (e.type === 'shallow') showHint('shallow');
     else if (e.type === 'step') play('step', { rate: 0.9 + Math.random() * 0.2, gain: 0.5 });
     else if (e.type === 'stop') {
       play('chime');
@@ -561,6 +563,71 @@ function handleEvents() {
       needLi?.classList.add('flash');
     } else if (e.type === 'finish') finish();
   }
+}
+
+// --- Hints: a thought bubble over the car or the boat ------------------------------------------------
+// In the car, after 2 s with no stick, a bubble says how to get out (owner, 2026-11-12: "once you stop
+// after a certain amount of time that you do nothing, like I don't know, maybe 2 seconds, we show you
+// like a thought bubble saying to what to tap the car so that you ... get out of the car, and or
+// spacebar"); any move or getting out hides it. A boat too deep for the lagoon's shallows says so.
+const CAR_IDLE = 2;
+const SHALLOW_HINT = 2.5;
+const touchFirst = matchMedia('(pointer: coarse)').matches;
+const HINTS = {
+  car: touchFirst ? 'Tap to get out' : 'Click or press Space to get out',
+  shallow: 'Too shallow: only the rowboat fits',
+};
+let hint = null; // { kind, t }
+let carIdle = 0;
+function showHint(kind) {
+  hint = { kind, t: 0 };
+}
+function syncHints(dt, input) {
+  const len = input && typeof input === 'object' ? Math.hypot(input.x || 0, input.y || 0) : 0;
+  const driving = world.phase === 'play' && world.mode === 'car' && !world.trans;
+  carIdle = driving && len < RULES.dead && !pilot ? carIdle + dt : 0;
+  if (driving && carIdle >= CAR_IDLE) {
+    if (!hint || hint.kind !== 'car') showHint('car');
+  } else if (hint && hint.kind === 'car') hint = null;
+  if (hint) {
+    hint.t += dt;
+    if (hint.kind === 'shallow' && (hint.t > SHALLOW_HINT || world.mode !== 'boat')) hint = null;
+  }
+}
+function drawHint() {
+  if (!hint || world.phase !== 'play') return;
+  const at = hint.kind === 'car' ? youCar(world) : youBoat(world);
+  if (!at) return;
+  const z = hint.kind === 'car' ? LAND_Z : 0;
+  const p = iso.toScreen(at.x, at.y, z);
+  const k = 1 / cam.zoom; // sizes in screen pixels
+  const text = HINTS[hint.kind];
+  ctx.save();
+  ctx.font = `600 ${15 * k}px system-ui, sans-serif`;
+  const w = ctx.measureText(text).width + 24 * k;
+  const h = 34 * k;
+  const bx = p.x - w / 2;
+  const by = p.y - 70 * k - h;
+  ctx.globalAlpha = Math.min(1, hint.t / 0.2);
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#1d3557';
+  ctx.lineWidth = 2 * k;
+  // The thought's trail: two small puffs down to the vehicle.
+  for (const [dx, dy, r] of [[-6, 22, 4], [-12, 36, 2.5]]) {
+    ctx.beginPath();
+    ctx.arc(p.x + dx * k, by + h + dy * k - 14 * k, r * k, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.roundRect(bx, by, w, h, h / 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#1d3557';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, p.x, by + h / 2);
+  ctx.restore();
 }
 
 // --- Camera -----------------------------------------------------------------------------------------------
@@ -793,11 +860,10 @@ function draw() {
       const c = ROWS[y][x];
       if (isLand(c) && c !== '=') continue;
       const p = iso.toScreen(x + 0.5, y + 0.5, 0);
-      // Open sea is the water block's own colour; in the shallows the blocks show, sandier.
-      if (isShallow(c)) {
-        spr('water', p.x, p.y);
-        diamond(x, y, 0.5, 'rgba(255, 236, 170, 0.35)');
-      }
+      // Open sea is the water block's own colour; the shallows are flat, lighter, clear water over
+      // sand, so they never read as ground (owner, 2026-11-12: "sometimes the islands are
+      // impossible to reach ... it has like solid ground tiles around the dock").
+      if (isShallow(c)) diamond(x, y, 0, (x + y) % 2 ? 'rgba(186, 240, 236, 0.75)' : 'rgba(176, 236, 232, 0.75)');
       if (!coarse && (hash(x, y) + Math.floor(clock * 0.7)) % 23 === 0) {
         const g = (clock * 0.7) % 1;
         ctx.strokeStyle = `rgba(255,255,255,${0.55 * Math.sin(g * Math.PI)})`;
@@ -908,6 +974,7 @@ function draw() {
   }
   // 4. The open stops' beams, over everything.
   if (world.phase !== 'card') drawBeams();
+  drawHint();
   // 5. The finish: your route and the gold route.
   if (finishView) {
     drawRoute(finishView.gold, '#f5c542', 7);
@@ -1108,6 +1175,7 @@ function advance(dt) {
   clock += dt;
   if (!paused && !manual) {
     let input = pilot ? (st) => (st.phase === 'play' ? pilotStick(st, pilot) : null) : stick();
+    syncHints(dt, input);
     if (getOut && !pilot) input = { ...input, out: true };
     getOut = false;
     const wasFlying = world.phase === 'fly';
@@ -1162,6 +1230,9 @@ window.__hop = {
   get people() {
     return peopleDrawn;
   },
+  get hint() {
+    return hint && { kind: hint.kind, text: HINTS[hint.kind] };
+  },
   get music() {
     return Object.fromEntries(Object.entries(music).map(([k, m]) => [k, { level: m.level, playing: !m.el.paused, ready: !!m.el.src }]));
   },
@@ -1201,6 +1272,7 @@ window.__hop = {
     for (let i = 0; i < n; i++) {
       if (paused) break;
       const input = pilot ? (st) => (st.phase === 'play' ? pilotStick(st, pilot) : null) : stickIn;
+      syncHints(dt, input);
       rulesStep(world, dt, input);
       handleEvents();
       syncLoops();

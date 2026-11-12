@@ -324,6 +324,16 @@ grab a car, drive to the door, and back to the boat. The route is yours.
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's
   about 2½ minutes and the island's about 1 minute — `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the music above.)
+- **AC-24** In the car, 2 s with no stick shows a thought bubble over it on how to get out ("Tap to
+  get out" on a touch screen, "Click or press Space to get out" otherwise), gone on any move or once
+  out; a boat too deep for the lagoon's shallows that noses into them shows "Too shallow: only the
+  rowboat fits" — `tests/island-hop.test.mjs`. (Added after the go, owner, 2026-11-12: "once you
+  stop after a certain amount of time that you do nothing, like I don't know, maybe 2 seconds, we
+  show you like a thought bubble saying to what to tap the car so that you or click or tap the car so
+  that the you get out of the car, and or spacebar also will get you out of the car"; and of Far
+  Cay's lagoon drawn as blocks: "sometimes the islands are impossible to reach ... it has like solid
+  ground tiles around the dock. It's impossible to get to it. Make sure that doesn't happen". The
+  shallows are now drawn as flat, light, clear water, and the hint names the boat that fits.)
 
 ## Core flow
 

@@ -321,6 +321,11 @@ function sailStep(s, b, g, dt) {
     } else {
       b.v = 0; // nosed into the coast: stopped, never stuck (it can always turn away)
     }
+    // Nosing into the lagoon's shallows in a boat too deep for them: say so (the page shows a hint).
+    if (b.kind !== 'row' && !fits(nx, ny) && boatFits('row', nx + Math.cos(b.h) * spec.radius, ny + Math.sin(b.h) * spec.radius) && s.t - (s.shallowAt ?? -9) > 2.5) {
+      s.shallowAt = s.t;
+      s.events.push({ type: 'shallow', boat: b.kind });
+    }
   }
   // Moored and leisure boats and buoys you glide round: pushed clear, slowed, never held. Rocks and traffic
   // bump you: stopped and held, pushed clear; only when you're heading into them, so you can

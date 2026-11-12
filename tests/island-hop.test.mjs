@@ -1311,6 +1311,70 @@ test('island-hop AC-23: the two tracks are the owner\'s at 64 kbps: the sea\'s a
   }
 });
 
+test('island-hop AC-24: in the car, 2 s without moving brings a thought bubble on how to get out; a boat too deep for the shallows says so', async () => {
+  const { context, page } = await open();
+  // Mission 2's taxi, driven away from the car park, then left alone.
+  await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    for (let t = 0; t < 60 && __hop.state.mode !== 'car'; t += 0.1) __hop.step(0.1);
+    __hop.autopilot(null);
+    for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
+  });
+  assert.equal(await page.evaluate(() => __hop.state.mode), 'car');
+  const hintAfter = (secs, stick = null) =>
+    page.evaluate(
+      ([secs, stick]) => {
+        for (let k = 0; k < Math.round(secs * 60); k++) __hop.step(1 / 60, stick);
+        return __hop.hint;
+      },
+      [secs, stick]
+    );
+  assert.equal(await hintAfter(1.8), null, 'not before 2 s');
+  const h = await hintAfter(0.4);
+  assert.equal(h?.kind, 'car', 'after 2 s');
+  assert.match(h.text, /Click or press Space to get out/, 'a mouse and keys: click or Space');
+  assert.equal(await hintAfter(0.2, { x: 0, y: -1 }), null, 'moving hides it');
+  assert.equal((await hintAfter(2.2))?.kind, 'car', 'back after 2 s more');
+  await page.keyboard.press('Space');
+  await page.evaluate(() => {
+    __hop.manual = false;
+  });
+  await waitFor(page, () => __hop.state.mode === 'walk', null, { what: 'out of the car after Space' });
+  assert.equal(await page.evaluate(() => __hop.hint), null, 'gone once out');
+  // The motorboat nosing into Far Cay's lagoon.
+  const shallow = await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(4, { fly: false });
+    const b = __hop.state.boats.find((x) => x.kind === 'motor');
+    __hop.state.you.boat = 'motor';
+    __hop.state.mode = 'boat';
+    Object.assign(b, { x: 42.5, y: 45, h: Math.PI / 2, v: 0, berth: null });
+    for (let k = 0; k < 120; k++) __hop.step(1 / 60, { x: -0.45, y: 0.9 });
+    return { hint: __hop.hint, y: b.y };
+  });
+  assert.ok(shallow.y < 47.2, 'kept out of the lagoon');
+  assert.match(shallow.hint?.text || '', /only the rowboat/, 'it says only the rowboat fits');
+  await context.close();
+});
+
+test('island-hop AC-24: on a touch screen the bubble says to tap', async () => {
+  const { context, page } = await open({ hasTouch: true, isMobile: true });
+  const text = await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    for (let t = 0; t < 60 && __hop.state.mode !== 'car'; t += 0.1) __hop.step(0.1);
+    __hop.autopilot(null);
+    for (let k = 0; k < 90; k++) __hop.step(1 / 60, { x: 0, y: -1 });
+    for (let k = 0; k < 150; k++) __hop.step(1 / 60);
+    return __hop.hint?.text;
+  });
+  assert.equal(text, 'Tap to get out');
+  await context.close();
+});
+
 test('island-hop AC-16: on a 390×844 phone nothing scrolls, every button is 44 px or more, the canvas is at most 2×, and a building covering the person fades', async () => {
   const { context, page } = await open({ deviceScaleFactor: 3, hasTouch: true, isMobile: true });
   const sizes = () =>
