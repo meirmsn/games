@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
 import { serve } from './serve.mjs';
 import { launch, realFrames, waitFor } from './clock.mjs';
-import { ROWS, ISLANDS, CARS, MAP_VERSION } from '../island-hop/map.js';
+import { ROWS, ISLANDS, CARS, MAP_VERSION, LEISURE } from '../island-hop/map.js';
 import { ATLAS } from '../island-hop/atlas.js';
 import {
   RULES,
@@ -35,6 +35,8 @@ import {
   leisureAt,
   obstaclesAt,
   TRUNK_R,
+  PROP_R,
+  personBlocked,
   TRAFFIC_R,
 } from '../island-hop/rules.js';
 
@@ -606,21 +608,32 @@ test('island-hop AC-9: you glide round moored and leisure boats and buoys, never
   }
 });
 
-test('island-hop AC-21: in every mission at least six small leisure boats sail, on water, never on land', async () => {
+test('island-hop AC-21: in every mission at least ten small leisure boats sail, on water, never on land: round single islands, round the whole archipelago, and on a figure of eight round two islands', async () => {
   for (const [i] of MISSIONS.entries()) {
     const s = createMission(i, { phase: 'play' });
     const at0 = obstaclesAt(s).filter((o) => o.kind === 'leisure');
     run(s, 2);
     const at1 = obstaclesAt(s).filter((o) => o.kind === 'leisure');
-    assert.ok(at0.length >= 6, `mission ${i + 1}: ${at0.length} leisure boats`);
+    assert.ok(at0.length >= 10, `mission ${i + 1}: ${at0.length} leisure boats`);
     const moved = at1.filter((o, k) => Math.hypot(o.x - at0[k].x, o.y - at0[k].y) > 1).length;
     assert.equal(moved, at0.length, `mission ${i + 1}: all of them moving`);
   }
-  for (let k = 0; k < 6; k++)
-    for (let t = 0; t < 120; t += 0.25) {
+  for (let k = 0; k < LEISURE.length; k++)
+    for (let t = 0; t < 140; t += 0.25) {
       const p = leisureAt(k, t);
       assert.ok(navigable('motor', tileAt(p.x, p.y)), `leisure boat ${k} on water at ${t} s`);
     }
+  // The circuits: one goes round all five islands, and one is a figure of eight, its loops round Palm
+  // Key and Marina Bay.
+  const around = (path, isl) => {
+    const xs = path.map((p) => p[0]);
+    const ys = path.map((p) => p[1]);
+    return Math.min(...xs) < isl.x0 && Math.max(...xs) > isl.x1 + 1 && Math.min(...ys) < isl.y0 && Math.max(...ys) > isl.y1 + 1;
+  };
+  assert.ok(LEISURE.some((l) => ISLANDS.every((isl) => around(l.path, isl))), 'a boat goes round the whole archipelago');
+  const eight = LEISURE.find((l) => l.path.length === 8);
+  const isl = (id) => ISLANDS.find((i) => i.id === id);
+  assert.ok(eight && around(eight.path.slice(0, 4), isl('palm')) && around(eight.path.slice(4), isl('marina')), 'a figure of eight round Palm Key and Marina Bay');
 });
 
 test('island-hop AC-6: on foot, a tree\'s tile is grass: you walk across it, only its trunk stops you, and walking straight at the trunk steps round it', () => {
@@ -643,6 +656,25 @@ test('island-hop AC-6: on foot, a tree\'s tile is grass: you walk across it, onl
   run(s, 2.5, track);
   assert.ok(s.person.x > 14.2, `round the trunk: x ${s.person.x.toFixed(2)}`);
   assert.ok(closest >= TRUNK_R + RULES.personR - 1e-6, `never into the trunk: ${closest.toFixed(3)}`);
+});
+
+test('island-hop AC-6: on foot, the fountain is the same: only its basin stops you, its tile\'s corners are paving, and walking straight at it steps round', () => {
+  // The fountain at (15,7) in Port Town's plaza.
+  assert.equal(tileAt(15, 7), '*');
+  const s = play(0);
+  const basin = { x: 15.5, y: 7.5 };
+  let closest = Infinity;
+  const track = (st) => {
+    closest = Math.min(closest, Math.hypot(st.person.x - basin.x, st.person.y - basin.y));
+    return gridToStick(1, 0);
+  };
+  // The paving round the basin, its tile's corners, is yours to stand on.
+  for (const [x, y] of [[15.12, 7.12], [15.88, 7.12], [15.12, 7.88], [15.88, 7.88]]) assert.equal(personBlocked(x, y), false, `the fountain tile's corner ${x},${y}`);
+  // Straight at the basin: round it and on.
+  ashore(s, 14.2, 7.5);
+  run(s, 2.5, track);
+  assert.ok(s.person.x > 16.2, `round the basin: x ${s.person.x.toFixed(2)}`);
+  assert.ok(closest >= PROP_R['*'] + RULES.personR - 1e-6, `never into the basin: ${closest.toFixed(3)}`);
 });
 
 // --- Pars and the gold routes (Node) ----------------------------------------------------------------------------
@@ -990,6 +1022,30 @@ test('island-hop AC-10: the finish shows the time, the medal, the pars, the best
   await old.context.close();
 });
 
+test('island-hop AC-10: at the finish the camera follows your route from its start, drawing it as it goes, then pulls back to the whole map', async () => {
+  const { context, page } = await open();
+  await page.evaluate(() => {
+    __hop.manual = true;
+    __hop.start(1, { fly: false });
+    __hop.autopilot('gold');
+    __hop.step(60);
+    __hop.autopilot(null);
+    __hop.manual = false;
+  });
+  const first = await page.evaluate(() => __hop.view.replay);
+  assert.ok(first && first.dur >= 4 && first.dur <= 9, `a replay of 4–9 s: ${JSON.stringify(first)}`);
+  const start = await page.evaluate(() => __hop.state.trail[0]);
+  assert.ok(Math.hypot(first.head.x - start[0], first.head.y - start[1]) < 1, 'it starts where you started');
+  await waitFor(page, () => __hop.view.replay && __hop.view.replay.head.n > 20 && Math.abs(__hop.view.tilesAcross - 16) < 1, null, { what: 'the camera close, 16 tiles across, following the route' });
+  const mid = await page.evaluate(() => ({ head: __hop.view.replay.head, x: __hop.view.x, y: __hop.view.y }));
+  await waitFor(page, (n) => __hop.view.replay && __hop.view.replay.head.n > n + 20, mid.head.n, { what: 'the head moving on along the route' });
+  const later = await page.evaluate(() => ({ x: __hop.view.x, y: __hop.view.y }));
+  assert.ok(Math.hypot(later.x - mid.x, later.y - mid.y) > 10, 'the camera moves with it');
+  await waitFor(page, () => !__hop.view.replay && __hop.view.tilesAcross > 30, null, { what: 'the whole map after the replay', timeout: 20000 });
+  assert.equal(await page.isVisible('[data-screen="finish"]'), true, 'the score card stays up throughout');
+  await context.close();
+});
+
 test('island-hop AC-12: off-screen stops get an edge arrow with their icon; holding the map shows it all and the clock runs on; the camera shows 14, 11 and 7 tiles across', async () => {
   const { context, page } = await open();
   await page.evaluate(() => {
@@ -1161,12 +1217,13 @@ test('island-hop AC-15: docking, a car door, a stop and the finish each sound, a
   await context.close();
 });
 
-test('island-hop AC-22: a boat in front of a building on the shore is drawn over it, and the land in front of a boat behind an island is drawn over the boat', async () => {
+test('island-hop AC-22: a boat in front of a building on the shore is drawn over it, the land in front of a boat behind an island is drawn over the boat, and no tile is drawn twice', async () => {
   const { context, page } = await open();
   const orderAt = (x, y, hDeg) =>
     page.evaluate(
       ([x, y, h]) => {
         __hop.manual = true;
+        __hop.recordGround = true;
         __hop.start(0, { fly: false });
         const b = __hop.state.boats[0];
         for (let k = 0; k < 240; k++) {
@@ -1182,10 +1239,17 @@ test('island-hop AC-22: a boat in front of a building on the shore is drawn over
   const front = await orderAt(18, 14.4, 90);
   assert.ok(front.includes('building:17,13'), 'the kiosk is drawn');
   assert.ok(front.indexOf('boat:motor') > front.indexOf('building:17,13'), `the boat after the kiosk: ${front.join(' ')}`);
-  // Off its north shore, behind the car park (15,2): the land is drawn again over the boat.
+  // Off its north shore, behind the car park (15,2): the boat is drawn before that land, so the land
+  // covers it.
   const behind = await orderAt(15, 1.6, 0);
   const at = behind.indexOf('boat:motor');
   assert.ok(at >= 0 && behind.indexOf('ground:15,2', at) > at, `the north shore over the boat: ${behind.join(' ')}`);
+  // Nothing is drawn twice: no tile pops over what was drawn after it.
+  for (const o of [front, behind]) {
+    const ground = o.filter((n) => n.startsWith('ground:'));
+    assert.equal(new Set(ground).size, ground.length, 'each ground tile drawn once');
+    assert.equal(o.filter((n) => n === 'boat:motor').length, 1, 'the boat drawn once');
+  }
   await context.close();
 });
 

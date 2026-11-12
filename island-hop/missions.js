@@ -165,7 +165,7 @@ export const MISSIONS = [
       { sail: 'palm' },
       { walk: 'X' },
     ],
-    par: 82.3,
+    par: 84.6,
   },
   {
     name: 'Turtle supper',
@@ -215,6 +215,6 @@ export const MISSIONS = [
       { sail: 'marina1' },
       { walk: 'I' },
     ],
-    par: 90.9,
+    par: 91.6,
   },
 ];

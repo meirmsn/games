@@ -123,7 +123,7 @@ export function leisureAt(i, t) {
 function routeAt(tr, t) {
   const p = tr.path;
   const L = pathLength(p, tr.loop);
-  let s = (tr.speed * t) % (tr.loop ? L : 2 * L);
+  let s = (tr.speed * t + (tr.from || 0)) % (tr.loop ? L : 2 * L);
   let back = false;
   if (!tr.loop && s > L) {
     s = 2 * L - s;
@@ -409,18 +409,22 @@ function tryDock(s, b) {
 // should be able to walk on the grass"). Paths (walkPath) still go round tree tiles, so the
 // autopilot's routes are unchanged.
 export const TRUNK_R = 0.2;
-const onFoot = (ch) => isWalkable(ch) || ch === 'T';
+// The same for the fountain: only its basin stops you (owner, 2026-11-12: "you should do similar to
+// the fountain tile that you did for the trees").
+export const PROP_R = { T: TRUNK_R, '*': 0.3 };
+const onFoot = (ch) => isWalkable(ch) || ch in PROP_R;
 function blocked(x, y) {
   const r = RULES.personR;
   for (const [dx, dy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (!onFoot(tileAt(x + dx, y + dy))) return true;
   for (let ty = Math.floor(y) - 1; ty <= Math.floor(y) + 1; ty++)
     for (let tx = Math.floor(x) - 1; tx <= Math.floor(x) + 1; tx++)
-      if (tileAt(tx, ty) === 'T' && Math.hypot(x - tx - 0.5, y - ty - 0.5) < TRUNK_R + r) return true;
+      if (PROP_R[tileAt(tx, ty)] && Math.hypot(x - tx - 0.5, y - ty - 0.5) < PROP_R[tileAt(tx, ty)] + r) return true;
   return false;
 }
 export const personBlocked = blocked;
 function nearTrunk(x, y) {
-  return tileAt(Math.floor(x), Math.floor(y)) === 'T' && Math.hypot(x - Math.floor(x) - 0.5, y - Math.floor(y) - 0.5) < TRUNK_R + RULES.personR + 0.1;
+  const pr = PROP_R[tileAt(Math.floor(x), Math.floor(y))];
+  return !!pr && Math.hypot(x - Math.floor(x) - 0.5, y - Math.floor(y) - 0.5) < pr + RULES.personR + 0.1;
 }
 // The person walks in the 8 grid directions nearest the stick.
 export function walkDir(g) {

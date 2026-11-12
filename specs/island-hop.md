@@ -110,7 +110,10 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   the trunk steps round it (owner, 2026-11-11: "there is a bug on the tiles that have an tree. You
   cannot get to the tile ... Most of the grid is mainly grass. So you should be able to walk on the
   grass. I don't know, maybe we can make it so that the part you cannot walk is a circle in the
-  center"). The autopilot's paths still go round tree tiles.
+  center"). The fountain is the same, with a basin of 0.3 tiles: its tile's corners are paving
+  (owner, 2026-11-12: "you should do similar to the fountain tile that you did for the trees ...
+  Check if there are other tiles that you should do the same treatment"; no other walkable ground
+  has anything on it). The autopilot's paths still go round tree and fountain tiles.
 - Movement, one config object (`island-hop/rules.js`), speeds in tiles a second: walking 1.6; car 5,
   on the road network only, following its centre line and taking the branch the stick points at
   junctions, passing through parked cars; rowboat 2.2 (turning 150° a second), motorboat 3.5 (120°),
@@ -153,9 +156,14 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   (about a second lost), never a failure; only heading into one bumps you, so sailing away from one
   you touch is never held. Moored boats, the leisure boats and buoys never hold you: you're pushed
   clear and slide along their side the way you're heading, slowed, so you ease round them even head
-  on; a knock at speed halves your speed once (owner, 2026-11-11: "there is some weirdness when driving around on the boat. I get stuck when getting near other boats, even though it doesn't seem like it should be stuck"). Six small leisure
-  boats sail slow loops round the open water in every mission, clear of the lanes, rocks and moored
-  boats (owner, 2026-11-11: "You should also make all the other boats, not move all of them, but there's too little movement. I see only one moving and the rest are not. I think you can do more. Some of the smaller boats are moving there recreationally and stuff to feel more alive").
+  on; a knock at speed halves your speed once (owner, 2026-11-11: "there is some weirdness when driving around on the boat. I get stuck when getting near other boats, even though it doesn't seem like it should be stuck"). Ten small leisure
+  boats sail loops in every mission, clear of berths, jetties, rocks and moored boats: six on slow
+  loops near the islands, two round the whole archipelago half a lap apart, and two on a figure of
+  eight whose loops go round Palm Key and Marina Bay (owner, 2026-11-12: "you should get even more
+  boats moving, and some of them moving, you know, maybe slowly making rounds around islands, some
+  other making rounds around the whole thing. Maybe some of them doing like a specific pattern of an
+  8 or something in between the islands"; the moored row in the north and two buoys moved a tile to
+  make room). The first six came with (owner, 2026-11-11: "You should also make all the other boats, not move all of them, but there's too little movement. I see only one moving and the rest are not. I think you can do more. Some of the smaller boats are moving there recreationally and stuff to feel more alive").
 - Missions, six, hand-made in `island-hop/missions.js`. Each lists its stops (2–6, most in any order,
   some ordered: a pickup, then its delivery), where each boat and car starts, and its gold route as
   hand-written waypoints (the order of stops, the berths and the vehicles). Starting or restarting a
@@ -184,16 +192,25 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   split against the best (green ahead, red behind). There's no ghost of the best run (the owner's
   words above). Bests and medals are saved with the map's version (it counts the missions too), and
   thrown away when it changes. At the finish, your route (your position every 0.2 s, at most 1,200
-  points) and the gold route are drawn over the map, with the medal and best.
+  points) and the gold route are drawn over the map, with the medal and best. First the camera
+  follows your route from its start at 16 tiles across, drawing it as it goes, at about five times
+  the run's speed (4–9 s); then it pulls back to the whole map with both routes, drawn thicker
+  (owner, 2026-11-12: "it's really cool that at the end you show the path that the player took versus
+  the ideal path, but it's, you know, almost impossible to see. So maybe what you can do is that while
+  you're showing the score, just move the camera, you know, panning, like tracking from the
+  beginning, the path").
 - The camera follows, leading 25% of the view in the direction of travel and sitting 15% above centre
   (the thumb is low), zoomed per mode by tiles shown across the screen's width (boat 14, car 11,
   walking 7), easing over 0.5 s. A 48 px map button shows the whole archipelago with the open stops
   while held; the clock keeps running. Rejected: pinch zoom, which fights the stick's finger
   (adversarial review, 2026-11-10).
 - Readability: the person has a bright ring under them; a building drawn after the person whose
-  bounds cover them fades to 35%. The land's ground is drawn first; then everything else back to
-  front, so a boat in front of a building on the shore is drawn over it, and after each boat the land
-  tiles in front of it are drawn again, so an island hides a boat behind it (owner, 2026-11-11: "when I get close to the edge of an island, visually, if it's the bottom left edge, I can see the boat behind, weird visual, it seems like it to be on top or below the island"). Stops are tall beams in their own colour with their icon on top;
+  bounds cover them fades to 35%. The land's ground is drawn first, back to front, with whatever at sea is
+  behind land (a land tile near it not behind it on either axis), so an island hides a boat behind
+  it; then everything else back to front, so a boat in the open in front of a building on the shore
+  is drawn over it. Nothing is drawn twice (owner, 2026-11-12, of the first fix, which drew land
+  tiles again over a boat: "Sometimes the tiles on the islands show up right out of nowhere and block
+  everything ... sometimes they're there, sometimes they're not"). (Owner, 2026-11-11: "when I get close to the edge of an island, visually, if it's the bottom left edge, I can see the boat behind, weird visual, it seems like it to be on top or below the island"). Stops are tall beams in their own colour with their icon on top;
   off-screen ones get an edge arrow with the icon and the distance.
 - Sound, through the shared sound module and the site-wide mute, MP3: the sea's ambience afloat and an
   island breeze ashore, a boat engine hum while it moves, footsteps, a car door and an engine that
@@ -243,7 +260,7 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   screen, at that mode's speed (walk 1.6, car 5, rowboat 2.2, motorboat 3.5, speedboat 5.5 tiles a
   second); a second finger is ignored, and so is a drag that starts in the phone's edge strips; the
   person slides along walls and can't walk into the sea from a jetty; a boat, like the person, goes in
-  the nearest of the grid's 8 directions; only a tree's trunk, not its tile, stops the person; the car stays on the roads and
+  the nearest of the grid's 8 directions; only a tree's trunk or the fountain's basin, not its tile, stops the person; the car stays on the roads and
   takes the branch the stick points at; a boat nosed into a cliff gets free in under 2 s —
   `tests/island-hop.test.mjs`.
 - **AC-7** A boat heading slowly toward a free berth within 1.5 tiles docks and the person steps
@@ -264,8 +281,9 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   past them; sailing away from a rock you touch isn't held — `tests/island-hop.test.mjs`.
 - **AC-10** The finish shows the time, the medal against gold, silver and bronze, the best, and the
   run's route beside the gold route; any finish opens the next mission; the best and medal persist
-  over a reload, and no ghost is kept or drawn; saved runs from another map version are thrown away
-  — `tests/island-hop.test.mjs`.
+  over a reload, and no ghost is kept or drawn; saved runs from another map version are thrown away;
+  the camera first follows your route from its start, then shows the whole map —
+  `tests/island-hop.test.mjs`.
 - **AC-11** For each of the six missions the autopilot following its gold route finishes it in a time
   inside the mission's band, and at least one other ordering of its stops is slower than its gold time
   (par × 1.1) —
@@ -297,10 +315,11 @@ grab a car, drive to the door, and back to the boat. The route is yours.
   scripts/island-hop/playtest.mjs` prints the same figures — `tests/island-hop.test.mjs`. (Was
   "verified by review: the playtest's figures in the PR", which no one but the builder could check;
   owner, 2026-11-11: "yes", to "turn the timed playtest into a real test".)
-- **AC-21** In every mission at least six small leisure boats sail, always on water —
+- **AC-21** In every mission at least ten small leisure boats sail, always on water, one round the
+  whole archipelago and one on a figure of eight round Palm Key and Marina Bay —
   `tests/island-hop.test.mjs`. (Added after the go; the owner's words on the boats above.)
-- **AC-22** A boat in front of a building on the shore is drawn over it, and the land in front of a
-  boat behind an island is drawn over the boat — `tests/island-hop.test.mjs`. (Added after the go;
+- **AC-22** A boat in front of a building on the shore is drawn over it, the land in front of a boat
+  behind an island is drawn over the boat, and no tile or boat is drawn twice — `tests/island-hop.test.mjs`. (Added after the go;
   the owner's words on the island's edge above.)
 - **AC-23** The sea's music plays afloat and the island's ashore, crossfading as you dock; none
   plays before a tap, while muted or while the page is hidden; both tracks are 64 kbps, the sea's

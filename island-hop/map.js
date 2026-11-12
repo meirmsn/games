@@ -137,18 +137,14 @@ export const YOUR_BOATS = {
 // Every other Watercraft sprite, moored in the harbours (they bump you like rocks), and the buoys
 // marking the channels. Positions in tiles; frame is the heading (0 = up-left, then clockwise).
 export const MOORED = [
-  { craft: 1, x: 28, y: 1.2, frame: 3 },
-  { craft: 2, x: 30.5, y: 1.2, frame: 3 },
-  { craft: 25, x: 33, y: 1.2, frame: 7 },
-  { craft: 26, x: 35.5, y: 1.2, frame: 3 },
-  { craft: 8, x: 38, y: 1.2, frame: 7 },
+  { craft: 1, x: 28, y: 2.4, frame: 3 },
+  { craft: 2, x: 30.5, y: 2.4, frame: 3 },
+  { craft: 25, x: 33, y: 2.4, frame: 7 },
+  { craft: 26, x: 35.5, y: 2.4, frame: 3 },
   { craft: 3, x: 20, y: 31, frame: 1 },
   { craft: 7, x: 19.5, y: 36, frame: 5 },
   { craft: 14, x: 24.6, y: 25.4, frame: 1 },
-  { craft: 16, x: 20.8, y: 27.2, frame: 5 },
   { craft: 18, x: 42, y: 15.5, frame: 7 },
-  { craft: 29, x: 1.2, y: 18.5, frame: 1 },
-  { craft: 20, x: 1.2, y: 20.8, frame: 5 },
   { craft: 10, x: 51, y: 53.5, frame: 5 },
   { craft: 11, x: 26.2, y: 4, frame: 1 },
   { craft: 4, x: 26.6, y: 7.5, frame: 5 },
@@ -165,15 +161,15 @@ export const SEA_ROCKS = [
   { x: 17, y: 50, rock: '152' },
 ];
 export const BUOYS = [
-  { x: 0.5, y: 13.5 },
+  { x: 2, y: 13.5 },
   { x: 13.5, y: 14.5 },
   { x: 36.4, y: 46.4 },
   { x: 49.6, y: 46.4 },
-  { x: 36.4, y: 59 },
-  { x: 49.6, y: 59 },
+  { x: 36.4, y: 58.3 },
+  { x: 49.6, y: 58.3 },
 ];
 
-// Small boats out for fun, on slow loops round the open water in every mission, so the sea feels
+// Small boats out for fun, on loops round the open water in every mission, so the sea feels
 // alive. You glide round them, as round a moored boat (owner, 2026-11-11: "Some of the smaller boats
 // are moving there recreationally and stuff to feel more alive").
 export const LEISURE = [
@@ -183,6 +179,15 @@ export const LEISURE = [
   { craft: 22, speed: 1.2, loop: true, path: [[53, 47], [57, 47], [57, 57], [53, 57]] },
   { craft: 9, speed: 1.4, loop: true, path: [[48, 2], [57, 2], [57, 7], [48, 7]] },
   { craft: 19, speed: 0.9, loop: true, path: [[46, 25], [54, 25], [54, 38], [46, 38]] },
+  // Two round the whole archipelago, half a lap apart, and two on a figure of eight whose loops go
+  // round Palm Key and Marina Bay, half its length apart (owner, 2026-11-12: "some of them moving,
+  // you know, maybe slowly making rounds around islands, some other making rounds around the whole
+  // thing. Maybe some of them doing like a specific pattern of an 8"). `from` is how far along its
+  // path, in tiles, each starts.
+  { craft: 29, speed: 1.8, loop: true, path: [[0.5, 0.5], [59.2, 0.5], [59.2, 59.5], [0.5, 59.5]] },
+  { craft: 20, speed: 1.8, loop: true, from: 117.7, path: [[0.5, 0.5], [59.2, 0.5], [59.2, 59.5], [0.5, 59.5]] },
+  { craft: 16, speed: 1.5, loop: true, path: [[44.2, 22.6], [44.2, 10], [32.5, 10], [32.5, 22.6], [42.5, 24.2], [42.5, 41.6], [22.4, 41.6], [22.4, 24.2]] },
+  { craft: 8, speed: 1.5, loop: true, from: 61.9, path: [[44.2, 22.6], [44.2, 10], [32.5, 10], [32.5, 22.6], [42.5, 24.2], [42.5, 41.6], [22.4, 41.6], [22.4, 24.2]] },
 ];
 
 // Traffic on fixed routes, in tiles and tiles a second: a loop goes round; a lane goes back and forth.

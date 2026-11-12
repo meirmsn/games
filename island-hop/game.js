@@ -445,8 +445,26 @@ function finish() {
   show('finish');
   // The gold route, flown by the autopilot, beside yours.
   const goldRun = runPilot(i, MISSIONS[i].gold, { fly: false });
-  finishView = { route: world.trail.slice(), gold: goldRun.trail };
+  // First the camera follows your route from the start, drawing it as it goes, beside the gold route;
+  // then it pulls back to the whole map with both (owner, 2026-11-12: "it's, you know, almost
+  // impossible to see. So maybe what you can do is that while you're showing the score, just move
+  // the camera ... tracking from the beginning, the path"). About five times the run's speed, 4–9 s.
+  const route = world.trail.slice();
+  finishView = { route, gold: goldRun.trail, t: 0, dur: Math.min(REPLAY_MAX, Math.max(REPLAY_MIN, (route.length * RULES.trailEvery) / 5)) };
 }
+const REPLAY_MIN = 4;
+const REPLAY_MAX = 9;
+const REPLAY_ACROSS = 16; // tiles across the screen while the camera follows the route
+// Where along your route the replay is: the point, and how many of the route's points are behind it.
+function replayHead() {
+  const r = finishView.route;
+  if (r.length < 2) return null;
+  const f = Math.min(1, finishView.t / finishView.dur) * (r.length - 1);
+  const i = Math.min(r.length - 2, Math.floor(f));
+  const k = f - i;
+  return { x: r[i][0] + (r[i + 1][0] - r[i][0]) * k, y: r[i][1] + (r[i + 1][1] - r[i][1]) * k, n: i + 1 };
+}
+const replaying = () => finishView && finishView.t < finishView.dur && finishView.route.length >= 2;
 $('[data-start]').addEventListener('click', () => start(missionIndex));
 $('[data-prev]').addEventListener('click', () => showCard(missionIndex - 1));
 $('[data-next]').addEventListener('click', () => showCard(missionIndex + 1));
@@ -563,6 +581,20 @@ function snapCamera() {
 }
 let viewTilesAcross = ACROSS.boat; // what the camera shows now, for tests
 function updateCamera(dt) {
+  if (finishView) finishView.t += dt;
+  if (replaying() && !mapHeld) {
+    // The replay: the camera follows the head of your route, in the space above the card.
+    const top = 8;
+    const bottom = Math.max(top + 120, screens.finish.getBoundingClientRect().top - 8);
+    const z = W / (REPLAY_ACROSS * TILE);
+    const k = 1 - Math.exp(-dt / 0.12);
+    cam.zoom += (z - cam.zoom) * k;
+    const h = replayHead();
+    const p = iso.toScreen(h.x, h.y, LAND_Z / 2);
+    cam.follow({ x: p.x, y: p.y + (H / 2 - (top + bottom) / 2) / z }, finishView.t < dt * 1.5 ? 1 : k);
+    viewTilesAcross = W / (cam.zoom * TILE);
+    return;
+  }
   if (finishView || mapHeld) {
     // The whole archipelago; at the finish, in the space above the card.
     const top = mapHeld ? 64 : 8;
@@ -727,7 +759,8 @@ function diamond(x, y, z, fill) {
 }
 const drawn = new Set(); // sprite names drawn this frame, for tests
 let peopleDrawn = 0; // people drawn this frame, for tests: you, and never a ghost
-const drawOrder = []; // for tests: buildings, your boats and ground drawn again in front of a boat, in order
+const drawOrder = []; // for tests: buildings, your boats and (when asked) the ground, in drawing order
+let recordGround = false;
 function spr(name, sx, sy, scale, alpha) {
   drawn.add(name);
   sprite(name, sx, sy, scale, alpha);
@@ -784,7 +817,6 @@ function draw() {
     }
   // 3. Everything that stands, back to front: land blocks, buildings, trees, boats, cars, you.
   const items = [];
-  const ground = new Map(); // land tiles' ground, by "x,y", to draw again in front of a boat
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const c = ROWS[y][x];
@@ -801,8 +833,7 @@ function draw() {
         spr(g, p.x, p.y);
         if (c === 'm') diamondMat(x, y);
       };
-      ground.set(`${x},${y}`, { depth, draw: drawGround });
-      items.push({ depth, ground: true, draw: drawGround });
+      items.push({ depth, ground: true, x, y, draw: drawGround });
       if (c === 'T' && !coarse) {
         const t = treeSprite(x, y);
         items.push({ depth: depth + 0.01, stand: true, building: true, box: spriteBox(t, p.x, p.y), draw: (a) => spr(t, p.x, p.y, 1, a) });
@@ -845,12 +876,22 @@ function draw() {
     personBox = { x: sp.x, y: sp.y - PERSON_H / 2 };
     items.push({ depth: personDepth, stand: true, draw: () => drawPerson(p.x, p.y, z) });
   }
-  // Two passes: first the land's ground, back to front; then everything else (buildings, trees,
-  // cars, you, and everything at sea), back to front, so a flat ground tile in front never cuts
-  // across the person's feet, and a boat in front of a building on the shore covers it. After each
-  // thing at sea, the land tiles truly in front of it (not behind it on either axis) are drawn
-  // again, so a cliff in front still hides a boat behind the island.
-  const order = [...sortByDepth(items.filter((it) => it.ground)), ...sortByDepth(items.filter((it) => !it.ground))];
+  // Two passes. First the land's ground, back to front, with whatever at sea is behind land (a land
+  // tile near it that is not behind it on either axis), so a cliff in front hides a boat behind the
+  // island. Then everything else back to front: buildings, trees, cars, you, and what's at sea in
+  // the open, so a flat ground tile in front never cuts across the person's feet and a boat in front
+  // of a building on the shore covers it. Nothing is drawn twice.
+  const behindLand = (o) => {
+    for (let dy = 0; dy <= 2; dy++)
+      for (let dx = 0; dx <= 2; dx++) {
+        const tx = Math.floor(o.x) + dx;
+        const ty = Math.floor(o.y) + dy;
+        if (isLand(ROWS[ty]?.[tx]) && tx >= o.x - 0.3 && ty >= o.y - 0.3) return true;
+      }
+    return false;
+  };
+  for (const it of items) if (it.sea) it.first = behindLand(it.sea);
+  const order = [...sortByDepth(items.filter((it) => it.ground || it.first)), ...sortByDepth(items.filter((it) => !it.ground && !it.first))];
   for (const it of order) {
     // A building drawn after you whose shape covers you fades to 35%.
     let a = 1;
@@ -863,26 +904,25 @@ function draw() {
     }
     it.draw(a);
     if (it.tag) drawOrder.push(it.tag);
-    if (it.sea) {
-      const { x: sx, y: sy } = it.sea;
-      for (let dy = 0; dy <= 2; dy++)
-        for (let dx = 0; dx <= 2; dx++) {
-          const tx = Math.floor(sx) + dx;
-          const ty = Math.floor(sy) + dy;
-          const g = ground.get(`${tx},${ty}`);
-          if (g && tx >= sx - 0.3 && ty >= sy - 0.3) {
-            g.draw();
-            if (it.tag) drawOrder.push(`ground:${tx},${ty}`);
-          }
-        }
-    }
+    else if (it.ground && recordGround) drawOrder.push(`ground:${it.x},${it.y}`);
   }
   // 4. The open stops' beams, over everything.
   if (world.phase !== 'card') drawBeams();
   // 5. The finish: your route and the gold route.
   if (finishView) {
     drawRoute(finishView.gold, '#f5c542', 7);
-    drawRoute(finishView.route, '#ff5e9a', 4);
+    if (replaying()) {
+      const h = replayHead();
+      drawRoute([...finishView.route.slice(0, h.n), [h.x, h.y]], '#ff5e9a', 4);
+      const p = iso.toScreen(h.x, h.y, LAND_Z / 2);
+      ctx.fillStyle = '#ff5e9a';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3 / cam.zoom;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 9 / cam.zoom, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else drawRoute(finishView.route, '#ff5e9a', 4);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   if (world.phase === 'play' && !finishView && !mapHeld) drawEdgeArrows();
@@ -949,7 +989,7 @@ function drawRoute(pts, color, width) {
   if (!pts || pts.length < 2) return;
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.lineWidth = width / cam.zoom / 2;
+  ctx.lineWidth = width / cam.zoom;
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.globalAlpha = 0.9;
@@ -1114,7 +1154,7 @@ window.__hop = {
     return mem;
   },
   get view() {
-    return { tilesAcross: viewTilesAcross, zoom: cam.zoom, x: cam.x, y: cam.y, mapHeld, finished: !!finishView };
+    return { tilesAcross: viewTilesAcross, zoom: cam.zoom, x: cam.x, y: cam.y, mapHeld, finished: !!finishView, replay: replaying() ? { t: finishView.t, dur: finishView.dur, head: replayHead() } : null };
   },
   get drawn() {
     return [...drawn];
@@ -1127,6 +1167,9 @@ window.__hop = {
   },
   get order() {
     return drawOrder.slice();
+  },
+  set recordGround(v) {
+    recordGround = !!v;
   },
   get faded() {
     return fadedNow;
