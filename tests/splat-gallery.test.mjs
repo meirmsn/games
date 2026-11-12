@@ -1507,11 +1507,19 @@ async function nearWater(page) {
     const g = window.__gallery;
     const { SW } = g.stage();
     const near = g.L.lanes[g.L.n - 1];
-    let tip = Infinity;
-    for (let x = 0; x <= SW; x += 1) tip = Math.min(tip, g.stripY(near, x));
+    // At both ends of the sway, so the near water's lowest point of its rise and fall counts.
+    let show = Infinity;
+    const ph0 = g.game.swayPh;
+    for (const ph of [Math.PI / 2, -Math.PI / 2]) {
+      g.game.swayPh = ph;
+      let tip = Infinity;
+      for (let x = 0; x <= SW; x += 1) tip = Math.min(tip, g.stripY(near, x));
+      show = Math.min(show, g.L.C - tip);
+    }
+    g.game.swayPh = ph0;
     const far = g.L.lanes[0];
     const tops = ['target', 'duck'].map((kind) => far.line - g.dims(g.makeTarget(kind, { lane: 0, speed: 0, turn: false }))[1] / 2);
-    return { show: g.L.C - tip, need: 2 * g.waveDepth(near), farTop: Math.min(...tops), T: g.L.T };
+    return { show, need: 2 * g.waveDepth(near), farTop: Math.min(...tops), T: g.L.T };
   });
 }
 
