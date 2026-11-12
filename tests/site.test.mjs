@@ -60,7 +60,7 @@ async function withSoonTile(page) {
 test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable', async () => {
   const { context, page, errors } = await open();
   assert.deepEqual(await page.locator('.tile h2').allTextContents(), [
-    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Orbit', 'Googly Faces', 'Crumble', 'Island Hop', 'Reef',
+    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Googly Faces', 'Orbit', 'Crumble', 'Island Hop', 'Reef',
   ]);
   for (const tile of await page.locator('.tiles > li > .tile').all()) {
     assert.equal(await tile.evaluate((el) => el.tagName), 'A');
