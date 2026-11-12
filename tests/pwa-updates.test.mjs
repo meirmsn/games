@@ -383,7 +383,7 @@ test('pwa-updates AC-2 / slow-tests-pwa-site AC-5 / slow-tests-pwa-site AC-6: wi
   await s.close();
 });
 
-test('landing-home-and-ribbon AC-4: the add-to-home-screen ribbon hides while the Update notice shows, an open dialog staying open, and comes back when the notice goes', async (t) => {
+test('landing-home-and-ribbon AC-4 / landing-home-and-ribbon AC-9: the add-to-home-screen ribbon hides while the Update notice shows, an open dialog staying open, and slides back in when the notice goes', async (t) => {
   const s = await site(t);
   const one = await s.page(); // the first visit
   await controlled(one);
@@ -409,10 +409,14 @@ test('landing-home-and-ribbon AC-4: the add-to-home-screen ribbon hides while th
   await two.keyboard.press('Escape');
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await ribbon.isVisible(), false, 'still hidden while the notice shows');
-  // One applies the update; two's notice goes, and its ribbon comes back.
+  // One applies the update; two's notice goes, and its ribbon slides back in.
+  await two.evaluate(() =>
+    document.querySelector('[data-ribbon] button').addEventListener('animationstart', (e) => (window.__slid = e.animationName))
+  );
   await notice(one).getByRole('button', { name: 'Update' }).click();
   await notice(two).waitFor({ state: 'hidden', timeout: scaled(10000) });
   await ribbon.waitFor({ state: 'visible' });
+  await two.waitForFunction(() => window.__slid === 'ribbon-in');
   await s.close();
 });
 
