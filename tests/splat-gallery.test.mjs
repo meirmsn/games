@@ -1850,7 +1850,17 @@ test('splat-gallery-near-water AC-6: no strip shows a seam where its tiles join:
         const joins = [];
         for (let x = (((lane.i * 37) % tw) + tw) % tw; x < SW + tw; x += tw) joins.push(x + g.sway(lane));
         const odd = [];
+        const steps = [];
         const inside = joins.filter((x) => x > 30 && x < SW - 30);
+        // Across a join the crest rises or falls over a unit no more than it does just beside it.
+        const over = (x) => Math.abs(g.stripY(lane, x + 0.5) - g.stripY(lane, x - 0.5));
+        for (const x of inside) {
+          let near = 0;
+          for (let d = 2; d <= 8; d += 0.1) near = Math.max(near, over(x - d), over(x + d));
+          let across = 0;
+          for (let d = -0.5; d <= 0.5; d += 0.1) across = Math.max(across, over(x + d));
+          if (across > near + 0.15) steps.push({ x: +x.toFixed(1), across: +across.toFixed(2), near: +near.toFixed(2) });
+        }
         for (const x of inside) {
           // Under the outline, in the strip's own colour: the join's column against 2 units either side.
           for (const dy of [12, 20]) {
@@ -1861,7 +1871,7 @@ test('splat-gallery-near-water AC-6: no strip shows a seam where its tiles join:
             if (Math.min(off(l), off(rr)) > 6) odd.push({ x: +x.toFixed(1), dy, m, l, r: rr });
           }
         }
-        out.push({ lane: lane.i, kind: lane.kind, jump: +jump.toFixed(3), at: +at.toFixed(1), joins: inside.length, odd });
+        out.push({ lane: lane.i, kind: lane.kind, jump: +jump.toFixed(3), at: +at.toFixed(1), joins: inside.length, odd, steps });
       }
       return out;
     });
@@ -1869,6 +1879,7 @@ test('splat-gallery-near-water AC-6: no strip shows a seam where its tiles join:
     for (const l of r) {
       assert.ok(l.joins >= 1, `${where}: lane ${l.lane} has a join on the stage`);
       assert.ok(l.jump <= 1, `${where}: lane ${l.lane} (${l.kind}) crest jumps ${l.jump} units at x=${l.at}`);
+      assert.deepEqual(l.steps, [], `${where}: lane ${l.lane} (${l.kind}) steps at its joins`);
       assert.deepEqual(l.odd, [], `${where}: lane ${l.lane} (${l.kind}) shows a seam at its joins`);
     }
     await context.close();

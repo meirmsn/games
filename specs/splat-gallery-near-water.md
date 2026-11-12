@@ -79,6 +79,19 @@ strips.
   see-through line and a step in the crest, and the line shows through the paint drawn over it
   (paint is at 80%). A strip tile is now drawn without its transparent edge columns, and its crest
   for hits and the paint's clip uses the same columns (owner, 2026-11-12).
+- Then, on the owner's words of 2026-11-12, in chat, with close-ups of a grass join and a water
+  join: "the vertical line you remove, that's great. And the speed is now great. I still see some.
+  Non-smooth transition in the grass and the water. Is that because the asset is incorrectly drawn?
+  Or we're just missing some 1 or 2 pixel vertical offset there?" Both, in part. Each atlas strip
+  tile carries its seam column on both edges (the water tiles' first and last columns are
+  near-copies, a little off-colour), so tiled whole every join drew a doubled column; and the grass
+  tile's outline climbs about three-quarters of a row a column but ends about one and a half rows
+  off where its start would continue it. Each tile is now built once at load from its inner columns
+  plus a seam column one step further along its outline, with its last columns eased by the
+  remaining offset, measured to a fraction of a row; and the strips are filled with the tile as a
+  repeating pattern, since drawing tiles half a unit wide each to hide hairline gaps also hid their
+  last columns. The water's pointed troughs at its joins are the art's own: every trough is drawn
+  that way (Claude, 2026-11-12).
 - AC-5 reworded after the go, on the owner's words of 2026-11-12, in chat: "reword + checks". Its
   old words said nothing else in the paint-clip test changed, while the test also aims at the
   landing-time crest; an adversarial review found no check loosened and each change needed, and
@@ -116,8 +129,9 @@ strips.
   otherwise unchanged. (Reworded after the go; see Decisions.)
 - **AC-6** No strip shows a seam where its tiles join (added after the go; see Decisions): along
   every strip the crest `stripY` never jumps by more than one unit between points a tenth of a
-  unit apart, and on the drawn canvas each tile join's column of pixels just under the crest matches
-  its neighbours on both sides.
+  unit apart; across each tile join the crest rises or falls over one unit by no more than it does
+  within 8 units either side of the join, give or take 0.15 units; and on the drawn canvas each tile
+  join's column of pixels just under the crest matches its neighbours on both sides.
 
 ## Out of scope
 

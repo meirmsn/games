@@ -283,40 +283,54 @@ function makeMasks() {
       top[col] = row / h;
     }
     masks[name] = { w, h, a, top };
+    if (['water1', 'water2', 'grass1'].includes(name)) makeTile(name, d);
   }
-  for (const name of ['water1', 'water2', 'grass1']) makeTile(name);
 }
 
-// A strip's tile, made to meet itself (specs/splat-gallery-near-water.md): the grass tile's first
-// column in the atlas is nearly transparent, and its outline ends two rows lower on its right edge
-// than it starts on its left, so tiled as it is every join showed a see-through line and a step.
-// So the tile drops its transparent edge columns, and its last columns ease up by the step, a
-// little more each, until its right edge leads into its left. Drawing, hits and the paint's clip
-// all use this tile and its outline (`top`, as a share of the height, per column).
+// A strip's tile, made to meet itself (specs/splat-gallery-near-water.md). The atlas's strip tiles
+// carry their seam column on both edges (each water tile's first and last columns are near-copies,
+// a little off-colour; the grass tile's first column is nearly transparent), so tiled whole every
+// join showed a doubled column: a notch in the outline and a faint line. So a tile keeps its inner
+// columns and a clean seam column (its left neighbour's pixels), and where the outline still
+// wouldn't lead from its right edge into its left (the grass's), its last columns ease up by the
+// difference, a little more each. Drawing, hits and the paint's clip all use this tile and its
+// outline (`top`, as a share of the height, per column).
 const tiles = {};
-function makeTile(name) {
-  const m = masks[name];
-  const [x0, y0, , h] = FRAMES[name];
-  let a = 0;
-  let b = m.w;
-  while (a < b && m.top[a] >= 1) a++;
-  while (b > a && m.top[b - 1] >= 1) b--;
-  const n = b - a;
-  const row = (i) => m.top[a + i] * h; // the outline's row in column i
-  const slope = (row(n - 1) - row(n - 5)) / 4;
-  const step = row(n - 1) + slope - row(0); // how far the right edge would land below the left
+function makeTile(name, d) {
+  const [, , w, h] = FRAMES[name];
+  const n = w - 1; // columns 1 to w - 2, then the seam
+  const px = (col, row, ch) => d[(Math.max(0, Math.min(h - 1, row)) * w + col) * 4 + ch];
+  // A source column's value at a fractional row.
+  const one = (col, y, ch) => {
+    const r0 = Math.floor(y);
+    const f = y - r0;
+    return px(col, r0, ch) * (1 - f) + px(col, r0 + 1, ch) * f;
+  };
+  // The seam takes its left neighbour's pixels, moved one step further along the outline's climb.
+  const at = (i, y, ch) => one(Math.min(i + 1, w - 2), y, ch);
+  // Where the outline starts in column i, to a fraction of a row: where its opacity crosses half.
+  const edge = (i, lift) => {
+    let r = 0;
+    while (r < h && at(i, r + lift, 3) <= 128) r++;
+    if (r === 0 || r >= h) return r;
+    const [a0, a1] = [at(i, r - 1 + lift, 3), at(i, r + lift, 3)];
+    return r - 1 + (128 - a0) / (a1 - a0);
+  };
+  const slope = (edge(n - 2, 0) - edge(n - 6, 0)) / 4; // on the inner columns, the seam aside
+  const step = edge(n - 2, 0) + 2 * slope - edge(0, 0); // how far the next tile's start lies off the line
   const ease = Math.min(24, n >> 2); // the columns that take it up
-  const c = document.createElement('canvas');
-  c.width = n;
-  c.height = h;
-  const g = c.getContext('2d');
+  const out = new ImageData(n, h);
   const top = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const k = i - (n - ease);
-    const lift = k < 0 ? 0 : (step * (k + 1)) / ease;
-    g.drawImage(atlas, x0 + a + i, y0, 1, h, i, -lift, 1, h);
-    top[i] = (row(i) - lift) / h;
+    const lift = (k < 0 ? 0 : (step * (k + 1)) / ease) - (i === n - 1 ? slope : 0);
+    for (let r = 0; r < h; r++) for (let ch = 0; ch < 4; ch++) out.data[(r * n + i) * 4 + ch] = at(i, r + lift, ch);
+    top[i] = edge(i, lift) / h;
   }
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = h;
+  c.getContext('2d').putImageData(out, 0, 0);
   tiles[name] = { canvas: c, n, h, top };
 }
 function maskAt(name, u, v) {
@@ -1632,9 +1646,12 @@ function drawStrip(lane) {
   ctx.fillStyle = lane.kind === 'water' ? '#3ea3df' : '#3c9f45';
   const edge = 4 + SWAY_AMP; // the fill's ends stay off the stage however far it sways
   ctx.fillRect(-edge, lane.strip + th - 1, SW + 2 * edge, Math.max(0, L.C - lane.strip - th + 1 + SWAY_RISE));
+  // The tiles as one repeating pattern: each column shows once, with no gap or overlap at a join.
   const off = lane.i * 37;
-  let x = (((off % tw) + tw) % tw) - 2 * tw;
-  for (; x < SW + 2 * tw; x += tw) ctx.drawImage(t.canvas, 0, 0, t.n, f[3] * part, x, lane.strip, tw + 0.5, th);
+  if (!t.pattern) t.pattern = ctx.createPattern(t.canvas, 'repeat-x');
+  t.pattern.setTransform(new DOMMatrix().translateSelf(off, lane.strip).scaleSelf(tw / t.n, th / (f[3] * part)));
+  ctx.fillStyle = t.pattern;
+  ctx.fillRect(-edge, lane.strip, SW + 2 * edge, th);
   ctx.restore();
 }
 
