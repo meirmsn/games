@@ -55,11 +55,26 @@ async function withSoonTile(page) {
   });
 }
 
-test('reef AC-11: landing page lists nine games, Reef first and playable, with no errors', async () => {
+// Island Hop takes High Seas's place in the order (meirmsn/games#17 turns that coming-soon tile into
+// Island Hop), and is playable, so no tile is coming soon.
+test('landing-tile-order AC-1 + landing-tile-order AC-2: the tiles run best first, a strong game last, each playable', async () => {
+  const { context, page, errors } = await open();
+  assert.deepEqual(await page.locator('.tile h2').allTextContents(), [
+    'Splat Gallery', 'Gotta Go!', 'Runes', 'Pixel Leap', 'Orbit', 'Googly Faces', 'Crumble', 'Island Hop', 'Reef',
+  ]);
+  for (const tile of await page.locator('.tiles > li > .tile').all()) {
+    assert.equal(await tile.evaluate((el) => el.tagName), 'A');
+    assert.equal(await tile.evaluate((el) => el.classList.contains('is-soon')), false);
+  }
+  await page.waitForLoadState('networkidle');
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('reef AC-11: landing page lists nine games, Reef playable, with no errors', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 9);
-  assert.equal(await page.locator('.tile h2').first().textContent(), 'Reef');
-  const reef = page.locator('.tiles > li').first().locator('.tile');
+  const reef = page.locator('a.tile[href="reef/"]');
   assert.equal(await reef.evaluate((el) => el.tagName), 'A', 'the Reef tile is a link');
   assert.equal(await reef.getAttribute('href'), 'reef/');
   assert.equal(await reef.evaluate((el) => el.classList.contains('is-soon')), false, 'not a coming-soon tile');
@@ -81,11 +96,9 @@ test('splat-gallery AC-20: the Splat Gallery tile is playable and opens the game
   await context.close();
 });
 
-test('walk-on-red AC-21: the landing page shows nine tiles, Gotta Go! playable after Googly Faces', async () => {
+test('walk-on-red AC-21: the landing page shows nine tiles, Gotta Go! playable (its place: landing-tile-order AC-1)', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 9);
-  const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names.indexOf('Gotta Go!'), names.indexOf('Googly Faces') + 1);
   const tile = page.locator('.tile', { hasText: 'Gotta Go!' });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A', 'a link');
   assert.equal(await tile.getAttribute('href'), 'walk-on-red/');
@@ -179,11 +192,9 @@ test('the manifest is valid and its icons load', async () => {
   for (const icon of m.icons) assert.ok((await fetch(BASE + icon.src)).ok, icon.src);
 });
 
-test('crumble AC-16: the landing page shows 9 tiles, with Crumble playable after Splat Gallery', async () => {
+test('crumble AC-16: the landing page shows 9 tiles, with Crumble playable (its place: landing-tile-order AC-1)', async () => {
   const { context, page, errors } = await open();
   assert.equal(await page.locator('.tiles > li').count(), 9);
-  const names = await page.locator('.tile h2').allTextContents();
-  assert.equal(names.indexOf('Crumble'), names.indexOf('Splat Gallery') + 1);
   const tile = page.locator('.tile', { has: page.locator('h2', { hasText: 'Crumble' }) });
   assert.equal(await tile.evaluate((el) => el.tagName), 'A');
   assert.equal(await tile.getAttribute('href'), 'crumble/');
