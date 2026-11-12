@@ -45,8 +45,8 @@ strips.
 - What sits on the water moves with it: paint that lands on a water strip rides with the strip, a
   shot is judged against the crest where it is drawn at that moment, and paint stays clipped to
   the moving crest. Targets keep their own motion (Claude, 2026-11-11).
-- "The water ones" read as the water strips, not the ducks on them (the ducks already bob) — to be
-  confirmed by the owner at the go (Claude, 2026-11-11).
+- "The water ones" read as the water strips, not the ducks on them (the ducks already bob); the owner
+  gave a plain "go" on this reading (Claude, 2026-11-11; go 2026-11-12).
 
 ## Acceptance items
 
