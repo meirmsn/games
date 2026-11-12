@@ -19,7 +19,7 @@ changes (there is no `DESIGN.md`).
 
 ## Decisions
 
-- The order, top to bottom: Splat Gallery, Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces,
+- The order as first built (#55; Googly Faces and Orbit later swapped, see below), top to bottom: Splat Gallery, Gotta Go!, Runes, Pixel Leap, Orbit, Googly Faces,
   Crumble, High Seas, Reef. The reason: the top two spots go to the owner's top two, and the owner's
   #3 (Reef) is the last tile, so someone who flicks straight to the bottom on a phone (one column)
   also lands on a good game. Rejected: strict best-to-worst (Crumble last), and the unplayable High
