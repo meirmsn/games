@@ -14,9 +14,32 @@ What the owner decided will happen, in their words. The table's order is the pri
 | R-7 | 2026-11-11 | Slow tests run once: Pixel Leap's tests, and the whole suite's proof        | Done (`specs/slow-tests-pixel-leap.md`) |
 | R-8 | 2026-11-11 | Tests check what a player sees, and a red slow run is explained, not re-run | Open |
 | R-9 | 2026-11-11 | Splat Gallery's main spec describes the count board and the tiny target | Done |
+| R-10 | 2026-11-17 | Splat Gallery's older specs say frenzy hits count: amend `specs/splat-gallery.md` and `specs/splat-gallery-goal-and-tiny-target.md` to `specs/splat-gallery-frenzy-counts.md` | Open |
 
 R-1 merges before R-2 to R-6 start; R-2 to R-6 run in parallel, each in its own session; R-7 is
 last.
+
+## R-10: Splat Gallery's older specs say frenzy hits count
+
+Asked 2026-11-17, in chat, after the reviewer could not run on the frenzy-counts change because it
+edited three spec files. Claude offered "1. **Split (recommended).** I take the two older-spec edits
+out of this PR and ship it now, then do the older specs in a small docs PR right after." and "2.
+**Wait for R-31.**" (the devshop's fix, not yet released). The owner's answer:
+
+```text
+1
+```
+
+### Claude's notes
+
+- The edits were built and taken out of the frenzy-counts PR: in `specs/splat-gallery.md`, the
+  "Frenzy" paragraph ("points ×2 and no pips") and AC-12 ("no pips"); in
+  `specs/splat-gallery-goal-and-tiny-target.md`, AC-5 ("a free (frenzy) ball neither counts nor
+  swells the board") and AC-11 ("adds no pips"). Each cites the owner's dated decision of
+  2026-11-17 and `specs/splat-gallery-frenzy-counts.md`.
+- With them goes the frenzy-counts spec's AC-7: a test that the main spec says frenzy hits count 1
+  pip and the frenzy target its lane's pips.
+- The tests already expect the new rule; only the specs' words change.
 
 ## R-2: Slow tests run once: Walk on Red's tests
 
