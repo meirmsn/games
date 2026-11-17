@@ -657,7 +657,8 @@ test('splat-gallery AC-12: hitting the frenzy target starts the frenzy: the galo
   s = await state(page);
   assert.ok(near(s.time, t0), 'the timer stopped');
   assert.ok((await page.evaluate(() => window.__gallery.targets().length)) > before + 2, 'targets sprang up');
-  // A shot in the frenzy is free, scores double, gives no pips and doesn't move the assist.
+  // A shot in the frenzy is free, scores double, gives 1 pip and doesn't move the assist
+  // (splat-gallery-frenzy-counts AC-2 tests its pips in full).
   await page.evaluate(() => {
     const g = window.__gallery;
     g.clear();
@@ -668,7 +669,7 @@ test('splat-gallery AC-12: hitting the frenzy target starts the frenzy: the galo
   const s1 = await state(page);
   assert.equal((await shoot(page, t.x + t.w * 0.38, 0)).what, 'body');
   s = await state(page);
-  assert.deepEqual([s.score - s1.score, s.pips, s.assist], [60, 0, 0.5]);
+  assert.deepEqual([s.score - s1.score, s.pips, s.assist], [60, 1, 0.5]);
   assert.ok(s.hopper >= 3, 'the shot was free');
   await shoot(page, 60, 0);
   await shoot(page, 60, 0);
@@ -678,6 +679,193 @@ test('splat-gallery AC-12: hitting the frenzy target starts the frenzy: the galo
   assert.equal(s.frenzy, 0);
   assert.equal(await page.evaluate(() => window.__gallery.music()), 'music', 'the waltz is back');
   assert.ok(s.time < t0, 'the timer runs again');
+  await context.close();
+});
+
+// specs/splat-gallery-frenzy-counts.md: the frenzy target counts its lane's pips; a frenzy shot's
+// hits count 1 each.
+test('splat-gallery-frenzy-counts AC-1: the frenzy target adds its lane pips, bullseye or not, keeps its +50 whatever the bonus, starts the frenzy and leaves the assist', async () => {
+  const { context, page } = await open();
+  await ready(page, 2, { assist: 0.5 });
+  const lanes = await page.evaluate(() => window.__gallery.L.lanes.map((l) => l.pips));
+  assert.equal(lanes[0], 3);
+  assert.equal(lanes[lanes.length - 1], 1);
+  for (let i = 0; i < lanes.length; i++) {
+    for (const [bull, bonus] of [[false, false], [true, true]]) {
+      const ft = await page.evaluate(
+        ({ i, bonus }) => {
+          const g = window.__gallery;
+          g.clear();
+          Object.assign(g.game, { frenzy: 0, frenzyDone: false, pips: 0, bonus, hopper: 6, assist: 0.5, banner: null });
+          const t = g.makeTarget('frenzy', { lane: i, x: 200, face: 'target_colored', turn: false, speed: 0 });
+          return { x: t.x, w: g.dims(t)[0] };
+        },
+        { i, bonus }
+      );
+      const s0 = await state(page);
+      const r = await shoot(page, bull ? ft.x : ft.x + ft.w * 0.38, i);
+      assert.deepEqual([r.kind, r.lane], ['frenzy', i]);
+      const s = await state(page);
+      const what = `lane ${i}, ${bull ? 'bullseye, in the bonus' : 'body'}`;
+      assert.equal(s.pips, lanes[i], `${what}: its lane's pips`);
+      assert.equal(s.score - s0.score, 50, `${what}: +50`);
+      assert.ok(s.frenzy > 0, `${what}: the frenzy started`);
+      assert.equal(s.assist, 0.5, `${what}: the assist unchanged`);
+    }
+  }
+  await context.close();
+});
+
+test('splat-gallery-frenzy-counts AC-2: every hit by a frenzy shot counts 1 pip, in any lane, bullseye or not, a gold duck too, even landing after the frenzy; points as before', async () => {
+  const { context, page } = await open();
+  await ready(page, 3, { assist: 0.5 });
+  await page.evaluate(() => window.__gallery.startFrenzy());
+  const n = await page.evaluate(() => window.__gallery.L.n);
+  for (let i = 0; i < n; i++) {
+    for (const bull of [false, true]) {
+      await page.evaluate(() => window.__gallery.clear());
+      const t = await place(page, 'target', { lane: i, x: 200, face: 'target_red1' });
+      const s0 = await state(page);
+      const r = await shoot(page, bull ? t.x : t.x + t.w * 0.38, i);
+      assert.equal(r.what, bull ? 'bull' : 'body');
+      const s = await state(page);
+      const pips = await page.evaluate((i) => window.__gallery.L.lanes[i].pips, i);
+      assert.equal(s.pips - s0.pips, 1, `lane ${i}${bull ? ', bullseye' : ''}: 1 pip`);
+      assert.equal(s.score - s0.score, 10 * pips * (bull ? 2 : 1) * 2, `lane ${i}: points ×2`);
+      assert.equal(s.assist, 0.5);
+    }
+  }
+  // A gold duck: 1 pip, not its 2.
+  await page.evaluate(() => window.__gallery.clear());
+  const gold = await place(page, 'gold', { lane: n - 1, x: 200 });
+  let s0 = await state(page);
+  assert.ok(['body', 'bull'].includes((await shoot(page, gold.x, n - 1)).what));
+  assert.equal((await state(page)).pips - s0.pips, 1, 'a gold duck: 1 pip');
+  // In the bonus, the higher multiplier: ×3 in the far lane, not the frenzy's ×2.
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.clear();
+    g.game.bonus = true;
+  });
+  const far = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  s0 = await state(page);
+  await shoot(page, far.x + far.w * 0.38, 0);
+  let s = await state(page);
+  assert.deepEqual([s.pips - s0.pips, s.score - s0.score], [1, 90]);
+  // A ball fired in the frenzy that lands after it ends: still 1 pip, points ×1.
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.clear();
+    g.game.bonus = false;
+  });
+  const mid = await place(page, 'target', { lane: 1, x: 200, face: 'target_red1' });
+  s0 = await state(page);
+  const landed = await page.evaluate(
+    ({ x }) => {
+      const g = window.__gallery;
+      g.aimAt(x, g.L.lanes[1].line);
+      g.game.lastFire = -1;
+      g.game.lastLand = null;
+      const b = g.fire();
+      g.game.frenzy = 1 / 120; // it ends on the next frame, before the ball lands
+      for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
+      return { free: b.free, frenzy: g.game.frenzy, what: g.game.lastLand && g.game.lastLand.what };
+    },
+    { x: mid.x + mid.w * 0.38 }
+  );
+  assert.deepEqual(landed, { free: true, frenzy: 0, what: 'body' });
+  s = await state(page);
+  assert.deepEqual([s.pips - s0.pips, s.score - s0.score, s.assist], [1, 20, 0.5]);
+  await context.close();
+});
+
+test('splat-gallery-frenzy-counts AC-3: a paid ball fired just before a frenzy that hits in it adds its lane pips and moves the assist', async () => {
+  const { context, page } = await open();
+  await ready(page, 3, { assist: 0.5 });
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  const r = await page.evaluate(
+    ({ x }) => {
+      const g = window.__gallery;
+      g.aimAt(x, g.L.lanes[0].line);
+      g.game.lastFire = -1;
+      g.game.lastLand = null;
+      const b = g.fire();
+      g.startFrenzy();
+      for (let i = 0; i < 40 && !g.game.lastLand; i++) g.step(1 / 60);
+      return { free: b.free, frenzy: g.game.frenzy > 0, what: g.game.lastLand && g.game.lastLand.what };
+    },
+    { x: t.x + t.w * 0.38 }
+  );
+  assert.deepEqual(r, { free: false, frenzy: true, what: 'body' });
+  const s = await state(page);
+  assert.equal(s.pips, 3, 'the far lane: 3 pips');
+  assert.ok(s.assist < 0.5, 'the hit moved the assist');
+  await context.close();
+});
+
+test('splat-gallery-frenzy-counts AC-4: a back or a miss in a frenzy adds no pips and leaves the assist', async () => {
+  const { context, page } = await open();
+  await ready(page, 4, { assist: 0.5 });
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.startFrenzy();
+    g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: true, turnT: 3.0 });
+  });
+  assert.equal((await shoot(page, 200, 2)).what, 'back');
+  assert.equal((await shoot(page, 60, 0)).what !== 'body', true);
+  const s = await state(page);
+  assert.deepEqual([s.pips, s.assist], [0, 0.5]);
+  await context.close();
+});
+
+test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reaching the quota in a frenzy starts the bonus with its sound under the Frenzy sign; Bonus shows as the frenzy ends, and not after a frenzy short of it', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  const quota = await page.evaluate(() => window.__gallery.ROUNDS[2].quota);
+  // A frenzy that doesn't reach the quota ends with no Bonus sign.
+  await page.evaluate(() => window.__gallery.startFrenzy());
+  let t = await place(page, 'target', { lane: 1, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 1);
+  await steps(page, 7.1);
+  let u = await page.evaluate(() => window.__gallery.ui());
+  assert.equal((await state(page)).frenzy, 0);
+  assert.notEqual(u.banner, 'Bonus!', 'no bonus, no Bonus sign');
+  // The frenzy target's own pips reach the quota: the bonus and its sound, under "Frenzy!".
+  const ft = await page.evaluate((quota) => {
+    const g = window.__gallery;
+    g.clear();
+    Object.assign(g.game, { frenzyDone: false, pips: quota - 1, bonus: false, banner: null });
+    g.heard.length = 0;
+    const f = g.makeTarget('frenzy', { lane: 0, x: 200, face: 'target_colored', turn: false, speed: 0 });
+    return { x: f.x, w: g.dims(f)[0] };
+  }, quota);
+  await shoot(page, ft.x + ft.w * 0.38, 0);
+  let s = await state(page);
+  u = await page.evaluate(() => window.__gallery.ui());
+  assert.ok(s.frenzy > 0 && s.bonus, 'the frenzy and the bonus');
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('quota')), 'the quota sound');
+  assert.equal(u.banner, 'Frenzy!');
+  // As that frenzy ends, the Bonus sign shows.
+  await steps(page, 7.1);
+  u = await page.evaluate(() => window.__gallery.ui());
+  assert.equal((await state(page)).frenzy, 0);
+  assert.equal(u.banner, 'Bonus!', 'the Bonus sign as the frenzy ends');
+  // A frenzy shot's pip reaches the quota: the same.
+  await page.evaluate((quota) => {
+    const g = window.__gallery;
+    g.clear();
+    Object.assign(g.game, { pips: quota - 1, bonus: false, banner: null });
+    g.heard.length = 0;
+    g.startFrenzy();
+  }, quota);
+  t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 2);
+  s = await state(page);
+  u = await page.evaluate(() => window.__gallery.ui());
+  assert.deepEqual([s.pips, s.bonus, u.banner], [quota, true, 'Frenzy!']);
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('quota')));
+  await steps(page, 7.1);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).banner, 'Bonus!');
   await context.close();
 });
 
@@ -2581,7 +2769,7 @@ test('splat-gallery-goal-and-tiny-target AC-4: the counter has no quota gauge an
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points where it lands and swells the board; no "+N" is shown; a free (frenzy) ball moves neither', async () => {
+test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points where it lands and swells the board; no "+N" is shown; a free (frenzy) ball counts 1 and swells it too', async () => {
   const { context, page } = await open();
   await ready(page, 3);
   const t = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
@@ -2592,7 +2780,7 @@ test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points 
   await realFrames(page, 2);
   const texts = await page.evaluate(() => window.__gallery.signTexts());
   assert.ok(!texts.some((x) => /^\+\d$/.test(x)), `no "+N" painted: ${texts}`);
-  // In a frenzy: the ball is free, adds no pips and doesn't swell the board.
+  // In a frenzy: the ball is free, adds 1 pip and swells the board (splat-gallery-frenzy-counts).
   await page.evaluate(() => {
     window.__gallery.startFrenzy();
     window.__gallery.game.goalPulse = 0;
@@ -2600,8 +2788,9 @@ test('splat-gallery-goal-and-tiny-target AC-5: a paid hit shows only its points 
   const t2 = await place(page, 'target', { lane: 2, x: 200, face: 'target_red1' });
   const before = await goal(page);
   assert.equal((await shoot(page, t2.x + t2.w * 0.38, 2)).what, 'body');
-  assert.deepEqual(await goal(page), before);
-  assert.equal(await page.evaluate(() => window.__gallery.ui().goalPulse), 0);
+  assert.equal(Number((await goal(page)).text), Number(before.text) + 1);
+  assert.ok((await page.evaluate(() => window.__gallery.ui().goalPulse)) > 0.5, 'the board swells');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.fx().filter((f) => f.type === 'text').map((f) => f.text)).then((x) => x.slice(-1)), ['+40']);
   await context.close();
 });
 
@@ -2806,7 +2995,7 @@ test('splat-gallery-goal-and-tiny-target AC-10: a tiny target scores 250 and 5 p
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny target scores 500 for a body hit and adds no pips', async () => {
+test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny target scores 500 for a body hit and adds 1 pip', async () => {
   const { context, page } = await open();
   await ready(page, 3);
   const t = await placeTiny(page);
@@ -2814,7 +3003,7 @@ test('splat-gallery-goal-and-tiny-target AC-11: a free (frenzy) ball on a tiny t
   const s0 = await state(page);
   assert.equal((await shoot(page, t.x + t.w * 0.4, 0)).what, 'body');
   const s = await state(page);
-  assert.deepEqual([s.score - s0.score, s.pips - s0.pips], [500, 0]);
+  assert.deepEqual([s.score - s0.score, s.pips - s0.pips], [500, 1]);
   await context.close();
 });
 
