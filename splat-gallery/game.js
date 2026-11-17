@@ -1313,33 +1313,31 @@ function groove(x, y, w, h) {
   ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
   ctx.fillRect(x, y, w, 2);
 }
-// A brass bar: brushed along its length, worn darker in places, with a bright bevel on top, a dark
-// one below and a rivet at the end, so it reads as metal rather than a smooth fill.
+// A brass bar: finely brushed along its length, each hairline running its full length so no patch
+// is lighter or darker than the rest of its row, with a bright bevel on top, a dark one below and a
+// rivet at the end, so it reads as metal rather than a smooth fill.
+const BRUSH_ROWS = 32;
 let brushed = null;
 function brushedPattern() {
   if (brushed) return brushed;
   const c = document.createElement('canvas');
-  c.width = 128;
-  c.height = 32;
+  c.width = 4;
+  c.height = BRUSH_ROWS;
   const g = c.getContext('2d');
   let seed = 3;
   const r = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let i = 0; i < 90; i++) {
-    const y = r() * 32;
-    g.strokeStyle = r() < 0.5 ? `rgba(255, 245, 210, ${0.15 + r() * 0.3})` : `rgba(60, 35, 0, ${0.15 + r() * 0.35})`;
-    g.lineWidth = 0.5 + r() * 0.8;
-    g.beginPath();
-    const x = r() * 128;
-    g.moveTo(x, y);
-    g.lineTo(x + 20 + r() * 70, y + (r() - 0.5) * 0.8);
-    g.stroke();
-  }
-  // A few dull patches where hands have worn it.
-  for (let i = 0; i < 5; i++) {
-    g.fillStyle = `rgba(70, 40, 0, ${0.1 + r() * 0.12})`;
-    g.beginPath();
-    g.ellipse(r() * 128, r() * 32, 6 + r() * 10, 2 + r() * 4, 0, 0, Math.PI * 2);
-    g.fill();
+  // Light and dark hairlines, picked at random but never three of a kind in a row, so both show in
+  // every four rows and the brushing stays even down the bar.
+  let last = null;
+  let run = 0;
+  for (let y = 0; y < BRUSH_ROWS; y++) {
+    let light = r() < 0.5;
+    if (run >= 2 && light === last) light = !light;
+    run = light === last ? run + 1 : 1;
+    last = light;
+    const a = (0.05 + r() * 0.08).toFixed(3);
+    g.fillStyle = light ? `rgba(255, 250, 225, ${a})` : `rgba(90, 55, 0, ${a})`;
+    g.fillRect(0, y, c.width, 1);
   }
   brushed = c;
   return c;
@@ -1357,7 +1355,10 @@ function brass(x, y, w, h, gold = false) {
   ctx.beginPath();
   ctx.rect(x, y, w, h);
   ctx.clip();
-  ctx.fillStyle = ctx.createPattern(brushedPattern(), 'repeat');
+  // Hairlines half a unit apart: fine on a phone, still visible as brushing.
+  const pat = ctx.createPattern(brushedPattern(), 'repeat');
+  if (pat.setTransform) pat.setTransform(new DOMMatrix().scale(0.5));
+  ctx.fillStyle = pat;
   ctx.fillRect(x, y, w, h);
   ctx.restore();
   ctx.fillStyle = 'rgba(255, 250, 220, 0.55)';
@@ -1931,7 +1932,62 @@ function drawGoalBoard(g) {
   }
   const f = clamp(game.pips / cfg.quota, 0, 1);
   if (f > 0) brass(bx, by + 1, bw * f, bh - 2, game.bonus);
+  for (const b of goalRing(g)) if (b.grow > 0) marqueeBulb(b.x, b.y, b.r * b.grow, b.col);
   ctx.restore();
+}
+// The count board's ring of bulbs when a round ends: gold, chasing like the frenzy's marquee, when
+// it's won; red, every other bulb, swapping each half second, when time runs out short. It stays on
+// beside the game's end card, and is gone from the next round's intro (or the start screen) on.
+function goalRingKind() {
+  if (!game.cfg) return null;
+  if (game.mode === 'won') return 'gold';
+  if (game.mode === 'lost') return 'red';
+  if (game.mode === 'over') return { closing: 'gold', time: 'red' }[game.ended] || null;
+  return null;
+}
+const RING_GROW = 0.6; // s: every bulb full size by then, growing in one after another
+// The ring's bulbs relative to the board's centre: set into the plank's frame, their centres in the
+// middle of its 6-unit border all the way round, small enough to sit in it; evenly round it clockwise
+// from the top left, an even count, so red and dark alternate all the way round. Where the board
+// sits against the screen's top, the top row comes down a little, so no bulb is cut in half. Each
+// has its size so far (`grow`, 0 to 1) and its colour (null: dark).
+const RING_R = 2.6;
+function goalRing(g) {
+  const kind = goalRingKind();
+  if (!kind) return [];
+  const R = RING_R;
+  const x0 = -g.w / 2 + 3;
+  const y0 = Math.max(-g.h / 2 + 3, -oy / k + R * 1.25 - (g.y + g.h / 2));
+  const w = g.w - 6;
+  const h = g.h / 2 - 3 - y0;
+  const per = 2 * (w + h);
+  let n = Math.round(per / (R * 3.4));
+  n += n % 2;
+  const growing = game.mode === 'won' || game.mode === 'lost';
+  const step = Math.floor(game.T * 9);
+  const swap = Math.floor(game.T * 2);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    let d = (i * per) / n;
+    let x;
+    let y;
+    if (d < w) [x, y] = [x0 + d, y0];
+    else if ((d -= w) < h) [x, y] = [x0 + w, y0 + d];
+    else if ((d -= h) < w) [x, y] = [x0 + w - d, y0 + h];
+    else [x, y] = [x0, y0 + h - (d - w)];
+    const start = (i / n) * (RING_GROW - 0.2);
+    const grow = growing ? clamp((game.modeT - start) / 0.2, 0, 1) : 1;
+    const col =
+      kind === 'gold'
+        ? (i + step) % 3 !== 0
+          ? MARQUEE_COLOURS[(i + Math.floor(step / 3)) % MARQUEE_COLOURS.length]
+          : null
+        : (i + swap) % 2 === 0
+          ? BULB.red
+          : null;
+    out.push({ i, x, y, r: R, grow, col });
+  }
+  return out;
 }
 
 function drawHud() {
@@ -2705,7 +2761,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern,
+      // The count board's ring, in stage units and in CSS px (centres; the board's swell aside).
+      goalRing: () => {
+        const g = hudLayout().goal;
+        return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
+      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
