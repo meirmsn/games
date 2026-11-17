@@ -2913,3 +2913,198 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
   }
   await context.close();
 });
+
+// ---------- The gold bar and the count board's lights (specs/splat-gallery-board-lights.md) ----------
+
+const ring = (page) => page.evaluate(() => window.__gallery.goalRing());
+// End the round now, with the quota met or not, and step `after` seconds on.
+const endRound = (page, met, after) =>
+  page.evaluate(
+    ({ met, after }) => {
+      const g = window.__gallery;
+      g.game.pips = met ? g.game.cfg.quota : g.game.cfg.quota - 1;
+      g.game.bonus = met;
+      g.game.time = 0.01;
+      g.step(1 / 60);
+      for (let t = 0; t < after - 1e-9; t += 1 / 60) g.step(1 / 60);
+      return g.game.mode;
+    },
+    { met, after }
+  );
+
+test('splat-gallery-board-lights AC-1: the brass is brushed in even hairlines, no blotches', async () => {
+  const { context, page } = await open();
+  const rows = await page.evaluate(() => {
+    const c = window.__gallery.brushedPattern();
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const out = [];
+    for (let y = 0; y < c.height; y++) {
+      const px = [];
+      for (let x = 0; x < c.width; x++) px.push(Array.from(d.slice((y * c.width + x) * 4, (y * c.width + x) * 4 + 4)).join(','));
+      out.push(px);
+    }
+    return out;
+  });
+  rows.forEach((px, y) => {
+    assert.equal(new Set(px).size, 1, `row ${y} is one colour all along`);
+    const [r, , , a] = px[0].split(',').map(Number);
+    assert.ok(a > 0 && a <= 0.15 * 255 + 1, `row ${y} is faint: alpha ${a}`);
+  });
+  const light = rows.map((px) => Number(px[0].split(',')[0]) > 170);
+  for (let y = 0; y + 4 <= light.length; y++) {
+    const w = light.slice(y, y + 4);
+    assert.ok(w.includes(true) && w.includes(false), `light and dark hairlines in rows ${y}–${y + 3}`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-2: the bar and the gold rim are still brass', async () => {
+  const { context, page } = await open();
+  await ready(page, 3);
+  await page.evaluate(() => (window.__gallery.game.pips = 6));
+  await realFrames(page, 2);
+  assert.equal(await page.evaluate(() => window.__gallery.brassDrawn()), 1, 'the bar');
+  await page.evaluate(() => {
+    const G = window.__gallery.game;
+    G.pips = G.cfg.quota;
+    G.bonus = true;
+  });
+  await realFrames(page, 2);
+  assert.equal(await page.evaluate(() => window.__gallery.brassDrawn()), 2, 'the bar and the rim');
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-3: no ring in play, in a round intro or on the start screen', async () => {
+  const { context, page } = await open();
+  assert.deepEqual(await ring(page), [], 'start screen');
+  await ready(page, 2);
+  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota + 2));
+  assert.deepEqual(await ring(page), [], 'in play, even past the quota');
+  await page.evaluate(() => window.__gallery.startRound(3));
+  assert.equal((await state(page)).mode, 'intro');
+  assert.deepEqual(await ring(page), [], 'in the intro');
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-4: a won round grows a ring of bulbs that chases in the marquee colours, gone at the next intro', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  assert.equal(await endRound(page, true, 0.1), 'won');
+  const early = await ring(page);
+  assert.ok(early.length >= 16, `a ring of bulbs: ${early.length}`);
+  assert.ok(early[0].grow > 0 && early.at(-1).grow < 1, 'growing in one after another, from the first');
+  const grow = await page.evaluate(() => window.__gallery.RING_GROW);
+  await steps(page, grow - 0.1);
+  const r = await ring(page);
+  assert.ok(r.every((b) => b.grow === 1), 'all full size by 0.6 s');
+  const { T, colours } = await page.evaluate(() => ({ T: window.__gallery.game.T, colours: window.__gallery.MARQUEE_COLOURS }));
+  const step = Math.floor(T * 9);
+  r.forEach((b) => {
+    const lit = (b.i + step) % 3 !== 0;
+    assert.equal(b.col, lit ? colours[(b.i + Math.floor(step / 3)) % 3] : null, `bulb ${b.i} chases`);
+  });
+  // Clockwise from the top left: the first bulbs run along the top, left to right.
+  assert.ok(r[1].x > r[0].x && r[1].y === r[0].y, 'clockwise from the top left');
+  await steps(page, 1.2);
+  assert.equal((await state(page)).mode, 'intro');
+  assert.deepEqual(await ring(page), [], 'gone at the next intro');
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-5: time up short grows a red ring, every other bulb, swapping each half second; the bar still flashes', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  assert.equal(await endRound(page, false, 0.6), 'lost');
+  const at = async () => ({ r: await ring(page), T: await page.evaluate(() => window.__gallery.game.T), u: await page.evaluate(() => window.__gallery.ui()) });
+  const a = await at();
+  assert.equal(a.u.pips, 'flash', 'the bar still flashes');
+  assert.equal(a.r.length % 2, 0, 'an even ring, so red and dark alternate all round');
+  assert.ok(a.r.every((b) => b.grow === 1), 'full size by 0.6 s');
+  const red = await page.evaluate(() => window.__gallery.BULB.red);
+  const swap = Math.floor(a.T * 2);
+  a.r.forEach((b) => assert.equal(b.col, (b.i + swap) % 2 === 0 ? red : null, `bulb ${b.i}`));
+  // Half a second on, every bulb has swapped.
+  await steps(page, 0.5);
+  const b = await at();
+  assert.equal(Math.floor(b.T * 2), swap + 1);
+  b.r.forEach((x, i) => assert.notEqual(x.col, a.r[i].col, `bulb ${i} swapped`));
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-6: the Out of time card still comes at 1.5 s, the red ring blinking beside it, after a turn too; Play again clears it', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  await endRound(page, false, 1.45);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).over, false, 'not before 1.5 s');
+  await steps(page, 0.1);
+  const u = await page.evaluate(() => window.__gallery.ui());
+  assert.ok(u.over, 'the card at 1.5 s');
+  const red = await page.evaluate(() => window.__gallery.BULB.red);
+  const r = await ring(page);
+  assert.ok(r.length && r.every((b) => b.grow === 1 && [red, null].includes(b.col)) && r.some((b) => b.col === red), 'the red ring beside the card');
+  await page.setViewportSize(LANDSCAPE);
+  await realFrames(page, 3);
+  const turned = await ring(page);
+  assert.ok(turned.some((b) => b.col === red), 'still blinking after a turn');
+  await page.evaluate(() => (window.__gallery.manual = false));
+  await page.click('[data-again]');
+  assert.deepEqual(await ring(page), [], 'Play again: no ring');
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-7: after round 6 is won, the gold chase goes on beside the Closing time card', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  await endRound(page, true, 2.1);
+  const u = await page.evaluate(() => window.__gallery.ui());
+  assert.ok(u.over, 'the card');
+  const colours = await page.evaluate(() => window.__gallery.MARQUEE_COLOURS);
+  const r = await ring(page);
+  assert.ok(r.length && r.some((b) => colours.includes(b.col)) && r.every((b) => b.col === null || colours.includes(b.col)), 'the gold chase');
+  await context.close();
+});
+
+test('splat-gallery-board-lights AC-8: the ring stays under the safe-area top, whole on screen, on the stage and left of the sound button, in portrait and landscape', async () => {
+  for (const [viewport, insets] of [
+    [{ width: 390, height: 844 }, { top: 47, bottom: 34 }],
+    [{ width: 360, height: 640 }, {}],
+    [{ width: 320, height: 568 }, {}],
+    [{ width: 844, height: 390 }, { top: 0, bottom: 21, left: 47, right: 47 }],
+  ]) {
+    const { context, page } = await openInset(viewport, insets);
+    await ready(page, 2);
+    await endRound(page, false, 0.7);
+    const m = await page.evaluate(() => {
+      const g = window.__gallery;
+      return { r: g.goalRing(), k: g.toClient(1, 0).x - g.toClient(0, 0).x, top: g.stageTop(), SW: g.SW(), mute: document.querySelector('[data-mute]').getBoundingClientRect().left };
+    });
+    const where = `${viewport.width}×${viewport.height}`;
+    assert.ok(m.r.length, `a ring at ${where}`);
+    for (const b of m.r) {
+      assert.ok(b.sy >= m.top - 1e-6, `bulb ${b.i} under the safe-area top at ${where}: ${b.sy} vs ${m.top}`);
+      assert.ok(b.sx >= 0 && b.sx <= m.SW, `bulb ${b.i} on the stage at ${where}`);
+      assert.ok(b.cx < m.mute, `bulb ${b.i} left of the sound button at ${where}: ${b.cx} vs ${m.mute}`);
+      assert.ok(b.cy - b.r * 1.2 * m.k >= -0.5, `bulb ${b.i} whole on screen at ${where}: ${b.cy}`);
+    }
+    await context.close();
+  }
+});
+
+test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy marquee and the board alone', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  const before = await page.evaluate(() => {
+    const g = window.__gallery;
+    return { goal: g.hudBounds().goal, timer: g.hudBounds().timerBadge, timerColour: g.ui().timerColour, marquee: g.ui().marquee, text: g.ui().goalText };
+  });
+  await page.evaluate(() => (window.__gallery.game.pips = 9));
+  await endRound(page, false, 0.7);
+  const after = await page.evaluate(() => {
+    const g = window.__gallery;
+    return { goal: g.hudBounds().goal, timer: g.hudBounds().timerBadge, marquee: g.ui().marquee, text: g.ui().goalText };
+  });
+  assert.deepEqual([after.goal, after.timer], [before.goal, before.timer], 'the boards stay where they were');
+  assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
+  assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
+  await context.close();
+});

@@ -66,6 +66,13 @@ top right (`drawGoalBoard`). There is no `DESIGN.md`; the baseline is the booth'
   units of the back lane: the ring only shows when the slingshot can't fire (`won`, `lost`, `over`),
   so it never hides a target that can be hit. Its bulb centres stay at or below the safe-area top
   (`L.top`) and left of the sound button's left edge. Their glow may spill past.
+- **Changed by the owner, 2026-11-17, during the build: the ring sits on the frame.** Looking at the
+  ring on the rim's line, the owner said: "the left right bottom should be on top of the frame similar to the top row
+  of leds. And perhaps they could be even closer to the inner edge of the frame so that the top does
+  not touch the top edge of the viewport? it is tight already so not sure possible". So the bulbs'
+  centres run along the middle of the plank's 6-unit border on all four sides. They are 2.6 units
+  across in radius, to fit it. Where the board sits against the screen's top, the top row comes
+  down just enough to show whole.
 - **How the ring knows what to show:** `won` and `lost` set it while they last. Once the card shows,
   the mode is `over`, and the ring follows `game.ended`: `'time'` red, `'closing'` gold. In `over` the
   bar's groove stays as `lost` left it today (no flash; it shows the shortfall). It is worked out from
