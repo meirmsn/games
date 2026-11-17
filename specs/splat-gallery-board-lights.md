@@ -1,6 +1,6 @@
 # Splat Gallery: a clean gold bar, and the count board lights up when a round is won or lost
 
-**Go:** pending
+**Go:** "all good, go!" 2026-11-17 (to the summary with the three calls, after Claude explained calls 1 and 2)
 
 ## Intent
 
@@ -58,8 +58,9 @@ top right (`drawGoalBoard`). There is no `DESIGN.md`; the baseline is the booth'
   full colour beside it). Rejected: holding the fail
   for 2 s or 3 s before the card.
 - **After "Closing time!" (round 6 won), the gold chase keeps going beside its card the same way**
-  (Claude, to match the fail; to confirm at the go).
-- **Where the ring sits** (Claude): its bulbs' centres run along the gold rim's line, 3 units
+  (Claude, to match the fail; confirmed by the owner at the go, 2026-11-17).
+- **Where the ring sits** (Claude; the full ring, bottom row included, confirmed by the owner at the go,
+  2026-11-17): its bulbs' centres run along the gold rim's line, 3 units
   outside the board's plank, evenly spaced all the way round, each a little larger than the board's
   digit bulbs. It is drawn with the board, inside its swell. Its bottom row overlaps the top few
   units of the back lane: the ring only shows when the slingshot can't fire (`won`, `lost`, `over`),
