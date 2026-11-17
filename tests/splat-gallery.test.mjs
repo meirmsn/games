@@ -2993,8 +2993,7 @@ test('splat-gallery-board-lights AC-4: a won round grows a ring of bulbs that ch
   const early = await ring(page);
   assert.ok(early.length >= 16, `a ring of bulbs: ${early.length}`);
   assert.ok(early[0].grow > 0 && early.at(-1).grow < 1, 'growing in one after another, from the first');
-  const grow = await page.evaluate(() => window.__gallery.RING_GROW);
-  await steps(page, grow - 0.1);
+  await steps(page, 0.6 - 0.1);
   const r = await ring(page);
   assert.ok(r.every((b) => b.grow === 1), 'all full size by 0.6 s');
   const { T, colours } = await page.evaluate(() => ({ T: window.__gallery.game.T, colours: window.__gallery.MARQUEE_COLOURS }));
@@ -3076,7 +3075,7 @@ test('splat-gallery-board-lights AC-8: the ring stays under the safe-area top, w
     await endRound(page, false, 0.7);
     const m = await page.evaluate(() => {
       const g = window.__gallery;
-      return { r: g.goalRing(), k: g.toClient(1, 0).x - g.toClient(0, 0).x, top: g.stageTop(), SW: g.SW(), mute: document.querySelector('[data-mute]').getBoundingClientRect().left };
+      return { r: g.goalRing(), k: g.toClient(1, 0).x - g.toClient(0, 0).x, top: g.L.top, SW: g.stage().SW, mute: document.querySelector('[data-mute]').getBoundingClientRect().left };
     });
     const where = `${viewport.width}×${viewport.height}`;
     assert.ok(m.r.length, `a ring at ${where}`);
@@ -3093,6 +3092,11 @@ test('splat-gallery-board-lights AC-8: the ring stays under the safe-area top, w
 test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy marquee and the board alone', async () => {
   const { context, page } = await open();
   await ready(page, 2);
+  // The board still swells when a hit lands.
+  const far = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  await shoot(page, far.x + far.w * 0.38, 0);
+  assert.ok((await page.evaluate(() => window.__gallery.ui().goalPulse)) > 0, 'a hit still swells the board');
+  await steps(page, 0.5);
   const before = await page.evaluate(() => {
     const g = window.__gallery;
     return { goal: g.hudBounds().goal, timer: g.hudBounds().timerBadge, timerColour: g.ui().timerColour, marquee: g.ui().marquee, text: g.ui().goalText };
@@ -3105,6 +3109,7 @@ test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy mar
   });
   assert.deepEqual([after.goal, after.timer], [before.goal, before.timer], 'the boards stay where they were');
   assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
+  assert.equal(await page.evaluate(() => window.__gallery.ui().timerText), '0', 'the timer shows 0 as before');
   assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
   await context.close();
 });

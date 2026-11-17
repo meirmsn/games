@@ -2761,14 +2761,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern, BRUSH_ROWS, RING_GROW,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern,
       // The count board's ring, in stage units and in CSS px (centres; the board's swell aside).
       goalRing: () => {
         const g = hudLayout().goal;
         return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
-      },
-      stageTop: () => L.top,
-      SW: () => SW, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
+      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
