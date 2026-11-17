@@ -1,6 +1,20 @@
+<div align="center">
+
+<a href="https://games.meirmsn.dev">
+  <img src="docs/readme/hero.png" alt="games" width="720">
+</a>
+
 # games
 
-Play at **https://games.meirmsn.dev**
+**Small, touch-first browser games playable on phone, tablet and desktop, and installable as a PWA.**
+
+[Play](https://games.meirmsn.dev) · [Adding a game](#adding-a-game) · [Checks](#checks)
+
+![Status](https://img.shields.io/badge/status-live-green)
+![Last commit](https://img.shields.io/github/last-commit/meirmsn/games)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
+</div>
 
 **Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Runes](runes/), draw one line of light through every stone while runes raise and sink stones around it; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Orbit](orbit/), fling a probe round the planets and catch the next one's orbit ring; [Gotta Go!](walk-on-red/), he needs the loo across the street, so cross before the light turns green; from level 8, people follow in your footsteps; [Pixel Leap](pixel-leap/), build a monster, then run and jump through worlds that each redraw it in their own art style; [Splat Gallery](splat-gallery/), pull the slingshot and lead the shot in a fairground paintball booth, with no crosshair, until the whole booth is painted; [Crumble](crumble/), blast the sand from under the other tank before the tide comes in; [Island Hop](island-hop/), errands across an archipelago against the clock: sail, step ashore, grab a car and drive to the door.
 
@@ -65,4 +79,14 @@ CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 - `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the share tags and pictures (`tests/social-previews.test.mjs`), the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
-Art and sound by [Kenney](https://www.kenney.nl) (CC0). Splat Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](splat-gallery/fonts/OFL.txt). Code is under the [MIT License](LICENSE).
+## Credits
+
+Art and sound by [Kenney](https://www.kenney.nl) (CC0). Splat Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](splat-gallery/fonts/OFL.txt).
+
+## License
+
+[MIT](LICENSE)
+
+## Feedback
+
+Suggestions and critiques welcome — open an [issue](https://github.com/meirmsn/games/issues).
