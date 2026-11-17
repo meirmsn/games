@@ -98,8 +98,10 @@ The surface is the game's booth canvas, customer-facing. The game has its own lo
   and plays the quota sound; during the frenzy the sign shows "Frenzy!", not "Bonus!".
 - **AC-6** When the quota was reached during a frenzy, the "Bonus!" sign shows when the frenzy ends;
   a frenzy in which the quota wasn't reached ends with no "Bonus!" sign.
-- **AC-7** Moved by the owner, 2026-11-17 ("1"), to the follow-up docs PR, ROADMAP.md R-10: the
-  older specs' texts are amended there.
+- **AC-7** Dropped from this change by the owner, 2026-11-17 ("1"): the reviewer reviews one spec
+  file per change, so the older specs' texts are amended in a follow-up docs PR, ROADMAP.md R-10.
+  This change leaves `specs/splat-gallery.md` and `specs/splat-gallery-goal-and-tiny-target.md` as
+  they are on `main` — verified by review: the PR's diff doesn't touch either.
 
 ## Out of scope
 
