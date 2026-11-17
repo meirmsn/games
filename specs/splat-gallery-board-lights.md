@@ -44,7 +44,7 @@ top right (`drawGoalBoard`). There is no `DESIGN.md`; the baseline is the booth'
   the bar and the gold rim the board gets at the quota. Rejected: C polished, D gold rod, keeping
   the current texture.
 - **Round won: a ring of bulbs grows in around the board's frame and chases** (owner, 2026-11-17,
-  "Chase"): when a round is cleared (`mode` `won`), bulbs set just outside the board's edge grow from
+  "Chase"): when a round is cleared (`mode` `won`), bulbs set around the board's frame (where: the owner's change below) grow from
   nothing, one after another around the ring, in about half a second, then chase in the frenzy
   marquee's colours and rhythm (`MARQUEE_COLOURS`, two lit and one dark, stepping 9 times a second)
   until the next round starts. Rejected: chase plus bounce; all bulbs flashing together.
@@ -60,7 +60,7 @@ top right (`drawGoalBoard`). There is no `DESIGN.md`; the baseline is the booth'
 - **After "Closing time!" (round 6 won), the gold chase keeps going beside its card the same way**
   (Claude, to match the fail; confirmed by the owner at the go, 2026-11-17).
 - **Where the ring sits** (Claude; the full ring, bottom row included, confirmed by the owner at the go,
-  2026-11-17): its bulbs' centres run along the gold rim's line, 3 units
+  2026-11-17; its placement superseded by the owner's change below, which puts it on the frame): its bulbs' centres run along the gold rim's line, 3 units
   outside the board's plank, evenly spaced all the way round, each a little larger than the board's
   digit bulbs. It is drawn with the board, inside its swell. Its bottom row overlaps the top few
   units of the back lane: the ring only shows when the slingshot can't fire (`won`, `lost`, `over`),
