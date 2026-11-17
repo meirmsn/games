@@ -417,6 +417,7 @@ const game = {
   pips: 0,
   goalPulse: 0,
   bonus: false,
+  bonusLater: false, // the quota was reached in a frenzy: show "Bonus!" when it ends
   time: ROUND_TIME, // left in the round
   elapsed: 0, // in the round, on the timer's own clock
   T: 0, // the simulation's time
@@ -698,6 +699,7 @@ function startRound(n) {
   game.goalPulse = 0;
   game.roundScore = 0;
   game.bonus = false;
+  game.bonusLater = false;
   game.time = ROUND_TIME;
   game.elapsed = 0;
   game.frenzy = 0;
@@ -798,6 +800,9 @@ function endFrenzy() {
   game.frenzy = 0;
   game.galopAt = 0;
   if (game.banner && game.banner.text === 'Frenzy!') game.banner = null;
+  // The quota was reached in the frenzy: its "Bonus!" sign shows now, unless the round is over.
+  if (game.bonusLater && game.mode === 'play' && game.time > 0) banner('Bonus!', '', 1.4, true);
+  game.bonusLater = false;
   if (was && (game.mode === 'play' || game.mode === 'won')) music('music');
 }
 
@@ -966,6 +971,9 @@ function landOn(b) {
     popup(b.x1, b.y1 - 18, '+50', '#ffd1ea');
     sfx('frenzyhit');
     startFrenzy();
+    // Its lane's pips, added once the frenzy is on, so reaching the quota keeps the "Frenzy!" sign
+    // (specs/splat-gallery-frenzy-counts.md); the assist stays where it is.
+    addPips(L.lanes[t.lane].pips);
     return r;
   }
   const bull = r.what === 'bull';
@@ -983,19 +991,28 @@ function landOn(b) {
     game.hopper = Math.min(HOPPER, game.hopper + 1);
   }
   if (t.kind === 'gold') game.hopper = HOPPER;
-  if (!free) {
-    const was = game.pips;
-    game.pips += pips;
-    // The count board climbs at once, with a swell; the hit shows only its points.
-    game.goalPulse = 1;
-    if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
-      game.bonus = true;
-      sfx('quota');
-      if (game.frenzy <= 0) banner('Bonus!', '', 1.4, true);
-    }
+  // A frenzy shot (a ball fired in the frenzy, `free`) counts 1 pip, whatever it hit, and leaves the
+  // assist alone (specs/splat-gallery-frenzy-counts.md).
+  if (free) addPips(1);
+  else {
+    addPips(pips);
     hitAssist();
   }
   return r;
+}
+
+// The count board climbs at once, with a swell; the hit shows only its points. Reaching the quota
+// starts the bonus; in a frenzy its sign waits for the frenzy's end.
+function addPips(n) {
+  const was = game.pips;
+  game.pips += n;
+  game.goalPulse = 1;
+  if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
+    game.bonus = true;
+    sfx('quota');
+    if (game.frenzy > 0) game.bonusLater = true;
+    else banner('Bonus!', '', 1.4, true);
+  }
 }
 
 function splatSound(what) {

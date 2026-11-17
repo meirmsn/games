@@ -160,8 +160,8 @@ follow-up docs PR (R-9), not here: see AC-12.
   quota gauge and no "N / quota" text: only the round's sign, the hopper and the slingshot.
 - **AC-5** (changed by the owner, 2026-11-11: "it's great that it shows you the points that you're
   getting for each and then but don't show the plus one, plus two, plus three, plus four, plus five")
-  A paid hit shows only its points where it lands and swells the board; no "+N" is shown anywhere; a
-  free (frenzy) ball neither counts nor swells the board.
+  A paid hit shows only its points where it lands and swells the board; no "+N" is shown anywhere;
+  (changed by the owner, 2026-11-17: "when you are in the frenzy mode, the target that you hit should also count … each one counting as one"; `specs/splat-gallery-frenzy-counts.md`) a free (frenzy) ball's hit counts 1 pip and swells the board, and shows only its points too.
 - **AC-6** (changed by the owner, 2026-11-11: "put like a pro tip there about like you know further
   target count more") Each round's opening banner reads "Round N", then its name, then "Q to clear"
   with Q its quota, then "Tip: far targets count more"; (changed by the owner, 2026-11-11: "There's
@@ -178,7 +178,7 @@ follow-up docs PR (R-9), not here: see AC-12.
 - **AC-10** A paid body hit on a tiny target outside the bonus scores 250 and adds 5 pips; a bullseye
   scores 500 and gives a ball back; in the bonus a body hit scores 750; a bullseye in round 6's bonus
   scores 2,000 (the ×8 cap).
-- **AC-11** A free (frenzy) ball hitting a tiny target scores 250 × 2 for a body hit and adds no pips.
+- **AC-11** A free (frenzy) ball hitting a tiny target scores 250 × 2 for a body hit and (changed by the owner, 2026-11-17: "when you are in the frenzy mode, the target that you hit should also count … each one counting as one"; `specs/splat-gallery-frenzy-counts.md`) adds 1 pip.
 - **AC-12** Dropped from this change by the owner, 2026-11-11: the reviewer reviews one spec file per
   change, so asked how to unblock this PR, they chose "Main spec in a follow-up" (take the
   `specs/splat-gallery.md` edits out and drop AC-12; a docs-only PR brings it up to date after this
