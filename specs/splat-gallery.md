@@ -416,10 +416,8 @@ second playtest, above, then replaced the gun with a slingshot and changed the t
   to the normal. Maybe that's just for bonus points." From round 2, once a round, at a random
   moment 8–18 s in: 6 s of "Frenzy!" (7 s since the fifth playtest), the galop instead of the waltz, pop-ups and drop-downs
   springing up across every lane, targets 1.6× as fast (the paintball's flight unchanged), shots
-  free, points ×2 and no pips (since 2026-11-17, 1 pip a hit, whatever the lane, and the frenzy
-  target counts its lane's pips: `specs/splat-gallery-frenzy-counts.md`). The round's timer stops
-  during it; frenzy shots don't move the assist (Claude's rules, from the review: a frenzy late in a
-  round must not lose the run).
+  free, points ×2 and no pips. The round's timer stops during it; frenzy shots don't move the
+  assist (Claude's rules, from the review: a frenzy late in a round must not lose the run).
 - **Carnival music.** "the music should sound more like carnival." An original calliope waltz
   (oom-pah-pah, steam-whistle pipes with a flutter) plays under the booth, and an original fast
   galop under a frenzy, both synthesised by `scripts/splat-gallery/make-music.py` into MP3.
@@ -553,7 +551,7 @@ moment 8–18 s into rounds 2 to 6.
   closing time doubles everything; no hit scores more than ×8 — `tests/splat-gallery.test.mjs`.
 - **AC-12** Hitting the frenzy target starts a frenzy for 7 s: the galop plays, targets spring up
   across every lane and move 1.6× as fast, shots are free, points ×2 (the higher of it and the
-  bonus), 1 pip a hit (`specs/splat-gallery-frenzy-counts.md`), the round's timer stops and the assist doesn't move; then the waltz returns; no
+  bonus), no pips, the round's timer stops and the assist doesn't move; then the waltz returns; no
   frenzy comes without the target — `tests/splat-gallery.test.mjs`.
 - **AC-13** Rounds bring in their elements as in the table: movers in every lane in round 1,
   pop-ups from 2, drop-downs from 3 (only into the front three lanes in portrait), turnabouts from

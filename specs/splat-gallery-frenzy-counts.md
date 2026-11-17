@@ -49,8 +49,15 @@ The surface is the game's booth canvas, customer-facing. The game has its own lo
 - No quota changes with this change. The balance review (below) expects rounds 1–3 to get
   easier; the owner plays it on the preview and the quotas are the knob if they do (Claude's
   proposal, accepted with the owner's go, 2026-11-17).
-- The main spec (`specs/splat-gallery.md`), in its "Frenzy" paragraph and its acceptance item on the frenzy, and the test of
-  that item in `tests/splat-gallery.test.mjs`, stop saying "no pips" (Claude, 2026-11-17).
+- The tests of the main spec's frenzy item and of the goal-and-tiny-target spec's items on a free
+  ball's count and a free ball on a tiny target, in `tests/splat-gallery.test.mjs`, expect the new
+  rule; the texts of those two older specs, which still say "no pips", are amended in a
+  follow-up docs PR, ROADMAP.md R-10 (changed after the go, below).
+- Changed after the go, on the owner's word of 2026-11-17, in chat: "1". The reviewer takes one spec
+  file per change (devshop R-31, the fix, is not yet released), so this change's edits to the two
+  older specs move to the follow-up docs PR, R-10, and AC-7, which checked the main spec's text,
+  goes with them. Until that PR merges, those specs say "no pips" in lines this spec supersedes
+  (owner, 2026-11-17).
 
 ### Balance review (Claude, 2026-11-17)
 
@@ -91,8 +98,8 @@ The surface is the game's booth canvas, customer-facing. The game has its own lo
   and plays the quota sound; during the frenzy the sign shows "Frenzy!", not "Bonus!".
 - **AC-6** When the quota was reached during a frenzy, the "Bonus!" sign shows when the frenzy ends;
   a frenzy in which the quota wasn't reached ends with no "Bonus!" sign.
-- **AC-7** `specs/splat-gallery.md`'s "Frenzy" paragraph and its acceptance item on the frenzy say frenzy hits count 1 pip
-  and the frenzy target its lane's pips.
+- **AC-7** Moved by the owner, 2026-11-17 ("1"), to the follow-up docs PR, ROADMAP.md R-10: the
+  older specs' texts are amended there.
 
 ## Out of scope
 

@@ -869,13 +869,6 @@ test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reachi
   await context.close();
 });
 
-test('splat-gallery-frenzy-counts AC-7: the main spec says frenzy hits count 1 pip and the frenzy target its lane pips', () => {
-  const spec = readFileSync(new URL('../specs/splat-gallery.md', import.meta.url), 'utf8');
-  assert.ok(!/bonus\), no pips/.test(spec), 'its frenzy acceptance item no longer says "no pips"');
-  assert.ok(/1 pip a hit/.test(spec), 'frenzy hits count 1 pip');
-  assert.ok(/frenzy\s+target counts its lane's pips/.test(spec), "the frenzy target counts its lane's pips");
-});
-
 test('splat-gallery AC-13: rounds bring in their elements as in the table', async () => {
   const { context, page } = await open();
   const seen = await page.evaluate(() => {
