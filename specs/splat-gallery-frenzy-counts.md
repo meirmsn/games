@@ -1,6 +1,6 @@
 # Splat Gallery: the frenzy target and frenzy hits count toward the round's goal
 
-**Go:** pending
+**Go:** "go, and show the Bonus sign when the frenzy ends." 2026-11-17
 
 ## Intent
 
@@ -43,9 +43,12 @@ The surface is the game's booth canvas, customer-facing. The game has its own lo
 - The frenzy target's pips are added after the frenzy starts, so when they reach the quota the
   bonus starts with its sound and the "Frenzy!" sign shows, not "Bonus!". Hitting the frenzy target
   still leaves the assist alone, as now (Claude, 2026-11-17).
-- No quota changes with this change. The balance review (below) expects rounds 1 and 2 to get
+- When the quota was reached during a frenzy, the "Bonus!" sign shows as the frenzy ends (the
+  owner, 2026-11-17: "show the Bonus sign when the frenzy ends"), unless the round's time has run
+  out by then.
+- No quota changes with this change. The balance review (below) expects rounds 1–3 to get
   easier; the owner plays it on the preview and the quotas are the knob if they do (Claude's
-  proposal, 2026-11-17; **open for the owner**).
+  proposal, accepted with the owner's go, 2026-11-17).
 - The main spec (`specs/splat-gallery.md`), in its "Frenzy" paragraph and its acceptance item on the frenzy, and the test of
   that item in `tests/splat-gallery.test.mjs`, stop saying "no pips" (Claude, 2026-11-17).
 
@@ -86,11 +89,13 @@ The surface is the game's booth canvas, customer-facing. The game has its own lo
   leave the assist unchanged.
 - **AC-5** A frenzy hit (or the frenzy target) that brings the count to the quota starts the bonus
   and plays the quota sound; during the frenzy the sign shows "Frenzy!", not "Bonus!".
-- **AC-6** `specs/splat-gallery.md`'s "Frenzy" paragraph and its acceptance item on the frenzy say frenzy hits count 1 pip
+- **AC-6** When the quota was reached during a frenzy, the "Bonus!" sign shows when the frenzy ends;
+  a frenzy in which the quota wasn't reached ends with no "Bonus!" sign.
+- **AC-7** `specs/splat-gallery.md`'s "Frenzy" paragraph and its acceptance item on the frenzy say frenzy hits count 1 pip
   and the frenzy target its lane's pips.
 
 ## Out of scope
 
 - Changing any quota (if the owner wants one, it is a follow-up after playing this), the frenzy's length, its speed or how often its targets spring up.
 - Changing points for any hit.
-- Showing "Bonus!" after a frenzy in which the quota was reached.
+- Whether the bonus and the frenzy multipliers stack (the higher one still applies).
