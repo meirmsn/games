@@ -35,6 +35,7 @@ const { sound } = mountShell({
     alert10: 'sounds/alert10.mp3',
     alert5: 'sounds/alert5.mp3',
     alarm: 'sounds/alarm.mp3',
+    coins: 'sounds/coins.mp3',
   },
 });
 
@@ -82,9 +83,9 @@ const ROUNDS = [
   { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55, frenzy: true },
   { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true, tiny: 1 },
   { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true, tiny: 1 },
-  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true, tiny: 2 },
-  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true, tiny: 2 },
-  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true, tiny: 2 },
+  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, turnFace: 6.1, frenzy: true, tiny: 2 },
+  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 5, frenzy: true, tiny: 2 },
+  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 3, frenzy: true, double: true, lamps: true, tiny: 2 },
 ];
 const LAST_ROUND = 6;
 // The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
@@ -285,6 +286,43 @@ function makeMasks() {
     masks[name] = { w, h, a, top };
   }
   for (const name of ['water1', 'water2', 'grass1']) makeTile(name);
+  makeGold('duck_target_yellow');
+}
+
+// A sprite tinted the game's gold (#ffd23f, the tiny target's rim), keeping its light and dark: each
+// pixel's lightness picks a gold from dark through #ffd23f to pale, so a painted target's rings still
+// show (specs/splat-gallery-gold-ducks-and-turns.md).
+const GOLD_RAMP = [[150, 95, 10], [255, 210, 63], [255, 240, 130]];
+const golds = {};
+function makeGold(name) {
+  const [fx0, fy0, w, h] = FRAMES[name];
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(atlas, fx0, fy0, w, h, 0, 0, w, h);
+  const img = g.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
+    const [a, b, u] = l < 0.5 ? [GOLD_RAMP[0], GOLD_RAMP[1], l / 0.5] : [GOLD_RAMP[1], GOLD_RAMP[2], (l - 0.5) / 0.5];
+    for (let j = 0; j < 3; j++) d[i + j] = Math.round(lerp(a[j], b[j], u));
+  }
+  g.putImageData(img, 0, 0);
+  golds[name] = c;
+}
+function goldSprite(name, x, y, w, h, flip = false) {
+  const c = golds[name];
+  if (!c) return sprite(name, x, y, w, h, flip);
+  ctx.save();
+  if (flip) {
+    ctx.translate(x + w, y);
+    ctx.scale(-1, 1);
+    ctx.drawImage(c, 0, 0, w, h);
+  } else {
+    ctx.drawImage(c, x, y, w, h);
+  }
+  ctx.restore();
 }
 
 // A strip's tile, made to meet itself (specs/splat-gallery-near-water.md): the grass tile's first
@@ -462,6 +500,7 @@ function faceFor(kind, face) {
 function makeTarget(kind, opts = {}) {
   const lane = L.lanes[opts.lane ?? L.n - 1];
   const cfg = game.cfg || {};
+  const turnTimes = turnCycle(cfg);
   const t = {
     id: nextId++,
     kind,
@@ -475,7 +514,8 @@ function makeTarget(kind, opts = {}) {
     y: lane.line,
     phase: rand(0, Math.PI * 2),
     turn: opts.turn ?? !!cfg.turn,
-    turnT: opts.turnT ?? rand(0, 3.9),
+    turnT: opts.turnT ?? rand(0, turnTimes.reduce((a, b) => a + b, 0)),
+    turnTimes,
     upFor: opts.upFor ?? 1.8,
     popT: opts.up ? 0.35 : 0,
     splats: [],
@@ -511,10 +551,13 @@ function rockAngle(t) {
 const dropTop = (t) => L.top + 40 - dims(t)[1];
 
 // Turnabouts: 2.2 s facing, a 0.25 s turn, 1.2 s showing the back, a 0.25 s turn. A turn counts as
-// back.
+// back. A round may face longer (`turnFace`): round 4 faces 6.1 s, turning half as often
+// (specs/splat-gallery-gold-ducks-and-turns.md). Each target keeps the cycle of the round it came in.
 const TURN = [2.2, 0.25, 1.2, 0.25];
+const turnCycle = (cfg) => [cfg.turnFace ?? TURN[0], TURN[1], TURN[2], TURN[3]];
 function turnState(t) {
   if (!t.turn) return { back: false, sx: 1, showBack: false };
+  const TURN = t.turnTimes || turnCycle({});
   const cyc = TURN.reduce((a, b) => a + b, 0);
   let u = ((t.turnT % cyc) + cyc) % cyc;
   if (u < TURN[0]) return { back: false, sx: 1, showBack: false };
@@ -621,6 +664,18 @@ function launchTiny() {
   return null;
 }
 // When in the round (on its own clock, `game.elapsed`) its tiny targets are due: 6–24 s in, 6 s apart.
+// When a round's gold ducks are due, on its own clock (`elapsed`): between 4 and 24 s, re-drawn
+// until every two are at least 3 s apart, so each gets noticed
+// (specs/splat-gallery-gold-ducks-and-turns.md).
+const GOLD = { from: 4, to: 24, gap: 3 };
+function goldSchedule(n) {
+  if (!n) return [];
+  for (;;) {
+    const due = Array.from({ length: n }, () => rand(GOLD.from, GOLD.to)).sort((a, b) => a - b);
+    if (due.every((v, i) => i === 0 || v - due[i - 1] >= GOLD.gap)) return due;
+  }
+}
+
 function tinySchedule(n) {
   if (!n) return [];
   if (n === 1) return [rand(TINY.from, TINY.to)];
@@ -711,7 +766,7 @@ function startRound(n) {
   game.missRow = 0;
   game.dirs = L.lanes.map(() => (rng() < 0.5 ? 1 : -1));
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
-  if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
+  game.spawn.gold = goldSchedule(cfg.gold);
   game.spawn.tiny = tinySchedule(cfg.tiny);
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
@@ -1104,6 +1159,7 @@ function spawnStep(dt, cfg) {
     if (sp.gold[g] > 0 && game.elapsed >= sp.gold[g]) {
       const waters = L.lanes.filter((l) => l.kind === 'water').map((l) => l.i);
       launchMover(pick(waters), cfg, true);
+      sfx('coins');
       sp.gold[g] = -1;
     }
   }
@@ -1739,7 +1795,10 @@ function drawTarget(t) {
   ctx.scale(ts.sx, 1);
   let name = t.face;
   if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
-  sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
+  // A gold duck face on is all gold, with sparkles; turning or on its back, it's any duck.
+  const golden = t.kind === 'gold' && !ts.back;
+  if (golden) goldSprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
+  else sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
   if (t.kind === 'frenzy') {
     // Little marquee bulbs set into its white border, chasing like the frenzy's own marquee: it's
     // what a hit sets off.
@@ -1758,11 +1817,16 @@ function drawTarget(t) {
     ctx.stroke();
     sparkle(w * 0.42, -h * 0.42, w * 0.3, game.T * 3);
   }
-  if (t.kind === 'gold' && !ts.showBack) {
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.25 + 0.2 * Math.sin(game.T * 8);
-    sprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
-    ctx.globalCompositeOperation = 'source-over';
+  if (golden) {
+    // The tiny target's turning sparkle at its crown, and a short trail of them behind it, each
+    // fainter and smaller, twinkling.
+    sparkle(t.dir * w * 0.3, -h * 0.42, w * 0.22, game.T * 3);
+    for (let i = 1; i <= 3; i++) {
+      ctx.globalAlpha = (1 - i * 0.22) * (0.7 + 0.3 * Math.sin(game.T * 9 + i * 2.1));
+      const x = -t.dir * (w * 0.42 + i * w * 0.2);
+      const y = -h * 0.1 + Math.sin(game.T * 4 + i * 1.7) * h * 0.12;
+      sparkle(x, y, w * (0.16 - i * 0.025), game.T * 2 + i);
+    }
     ctx.globalAlpha = 1;
   }
   for (const s of t.splats) {
@@ -2785,6 +2849,17 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
         return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
       }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
+      // Draws one target alone on a cleared canvas, as the booth's frame would place it.
+      drawAlone(t) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
+        sparklesDrawn = 0;
+        drawTarget(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        return sparklesDrawn;
+      },
+      goldSchedule, GOLD, turnCycle,
       balls: () => balls,
       paint: () => paint,
       clear() {
