@@ -84,9 +84,16 @@ const ROUNDS = [
   { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true, tiny: 1 },
   { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true, tiny: 2 },
   { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true, tiny: 2 },
-  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true, tiny: 2 },
+  { name: 'Bouncer', bg: 'green', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, tiny: 2, bouncer: 2 },
+  { name: 'Closing time', bg: 'blue', dusk: true, quota: 36, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true, tiny: 2, bouncer: 1 },
 ];
-const LAST_ROUND = 6;
+const LAST_ROUND = 7;
+// The bouncing ball (specs/splat-gallery-bouncer.md): it hops along the middle lane, turning at the
+// curtains; a hit charges it, and charged it knocks down what it meets in its lane, for you.
+// size: its diameter, a share of its lane's target; hop: its height, a share of a target, and how
+// long a hop takes; speed in units a second; stay: how long uncharged before it rolls out; charge:
+// how long charged; knocks: the most a charge knocks; lastSecs: none comes later in a round.
+const BOUNCER = { size: 0.8, hop: 1 / 3, hopT: 0.8, speed: 105, stay: 8, charge: 6, knocks: 5, lastSecs: 6, pips: 2, base: 20 };
 // The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
 // lane, from round 2, worth the most pips and points; 0.6 of a far target, never under 30 CSS px.
 const TINY = { pips: 5, base: 250, upFor: 1.4, scale: 0.6, minPx: 30, from: 6, to: 24, gap: 6, retry: 0.25, lastSecs: 2 };
@@ -504,6 +511,7 @@ function pivotOf(t) {
   return { x: t.x, y: L.lanes[t.lane].strip + 30 };
 }
 function rockAngle(t) {
+  if (t.kind === 'bouncer') return 0;
   if (t.state === 'knocked') return t.knockRot || 0;
   const amp = (t.kind === 'drop' ? 3 : t.isDuck ? 5 : 4) * (Math.PI / 180) * game.rock;
   return amp * Math.sin(game.T * 1.7 * t.rockF + t.phase);
@@ -628,6 +636,120 @@ function tinySchedule(n) {
   return [a, rand(a + TINY.gap, TINY.to)];
 }
 
+// The bouncing ball: in the middle lane, coming in from a side (drawn, or `side` for the tests).
+const bouncerLane = () => Math.floor(L.n / 2);
+function bouncerLimits(t) {
+  const c = curtainRect();
+  const edge = c.x + c.w; // the curtains' inner edge
+  return { edge, left: edge + t.r, right: SW - edge - t.r };
+}
+function launchBouncer(side) {
+  const i = bouncerLane();
+  const t = makeTarget('bouncer', { lane: i, face: 'target_red1', turn: false, big: BOUNCER.size });
+  t.isDuck = false;
+  t.bull = false;
+  t.r = dims(t)[0] / 2;
+  t.dir = side ?? (rng() < 0.5 ? 1 : -1);
+  t.x = t.dir > 0 ? -t.r : SW + t.r;
+  t.hopT = 0;
+  t.onT = 0; // time on the stage
+  t.chargeT = 0;
+  t.charged = false;
+  t.knocks = 0;
+  t.inside = false; // in between the curtains yet
+  t.leaving = false;
+  t.colour = null;
+  t.roll = 0;
+  return t;
+}
+// When in the round (`game.elapsed`) its balls are due: two at 5–9 s and 17–21 s, one at 5–21 s.
+function bouncerSchedule(n) {
+  if (!n) return [];
+  if (n === 1) return [rand(5, 21)];
+  return [rand(5, 9), rand(17, 21)];
+}
+// Its height above the lane's line, from its hop.
+function bouncerRise(t) {
+  return 142 * L.lanes[t.lane].s * BOUNCER.hop * Math.abs(Math.sin((Math.PI * t.hopT) / BOUNCER.hopT));
+}
+// A target stands where a charged ball can knock it: up, clear of the curtains, and a kind it knocks.
+function knockable(o, t) {
+  if (o === t || o.lane !== t.lane || o.state !== 'live') return false;
+  if (o.kind === 'tiny' || o.kind === 'frenzy' || o.kind === 'bouncer') return false;
+  if (o.kind === 'pop' || o.kind === 'drop' || o.motion === 'pop') {
+    if (o.popT < 0.35 || o.popT > 0.35 + o.upFor) return false;
+  }
+  const [w, h] = dims(o);
+  const { edge } = bouncerLimits(t);
+  if (o.x - w / 2 < edge || o.x + w / 2 > SW - edge) return false;
+  const R = o.isDuck ? Math.min(w, h) * 0.45 : (w / 2) * 0.97;
+  return Math.hypot(o.x - t.x, o.y - t.y) < t.r + R;
+}
+function bouncerKnock(t, o) {
+  const lane = L.lanes[o.lane];
+  t.knocks++;
+  const n = t.knocks;
+  o.knockRot = rockAngle(o);
+  o.state = 'knocked';
+  o.anim = 0;
+  addSplatTo(o, (o.x + t.x) / 2, (o.y + t.y) / 2, t.colour);
+  const pts = 10 * lane.pips * n * multiplier(o, false);
+  game.score += pts;
+  game.roundScore += pts;
+  popup(o.x, o.y - 18, `+${pts}`, '#fff');
+  sfx('hit', { rate: 1 + 0.12 * n });
+  if (o.kind === 'gold') game.hopper = HOPPER;
+  addPips(1);
+}
+function bouncerStep(t, dt) {
+  const lane = L.lanes[t.lane];
+  t.onT += dt;
+  if (t.charged) t.chargeT += dt;
+  t.hopT += dt;
+  // It rolls: its stripes turn with the distance it covers.
+  t.roll += (t.dir * BOUNCER.speed * dt) / t.r;
+  t.x += t.dir * BOUNCER.speed * dt;
+  t.y = lane.line - bouncerRise(t);
+  const lim = bouncerLimits(t);
+  if (!t.leaving) {
+    if (!t.inside && t.x >= lim.left && t.x <= lim.right) t.inside = true;
+    const atSide = t.inside && ((t.dir > 0 && t.x >= lim.right) || (t.dir < 0 && t.x <= lim.left));
+    if (atSide) {
+      const done = t.charged ? t.chargeT >= BOUNCER.charge || t.knocks >= BOUNCER.knocks : t.onT >= BOUNCER.stay;
+      if (done) t.leaving = true;
+      else {
+        t.x = t.dir > 0 ? lim.right : lim.left;
+        t.dir = -t.dir;
+        sfx('plip', { gain: 0.5, rate: 0.8 });
+      }
+    }
+  }
+  if (t.charged && t.knocks < BOUNCER.knocks) {
+    for (const o of targets) {
+      if (t.knocks >= BOUNCER.knocks) break;
+      if (knockable(o, t)) bouncerKnock(t, o);
+    }
+  }
+  if (t.leaving && (t.x < -t.r - 8 || t.x > SW + t.r + 8)) t.state = 'gone';
+}
+// A shot on it: an uncharged ball is charged, with the shot's paint, and scores as a middle-lane hit.
+function chargeBouncer(t, b) {
+  t.charged = true;
+  t.chargeT = 0;
+  t.leaving = false;
+  t.colour = b.colour;
+  const pts = BOUNCER.base * multiplier(t, false);
+  game.score += pts;
+  game.roundScore += pts;
+  popup(b.x1, b.y1 - 18, `+${pts}`, '#fff');
+  sfx('hit', { rate: 1.3 });
+  if (b.free) addPips(1);
+  else {
+    addPips(BOUNCER.pips);
+    hitAssist();
+  }
+}
+
 // ---------- Rounds and the run ----------
 
 let stopMusic = null;
@@ -713,6 +835,7 @@ function startRound(n) {
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
   if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
   game.spawn.tiny = tinySchedule(cfg.tiny);
+  game.spawn.bouncer = bouncerSchedule(cfg.bouncer);
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
   game.modeT = 0;
@@ -882,9 +1005,16 @@ function resolve(px, py) {
   }
   return { what: 'wall' };
 }
-const drawOrder = (i) => targets.filter((t) => t.lane === i && t.kind === 'drop').concat(targets.filter((t) => t.lane === i && t.kind !== 'drop'));
+// The bouncing ball, on no stick, is in front of its lane's targets.
+const drawOrder = (i) =>
+  targets
+    .filter((t) => t.lane === i && t.kind === 'drop')
+    .concat(targets.filter((t) => t.lane === i && t.kind !== 'drop' && t.kind !== 'bouncer'))
+    .concat(targets.filter((t) => t.lane === i && t.kind === 'bouncer'));
 
 function hitTest(t, px0, py0, grow) {
+  // The bouncing ball: a circle; charged, shots pass through it.
+  if (t.kind === 'bouncer') return !t.charged && Math.hypot(px0 - t.x, py0 - t.y) <= t.r * grow ? { what: 'body', t } : null;
   const [w, h] = dims(t);
   // Into the target's frame: undo its rock about the pivot.
   const r = rockAngle(t);
@@ -955,6 +1085,10 @@ function landOn(b) {
     return r;
   }
   const t = r.t;
+  if (t.kind === 'bouncer') {
+    chargeBouncer(t, b);
+    return r;
+  }
   addSplatTo(t, b.x1, b.y1, b.colour);
   if (r.what === 'back') {
     sfx('hit', { rate: 0.7, gain: 0.6 });
@@ -1114,6 +1248,17 @@ function spawnStep(dt, cfg) {
     if (game.time < TINY.lastSecs) tiny[g] = -1;
     else if (launchTiny()) tiny[g] = -1;
     else tiny[g] = game.elapsed + TINY.retry;
+  }
+  // The bouncing ball: one at a time; one due in a frenzy or while another is out waits; none comes
+  // with under 6 s left.
+  const bs = sp.bouncer || [];
+  for (let g = 0; g < bs.length; g++) {
+    if (bs[g] < 0 || fr || game.elapsed < bs[g]) continue;
+    if (game.time < BOUNCER.lastSecs) bs[g] = -1;
+    else if (!targets.some((t) => t.kind === 'bouncer' && t.state === 'live')) {
+      launchBouncer();
+      bs[g] = -1;
+    }
   }
   if (!game.frenzyDone && !fr && game.frenzyTimes.length && game.elapsed >= game.frenzyTimes[0]) {
     game.frenzyTimes.shift();
@@ -1545,6 +1690,11 @@ function update(dt) {
       continue;
     }
     if (t.state !== 'live' || !moving) continue;
+    if (t.kind === 'bouncer') {
+      // Its own pace: neither a frenzy nor the last seconds' rush speeds it up.
+      bouncerStep(t, dt);
+      continue;
+    }
     const lane = L.lanes[t.lane];
     if (t.kind === 'pop' || t.kind === 'drop' || t.motion === 'pop') {
       // A tiny target keeps its 1.4 s whatever happens: a frenzy doesn't speed it up.
@@ -1708,7 +1858,57 @@ function drawPaintIn(layer) {
   ctx.globalAlpha = 1;
 }
 
+// The bouncing ball: a fairground ball of red and white wedges (the white takes the paint of the shot
+// that charged it), turning as it rolls, with a soft shadow on its lane that shrinks as it rises.
+let bouncerDrawn = null; // the last one drawn (for the tests)
+const BOUNCER_RED = '#d8322a';
+function drawBouncer(t) {
+  const lane = L.lanes[t.lane];
+  const rise = bouncerRise(t) / (142 * lane.s * BOUNCER.hop || 1);
+  const r = t.r;
+  ctx.save();
+  ctx.globalAlpha = 0.3 * (1 - 0.5 * rise);
+  ctx.fillStyle = '#1e120a';
+  ctx.beginPath();
+  ctx.ellipse(t.x, lane.line + r, r * (0.85 - 0.3 * rise), r * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  const light = t.colour || '#fbf6ec';
+  ctx.translate(t.x, t.y);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = light;
+  ctx.fillRect(-r, -r, 2 * r, 2 * r);
+  ctx.rotate(t.roll || 0);
+  ctx.fillStyle = BOUNCER_RED;
+  for (let j = 0; j < 6; j += 2) {
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, r, (j * Math.PI) / 3, ((j + 1) * Math.PI) / 3);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.rotate(-(t.roll || 0));
+  // A soft highlight, top left, as on a painted ball.
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.35, -r * 0.4, r * 0.3, r * 0.18, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#5a1c12';
+  ctx.lineWidth = Math.max(1.2, r * 0.07);
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  bouncerDrawn = { x: t.x, y: t.y, r, colour: light, red: BOUNCER_RED, stick: false, shadowY: lane.line + r };
+}
+
 function drawTarget(t) {
+  if (t.kind === 'bouncer') return drawBouncer(t);
   const [w, h] = dims(t);
   const lane = L.lanes[t.lane];
   const ts = turnState(t);
@@ -2484,6 +2684,7 @@ function draw() {
   signsWorn = 0;
   signTexts = [];
   paintballsDrawn = 0;
+  bouncerDrawn = null;
   bandsDrawn = 0;
   brassDrawn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2783,7 +2984,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
       goalRing: () => {
         const g = hudLayout().goal;
         return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
-      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
+      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, launchBouncer, bouncerSchedule, bouncerLimits, bouncerLane, bouncerRise, BOUNCER, LAST_ROUND, bouncerDrawn: () => bouncerDrawn, curtainRect, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
       balls: () => balls,
       paint: () => paint,
