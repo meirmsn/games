@@ -52,24 +52,32 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   rising steel-drum flourish, 0.9 s), as `sounds/bonus.mp3`, in place of today's `quota` sound. It
   plays when the quota is reached, then again 0.9 s and 1.8 s later on `game.T` (one after the
   other, not overlapping), "so that you know that something is going on" (owner, 2026-11-18).
-  Repeats that haven't played when the round ends are dropped, so they never play over W2 or the
-  lose sound; a pause holds them. Rejected: keeping today's pizzicato run; G2 to G4.
+  It starts only in play: a ball still in the air that crosses the quota after the time has run
+  out starts no bonus (no sound, no BONUS), since the round is already decided. Repeats that haven't
+  started when the round ends are dropped, and a new round, Restart or Play again clears them, so
+  they never carry over. When `cleared` starts, any `bonus` still sounding is stopped, so the two
+  never play together. Like everything on `game.T`, the repeats wait through a pause, a phone turn
+  and the 1 s count-in after them; while muted they keep their times silently. Rejected: keeping
+  today's pizzicato run; G2 to G4.
 - **The bar says BONUS: option C** (owner, 2026-11-18). From the moment the quota is reached until
   the round ends, and through the round-won moment, "BONUS" is stamped into the gold bar in dark
-  letters in the booth's lettering (`SIGN_FONT`), sized to the bar. The small "Bonus!" sign on the
-  counter is gone, including the one that waited for a frenzy to end. Rejected: A (engraved, no
+  letters in the booth's lettering (`SIGN_FONT`), sized to the bar (its height less 2.5 units: 8.5 units in landscape,
+  11.5 in portrait). The small "Bonus!" sign on the
+  counter is gone, including the one that waited for a frenzy to end; `game.bonusLater`, which only held that sign, goes. Rejected: A (engraved, no
   glint), B (dark bar, glowing letters).
 - **The glint sweeps left to right with easing** (owner, 2026-11-18, "not super fast, not super
   slow, but maybe with some easing"; the timing is Claude's): a soft bright band crosses the bar
   from its left edge to its right in 0.9 s, easing in and out (slow start, fast middle, slow
-  finish), then the bar rests for 1.1 s, so a glint every 2 s. It runs on `game.T`, so it freezes
-  with pause and turn. Rejected: the mockup's even 1.4 s sweep with no rest.
+  finish), then the bar rests for 1.1 s, so a glint every 2 s, the first starting the moment the
+  quota is reached. The band is 20 units wide, clipped to the bar. It runs on `game.T`, so it
+  freezes with pause and turn. Rejected: the mockup's even 1.4 s sweep with no rest.
 - **The lose sound stays as it is** (owner, 2026-11-18: "I think there is a sound effect when you
   lose").
 - **The red ring goes back outside the frame** (owner, 2026-11-18): when time runs out short, and
   beside the "Out of time" card, the red bulbs' centres run along the gold rim's line, 3 units
   outside the board's plank on all four sides, each a little larger than the board's digit bulbs
-  (radius 1.15 times the digit bulbs'). This is the placement the owner saw first in
+  (radius 1.15 times the digit bulbs'). As today, the centres are placed without the board's
+  hit swell, and the ring is drawn inside it. This is the placement the owner saw first in
   `specs/splat-gallery-board-lights.md`. Its blinking, timing and grow-in are unchanged.
 - **The gold win ring stays on the frame** (Claude: the owner named only the red lights; confirmed
   at the go).
@@ -82,34 +90,41 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   2.5 s, and the next round's intro starts 3.1 s after the round ends.
 - **AC-3** When round 6 is won, `finale` plays as before, not `cleared`, and the "Closing time!"
   card shows 2 s after the round ends, as before.
-- **AC-4** When the quota is reached with time left, `bonus` plays then, again 0.9 s later and again
+- **AC-4** When the quota is reached in play (`mode` `play`, time left), `bonus` plays then, again 0.9 s later and again
   1.8 s later (on `game.T`), three times in all. `quota` never plays. Reaching the quota again in
   the same round (more hits) plays nothing more.
-- **AC-5** If the round ends before the third `bonus` has played, no `bonus` plays after the round
-  ends. While the game is paused, no `bonus` plays, and the remaining ones play once it resumes.
-- **AC-6** From the moment the quota is reached until the next round's intro or a new game (so also beside
-  the "Closing time!" card), the bar shows "BONUS"
-  in `SIGN_FONT`, inside the bar's bounds, in portrait and in landscape. Under the quota it shows no
-  text.
-- **AC-7** No "Bonus!" banner shows at any point, with or without a frenzy.
-- **AC-8** While the bar shows BONUS, a glint crosses it left to right: at phase `p = (game.T mod 2)
-  / 0.9`, for `p` under 1 the glint's centre is at `ease(p)` of the way across (plus its half-width
+- **AC-5** No new `bonus` starts at or after the round's end, nor after Restart, Play again or a new
+  round. When `cleared` starts, any `bonus` still sounding stops, including when the quota was
+  reached on the round's last frame. While the game is paused or turned, no `bonus` plays, and the
+  remaining ones play at their times once `game.T` runs again. Muted, they keep their times.
+- **AC-6** A ball that lands after the time has run out (`mode` `lost`) and crosses the quota starts
+  no bonus: no `bonus` sound, `game.bonus` stays false, and the bar keeps flashing red with no
+  BONUS.
+- **AC-7** From the moment the quota is reached until the next round's intro or a new game (so
+  also beside the "Closing time!" card), the bar shows "BONUS" in `SIGN_FONT` at the size in
+  Decisions, inside the bar's bounds, in portrait and in landscape. Under the quota, and whenever
+  the groove flashes red, it shows no text. Whether it reads is judged on the PR's screenshots —
+  verified by review: phone-size screenshots of the bar in both layouts.
+- **AC-8** No "Bonus!" banner shows at any point, with or without a frenzy.
+- **AC-9** While the bar shows BONUS, a glint 20 units wide crosses it left to right: with `t` the `game.T`
+  since the quota was reached and `p = (t mod 2) / 0.9`, for `p` under 1 the glint's centre is at `ease(p)` of the way across (plus its half-width
   either side), where `ease` is an ease-in-out curve (`ease(0)=0`, `ease(0.5)=0.5`, `ease(1)=1`,
   slower at both ends than in the middle). For the rest of each 2 s there is no glint. It stays
   inside the bar.
-- **AC-9** When time runs out short, and on the "Out of time" card, every red ring bulb's centre is
+- **AC-10** When time runs out short, and on the "Out of time" card, every red ring bulb's centre is
   3 units outside the board's plank, on one of its four sides, and its radius is 1.15 times the
-  digit bulbs'. Every centre is at or below `L.top` and left of the sound button's left edge, in
+  digit bulbs' (positions without the swell, as today). Every centre is at or below `L.top` and left of the sound button's left edge, in
   portrait and in landscape. The swap every 0.5 s and the grow-in are as before.
-- **AC-10** The gold ring, when a round is won and on the "Closing time!" card, is where it is today:
+- **AC-11** The gold ring, when a round is won and on the "Closing time!" card, is where it is today:
   on the frame.
-- **AC-11** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
+- **AC-12** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
   converted to MP3; the README's credits line still covers them. `sounds/quota.mp3` is removed, as
   nothing plays it.
-- **AC-12** Nothing else changes: the lose sound and its timing, the timer, the frenzy, the hit
+- **AC-13** Nothing else changes: the lose sound and its timing, the timer, the frenzy, the hit
   swell and the board's digits. The existing Splat Gallery tests pass, apart from those whose
-  literal behaviour this replaces (the 1.6 s round-won wait, the `quota` sound, the "Bonus!" sign,
-  the red ring on the frame), which are updated to this spec.
+  literal behaviour this replaces, which are updated to this spec: the 1.6 s round-won wait, the
+  `quota` sound, the "Bonus!" sign and `bonusLater` (the frenzy-counts tests that wait for it), and
+  the red ring on the frame (board-lights AC-5, AC-6, AC-8).
 
 ## States
 
