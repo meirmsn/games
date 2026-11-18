@@ -1,10 +1,12 @@
+<a id="readme-top"></a>
+
 <div align="center">
 
 <a href="https://games.meirmsn.dev">
   <img src="docs/readme/hero.png" alt="games" width="720">
 </a>
 
-# games
+# Games
 
 **Small, touch-first browser games playable on phone, tablet and desktop, and installable as a PWA.**
 
@@ -15,6 +17,20 @@
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 </div>
+
+<details>
+<summary>Contents</summary>
+
+- [How the site is put together](#how-the-site-is-put-together)
+- [Adding a game](#adding-a-game)
+- [The add-to-home-screen ribbon](#the-add-to-home-screen-ribbon)
+- [Updates](#updates)
+- [Checks](#checks)
+- [Credits](#credits)
+- [License](#license)
+- [Feedback](#feedback)
+
+</details>
 
 **Games:** [Reef](reef/), eat the golden, green and pink fish, dodge the marked ones and dive deeper; [Runes](runes/), draw one line of light through every stone while runes raise and sink stones around it; [Googly Faces](googly-faces/), tap the silly faces and watch their eyes wobble; [Orbit](orbit/), fling a probe round the planets and catch the next one's orbit ring; [Gotta Go!](walk-on-red/), he needs the loo across the street, so cross before the light turns green; from level 8, people follow in your footsteps; [Pixel Leap](pixel-leap/), build a monster, then run and jump through worlds that each redraw it in their own art style; [Splat Gallery](splat-gallery/), pull the slingshot and lead the shot in a fairground paintball booth, with no crosshair, until the whole booth is painted; [Crumble](crumble/), blast the sand from under the other tank before the tide comes in; [Island Hop](island-hop/), errands across an archipelago against the clock: sail, step ashore, grab a car and drive to the door.
 
@@ -44,6 +60,8 @@ Run it locally with `PORT=8000 scripts/local-run.sh`, then open http://127.0.0.1
 
 It's hosted on Cloudflare (Workers static assets, connected through the Cloudflare GitHub app). `main` deploys to the live site at https://games.meirmsn.dev, and every pull request gets its own preview link at `<branch>.games.meirmsn.dev`, posted as a comment on the PR. `wrangler.jsonc` holds the config, and `.assetsignore` lists the repo files that aren't part of the site. After a merge, CI's `scripts/deploy.sh` waits until the live site serves the merged files and updates the merged PR's deploy comment; it deploys nothing itself (`specs/all-cloudflare-deploys.md`).
 
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
+
 ## Adding a game
 
 1. Make its folder, e.g. `googly-faces/index.html`. Load `../shared/game-shell.css` and call `mountShell()` from `../shared/game-shell.js`, which adds the back button and sets up sound.
@@ -51,6 +69,8 @@ It's hosted on Cloudflare (Workers static assets, connected through the Cloudfla
 3. Give it a share picture: run `node scripts/make-previews.mjs`, which draws `assets/previews/<slug>.png` from its tile, and copy the `og:` and `twitter:` tags from another game's `<head>`, with its own title, description, URL and image alt. The fast tier fails without them.
 4. Nothing to do in `sw.js`: a game's files are cached in its own cache the first time it's played. Bump `VERSION` there only when you add, remove or rename a file in its `SHELL` list, such as the new tile picture.
 5. Run `scripts/check-fast.sh` and `scripts/check-slow.sh`.
+
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
 
 ## The add-to-home-screen ribbon
 
@@ -63,6 +83,8 @@ hides it for the rest of that visit. When it appears on a page that's already op
 cmd-click on a game, or once the Update notice goes), it slides in from its corner. Its state is one
 `localStorage` key, `ribbon`; deleting it starts over as a first visit.
 
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
+
 ## Updates
 
 How a new version reaches players (`specs/pwa-updates.md`):
@@ -72,6 +94,8 @@ How a new version reaches players (`specs/pwa-updates.md`):
 - **Pages, scripts and styles are fetched fresh when online** (the cache is the offline fallback), so a page and its scripts always match. Pictures, sounds and fonts come from the cache and refresh in the background, so a changed picture shows one load later.
 - **Each game has its own offline cache** (`games-game-<folder>`), refreshed in place; a `VERSION` bump replaces only the landing page's (`games-shell-<VERSION>`), so updating never empties another game's offline copy.
 
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
+
 ## Checks
 
 CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
@@ -79,14 +103,22 @@ CI is `.github/workflows/ci.yml`, with two required jobs, `fast` and `slow`.
 - `scripts/check-fast.sh origin/main`: the secret scan, the spec and project contract checks, then links, the share tags and pictures (`tests/social-previews.test.mjs`), the lockfile (npmjs only), the offline file list and page references, the theme tokens, that previews never bind production data (`scripts/preview-bindings-check.mjs`), and the deploy step's tests. In CI, `fast` also checks the PR title: it starts with a Conventional Commit type (`feat:`, `fix:`, `chore:`, …).
 - `scripts/check-slow.sh`: browser tests in `tests/`. Needs `scripts/setup.sh` (`npm ci`), then `npx playwright install chromium`.
 
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
+
 ## Credits
 
 Art and sound by [Kenney](https://www.kenney.nl) (CC0). Splat Gallery's lettering is Rye by Sorkin Type, under the [SIL Open Font License](splat-gallery/fonts/OFL.txt).
+
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
 
 ## License
 
 [MIT](LICENSE)
 
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
+
 ## Feedback
 
 Suggestions and critiques welcome — open an [issue](https://github.com/meirmsn/games/issues).
+
+<p align="right"><small><a href="#readme-top">back to top</a></small></p>
