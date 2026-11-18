@@ -3328,12 +3328,14 @@ const sharpRises = (page, seeds, { frenzy = false } = {}) =>
         let earlyMaxUp = 0;
         const others = new Set();
         let moved = false;
+        let turning = false;
         const xs = {};
         while (g.game.mode === 'intro' || g.game.mode === 'play') {
           g.step(dt);
           if (g.game.mode === 'play' && playT === null) playT = g.game.T - dt;
           const live = g.targets().filter((t) => t.state === 'live');
           for (const t of live) {
+            if (t.turn) turning = true;
             if (t.kind !== 'pop' && t.kind !== 'frenzy') others.add(t.kind);
             if (t.id in xs && xs[t.id] !== t.x) moved = true;
             xs[t.id] = t.x;
@@ -3344,6 +3346,7 @@ const sharpRises = (page, seeds, { frenzy = false } = {}) =>
           if (fresh.length) {
             fresh.forEach((t) => seen.add(t.id));
             rises.push({
+              upBefore: live.length - fresh.length,
               T: g.game.T, sincePlay: g.game.T - playT, wait: emptySince === null ? null : g.game.T - emptySince, elapsed: g.game.elapsed, left: g.game.time,
               ts: fresh.map((t) => ({ lane: t.lane, kind: t.kind, up: t.upFor, rise: t.rise ?? 0.35, x: t.x, w: g.dims(t)[0], motion: t.motion || '' })),
             });
@@ -3351,7 +3354,7 @@ const sharpRises = (page, seeds, { frenzy = false } = {}) =>
           if (live.length) emptySince = null;
           else if (emptySince === null) emptySince = g.game.T;
         }
-        runs.push({ rises, maxUp, earlyMaxUp, others: [...others], moved, n: g.L.n });
+        runs.push({ rises, maxUp, earlyMaxUp, others: [...others], moved, turning, n: g.L.n });
       }
       return runs;
     },
@@ -3419,11 +3422,10 @@ test('splat-gallery-sharpshooter AC-4: only pop-ups rise from behind the strips,
     for (const r of runs) {
       assert.deepEqual(r.others, [], 'no crossing target or duck, drop-down, gold duck or tiny target');
       assert.ok(!r.moved, 'no target moves along its lane');
+      assert.ok(!r.turning, 'no turnabouts');
       assert.ok(r.rises.length > 0);
       for (const rise of r.rises) for (const t of rise.ts) assert.ok(t.kind === 'pop' || (t.kind === 'frenzy' && t.motion === 'pop'), `a ${t.kind} rose`);
     }
-    const turning = await page.evaluate(() => window.__gallery.targets().some((t) => t.turn));
-    assert.ok(!turning, 'no turnabouts');
     await context.close();
   }
 });
@@ -3477,7 +3479,8 @@ test('splat-gallery-sharpshooter AC-6: the next rise waits until both of a pair 
   for (const r of runs)
     r.rises.forEach((rise, i) => {
       if (i === 0) return;
-      assert.ok(rise.wait !== null, 'every rise comes once the booth is empty');
+      assert.equal(rise.upBefore, 0, 'nothing else is up when a target rises');
+      assert.ok(rise.wait !== null && rise.wait >= 0.3 - 1e-6, `every rise comes a wait after the booth is empty: ${rise.wait}`);
     });
   await context.close();
 });

@@ -94,12 +94,12 @@ const LAST_ROUND = 7;
 // The hidden assist is off from Closing time on.
 const ASSIST_OFF_FROM = 6;
 // The Sharpshooter's targets (specs/splat-gallery-sharpshooter.md): a fair one rises in 0.35 s and
-// stays up 2.2 s; a flash (40% of eligible singles, about one in five of all; never in the nearest
+// stays up 2.2 s; a flash (60% of eligible singles, about one in four of all; never in the nearest
 // lane, the first three rises or twice running) rises in 0.2 s and stays up 0.15 s. The next rises 0.6–1.4 s after the booth is empty (0.3–0.7 s from 10 s left);
 // from 15 s in about one rise in three is a pair. No rise with under 1.5 s left.
 const SHARP = {
   first: 0.8, gap: [0.6, 1.4], lateGap: [0.3, 0.7], lateFrom: 10, lastSecs: 1.5,
-  fair: { rise: 0.35, up: 2.2 }, flash: { rise: 0.2, up: 0.15 }, flashP: 0.4, safeRises: 3,
+  fair: { rise: 0.35, up: 2.2 }, flash: { rise: 0.2, up: 0.15 }, flashP: 0.6, safeRises: 3,
   pairFrom: 15, pairP: 1 / 3, frenzyUp: 1.6, afterFrenzy: 0.8,
 };
 // The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
