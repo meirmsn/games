@@ -609,7 +609,7 @@ test('splat-gallery AC-11: the bonus pays by depth (×1 near, ×2 middle, ×3 fa
     g.game.bonus = true;
     const mk = (kind, lane) => g.makeTarget(kind, { lane, speed: 0, turn: false });
     const r = [mk('duck', 4), mk('target', 2), mk('target', 0), mk('gold', 4)].map((t) => g.multiplier(t, false));
-    g.startRound(6);
+    g.startRound(7);
     g.game.bonus = true;
     const far = mk('target', 0);
     return { r, closingFar: g.multiplier(far, false), capped: g.multiplier(far, true) };
@@ -869,13 +869,13 @@ test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reachi
   await context.close();
 });
 
-test('splat-gallery AC-13: rounds bring in their elements as in the table', async () => {
+test('splat-gallery AC-13, splat-gallery-bouncer AC-1: rounds bring in their elements as in the table; Bouncer before Closing time', async () => {
   const { context, page } = await open();
   const seen = await page.evaluate(() => {
     const g = window.__gallery;
     g.manual = true;
     const out = [];
-    for (let n = 1; n <= 6; n++) {
+    for (let n = 1; n <= 7; n++) {
       g.startRun({ seed: 4 + n });
       if (n > 1) g.startRound(n);
       g.game.frenzyTimes = [];
@@ -893,7 +893,7 @@ test('splat-gallery AC-13: rounds bring in their elements as in the table', asyn
           if (t.turn) turning = true;
         }
       }
-      out.push({ kinds: [...kinds].sort(), drop: [...lanes.drop].sort(), mover: [...lanes.mover].sort(), turning, double: !!g.ROUNDS[n].double });
+      out.push({ kinds: [...kinds].sort(), drop: [...lanes.drop].sort(), mover: [...lanes.mover].sort(), turning, double: !!g.ROUNDS[n].double, name: g.ROUNDS[n].name, quota: g.ROUNDS[n].quota });
     }
     return out;
   });
@@ -904,7 +904,20 @@ test('splat-gallery AC-13: rounds bring in their elements as in the table', asyn
   assert.ok(seen[2].drop.every((i) => i >= 2), `drop-downs only in the front three lanes: ${seen[2].drop}`);
   assert.ok(!seen[2].turning && seen[3].turning, 'round 4: turnabouts');
   assert.ok(seen[4].kinds.includes('gold'), 'round 5: gold ducks');
-  assert.ok(seen[5].double && ['pop', 'drop', 'duck', 'target'].every((k) => seen[5].kinds.includes(k)) && seen[5].turning);
+  assert.deepEqual(seen.map((r) => r.name), ['Warm-up', 'Pop-ups', 'Drop-downs', 'Turnabouts', 'Gold rush', 'Bouncer', 'Closing time']);
+  assert.ok(!seen[5].double && ['pop', 'drop', 'duck', 'target', 'bouncer'].every((k) => seen[5].kinds.includes(k)) && seen[5].turning, `round 6, Bouncer: ${seen[5].kinds}`);
+  assert.ok(!seen[4].kinds.includes('bouncer'), 'no ball before Bouncer');
+  assert.equal(seen[5].quota, 34);
+  assert.ok(seen[6].double && ['pop', 'drop', 'duck', 'target', 'bouncer'].every((k) => seen[6].kinds.includes(k)) && seen[6].turning, `round 7, Closing time: ${seen[6].kinds}`);
+  assert.equal(seen[6].quota, 36);
+  const cfg = await page.evaluate(() => {
+    const g = window.__gallery;
+    const pickCfg = (c) => ({ vNear: c.vNear, vFar: c.vFar, pops: c.pops, drops: c.drops, turn: c.turn, frenzy: c.frenzy, tiny: c.tiny });
+    return { gold: pickCfg(g.ROUNDS[5]), bouncer: pickCfg(g.ROUNDS[6]), golds: g.ROUNDS[6].gold, last: g.LAST_ROUND };
+  });
+  assert.deepEqual(cfg.bouncer, cfg.gold, "Bouncer has Gold rush's speeds and elements");
+  assert.equal(cfg.golds, 1, 'one gold duck');
+  assert.equal(cfg.last, 7, 'Closing time is the last round');
   await context.close();
 });
 
@@ -1011,7 +1024,7 @@ async function pauseCheck(o = {}) {
 
 test('splat-gallery AC-15: hiding the page pauses a round; the resuming tap never fires and play waits out the count-in [slow-tests-splat-gallery AC-4]', () => pauseCheck());
 
-test('splat-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in round 6', async () => {
+test('splat-gallery AC-16: the assist grows only the body, starts at 0.3, rises after misses and an early lost run, falls with hits, and is off in the last round, 7 [splat-gallery-bouncer AC-12]', async () => {
   const { context, page } = await open();
   assert.equal(await page.evaluate(() => window.__gallery.memory.assist), 0.3, 'a new player');
   await ready(page, 2, { assist: 1 });
@@ -1036,6 +1049,8 @@ test('splat-gallery AC-16: the assist grows only the body, starts at 0.3, rises 
   await shoot(page, t.x + t.w * 0.38, 3);
   assert.ok(near((await state(page)).assist, 0.15));
   await ready(page, 6, { assist: 1 });
+  assert.equal(await page.evaluate(() => window.__gallery.assistNow()), 1, 'on in round 6, Bouncer');
+  await ready(page, 7, { assist: 1 });
   assert.equal(await page.evaluate(() => window.__gallery.assistNow()), 0);
   await ready(page, 2, { assist: 0.1 });
   await page.evaluate(() => (window.__gallery.game.time = 0.01));
@@ -2826,7 +2841,7 @@ test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "
   await context.close();
 });
 
-test('splat-gallery-goal-and-tiny-target AC-7: none in round 1, one in rounds 2 and 3, two in rounds 4 to 6, 6–24 s in and 6 s apart', async () => {
+test('splat-gallery-goal-and-tiny-target AC-7: none in round 1, one in rounds 2 and 3, two in rounds 4 to 7, 6–24 s in and 6 s apart [splat-gallery-bouncer AC-12]', async () => {
   const { context, page } = await open();
   const rounds = await page.evaluate(() => {
     const g = window.__gallery;
@@ -2834,7 +2849,7 @@ test('splat-gallery-goal-and-tiny-target AC-7: none in round 1, one in rounds 2 
     const out = [];
     for (let seed = 1; seed <= 40; seed++) {
       g.startRun({ seed });
-      for (let n = 1; n <= 6; n++) {
+      for (let n = 1; n <= 7; n++) {
         g.startRound(n);
         out.push([n, [...(g.game.spawn.tiny || [])]]);
       }
@@ -2989,9 +3004,9 @@ test('splat-gallery-goal-and-tiny-target AC-10: a tiny target scores 250 and 5 p
   assert.deepEqual(await hit('bull'), { points: 500, pips: 5, hopper: 0 }, 'a bullseye doubles and gives the ball back');
   await page.evaluate(() => (window.__gallery.game.bonus = true));
   assert.equal((await hit('body')).points, 750, 'the bonus: ×3');
-  await ready(page, 6);
+  await ready(page, 7);
   await page.evaluate(() => (window.__gallery.game.bonus = true));
-  assert.equal((await hit('bull')).points, 2000, 'round 6, bonus, bullseye: 2 × 3 × 2 capped at ×8');
+  assert.equal((await hit('bull')).points, 2000, 'round 7, closing time, bonus, bullseye: 2 × 3 × 2 capped at ×8');
   await context.close();
 });
 
@@ -3240,9 +3255,12 @@ test('splat-gallery-board-lights AC-6: the Out of time card still comes at 1.5 s
   await context.close();
 });
 
-test('splat-gallery-board-lights AC-7: after round 6 is won, the gold chase goes on beside the Closing time card', async () => {
+test('splat-gallery-board-lights AC-7, splat-gallery-bouncer AC-12: after round 7 is won, the gold chase goes on beside the Closing time card; round 6 goes on to round 7', async () => {
   const { context, page } = await open();
   await ready(page, 6);
+  await endRound(page, true, 1.7);
+  assert.deepEqual(await page.evaluate(() => [window.__gallery.game.round, window.__gallery.ROUNDS[window.__gallery.game.round].name, window.__gallery.ui().over]), [7, 'Closing time', false], 'round 6 won goes on to round 7');
+  await ready(page, 7);
   await endRound(page, true, 2.1);
   const u = await page.evaluate(() => window.__gallery.ui());
   assert.ok(u.over, 'the card');
@@ -3300,5 +3318,430 @@ test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy mar
   assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
   assert.equal(await page.evaluate(() => window.__gallery.ui().timerText), '0', 'the timer shows 0 as before');
   assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
+  await context.close();
+});
+
+// ---------- The bouncing ball (specs/splat-gallery-bouncer.md) ----------
+
+// Put a ball on the stage at x, between the curtains, going `dir`, `hopT` into its hop.
+const placeBouncer = (page, { x, dir = 1, hopT = 0, charged = false, colour = '#2f80ed' } = {}) =>
+  page.evaluate(
+    ({ x, dir, hopT, charged, colour }) => {
+      const g = window.__gallery;
+      const t = g.launchBouncer(dir);
+      t.x = x ?? g.stage().SW / 2;
+      t.inside = true;
+      t.hopT = hopT;
+      t.y = g.L.lanes[t.lane].line - g.bouncerRise(t);
+      if (charged) {
+        t.charged = true;
+        t.colour = colour;
+      }
+      return { id: t.id, x: t.x, y: t.y, r: t.r, lane: t.lane };
+    },
+    { x, dir, hopT, charged, colour }
+  );
+// Fire at where the ball will be when the paintball lands, and let it land.
+const shootBouncer = (page) =>
+  page.evaluate(() => {
+    const g = window.__gallery;
+    const t = g.targets().find((o) => o.kind === 'bouncer' && o.state === 'live');
+    const lane = g.L.lanes[t.lane];
+    let px = t.x;
+    let py = t.y;
+    for (let k = 0; k < 4; k++) {
+      const dur = g.flightTime(py);
+      px = t.x + t.dir * g.BOUNCER.speed * dur;
+      py = lane.line - g.bouncerRise({ lane: t.lane, hopT: t.hopT + dur });
+    }
+    const SW = g.stage().SW;
+    g.setPull(((SW / 2 - px) / (0.47 * SW)) * g.pullRange().x, ((g.L.C - py) / (g.L.C - g.L.T)) * g.pullRange().y);
+    g.game.lastFire = -1;
+    g.game.lastLand = null;
+    const b = g.fire();
+    for (let i = 0; i < 60 && !g.game.lastLand; i++) g.step(1 / 60);
+    return { land: g.game.lastLand, colour: b.colour, charged: t.charged, ballColour: t.colour };
+  });
+
+test('splat-gallery-bouncer AC-2, splat-gallery-bouncer AC-3: two balls in Bouncer, one in Closing time, none before; one at a time; none in a frenzy, in the last 6 s, or after its round', async () => {
+  const { context, page } = await open();
+  const due = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    const out = [];
+    for (let seed = 1; seed <= 30; seed++) {
+      g.startRun({ seed });
+      for (let n = 1; n <= 7; n++) {
+        g.startRound(n);
+        out.push([n, [...(g.game.spawn.bouncer || [])]]);
+      }
+    }
+    return out;
+  });
+  for (const [n, d] of due) {
+    assert.equal(d.length, n < 6 ? 0 : n === 6 ? 2 : 1, `round ${n}: ${d}`);
+    if (n === 6) assert.ok(d[0] >= 5 && d[0] <= 9 && d[1] >= 17 && d[1] <= 21, `Bouncer: ${d}`);
+    if (n === 7) assert.ok(d[0] >= 5 && d[0] <= 21, `Closing time: ${d}`);
+  }
+  await ready(page, 6);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const G = g.game;
+    const live = () => g.targets().filter((t) => t.kind === 'bouncer' && t.state === 'live').length;
+    G.spawn.bouncer = [0.5, 0.6];
+    const out = { most: 0 };
+    let firstGone = false;
+    let secondAt = -1;
+    for (let i = 0; i < 60 * 20; i++) {
+      g.step(1 / 60);
+      G.time = 20;
+      const n = live();
+      out.most = Math.max(out.most, n);
+      if (G.spawn.bouncer[0] < 0 && n === 0) firstGone = true;
+      if (G.spawn.bouncer[1] < 0 && secondAt < 0) {
+        secondAt = G.elapsed;
+        out.secondAfterFirst = firstGone;
+      }
+    }
+    out.secondCame = secondAt > 0;
+    // In a frenzy a due ball waits; it comes when the frenzy ends.
+    g.clear();
+    G.spawn.bouncer = [G.elapsed];
+    g.startFrenzy();
+    for (let i = 0; i < 30; i++) g.step(1 / 60);
+    out.inFrenzy = live();
+    for (let i = 0; i < 60 * 9 && G.frenzy > 0; i++) g.step(1 / 60);
+    g.step(1 / 60);
+    out.afterFrenzy = live();
+    // With under 6 s left none comes.
+    g.clear();
+    G.time = 5.9;
+    G.spawn.bouncer = [G.elapsed];
+    for (let i = 0; i < 30; i++) g.step(1 / 60);
+    out.late = live();
+    out.lateDue = G.spawn.bouncer[0];
+    // One on the stage when the round ends is gone in the next.
+    G.time = 20;
+    g.launchBouncer(1);
+    g.startRound(7);
+    out.nextRound = live();
+    return out;
+  });
+  assert.equal(r.most, 1, 'one at a time');
+  assert.ok(r.secondCame && r.secondAfterFirst, 'the second waited for the first to go');
+  assert.equal(r.inFrenzy, 0, 'none in a frenzy');
+  assert.equal(r.afterFrenzy, 1, 'it comes when the frenzy ends');
+  assert.deepEqual([r.late, r.lateDue], [0, -1], 'none with under 6 s left');
+  assert.equal(r.nextRound, 0, 'gone with its round');
+  await context.close();
+});
+
+test('splat-gallery-bouncer AC-4, splat-gallery-bouncer AC-11: the ball hops along the middle lane at 105 u/s, a third of a target high every 0.8 s, frenzy or not; turns at the curtains with a plip; rolls out after 8 s', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 6);
+    const r = await page.evaluate(() => {
+      const g = window.__gallery;
+      const G = g.game;
+      const out = { sides: [] };
+      for (const side of [1, -1]) {
+        g.clear();
+        const t = g.launchBouncer(side);
+        out.sides.push({ dir: t.dir, offLeft: t.x < 0, offRight: t.x > g.stage().SW });
+      }
+      g.clear();
+      // Some balls come from each side when the side is drawn.
+      const drawn = new Set();
+      for (let i = 0; i < 20; i++) drawn.add(g.launchBouncer().dir);
+      out.drawn = [...drawn].sort();
+      g.clear();
+      const t = g.launchBouncer(1);
+      const lane = g.L.lanes[t.lane];
+      const D = 142 * lane.s;
+      const lim = g.bouncerLimits(t);
+      out.lane = t.lane;
+      out.mid = g.bouncerLane();
+      out.n = g.L.n;
+      let minRise = Infinity;
+      let maxRise = 0;
+      let outside = 0;
+      let turns = 0;
+      let leftAt = -1;
+      const speeds = [];
+      let prev = t.x;
+      g.heard.length = 0;
+      for (let i = 0; i < 60 * 14 && t.state === 'live'; i++) {
+        // A frenzy and the last seconds' rush: neither changes its pace.
+        if (i === 60 * 3) g.startFrenzy();
+        G.time = i > 60 * 6 ? 2 : 20;
+        const d = t.dir;
+        g.step(1 / 60);
+        const rise = lane.line - t.y;
+        if (t.inside) {
+          minRise = Math.min(minRise, rise);
+          maxRise = Math.max(maxRise, rise);
+          if (!t.leaving && (t.x < lim.left - 1e-6 || t.x > lim.right + 1e-6)) outside++;
+        }
+        if (t.dir !== d) turns++;
+        else speeds.push(Math.abs(t.x - prev) * 60);
+        if (t.leaving && leftAt < 0) leftAt = t.onT;
+        prev = t.x;
+      }
+      Object.assign(out, { minRise, maxRise, D, outside, turns, leftAt, gone: t.state === 'gone', plips: g.heard.filter((h) => h === 'plip').length });
+      out.speedMin = Math.min(...speeds);
+      out.speedMax = Math.max(...speeds);
+      // The hop: down on the line at every 0.8 s, highest halfway.
+      const f = { lane: t.lane, hopT: 0 };
+      out.hop = [0, 0.4, 0.8, 1.2, 1.6].map((h) => g.bouncerRise({ ...f, hopT: h }));
+      // Near the right curtain it turns back, with a plip, in either layout.
+      g.clear();
+      const u = g.launchBouncer(1);
+      u.inside = true;
+      u.x = g.bouncerLimits(u).right - 3;
+      g.heard.length = 0;
+      for (let i = 0; i < 10; i++) g.step(1 / 60);
+      out.turnBack = { dir: u.dir, x: u.x, right: g.bouncerLimits(u).right, plip: g.heard.includes('plip'), rate: g.heardOpts.plip.rate };
+      return out;
+    });
+    assert.deepEqual(r.sides, [{ dir: 1, offLeft: true, offRight: false }, { dir: -1, offLeft: false, offRight: true }], 'it comes in from the side it is given');
+    assert.deepEqual(r.drawn, [-1, 1], 'drawn sides: both');
+    assert.equal(r.lane, r.n === 5 ? 2 : 1, 'the middle lane');
+    assert.equal(r.mid, r.lane);
+    assert.ok(r.minRise < 0.5 && r.minRise >= -1e-6, `its lowest point is on the line: ${r.minRise}`);
+    assert.ok(Math.abs(r.maxRise - r.D / 3) < 0.5, `its highest a third of a target up: ${r.maxRise} of ${r.D}`);
+    assert.ok(near(r.hop[0], 0, 1e-9) && near(r.hop[2], 0, 1e-6) && near(r.hop[4], 0, 1e-6) && near(r.hop[1], r.D / 3, 1e-6), `a hop every 0.8 s: ${r.hop}`);
+    assert.ok(r.speedMin > 104.9 && r.speedMax < 105.1, `105 u/s in a frenzy and the rush too: ${r.speedMin}–${r.speedMax}`);
+    assert.equal(r.outside, 0, 'never behind a curtain while in play');
+    // In portrait it crosses back and forth; on the wide landscape stage one crossing takes about its 8 s.
+    assert.ok(r.turns >= (r.n === 5 ? 1 : 0), `it turns: ${r.turns}`);
+    assert.ok(r.turnBack.dir === -1 && r.turnBack.x <= r.turnBack.right && r.turnBack.plip, `turns back at the curtain: ${JSON.stringify(r.turnBack)}`);
+    assert.equal(r.plips, r.turns, 'a plip at each turn');
+    assert.ok(r.leftAt >= 8 && r.gone, `rolls out after 8 s: ${r.leftAt}`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-bouncer AC-5: a red-and-white striped ball, 0.8 of a target, no stick, a shadow on its lane, in front of its lane, at least 44 px across', async () => {
+  for (const viewport of [PORTRAIT, { width: 360, height: 640 }, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 6);
+    const b = await placeBouncer(page, { hopT: 0.3 });
+    await realFrames(page, 2);
+    const r = await page.evaluate((b) => {
+      const g = window.__gallery;
+      const lane = g.L.lanes[b.lane];
+      const behind = g.makeTarget(lane.kind === 'water' ? 'duck' : 'target', { lane: b.lane, x: b.x, speed: 0, turn: false });
+      behind.y = b.y;
+      const hit = g.resolve(b.x, b.y);
+      return { drawn: g.bouncerDrawn(), D: 142 * lane.s, line: lane.line, k: g.stage().k, front: hit.t && hit.t.kind, poles: g.polesDrawn() };
+    }, b);
+    assert.ok(r.drawn, `drawn at ${viewport.width}×${viewport.height}`);
+    assert.ok(near(r.drawn.r * 2, r.D * 0.8, 1e-6), '0.8 of a target');
+    assert.equal(r.drawn.stick, false);
+    assert.equal(r.drawn.red, '#d8322a');
+    assert.equal(r.drawn.colour, '#fbf6ec', 'white stripes, uncharged');
+    assert.ok(near(r.drawn.shadowY, r.line + r.drawn.r, 1e-6), 'its shadow on the lane');
+    assert.equal(r.poles, 0, 'no stick drawn (nothing else is on the stage)');
+    assert.equal(r.front, 'bouncer', 'in front of its lane’s targets');
+    assert.ok(r.drawn.r * 2 * r.k >= 44, `${(r.drawn.r * 2 * r.k).toFixed(1)} px across at ${viewport.width}×${viewport.height}`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-bouncer AC-6, splat-gallery-bouncer AC-11: a shot on the ball mid-hop charges it with its colour, scores 2 pips and 20 points, moves the assist; a frenzy ball counts 1 pip', async () => {
+  const { context, page } = await open();
+  await ready(page, 6, { assist: 0.5 });
+  await placeBouncer(page, { x: 150, hopT: 0.3 });
+  const s0 = await state(page);
+  const r = await shootBouncer(page);
+  const s = await state(page);
+  assert.equal(r.land.kind, 'bouncer', `landed on: ${JSON.stringify(r.land)}`);
+  assert.ok(r.charged, 'charged');
+  assert.equal(r.ballColour, r.colour, 'it takes the shot’s colour');
+  assert.deepEqual([s.pips - s0.pips, s.score - s0.score], [2, 20]);
+  assert.ok(near(s.assist, 0.45), `a paid hit moves the assist: ${s.assist}`);
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heardOpts.hit.rate), 1.3, 'the higher knock');
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.clear();
+    g.game.bonus = false;
+    g.startFrenzy();
+  });
+  await placeBouncer(page, { x: 150, hopT: 0.5 });
+  const f0 = await state(page);
+  const f = await shootBouncer(page);
+  const f1 = await state(page);
+  assert.equal(f.land.kind, 'bouncer');
+  assert.deepEqual([f1.pips - f0.pips, f1.score - f0.score, f1.assist], [1, 40, f0.assist], 'a frenzy ball: 1 pip, ×2, the assist alone');
+  await context.close();
+});
+
+test('splat-gallery-bouncer AC-7, splat-gallery-bouncer AC-8: uncharged it knocks nothing; charged it knocks what it overlaps in its lane clear of the curtains, never a rising pop-up, the tiny or frenzy target, or another lane', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 6);
+    const r = await page.evaluate(() => {
+      const g = window.__gallery;
+      const G = g.game;
+      const mid = g.bouncerLane();
+      const lane = g.L.lanes[mid];
+      const mover = lane.kind === 'water' ? 'duck' : 'target';
+      const SW = g.stage().SW;
+      const cases = {
+        mover: { kind: mover },
+        back: { kind: mover, turn: true, turnT: 2.7 },
+        drop: { kind: 'drop', up: true },
+        pop: { kind: 'pop', up: true },
+        rising: { kind: 'pop', rising: true },
+        tiny: { kind: 'tiny' },
+        frenzy: { kind: 'frenzy' },
+        otherLane: { kind: 'target', lane: mid - 1 },
+        curtain: { kind: mover, atCurtain: true },
+        gold: { kind: 'gold', onlyWater: true },
+      };
+      const out = {};
+      for (const charged of [false, true]) {
+        for (const [name, c] of Object.entries(cases)) {
+          if (c.onlyWater && lane.kind !== 'water') continue;
+          g.clear();
+          const ball = g.launchBouncer(1);
+          ball.inside = true;
+          ball.charged = charged;
+          ball.colour = '#9b51e0';
+          const lim = g.bouncerLimits(ball);
+          const x = c.atCurtain ? lim.edge + 10 : SW / 2;
+          ball.x = x;
+          const o = g.makeTarget(c.kind, { lane: c.lane ?? mid, x, speed: 0, turn: !!c.turn, turnT: c.turnT, up: c.up });
+          if (c.kind === 'tiny' || c.kind === 'frenzy') o.motion = 'mover';
+          if (c.rising) o.popT = 0.1;
+          ball.y = o.y;
+          G.hopper = 2;
+          const s0 = G.score;
+          g.step(1 / 60);
+          out[`${charged}:${name}`] = { knocked: o.state === 'knocked', points: G.score - s0, splat: o.splats.length ? o.splats[0].colour : null, hopper: G.hopper, back: name === 'back' ? g.turnState(o).back : undefined };
+        }
+      }
+      return { out, water: lane.kind === 'water' };
+    });
+    const o = r.out;
+    for (const name of Object.keys(o).filter((k) => k.startsWith('false:'))) assert.equal(o[name].knocked, false, `uncharged knocks nothing: ${name}`);
+    for (const name of ['mover', 'back', 'drop', 'pop'].concat(r.water ? ['gold'] : [])) {
+      assert.equal(o[`true:${name}`].knocked, true, `charged knocks a ${name}`);
+      assert.equal(o[`true:${name}`].splat, '#9b51e0', `splatted in the ball’s colour: ${name}`);
+    }
+    assert.equal(o['true:back'].back, true, 'the back was showing');
+    for (const name of ['rising', 'tiny', 'frenzy', 'otherLane', 'curtain']) assert.equal(o[`true:${name}`].knocked, false, `never a ${name}`);
+    if (r.water) assert.equal(o['true:gold'].hopper, 6, 'a knocked gold duck refills the hopper');
+    await context.close();
+  }
+});
+
+test('splat-gallery-bouncer AC-9, splat-gallery-bouncer AC-11: knock n scores 10 × pips × n × the multiplier and 1 pip, rising in pitch; 5 a charge, then it rolls out; otherwise it rolls out after 6 s charged', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const G = g.game;
+    const mid = g.bouncerLane();
+    const lane = g.L.lanes[mid];
+    const mover = lane.kind === 'water' ? 'duck' : 'target';
+    const run = (bonus) => {
+      g.clear();
+      G.bonus = bonus;
+      const ball = g.launchBouncer(1);
+      const lim = g.bouncerLimits(ball);
+      ball.x = lim.left;
+      ball.inside = true;
+      ball.charged = true;
+      ball.colour = '#27ae60';
+      const ts = [];
+      for (let i = 0; i < 6; i++) ts.push(g.makeTarget(mover, { lane: mid, x: 75 + i * 50, speed: 0, turn: false }));
+      const knocks = [];
+      const rates = [];
+      let leftAt = -1;
+      for (let i = 0; i < 60 * 12 && ball.state === 'live'; i++) {
+        const s0 = G.score;
+        const p0 = G.pips;
+        const k0 = ball.knocks;
+        g.step(1 / 60);
+        if (ball.knocks > k0) {
+          knocks.push([G.score - s0, G.pips - p0]);
+          rates.push(g.heardOpts.hit.rate);
+        }
+        if (ball.leaving && leftAt < 0) leftAt = ball.knocks;
+      }
+      return { knocks, rates, standing: ts.filter((t) => t.state === 'live').length, leftAt, gone: ball.state === 'gone' };
+    };
+    const plain = run(false);
+    const bonus = run(true);
+    // No targets: it rolls out once 6 s charged.
+    g.clear();
+    G.bonus = false;
+    const ball = g.launchBouncer(1);
+    ball.x = g.stage().SW / 2;
+    ball.inside = true;
+    ball.charged = true;
+    let leftAfter = -1;
+    for (let i = 0; i < 60 * 14 && ball.state === 'live'; i++) {
+      g.step(1 / 60);
+      if (ball.leaving && leftAfter < 0) leftAfter = ball.chargeT;
+    }
+    return { plain, bonus, leftAfter, gone: ball.state === 'gone' };
+  });
+  assert.deepEqual(r.plain.knocks, [[20, 1], [40, 1], [60, 1], [80, 1], [100, 1]], 'knock n: 10 × 2 × n, 1 pip');
+  assert.equal(r.plain.standing, 1, 'at most 5 a charge');
+  assert.ok(r.plain.leftAt === 5 && r.plain.gone, 'then it rolls out');
+  assert.ok(r.plain.rates.every((x, i) => i === 0 || x > r.plain.rates[i - 1]), `each knock higher: ${r.plain.rates}`);
+  assert.deepEqual(r.bonus.knocks.map((k) => k[0]), [40, 80, 120, 160, 200], 'times the multiplier (the bonus ×2 in a middle lane)');
+  assert.ok(r.leftAfter >= 6 && r.gone, `it rolls out once 6 s charged: ${r.leftAfter}`);
+  await context.close();
+});
+
+test('splat-gallery-bouncer AC-10: a shot at a charged ball passes through it to what is behind', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    const mid = g.bouncerLane();
+    const lane = g.L.lanes[mid];
+    const x = g.stage().SW / 2;
+    const ball = g.launchBouncer(1);
+    ball.x = x;
+    ball.inside = true;
+    ball.y = lane.line;
+    const t = g.makeTarget(lane.kind === 'water' ? 'duck' : 'target', { lane: mid, x, speed: 0, turn: false });
+    const before = g.resolve(x, lane.line).t.kind;
+    ball.charged = true;
+    const after = g.resolve(x, lane.line).t.kind;
+    return { before, after, mover: t.kind };
+  });
+  assert.equal(r.before, 'bouncer', 'uncharged it takes the shot');
+  assert.equal(r.after, r.mover, 'charged, the shot goes through to the target behind');
+  await context.close();
+});
+
+test('splat-gallery-bouncer AC-13: paused or turned, the ball holds still, through the count-in too', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  await placeBouncer(page, { x: 120 });
+  await page.evaluate(() => (window.__gallery.manual = false));
+  const pos = () => page.evaluate(() => window.__gallery.targets().find((t) => t.kind === 'bouncer').x);
+  await waitFor(page, (x0) => window.__gallery.targets().find((t) => t.kind === 'bouncer').x !== x0, await pos(), { what: 'the ball moving' });
+  for (const how of ['pause', 'turn']) {
+    await page.evaluate((how) => {
+      const g = window.__gallery;
+      if (how === 'pause') g.pause();
+      else g.game.turned = true;
+    }, how);
+    const x0 = await pos();
+    await realFrames(page, 10);
+    assert.equal(await pos(), x0, `${how}d, it holds still`);
+    await page.evaluate((how) => {
+      const g = window.__gallery;
+      if (how === 'pause') g.resume();
+      else g.game.turned = false;
+    }, how);
+    await waitFor(page, (x0) => window.__gallery.targets().find((t) => t.kind === 'bouncer').x !== x0, x0, { what: `the ball moving again after the ${how}` });
+  }
   await context.close();
 });
