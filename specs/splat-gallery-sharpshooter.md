@@ -1,6 +1,6 @@
 # Splat Gallery: a last round, the Sharpshooter, where targets rise one at a time from below
 
-**Go:** pending
+**Go:** "Go" 2026-11-18
 
 ## Intent
 
