@@ -82,7 +82,10 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   beside the "Out of time" card, the red bulbs' centres run 3 units
   outside the board's plank on all four sides, each a little larger than the board's digit bulbs
   (radius 1.15 times the digit bulbs'). As today, the centres are placed without the board's
-  hit swell, and the ring is drawn inside it. This is the placement the owner saw first in
+  hit swell, and the ring is drawn inside it. Where the board sits against the screen's top (in
+  landscape), the top row comes down just enough to show whole, as it does today (Claude, during
+  the build, 2026-11-18: the owner, asked, answered "You can keep the frame or remove that yellow
+  thing around it", so the recommended option stands, flagged in the PR for the owner). This is the placement the owner saw first in
   `specs/splat-gallery-board-lights.md`. Its blinking, timing and grow-in are unchanged.
 - **The gold win ring goes outside the frame too** (owner, 2026-11-18: "I think the gold wing should
   be outside as well"): when a round is won and beside the "Closing time!" card, the gold chase sits
@@ -119,7 +122,8 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   slower at both ends than in the middle). For the rest of each 2 s there is no glint. It stays
   inside the bar.
 - **AC-10** When time runs out short, and on the "Out of time" card, every red ring bulb's centre is
-  3 units outside the board's plank, on one of its four sides, and its radius is 1.15 times the
+  3 units outside the board's plank, on one of its four sides (the top row lowered only where the
+  screen's top would cut a bulb, as in Decisions), and its radius is 1.15 times the
   digit bulbs' (positions without the swell, as today). Every centre is at or below `L.top` and left of the sound button's left edge, in
   portrait and in landscape. The swap every 0.5 s and the grow-in are as before.
 - **AC-11** The gold ring, when a round is won and on the "Closing time!" card, is laid out as in
