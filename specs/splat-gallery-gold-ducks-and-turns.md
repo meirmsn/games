@@ -1,6 +1,6 @@
 # Splat Gallery: more gold ducks you can't miss, and gentler turnabouts in round 4
 
-**Go:** pending
+**Go:** "go with a, do it on a child session" 2026-11-18
 
 ## Intent
 
