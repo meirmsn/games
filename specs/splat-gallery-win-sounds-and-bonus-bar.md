@@ -79,7 +79,7 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 - **The lose sound stays as it is** (owner, 2026-11-18: "I think there is a sound effect when you
   lose").
 - **The red ring goes back outside the frame** (owner, 2026-11-18): when time runs out short, and
-  beside the "Out of time" card, the red bulbs' centres run along the gold rim's line, 3 units
+  beside the "Out of time" card, the red bulbs' centres run 3 units
   outside the board's plank on all four sides, each a little larger than the board's digit bulbs
   (radius 1.15 times the digit bulbs'). As today, the centres are placed without the board's
   hit swell, and the ring is drawn inside it. This is the placement the owner saw first in
