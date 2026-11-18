@@ -2801,7 +2801,7 @@ test('splat-gallery-goal-and-tiny-target AC-6: each round opens with its name, "
     g.manual = true;
     g.startRun({ seed: 3 });
     const out = [];
-    for (let n = 1; n <= 6; n++) {
+    for (let n = 1; n < g.ROUNDS.length; n++) {
       g.startRound(n);
       const u = g.ui();
       out.push([u.banner, u.bannerSub, u.bannerGoal, u.bannerTip, g.ROUNDS[n].name, g.ROUNDS[n].quota]);
@@ -3240,9 +3240,10 @@ test('splat-gallery-board-lights AC-6: the Out of time card still comes at 1.5 s
   await context.close();
 });
 
-test('splat-gallery-board-lights AC-7: after round 6 is won, the gold chase goes on beside the Closing time card', async () => {
+// The last round is the Sharpshooter since specs/splat-gallery-sharpshooter.md (it was round 6).
+test('splat-gallery-board-lights AC-7: after the last round is won, the gold chase goes on beside the Closing time card', async () => {
   const { context, page } = await open();
-  await ready(page, 6);
+  await ready(page, 7);
   await endRound(page, true, 2.1);
   const u = await page.evaluate(() => window.__gallery.ui());
   assert.ok(u.over, 'the card');
@@ -3300,5 +3301,390 @@ test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy mar
   assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
   assert.equal(await page.evaluate(() => window.__gallery.ui().timerText), '0', 'the timer shows 0 as before');
   assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
+  await context.close();
+});
+
+// ---------- The Sharpshooter (specs/splat-gallery-sharpshooter.md) ----------
+
+// Play the Sharpshooter through, nobody shooting, for each seed, and record every rise: when (on the
+// round's clock and the time left), how many rose together, and each target's lane, kind and timings.
+// `frenzy: false` keeps the frenzy target away.
+const sharpRises = (page, seeds, { frenzy = false } = {}) =>
+  page.evaluate(
+    ({ seeds, frenzy }) => {
+      const g = window.__gallery;
+      g.manual = true;
+      const dt = 1 / 60;
+      const runs = [];
+      for (const seed of seeds) {
+        g.startRun({ seed });
+        g.startRound(7);
+        if (!frenzy) g.game.frenzyTimes = [];
+        const seen = new Set();
+        const rises = [];
+        let playT = null;
+        let emptySince = null;
+        let maxUp = 0;
+        let earlyMaxUp = 0;
+        const others = new Set();
+        let moved = false;
+        const xs = {};
+        while (g.game.mode === 'intro' || g.game.mode === 'play') {
+          g.step(dt);
+          if (g.game.mode === 'play' && playT === null) playT = g.game.T - dt;
+          const live = g.targets().filter((t) => t.state === 'live');
+          for (const t of live) {
+            if (t.kind !== 'pop' && t.kind !== 'frenzy') others.add(t.kind);
+            if (t.id in xs && xs[t.id] !== t.x) moved = true;
+            xs[t.id] = t.x;
+          }
+          maxUp = Math.max(maxUp, live.length);
+          if (g.game.elapsed < 15) earlyMaxUp = Math.max(earlyMaxUp, live.length);
+          const fresh = live.filter((t) => !seen.has(t.id));
+          if (fresh.length) {
+            fresh.forEach((t) => seen.add(t.id));
+            rises.push({
+              T: g.game.T, sincePlay: g.game.T - playT, wait: emptySince === null ? null : g.game.T - emptySince, elapsed: g.game.elapsed, left: g.game.time,
+              ts: fresh.map((t) => ({ lane: t.lane, kind: t.kind, up: t.upFor, rise: t.rise ?? 0.35, x: t.x, w: g.dims(t)[0], motion: t.motion || '' })),
+            });
+          }
+          if (live.length) emptySince = null;
+          else if (emptySince === null) emptySince = g.game.T;
+        }
+        runs.push({ rises, maxUp, earlyMaxUp, others: [...others], moved, n: g.L.n });
+      }
+      return runs;
+    },
+    { seeds, frenzy }
+  );
+const seedsFrom = (a, n) => Array.from({ length: n }, (_, i) => a + i);
+
+test('splat-gallery-sharpshooter AC-1: the run has seven rounds, the seventh the Sharpshooter, its sign with its quota and the tip', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    g.startRun({ seed: 3 });
+    g.startRound(7);
+    const u = g.ui();
+    return { rounds: g.ROUNDS.length - 1, sign: [u.banner, u.bannerSub, u.bannerGoal, u.bannerTip], quota: g.ROUNDS[7].quota };
+  });
+  assert.equal(r.rounds, 7);
+  assert.deepEqual(r.sign, ['Round 7', 'Sharpshooter', `${r.quota} to clear`, 'Tip: far targets count more']);
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-2: winning Closing time goes on to round 7, with no finale', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  await page.evaluate(() => (window.__gallery.heard.length = 0));
+  await endRound(page, true, 1.7);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    return { round: g.game.round, mode: g.game.mode, finale: g.heard.includes('finale'), over: g.ui().over };
+  });
+  assert.deepEqual([r.round, r.mode, r.finale, r.over], [7, 'intro', false, false]);
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-2: winning Closing time shows "Round cleared"', async () => {
+  const { context, page } = await open();
+  await ready(page, 6);
+  await endRound(page, true, 0.1);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).banner, 'Round cleared');
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-3: winning the Sharpshooter shows "Closing time!" with the score, plays the finale and ends the run', async () => {
+  const { context, page } = await open();
+  await ready(page, 7);
+  await page.evaluate(() => {
+    window.__gallery.heard.length = 0;
+    window.__gallery.game.score = 4321;
+  });
+  await endRound(page, true, 0.1);
+  const sign = await page.evaluate(() => window.__gallery.ui());
+  assert.deepEqual([sign.banner, sign.bannerSub], ['Closing time!', '4,321 points']);
+  await steps(page, 2);
+  const r = await page.evaluate(() => ({ finale: window.__gallery.heard.includes('finale'), mode: window.__gallery.game.mode, over: window.__gallery.ui().over }));
+  assert.deepEqual([r.finale, r.mode, r.over], [true, 'over', true]);
+  assert.equal(await page.locator('[data-over-title]').textContent(), 'Closing time!');
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-4: only pop-ups rise from behind the strips, standing still; nothing crosses, drops, turns or glints, in portrait and landscape', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    const runs = await sharpRises(page, seedsFrom(20, 8), { frenzy: true });
+    for (const r of runs) {
+      assert.deepEqual(r.others, [], 'no crossing target or duck, drop-down, gold duck or tiny target');
+      assert.ok(!r.moved, 'no target moves along its lane');
+      assert.ok(r.rises.length > 0);
+      for (const rise of r.rises) for (const t of rise.ts) assert.ok(t.kind === 'pop' || (t.kind === 'frenzy' && t.motion === 'pop'), `a ${t.kind} rose`);
+    }
+    const turning = await page.evaluate(() => window.__gallery.targets().some((t) => t.turn));
+    assert.ok(!turning, 'no turnabouts');
+    await context.close();
+  }
+});
+
+test('splat-gallery-sharpshooter AC-5: until 15 s in, one target at a time, each 0.6–1.4 s after the booth empties; the first 0.8 s after play starts', async () => {
+  const { context, page } = await open();
+  const runs = await sharpRises(page, seedsFrom(40, 10), { frenzy: true });
+  for (const r of runs) {
+    assert.equal(r.earlyMaxUp, 1, 'one at a time before 15 s');
+    assert.ok(Math.abs(r.rises[0].sincePlay - 0.8) <= 1 / 60 + 1e-6, `the first rose ${r.rises[0].sincePlay} s after play started`);
+    for (const rise of r.rises.slice(1)) {
+      if (rise.left <= 10) continue; // AC-9
+      if (rise.elapsed < 15) assert.equal(rise.ts.length, 1);
+      assert.ok(rise.wait >= 0.6 - 1e-6 && rise.wait <= 1.4 + 2 / 60, `a wait of ${rise.wait} s`);
+    }
+  }
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-6: from 15 s in, a third or so of rises are pairs, in different lanes and far apart; never more than two up', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    const runs = await sharpRises(page, seedsFrom(60, 75));
+    let late = 0;
+    let pairs = 0;
+    for (const r of runs) {
+      assert.ok(r.maxUp <= 2, `at most two up: ${r.maxUp}`);
+      for (const rise of r.rises) {
+        if (rise.elapsed < 15) {
+          assert.equal(rise.ts.length, 1, 'no pair before 15 s');
+          continue;
+        }
+        late++;
+        if (rise.ts.length !== 2) continue;
+        pairs++;
+        const [a, b] = rise.ts;
+        assert.notEqual(a.lane, b.lane, 'different lanes');
+        assert.ok(Math.abs(a.x - b.x) >= 2 * Math.max(a.w, b.w) - 1e-6, `centres ${Math.abs(a.x - b.x)} apart, widths ${a.w}, ${b.w}`);
+        assert.ok(a.up === 2.2 && b.up === 2.2, 'a pair is never a flash');
+      }
+    }
+    assert.ok(late >= 300, `a sample of ${late} rises`);
+    assert.ok(pairs / late >= 0.2 && pairs / late <= 0.45, `${pairs} pairs in ${late} rises`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-sharpshooter AC-6: the next rise waits until both of a pair are gone', async () => {
+  const { context, page } = await open();
+  const runs = await sharpRises(page, seedsFrom(60, 10));
+  for (const r of runs)
+    r.rises.forEach((rise, i) => {
+      if (i === 0) return;
+      assert.ok(rise.wait !== null, 'every rise comes once the booth is empty');
+    });
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-7: fair targets rise in 0.35 s and stay 2.2 s; flashes rise in 0.2 s, stay 0.15 s, never nearest, about one in four, never early or twice running', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    const runs = await sharpRises(page, seedsFrom(100, 50));
+    let singles = 0;
+    let flashes = 0;
+    for (const r of runs) {
+      let lastFlash = false;
+      r.rises.forEach((rise, i) => {
+        for (const t of rise.ts) assert.ok((t.rise === 0.35 && t.up === 2.2) || (t.rise === 0.2 && t.up === 0.15), `a rise of ${t.rise} s, up ${t.up} s`);
+        if (rise.ts.length !== 1) {
+          lastFlash = false;
+          return;
+        }
+        singles++;
+        const flash = rise.ts[0].up === 0.15;
+        if (flash) {
+          flashes++;
+          assert.ok(i >= 3, 'not among the first three rises');
+          assert.ok(!lastFlash, 'never two flashes in a row');
+          assert.notEqual(rise.ts[0].lane, r.n - 1, 'never in the nearest lane');
+        }
+        lastFlash = flash;
+      });
+    }
+    assert.ok(singles >= 300, `a sample of ${singles} single rises`);
+    assert.ok(flashes / singles >= 0.15 && flashes / singles <= 0.35, `${flashes} flashes in ${singles} singles`);
+    // The motion itself: a flash is fully up at 0.2 s, starts down at 0.35 s and is gone by 0.55 s.
+    const m = await page.evaluate(() => {
+      const g = window.__gallery;
+      g.manual = true;
+      g.startRun({ seed: 1 });
+      g.startRound(7);
+      g.clear();
+      g.game.mode = 'play';
+      g.game.spawn.sharp = null;
+      const lane = g.L.lanes[1];
+      const t = g.launchSharp(1, g.SHARP.flash, 200);
+      const at = (s) => {
+        for (let i = 0; i < Math.round(s * 600); i++) g.step(1 / 600);
+        return { y: t.y, state: t.state };
+      };
+      return { line: lane.line, up: at(0.2), still: at(0.14), down: at(0.1), gone: at(0.12) };
+    });
+    assert.ok(Math.abs(m.up.y - m.line) < 1e-6 && Math.abs(m.still.y - m.line) < 1e-6, 'up from 0.2 s to 0.34 s');
+    assert.ok(m.down.y > m.line, 'dropping at 0.44 s');
+    assert.equal(m.gone.state, 'gone');
+    await context.close();
+  }
+});
+
+test('splat-gallery-sharpshooter AC-8: a ball released 1.2 s after a fair far target is up lands on it before it drops, in portrait and landscape', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 7);
+    const r = await page.evaluate(() => {
+      const g = window.__gallery;
+      const t = g.launchSharp(0, g.SHARP.fair, g.stage().SW * 0.3);
+      const dt = 1 / 120;
+      while (t.popT < 0.35) g.step(dt);
+      const upAt = g.game.T;
+      while (g.game.T - upAt < 1.2) g.step(dt);
+      g.aimAt(t.x, g.L.lanes[0].line);
+      g.game.lastFire = -1;
+      g.game.lastLand = null;
+      const b = g.fire();
+      while (!g.game.lastLand) g.step(dt);
+      return { fired: !!b, what: g.game.lastLand.what, state: t.state, landedAfterUp: g.game.T - upAt };
+    });
+    assert.ok(r.fired);
+    assert.ok(['body', 'bull'].includes(r.what), `it landed on ${r.what}`);
+    assert.equal(r.state, 'knocked');
+    assert.ok(r.landedAfterUp < 2.2, `landed ${r.landedAfterUp} s after it was up, before the drop at 2.2 s`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-sharpshooter AC-9: from 10 s left the waits are 0.3–0.7 s; no rise with under 1.5 s left', async () => {
+  const { context, page } = await open();
+  const runs = await sharpRises(page, seedsFrom(140, 20));
+  let late = 0;
+  for (const r of runs)
+    for (const rise of r.rises) {
+      assert.ok(rise.left >= 1.5 - 1e-6, `a rise with ${rise.left} s left`);
+      if (rise.left > 10 || rise.wait === null) continue;
+      // A wait that began before 10 s left was drawn from the earlier range.
+      if (rise.left + rise.wait > 10) continue;
+      late++;
+      assert.ok(rise.wait >= 0.3 - 1e-6 && rise.wait <= 0.7 + 2 / 60, `a late wait of ${rise.wait} s`);
+    }
+  assert.ok(late > 20, `${late} late rises`);
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-10: the frenzy target rises alone from behind one of the two farthest strips, stays 1.6 s and never crosses', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    const runs = await sharpRises(page, seedsFrom(200, 10), { frenzy: true });
+    let seen = 0;
+    for (const r of runs)
+      for (const rise of r.rises) {
+        const f = rise.ts.find((t) => t.kind === 'frenzy');
+        if (!f) continue;
+        seen++;
+        assert.equal(rise.ts.length, 1, 'alone');
+        assert.ok(r.n > 3 ? [0, 1].includes(f.lane) : f.lane === 0, `lane ${f.lane} of ${r.n}`);
+        assert.equal(f.up, 1.6);
+        assert.equal(f.motion, 'pop');
+      }
+    assert.ok(seen >= 10, `${seen} frenzy targets`);
+    for (const r of runs) assert.ok(!r.moved, 'it never crosses');
+    await context.close();
+  }
+});
+
+test('splat-gallery-sharpshooter AC-11: in its frenzy only pop-ups spring up; the sequence goes on 0.8 s after the frenzy and the booth are done', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    g.startRun({ seed: 9 });
+    g.startRound(7);
+    g.game.frenzyTimes = [];
+    const dt = 1 / 60;
+    while (g.game.mode === 'intro') g.step(dt);
+    g.clear();
+    g.startFrenzy();
+    const kinds = new Set();
+    let count = 0;
+    const seen = new Set();
+    while (g.game.frenzy > 0) {
+      g.step(dt);
+      for (const t of g.targets()) {
+        kinds.add(t.kind);
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          count++;
+        }
+      }
+    }
+    // After the frenzy: wait for an empty booth, then the next rise.
+    let emptyAt = null;
+    let next = null;
+    for (let i = 0; i < 600 && next === null; i++) {
+      g.step(dt);
+      const live = g.targets().filter((t) => t.state === 'live');
+      const fresh = live.filter((t) => !seen.has(t.id));
+      if (fresh.length) next = g.game.T;
+      else if (!live.length && emptyAt === null) emptyAt = g.game.T;
+    }
+    return { kinds: [...kinds], count, wait: next - emptyAt };
+  });
+  assert.deepEqual(r.kinds, ['pop'], 'only pop-ups');
+  assert.ok(r.count >= 10, `${r.count} sprang up`);
+  assert.ok(Math.abs(r.wait - 0.8) <= 2 / 60, `the next rose ${r.wait} s after the booth emptied`);
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-12: hits score as in other rounds, no closing-time ×2, and the assist is off', async () => {
+  const { context, page } = await open();
+  await ready(page, 7, { assist: 1 });
+  const m = await page.evaluate(() => {
+    const g = window.__gallery;
+    const mk = (lane) => g.makeTarget('pop', { lane, up: true, turn: false });
+    const far = mk(0);
+    const near = mk(g.L.n - 1);
+    const out = { plain: g.multiplier(far, false), bull: g.multiplier(far, true), assist: g.assistNow() };
+    g.game.bonus = true;
+    out.bonusFar = g.multiplier(far, false);
+    out.bonusNear = g.multiplier(near, false);
+    g.game.bonus = false;
+    g.startFrenzy();
+    out.frenzy = g.multiplier(near, false);
+    return out;
+  });
+  assert.deepEqual(m, { plain: 1, bull: 2, assist: 0, bonusFar: 3, bonusNear: 1, frenzy: 2 });
+  // A real hit on a far pop-up: its lane's 3 pips and 30 points.
+  await ready(page, 7, { assist: 1 });
+  const t = await place(page, 'pop', { lane: 0, x: 200, up: true, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 0);
+  const s = await state(page);
+  assert.deepEqual([s.pips, s.score], [3, 30]);
+  await context.close();
+});
+
+test('splat-gallery-sharpshooter AC-13: rounds 1–6 keep their quotas and elements, and the assist is still off in round 6 and on in round 5', async () => {
+  const { context, page } = await open();
+  await ready(page, 5, { assist: 0.5 });
+  const on5 = await page.evaluate(() => window.__gallery.assistNow());
+  await ready(page, 6, { assist: 0.5 });
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    return {
+      off6: g.assistNow(),
+      quotas: g.ROUNDS.slice(1, 7).map((c) => c.quota),
+      sharp: g.ROUNDS.slice(1, 7).some((c) => c.sharp),
+      double: g.ROUNDS.map((c) => !!(c && c.double)),
+    };
+  });
+  assert.equal(on5, 0.5);
+  assert.equal(r.off6, 0);
+  assert.deepEqual(r.quotas, [7, 13, 18, 24, 30, 34]);
+  assert.ok(!r.sharp);
+  assert.deepEqual(r.double, [false, false, false, false, false, false, true, false], 'only Closing time doubles');
   await context.close();
 });
