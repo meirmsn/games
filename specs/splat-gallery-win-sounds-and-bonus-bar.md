@@ -55,8 +55,9 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   It starts only in play: a ball still in the air that crosses the quota after the time has run
   out starts no bonus (no sound, no BONUS), since the round is already decided. Repeats that haven't
   started when the round ends are dropped, and a new round, Restart or Play again clears them, so
-  they never carry over. When `cleared` starts, any `bonus` still sounding is stopped, so the two
-  never play together. Like everything on `game.T`, the repeats wait through a pause, a phone turn
+  they never carry over. A `bonus` already sounding when `cleared` starts plays out under it: changed by the
+  owner after the go, 2026-11-18, choosing "Let them overlap" over stopping it (the shared sound
+  code can't stop a sound, and changing it would need its own PR first) or delaying `cleared`. Like everything on `game.T`, the repeats wait through a pause, a phone turn
   and the 1 s count-in after them; while muted they keep their times silently. Rejected: keeping
   today's pizzicato run; G2 to G4.
 - **The bar says BONUS: option C** (owner, 2026-11-18). From the moment the quota is reached until
@@ -87,7 +88,7 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 ## Acceptance items
 
 - **AC-1** When a round from 1 to 5 is won, `cleared` plays once, at that moment, and no `quota` or
-  `bonus` sound plays with it.
+  `bonus` sound starts with it.
 - **AC-2** "Round cleared" is on screen, fully visible apart from its fade in and out, for at least
   2.5 s, and the next round's intro starts 3.1 s after the round ends.
 - **AC-3** When round 6 is won, `finale` plays as before, not `cleared`, and the "Closing time!"
@@ -96,8 +97,8 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   1.8 s later (on `game.T`), three times in all. `quota` never plays. Reaching the quota again in
   the same round (more hits) plays nothing more.
 - **AC-5** No new `bonus` starts at or after the round's end, nor after Restart, Play again or a new
-  round. When `cleared` starts, any `bonus` still sounding stops, including when the quota was
-  reached on the round's last frame. While the game is paused or turned, no `bonus` plays, and the
+  round. A `bonus` that started before the round's end may still be sounding when `cleared`
+  starts (owner, 2026-11-18). While the game is paused or turned, no `bonus` plays, and the
   remaining ones play at their times once `game.T` runs again. Muted, they keep their times.
 - **AC-6** A ball that lands after the time has run out (`mode` `lost`) and crosses the quota starts
   no bonus: no `bonus` sound, `game.bonus` stays false, and the bar keeps flashing red with no
