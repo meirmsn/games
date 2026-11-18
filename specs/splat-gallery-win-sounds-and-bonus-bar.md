@@ -1,6 +1,6 @@
 # Splat Gallery: a win you can read and hear, a BONUS bar, and the red lights back outside
 
-**Go:** pending
+**Go:** "and go" 2026-11-18 (to the summary with the three calls, right after "I think the gold wing should be outside as well"; calls 1 and 2 stand as proposed)
 
 ## Intent
 
