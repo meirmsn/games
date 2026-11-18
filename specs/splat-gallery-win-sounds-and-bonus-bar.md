@@ -79,8 +79,10 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   (radius 1.15 times the digit bulbs'). As today, the centres are placed without the board's
   hit swell, and the ring is drawn inside it. This is the placement the owner saw first in
   `specs/splat-gallery-board-lights.md`. Its blinking, timing and grow-in are unchanged.
-- **The gold win ring stays on the frame** (Claude: the owner named only the red lights; confirmed
-  at the go).
+- **The gold win ring goes outside the frame too** (owner, 2026-11-18: "I think the gold wing should
+  be outside as well"): when a round is won and beside the "Closing time!" card, the gold chase sits
+  on the same line as the red ring, with the same bulb size. Rejected: keeping it on the frame
+  (Claude's first proposal).
 
 ## Acceptance items
 
@@ -115,8 +117,9 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   3 units outside the board's plank, on one of its four sides, and its radius is 1.15 times the
   digit bulbs' (positions without the swell, as today). Every centre is at or below `L.top` and left of the sound button's left edge, in
   portrait and in landscape. The swap every 0.5 s and the grow-in are as before.
-- **AC-11** The gold ring, when a round is won and on the "Closing time!" card, is where it is today:
-  on the frame.
+- **AC-11** The gold ring, when a round is won and on the "Closing time!" card, is laid out as in
+  AC-10 (centres 3 units outside the plank, radius 1.15 times the digit bulbs', the same bounds);
+  its grow-in and chase are as before.
 - **AC-12** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
   converted to MP3; the README's credits line still covers them. `sounds/quota.mp3` is removed, as
   nothing plays it.
@@ -124,7 +127,7 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   swell and the board's digits. The existing Splat Gallery tests pass, apart from those whose
   literal behaviour this replaces, which are updated to this spec: the 1.6 s round-won wait, the
   `quota` sound, the "Bonus!" sign and `bonusLater` (the frenzy-counts tests that wait for it), and
-  the red ring on the frame (board-lights AC-5, AC-6, AC-8).
+  the ring on the frame (board-lights AC-4 to AC-8).
 
 ## States
 
@@ -132,15 +135,14 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 | ----------------------------- | ---------------------------------- | ---------------- | ------------------------ |
 | Playing, under the quota      | brass, filling                     | none             |                          |
 | Quota reached, time left      | gold, BONUS, glint every 2 s       | none             | `bonus` ×3, 0.9 s apart  |
-| Round won, rounds 1–5 (3.1 s) | gold, BONUS, glint                 | gold, on frame   | `cleared`                |
-| Round 6 won (2 s)             | gold, BONUS, glint                 | gold, on frame   | `finale` (as today)      |
+| Round won, rounds 1–5 (3.1 s) | gold, BONUS, glint                 | gold, outside    | `cleared`                |
+| Round 6 won (2 s)             | gold, BONUS, glint                 | gold, outside    | `finale` (as today)      |
 | Round lost (1.5 s)            | groove flashes red                 | red, outside     | `lost` (as today)        |
 | "Out of time" card            | groove, no flash                   | red, outside     |                          |
-| "Closing time!" card          | gold, BONUS, glint                 | gold, on frame   |                          |
+| "Closing time!" card          | gold, BONUS, glint                 | gold, outside    |                          |
 
 ## Out of scope
 
 - The lose sound, the timer's alarms and the music.
-- The gold ring's placement.
 - `specs/splat-gallery.md`'s sound and HUD sections are brought up to date in their follow-up docs
   PR, as for the count board itself.
