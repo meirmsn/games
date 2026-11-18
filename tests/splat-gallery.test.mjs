@@ -1094,8 +1094,9 @@ async function statesCheck(o = {}) {
   u = await ui();
   assert.deepEqual([u.banner, u.pips], ['Round cleared', 'gold']);
   assert.match(u.bannerSub, /^\+\d+ points$/);
-  // A frenzy: its pill, the timer stopped.
-  await steps(page, 3);
+  // A frenzy: its pill, the timer stopped. Into the next round first ("Round cleared" holds 3 s and
+  // the intro comes at 3.1 s since splat-gallery-win-sounds-and-bonus-bar AC-2).
+  await steps(page, 3.2);
   await page.evaluate(() => {
     const g = window.__gallery;
     g.game.mode = 'play';
