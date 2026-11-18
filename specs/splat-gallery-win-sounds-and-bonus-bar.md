@@ -72,6 +72,10 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   finish), then the bar rests for 1.1 s, so a glint every 2 s, the first starting the moment the
   quota is reached. The band is 20 units wide, clipped to the bar. It runs on `game.T`, so it
   freezes with pause and turn. Rejected: the mockup's even 1.4 s sweep with no rest.
+- **No gold rim on the board at the quota** (owner, 2026-11-18, during the build, looking at the
+  board past the quota: "Not sure what the yellow border around the of that frame is. Can you
+  remove it?"): the brass rim `drawGoalBoard` adds around the plank once the count reaches the
+  quota goes; BONUS and its glint on the bar mark the bonus instead. Rejected: keeping it.
 - **The lose sound stays as it is** (owner, 2026-11-18: "I think there is a sound effect when you
   lose").
 - **The red ring goes back outside the frame** (owner, 2026-11-18): when time runs out short, and
@@ -121,21 +125,23 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 - **AC-11** The gold ring, when a round is won and on the "Closing time!" card, is laid out as in
   AC-10 (centres 3 units outside the plank, radius 1.15 times the digit bulbs', the same bounds);
   its grow-in and chase are as before.
-- **AC-12** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
+- **AC-12** The count board never has a brass rim around its plank: past the quota it draws the
+  same number of brass pieces as under it (the bar alone).
+- **AC-13** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
   converted to MP3; the README's credits line still covers them. `sounds/quota.mp3` is removed, as
   nothing plays it.
-- **AC-13** Nothing else changes: the lose sound and its timing, the timer, the frenzy, the hit
+- **AC-14** Nothing else changes: the lose sound and its timing, the timer, the frenzy, the hit
   swell and the board's digits. The existing Splat Gallery tests pass, apart from those whose
   literal behaviour this replaces, which are updated to this spec: the 1.6 s round-won wait, the
   `quota` sound, the "Bonus!" sign and `bonusLater` (the frenzy-counts tests that wait for it), and
-  the ring on the frame (board-lights AC-4 to AC-8).
+  the ring on the frame (board-lights AC-4 to AC-8), and the gold rim (board-lights AC-2).
 
 ## States
 
 | State                         | Bar                                | Ring             | Sound                    |
 | ----------------------------- | ---------------------------------- | ---------------- | ------------------------ |
 | Playing, under the quota      | brass, filling                     | none             |                          |
-| Quota reached, time left      | gold, BONUS, glint every 2 s       | none             | `bonus` ×3, 0.9 s apart  |
+| Quota reached, time left      | gold, BONUS, glint every 2 s, no rim | none             | `bonus` ×3, 0.9 s apart  |
 | Round won, rounds 1–5 (3.1 s) | gold, BONUS, glint                 | gold, outside    | `cleared`                |
 | Round 6 won (2 s)             | gold, BONUS, glint                 | gold, outside    | `finale` (as today)      |
 | Round lost (1.5 s)            | groove flashes red                 | red, outside     | `lost` (as today)        |
