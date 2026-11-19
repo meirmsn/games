@@ -736,7 +736,7 @@ function launchTiny() {
   }
   return null;
 }
-// When in the round (on its own clock, `game.elapsed`) its tiny targets are due: 6–24 s in, 6 s apart.
+
 // When a round's gold ducks are due, on its own clock (`elapsed`): between 4 and 24 s, re-drawn
 // until every two are at least 3 s apart, so each gets noticed
 // (specs/splat-gallery-gold-ducks-and-turns.md).
@@ -749,6 +749,7 @@ function goldSchedule(n) {
   }
 }
 
+// When in the round (on its own clock, `game.elapsed`) its tiny targets are due: 6–24 s in, 6 s apart.
 function tinySchedule(n) {
   if (!n) return [];
   if (n === 1) return [rand(TINY.from, TINY.to)];
