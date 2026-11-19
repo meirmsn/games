@@ -3398,47 +3398,136 @@ test('splat-gallery-gold-ducks-and-turns AC-2: over 200+ seeded rounds 5 and 6 e
   await context.close();
 });
 
-// The share of a target's opaque pixels that are gold, drawn alone, face on, on a cleared canvas.
-const goldShare = (page, kind, opts) =>
+// A gold duck and an ordinary yellow target-duck, each drawn alone, the same way, on a cleared
+// canvas, the clock held at T: how they compare (AC-3).
+const goldVsPlain = (page, opts = {}, T = 0.4) =>
   page.evaluate(
-    ({ kind, opts }) => {
+    ({ opts, T }) => {
       const g = window.__gallery;
-      g.clear();
-      const t = g.makeTarget(kind, { lane: 4, x: g.stage().SW / 2, speed: 0, turn: false, ...opts });
-      t.phase = 0;
-      g.game.rock = 0;
-      const sparkles = g.drawAlone(t);
       const c = document.querySelector('#booth');
-      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-      let opaque = 0;
-      let gold = 0;
-      for (let i = 0; i < d.length; i += 4) {
-        if (d[i + 3] < 200) continue;
-        opaque++;
-        const [R, G, B] = [d[i], d[i + 1], d[i + 2]];
-        if (R >= 200 && G >= 150 && B <= 0.6 * G) gold++;
+      const cx = c.getContext('2d');
+      g.game.rock = 0;
+      g.game.T = T;
+      const shot = (kind, face) => {
+        g.clear();
+        const t = g.makeTarget(kind, { lane: 4, x: g.stage().SW / 2, speed: 0, turn: false, dir: 1, ...(face ? { face } : {}), ...opts });
+        t.phase = 0;
+        t.id = 1; // the same sparkles for every drawing at T
+        const sparkles = g.drawAlone(t);
+        t.state = 'gone';
+        return { d: cx.getImageData(0, 0, c.width, c.height).data, sparkles };
+      };
+      const plain = shot('duck', 'duck_target_yellow');
+      // The stick it stands on, in canvas px: from its middle down (the stick is no part of its edge).
+      const dpr = c.width / innerWidth;
+      const mid = g.toClient(g.stage().SW / 2, g.L.lanes[4].line);
+      const stick = { x: mid.x * dpr, y: mid.y * dpr, half: (g.stickWidth(g.L.lanes[4]) / 2) * g.stage().k * dpr + 4 };
+      const gold = shot('gold');
+      const W = c.width;
+      const stats = (d) => {
+        let n = 0;
+        const sum = [0, 0, 0];
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 200) continue;
+          n++;
+          for (let j = 0; j < 3; j++) sum[j] += d[i + j];
+        }
+        const m = sum.map((v) => v / n);
+        const [r, gg, b] = m.map((v) => v / 255);
+        const hi = Math.max(r, gg, b);
+        const lo = Math.min(r, gg, b);
+        let hue = 0;
+        if (hi > lo) hue = hi === r ? (60 * (gg - b)) / (hi - lo) : hi === gg ? 60 * (2 + (b - r) / (hi - lo)) : 60 * (4 + (r - gg) / (hi - lo));
+        return { n, mean: (m[0] + m[1] + m[2]) / 3, hue: (hue + 360) % 360 };
+      };
+      // Just outside the sprite's own edge: wholly clear in the plain drawing, with a plain opaque
+      // pixel within 2 px.
+      const P = plain.d;
+      const G = gold.d;
+      const inPlain = (x, y) => P[(y * W + x) * 4 + 3] >= 128;
+      let ring = 0;
+      let lined = 0;
+      let shine = 0;
+      let inside = 0;
+      for (let y = 2; y < c.height - 2; y++) {
+        for (let x = 2; x < W - 2; x++) {
+          const i = (y * W + x) * 4;
+          if (inPlain(x, y)) {
+            inside++;
+            if (G[i] >= 230 && G[i + 1] >= 230 && G[i + 2] >= 230) shine++;
+            continue;
+          }
+          if (P[i + 3] > 0) continue; // the sprite's own soft edge
+          if (Math.abs(x - stick.x) <= stick.half && y > stick.y) continue; // beside its stick, not its edge
+          let near = false;
+          for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2 && !near; dx++) near = inPlain(x + dx, y + dy);
+          if (!near) continue;
+          ring++;
+          if (G[i + 3] >= 200 && G[i] > G[i + 1] && G[i + 1] > G[i + 2] && G[i] <= 140) lined++;
+        }
       }
-      t.state = 'gone';
-      return { share: gold / opaque, opaque, sparkles };
+      let same = true;
+      for (let i = 0; i < P.length && same; i++) same = P[i] === G[i];
+      return { plain: stats(P), gold: stats(G), ring, lined, shine, inside, sparkles: gold.sparkles, plainSparkles: plain.sparkles, same };
     },
-    { kind, opts }
+    { opts, T }
   );
 
-test('splat-gallery-gold-ducks-and-turns AC-3: face on, a gold duck is at least 70% gold with sparkles, an ordinary yellow target-duck at most 30%; turning or on its back it has no gold and no sparkles', async () => {
+test('splat-gallery-gold-ducks-and-turns AC-3: face on, a gold duck is deep metallic gold, 40+ levels darker than a yellow duck with a 35–50° hue, a dark-gold outline and a band of near-white shine; turning or on its back it is any duck’s back', async () => {
   const { context, page } = await open();
   await ready(page, 5);
-  const gold = await goldShare(page, 'gold', {});
-  const plain = await goldShare(page, 'duck', { face: 'duck_target_yellow' });
-  assert.ok(gold.share >= 0.7, `gold duck: ${(gold.share * 100).toFixed(1)}% gold of ${gold.opaque}`);
-  assert.ok(gold.sparkles >= 2, `sparkles at its crown and in its trail: ${gold.sparkles}`);
-  assert.ok(plain.share <= 0.3, `yellow target-duck: ${(plain.share * 100).toFixed(1)}% gold`);
-  // Turning (0.1 s into the turn: still its face, squeezed) and on its back: no tint, no sparkles.
-  for (const [what, turnT] of [['turning', 2.3], ['back', 3.0]]) {
-    const r = await goldShare(page, 'gold', { turn: true, turnT });
-    const ref = await goldShare(page, 'duck', { face: 'duck_target_yellow', turn: true, turnT });
-    assert.equal(r.sparkles, 0, `${what}: no sparkles`);
-    assert.ok(Math.abs(r.share - ref.share) < 0.02 && r.share <= 0.3, `${what}: drawn as any duck, ${(r.share * 100).toFixed(1)}% gold vs ${(ref.share * 100).toFixed(1)}%`);
+  // At moments every 0.3 s over a whole sweep of the shine (2π / 2.2 s), its sparkles coming and going.
+  for (let T = 0; T < 2.9; T += 0.3) {
+    const r = await goldVsPlain(page, {}, T);
+    const dark = r.plain.mean - r.gold.mean;
+    assert.ok(dark >= 40, `T ${T}: ${dark.toFixed(1)} levels darker (${r.gold.mean.toFixed(1)} vs ${r.plain.mean.toFixed(1)})`);
+    assert.ok(r.gold.hue >= 35 && r.gold.hue <= 50, `T ${T}: hue ${r.gold.hue.toFixed(1)}°`);
+    assert.ok(r.ring > 100 && r.lined / r.ring >= 0.8, `T ${T}: the dark-gold outline: ${r.lined} of ${r.ring} edge pixels`);
+    assert.ok(r.shine >= r.inside * 0.01, `T ${T}: a band of shine: ${r.shine} of ${r.inside} pixels`);
   }
+  // Turning (0.1 s into the turn: still its face, squeezed) and on its back: drawn exactly as an
+  // ordinary duck, with no sparkles.
+  for (const [what, turnT] of [['turning', 2.3], ['back', 3.0]]) {
+    const r = await goldVsPlain(page, { turn: true, turnT });
+    assert.ok(r.same, `${what}: pixel for pixel an ordinary duck`);
+    assert.equal(r.sparkles, 0, `${what}: no sparkles`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-8: a gold duck’s sparkles twinkle: what is drawn differs 0.3 s apart, and over 2 s each has been fully shown and gone', async () => {
+  const { context, page } = await open();
+  await ready(page, 5);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.rock = 0;
+    g.clear();
+    const t = g.makeTarget('gold', { lane: 4, x: g.stage().SW / 2, speed: 0, turn: false });
+    const at = (T) => {
+      g.game.T = T;
+      g.drawAlone(t);
+      return g.sparkleLog().map((s) => ({ tag: s.tag, r: +s.r.toFixed(3), alpha: +s.alpha.toFixed(3) }));
+    };
+    const pairs = [];
+    for (let T = 0; T < 3; T += 0.25) pairs.push([at(T), at(T + 0.3)]);
+    // Over 2 s, sampled each frame: for each sparkle, its largest size, whether it was ever fully
+    // shown at it, and whether it was ever gone.
+    const seen = {};
+    const frames = [];
+    for (let i = 0; i <= 120; i++) frames.push(at(10 + i / 60));
+    for (const f of frames) for (const s of f) seen[s.tag] = Math.max(seen[s.tag] || 0, s.r);
+    const tags = Object.keys(seen);
+    const each = tags.map((tag) => ({
+      tag,
+      shown: frames.some((f) => f.some((s) => String(s.tag) === tag && s.alpha >= 0.999 && s.r >= seen[tag] - 1e-3)),
+      gone: frames.some((f) => !f.some((s) => String(s.tag) === tag)),
+    }));
+    t.state = 'gone';
+    return { pairs, each };
+  });
+  for (const [a, b] of r.pairs) assert.notDeepEqual(a, b, `the sparkles change in 0.3 s: ${JSON.stringify(a)}`);
+  assert.ok(r.each.length >= 3, `a head sparkle and a trail: ${JSON.stringify(r.each)}`);
+  for (const s of r.each) assert.ok(s.shown && s.gone, `sparkle ${s.tag} fully shown and gone within 2 s: ${JSON.stringify(s)}`);
   await context.close();
 });
 

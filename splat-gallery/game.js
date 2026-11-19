@@ -289,40 +289,113 @@ function makeMasks() {
   makeGold('duck_target_yellow');
 }
 
-// A sprite tinted the game's gold (#ffd23f, the tiny target's rim), keeping its light and dark: each
-// pixel's lightness picks a gold from dark through #ffd23f to pale, so a painted target's rings still
-// show (specs/splat-gallery-gold-ducks-and-turns.md).
-const GOLD_RAMP = [[150, 95, 10], [255, 210, 63], [255, 240, 130]];
+// The gold duck's deep metallic gold (specs/splat-gallery-gold-ducks-and-turns.md): its sprite toned
+// from dark amber-gold in its shadows to the game's gold (#ffd23f, the tiny target's rim) in its
+// lights, so a painted target's rings still show; a dark-gold outline round it; and, drawn each
+// frame, a band of near-white shine sweeping across it.
+const GOLD_LOOK = { dark: [122, 74, 0], light: [255, 210, 63], curve: 3.6, top: 1.35, foot: 0.25, outline: '#6e3c00', pad: 14 };
 const golds = {};
 function makeGold(name) {
   const [fx0, fy0, w, h] = FRAMES[name];
-  const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
-  const g = c.getContext('2d', { willReadFrequently: true });
+  const P = GOLD_LOOK.pad;
+  const tone = document.createElement('canvas');
+  tone.width = w;
+  tone.height = h;
+  const g = tone.getContext('2d', { willReadFrequently: true });
   g.drawImage(atlas, fx0, fy0, w, h, 0, 0, w, h);
   const img = g.getImageData(0, 0, w, h);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const l = (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255;
-    const [a, b, u] = l < 0.5 ? [GOLD_RAMP[0], GOLD_RAMP[1], l / 0.5] : [GOLD_RAMP[1], GOLD_RAMP[2], (l - 0.5) / 0.5];
-    for (let j = 0; j < 3; j++) d[i + j] = Math.round(lerp(a[j], b[j], u));
+    // Lit from above, like polished metal: brightest along its top, deepest at its foot.
+    const row = Math.floor(i / 4 / w) / h;
+    const lit = lerp(GOLD_LOOK.top, GOLD_LOOK.foot, row);
+    const u = clamp(((0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255) ** GOLD_LOOK.curve * lit, 0, 1);
+    for (let j = 0; j < 3; j++) d[i + j] = Math.round(lerp(GOLD_LOOK.dark[j], GOLD_LOOK.light[j], u));
   }
   g.putImageData(img, 0, 0);
-  golds[name] = c;
-}
-function goldSprite(name, x, y, w, h, flip = false) {
-  const c = golds[name];
-  if (!c) return sprite(name, x, y, w, h, flip);
-  ctx.save();
-  if (flip) {
-    ctx.translate(x + w, y);
-    ctx.scale(-1, 1);
-    ctx.drawImage(c, 0, 0, w, h);
-  } else {
-    ctx.drawImage(c, x, y, w, h);
+  // The outline: the sprite's silhouette in dark gold, spread `pad` source pixels every way.
+  const sil = document.createElement('canvas');
+  sil.width = w;
+  sil.height = h;
+  const sg = sil.getContext('2d');
+  sg.drawImage(tone, 0, 0);
+  sg.globalCompositeOperation = 'source-in';
+  sg.fillStyle = GOLD_LOOK.outline;
+  sg.fillRect(0, 0, w, h);
+  const line = document.createElement('canvas');
+  line.width = w + 2 * P;
+  line.height = h + 2 * P;
+  const lg = line.getContext('2d');
+  for (let a = 0; a < 24; a++) {
+    const q = (a * Math.PI) / 12;
+    lg.drawImage(sil, P + Math.cos(q) * P, P + Math.sin(q) * P);
   }
+  for (let r = 1; r < P; r++) for (let a = 0; a < 8; a++) lg.drawImage(sil, P + Math.cos((a * Math.PI) / 4) * r, P + Math.sin((a * Math.PI) / 4) * r);
+  // A scratch canvas the shine is laid on each frame, atop the toned sprite only.
+  const shine = document.createElement('canvas');
+  shine.width = w;
+  shine.height = h;
+  golds[name] = { tone, line, shine, w, h };
+}
+// Where the shine's band is, as a share of the way across: sweeping to and fro, never off the duck.
+const shineAt = () => 0.3 + 0.45 * (0.5 - 0.5 * Math.cos(game.T * 2.2));
+function goldSprite(name, x, y, w, h, flip = false) {
+  const G = golds[name];
+  if (!G) return sprite(name, x, y, w, h, flip);
+  const sg = G.shine.getContext('2d');
+  sg.globalCompositeOperation = 'copy';
+  sg.drawImage(G.tone, 0, 0);
+  sg.globalCompositeOperation = 'source-atop';
+  const c = shineAt() * G.w;
+  // A slanted band across the body: the gradient runs mostly sideways, so its stripes stand
+  // nearly upright, leaning a little.
+  const band = G.w * 0.1;
+  const grad = sg.createLinearGradient(c - band, G.h / 2 - band * 0.45, c + band, G.h / 2 + band * 0.45);
+  grad.addColorStop(0, 'rgba(255,252,240,0)');
+  grad.addColorStop(0.32, 'rgba(255,252,240,0.35)');
+  grad.addColorStop(0.44, 'rgba(255,252,240,1)');
+  grad.addColorStop(0.56, 'rgba(255,252,240,1)');
+  grad.addColorStop(0.68, 'rgba(255,252,240,0.35)');
+  grad.addColorStop(1, 'rgba(255,252,240,0)');
+  sg.fillStyle = grad;
+  sg.fillRect(0, 0, G.w, G.h);
+  sg.globalCompositeOperation = 'source-over';
+  const s = w / G.w;
+  const P = GOLD_LOOK.pad * s;
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) {
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(G.line, -P, -P, w + 2 * P, h + 2 * P);
+  ctx.drawImage(G.shine, 0, 0, w, h);
   ctx.restore();
+}
+
+// A gold duck's sparkles twinkle: each grows in, holds, fades out and is gone a while, then another
+// appears somewhere new. Slot 0 is the large one at its head; 1–3 trail behind it.
+const TWINKLE = { period: 1.1, grow: 0.18, hold: 0.5, fade: 0.75 };
+const hash = (a, b, c) => {
+  const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+function goldSparkles(t, w, h) {
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const at = game.T / TWINKLE.period + i * 0.37 + t.id * 0.13;
+    const k = Math.floor(at);
+    const u = (at - k) * TWINKLE.period;
+    if (u >= TWINKLE.fade) continue;
+    const grow = Math.min(1, u / TWINKLE.grow);
+    const alpha = u < TWINKLE.hold ? grow : 1 - (u - TWINKLE.hold) / (TWINKLE.fade - TWINKLE.hold);
+    const j = hash(t.id, i, k);
+    const r = (i === 0 ? 0.3 : 0.17 - i * 0.02) * w * grow;
+    const x = i === 0 ? t.dir * w * (0.22 + 0.14 * j) : -t.dir * w * (0.38 + 0.2 * i + 0.1 * j);
+    const y = i === 0 ? -h * (0.38 + 0.1 * hash(k, i, t.id)) : -h * 0.2 + h * 0.3 * hash(k, t.id, i);
+    out.push({ i, x, y, r, alpha, a: game.T * 2 + i + k });
+  }
+  return out;
 }
 
 // A strip's tile, made to meet itself (specs/splat-gallery-near-water.md): the grass tile's first
@@ -1818,14 +1891,9 @@ function drawTarget(t) {
     sparkle(w * 0.42, -h * 0.42, w * 0.3, game.T * 3);
   }
   if (golden) {
-    // The tiny target's turning sparkle at its crown, and a short trail of them behind it, each
-    // fainter and smaller, twinkling.
-    sparkle(t.dir * w * 0.3, -h * 0.42, w * 0.22, game.T * 3);
-    for (let i = 1; i <= 3; i++) {
-      ctx.globalAlpha = (1 - i * 0.22) * (0.7 + 0.3 * Math.sin(game.T * 9 + i * 2.1));
-      const x = -t.dir * (w * 0.42 + i * w * 0.2);
-      const y = -h * 0.1 + Math.sin(game.T * 4 + i * 1.7) * h * 0.12;
-      sparkle(x, y, w * (0.16 - i * 0.025), game.T * 2 + i);
+    for (const p of goldSparkles(t, w, h)) {
+      ctx.globalAlpha = p.alpha;
+      sparkle(p.x, p.y, p.r, p.a, p.i);
     }
     ctx.globalAlpha = 1;
   }
@@ -1841,8 +1909,8 @@ function drawTarget(t) {
   ctx.globalAlpha = 1;
 }
 
-// A four-pointed star of light, turning.
-function sparkle(x, y, r, a) {
+// A four-pointed star of light, turning. `tag` names it in the frame's log, for the tests.
+function sparkle(x, y, r, a, tag = null) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(a);
@@ -1857,8 +1925,10 @@ function sparkle(x, y, r, a) {
   ctx.fill();
   ctx.restore();
   sparklesDrawn++;
+  sparkleLog.push({ tag, r, alpha: ctx.globalAlpha });
 }
 let sparklesDrawn = 0; // in the last frame (for the tests)
+let sparkleLog = []; // each drawn in the last frame: its tag, size and opacity
 
 // A hit target's pose: the mechanism under the booth pulls it straight down along its stick, the
 // stick going with it, out of sight behind its strip; a drop-down is hauled up behind the valance.
@@ -2544,6 +2614,7 @@ function drawLamps() {
 function draw() {
   polesDrawn = 0;
   sparklesDrawn = 0;
+  sparkleLog = [];
   paintClipped = 0;
   signsWorn = 0;
   signTexts = [];
@@ -2855,11 +2926,12 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
         sparklesDrawn = 0;
+        sparkleLog = [];
         drawTarget(t);
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         return sparklesDrawn;
       },
-      goldSchedule, GOLD, turnCycle,
+      goldSchedule, GOLD, GOLD_LOOK, turnCycle, TWINKLE, sparkleLog: () => sparkleLog,
       balls: () => balls,
       paint: () => paint,
       clear() {
