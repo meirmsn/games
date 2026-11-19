@@ -3370,91 +3370,45 @@ test('splat-gallery-win-sounds-and-bonus-bar AC-3: round 6 won plays finale, not
   await context.close();
 });
 
-test('splat-gallery-win-sounds-and-bonus-bar AC-4: reaching the quota in play plays bonus three times, 0.9 s apart, never quota, and not again past it', async () => {
+test('splat-gallery-win-sounds-and-bonus-bar AC-4: reaching the quota in play plays bonus once, never quota, and not again past it', async () => {
   const { context, page } = await open();
   await ready(page, 2);
   await hush(page);
   await reachQuota(page);
   assert.equal(await count(page, 'bonus'), 1, 'at once');
-  await steps(page, 0.85);
-  assert.equal(await count(page, 'bonus'), 1, 'not before 0.9 s');
-  await steps(page, 0.1);
-  assert.equal(await count(page, 'bonus'), 2, 'again at 0.9 s');
-  await steps(page, 0.9);
-  assert.equal(await count(page, 'bonus'), 3, 'a third at 1.8 s');
+  await steps(page, 3);
+  assert.equal(await count(page, 'bonus'), 1, 'no repeats');
   // More hits past the quota: nothing more.
   const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, t.x + t.w * 0.38, 0);
-  await steps(page, 3);
-  assert.equal(await count(page, 'bonus'), 3, 'three in all');
+  await steps(page, 1);
+  assert.equal(await count(page, 'bonus'), 1, 'once in all');
   assert.equal(await count(page, 'quota'), 0, 'quota never plays');
   await context.close();
 });
 
-test('splat-gallery-win-sounds-and-bonus-bar AC-5: no bonus starts after the round ends, a new round or Play again; a pause or a turn holds them; muted, they keep their times', async () => {
+test('splat-gallery-win-sounds-and-bonus-bar AC-5: no bonus starts at or after the round ends, nor after a new round or Play again', async () => {
   const { context, page } = await open();
-  // The round ends between the first and second.
-  await ready(page, 2);
-  await hush(page);
-  await reachQuota(page);
-  await steps(page, 0.5);
-  await endRound(page, true, 3);
-  assert.equal(await count(page, 'bonus'), 1, 'the round ended: the repeats are dropped');
-  // A new round straight after the first.
-  await ready(page, 2);
-  await hush(page);
-  await reachQuota(page);
-  await page.evaluate(() => window.__gallery.startRound(3));
-  await steps(page, 3);
-  assert.equal(await count(page, 'bonus'), 1, 'a new round clears them');
-  // Play again (a new run) straight after the first.
-  await ready(page, 2);
-  await hush(page);
-  await reachQuota(page);
-  await page.evaluate(() => window.__gallery.startRun({ seed: 2 }));
-  await steps(page, 3);
-  assert.equal(await count(page, 'bonus'), 1, 'a new run clears them');
-  // The quota reached on the round's last frame: the round ends; no repeat after it.
+  // The quota reached on the round's last frame: one bonus, then cleared, and nothing after.
   await ready(page, 2);
   await hush(page);
   await reachQuota(page);
   await page.evaluate(() => (window.__gallery.game.time = 1 / 120));
   await steps(page, 3);
-  assert.equal(await count(page, 'bonus'), 1, 'the last frame: one, and cleared after it');
+  assert.equal(await count(page, 'bonus'), 1, 'one, and cleared after it');
   assert.equal(await count(page, 'cleared'), 1);
-  // Paused, then a turn: the page's frames run but the game's clock doesn't, so no repeat plays.
-  await ready(page, 2);
-  await hush(page);
-  await reachQuota(page);
-  await page.evaluate(() => {
-    window.__gallery.pause();
-    window.__gallery.manual = false;
-  });
-  const T0 = await page.evaluate(() => window.__gallery.game.T);
-  await realFrames(page, 40);
-  assert.equal(await page.evaluate(() => window.__gallery.game.T), T0, 'the clock holds while paused');
-  assert.equal(await count(page, 'bonus'), 1, 'none while paused');
-  await page.setViewportSize(LANDSCAPE);
-  await realFrames(page, 40);
-  assert.equal(await count(page, 'bonus'), 1, 'none after a turn either');
-  await page.setViewportSize({ width: 390, height: 844 });
-  await realFrames(page, 10);
-  await page.evaluate(() => {
-    window.__gallery.manual = true;
-    window.__gallery.resume();
-    window.__gallery.game.resumeT = 0;
-    window.__gallery.game.paused = false;
-    window.__gallery.game.turned = false;
-  });
-  await steps(page, 1.85);
-  assert.equal(await count(page, 'bonus'), 3, 'the rest play once the clock runs');
-  // Muted: the same times.
-  await ready(page, 2);
-  await page.evaluate(() => document.querySelector('[data-mute]').click());
-  await hush(page);
-  await reachQuota(page);
-  await steps(page, 0.95);
-  assert.equal(await count(page, 'bonus'), 2, 'muted, the second at 0.9 s');
+  const h = await page.evaluate(() => window.__gallery.heard.slice());
+  assert.ok(h.indexOf('bonus') < h.indexOf('cleared'), `bonus before cleared: ${h}`);
+  // A new round, and a new run (Play again), start with no bonus and play none.
+  for (const next of [() => window.__gallery.startRound(3), () => window.__gallery.startRun({ seed: 2 })]) {
+    await ready(page, 2);
+    await reachQuota(page);
+    await hush(page);
+    await page.evaluate(next);
+    assert.equal((await state(page)).bonus, false, 'the bonus is over');
+    await steps(page, 3);
+    assert.equal(await count(page, 'bonus'), 0, 'no bonus after it');
+  }
   await context.close();
 });
 
@@ -3537,33 +3491,39 @@ test('splat-gallery-win-sounds-and-bonus-bar AC-8: no Bonus banner, with or with
   await context.close();
 });
 
-test('splat-gallery-win-sounds-and-bonus-bar AC-9: a 20-unit glint crosses the bar left to right in 0.9 s with easing, every 2 s from the quota', async () => {
+test('splat-gallery-win-sounds-and-bonus-bar AC-9: the BONUS bar flashes every 0.6 s from the quota, gold with dark letters then dark with yellow letters, and holds while paused', async () => {
   const { context, page } = await open();
-  const e = await page.evaluate(() => {
+  const k = await page.evaluate(() => {
     const g = window.__gallery;
-    return {
-      ease: [0, 0.1, 0.5, 0.9, 1].map(g.easeInOut),
-      glint: [0, 0.45, 0.89, 0.95, 1.99, 2.45].map((t) => g.bonusGlint(t)),
-      consts: [g.GLINT_SWEEP, g.GLINT_EVERY, g.GLINT_W],
-    };
+    return { flash: g.BONUS_FLASH, dark: g.BONUS_DARK, glow: g.BONUS_GLOW, at: [0, 0.3, 0.59, 0.61, 1.19, 1.21, 1.8, 2.5].map((t) => g.bonusDark(t)) };
   });
-  assert.deepEqual(e.consts, [0.9, 2, 20]);
-  assert.equal(e.ease[0], 0);
-  assert.ok(near(e.ease[2], 0.5) && near(e.ease[4], 1));
-  assert.ok(e.ease[1] < 0.1 && e.ease[3] > 0.9, `slower at both ends: ${e.ease}`);
-  assert.ok(near(e.glint[0], 0) && near(e.glint[1], 0.5), `${e.glint}`);
-  assert.ok(e.glint[2] > 0.99 && e.glint[2] < 1, 'nearly across at 0.89 s');
-  assert.deepEqual([e.glint[3], e.glint[4]], [null, null], 'at rest after 0.9 s');
-  assert.ok(near(e.glint[5], 0.5), 'again every 2 s');
-  // Counted from the quota: drawn at the middle 0.45 s after it.
+  assert.deepEqual([k.flash, k.dark, k.glow], [0.6, '#17100a', '#ffd23f']);
+  assert.deepEqual(k.at, [false, false, false, true, true, false, true, false]);
   await ready(page, 2);
-  await steps(page, 0.73); // the clock at some point that isn't a multiple of 2
+  await steps(page, 0.73); // the clock at a point that isn't a multiple of 0.6
   await reachQuota(page);
-  const at = await page.evaluate(() => window.__gallery.game.T - window.__gallery.game.bonusAt);
-  await steps(page, 0.45 - at);
-  await realFrames(page, 2);
-  const s = await page.evaluate(() => window.__gallery.lastStamp());
-  assert.ok(near(s.glint, 0.5, 0.03), `the glint mid-way: ${s.glint}`);
+  const drawnAt = async (t) => {
+    const at = await page.evaluate(() => window.__gallery.game.T - window.__gallery.game.bonusAt);
+    await steps(page, t - at);
+    await realFrames(page, 2);
+    return page.evaluate(() => ({ n: window.__gallery.stampsDrawn(), s: window.__gallery.lastStamp(), brass: window.__gallery.brassDrawn() }));
+  };
+  const gold = await drawnAt(0.3);
+  assert.deepEqual([gold.n, gold.s.dark, gold.s.colour], [1, false, '#5a3405'], 'first 0.6 s: gold, dark letters');
+  const dark = await drawnAt(0.9);
+  assert.deepEqual([dark.n, dark.s.dark, dark.s.colour], [1, true, '#ffd23f'], 'next 0.6 s: dark, yellow letters');
+  assert.equal(dark.s.px, gold.s.px, 'the same size');
+  assert.equal(dark.brass, gold.brass, 'the same pieces: the dark covers the gold bar');
+  const again = await drawnAt(1.5);
+  assert.equal(again.s.dark, false, 'gold again at 1.2 s');
+  // Paused, the flash holds.
+  await page.evaluate(() => {
+    window.__gallery.pause();
+    window.__gallery.manual = false;
+  });
+  const before = await page.evaluate(() => window.__gallery.lastStamp().dark);
+  await realFrames(page, 50);
+  assert.equal(await page.evaluate(() => window.__gallery.lastStamp().dark), before, 'held while paused');
   await context.close();
 });
 

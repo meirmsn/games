@@ -418,8 +418,7 @@ const game = {
   pips: 0,
   goalPulse: 0,
   bonus: false,
-  bonusAt: 0, // game.T when the quota was reached: the bar's glint counts from it
-  bonusRings: [], // game.T of the bonus jingle's repeats still to play
+  bonusAt: 0, // game.T when the quota was reached: the bar's flashing counts from it
   time: ROUND_TIME, // left in the round
   elapsed: 0, // in the round, on the timer's own clock
   T: 0, // the simulation's time
@@ -702,7 +701,6 @@ function startRound(n) {
   game.roundScore = 0;
   game.bonus = false;
   game.bonusAt = 0;
-  game.bonusRings = [];
   game.time = ROUND_TIME;
   game.elapsed = 0;
   game.frenzy = 0;
@@ -741,7 +739,6 @@ function banner(text, sub = '', life = 1.2, small = false, goal = '', tip = '') 
 const CLEARED_FOR = 3;
 function roundOver() {
   endFrenzy();
-  game.bonusRings = [];
   if (game.pips >= game.cfg.quota) {
     game.mode = 'won';
     game.modeT = 0;
@@ -1008,9 +1005,8 @@ function landOn(b) {
 }
 
 // The count board climbs at once, with a swell; the hit shows only its points. Reaching the quota in
-// play starts the bonus: BONUS on the bar, and its jingle three times, 0.9 s apart. A ball landing
-// after the time has run out counts but starts no bonus: the round is already decided.
-const BONUS_GAP = 0.9;
+// play starts the bonus: BONUS on the bar, and its jingle, once. A ball landing after the time has
+// run out counts but starts no bonus: the round is already decided.
 function addPips(n) {
   const was = game.pips;
   game.pips += n;
@@ -1018,7 +1014,6 @@ function addPips(n) {
   if (game.mode === 'play' && was < game.cfg.quota && game.pips >= game.cfg.quota) {
     game.bonus = true;
     game.bonusAt = game.T;
-    game.bonusRings = [game.T + BONUS_GAP, game.T + 2 * BONUS_GAP];
     sfx('bonus');
   }
 }
@@ -1601,11 +1596,6 @@ function update(dt) {
     game.time = 0;
     roundOver();
   }
-  // The bonus jingle's repeats play only while the round is on.
-  while (game.mode === 'play' && game.bonusRings.length && game.T >= game.bonusRings[0]) {
-    game.bonusRings.shift();
-    sfx('bonus');
-  }
   if (game.mode === 'won' && game.modeT >= (game.round === LAST_ROUND ? 2 : CLEARED_FOR + 0.1)) {
     if (game.round === LAST_ROUND) {
       game.ended = 'closing';
@@ -1927,47 +1917,39 @@ function goalBarState() {
   if (game.mode === 'lost') return 'flash';
   return game.bonus ? 'gold' : 'shown';
 }
-// In the bonus the bar says BONUS, stamped into the gold in the booth's lettering, and a glint
-// crosses it every 2 s: left to right in 0.9 s, easing in and out, then 1.1 s at rest. The glint's
-// centre is its share of the way across (null while it rests), counted from the quota.
-const GLINT_SWEEP = 0.9;
-const GLINT_EVERY = 2;
-const GLINT_W = 20;
-const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
-function bonusGlint(t = game.T - game.bonusAt) {
-  const p = (((t % GLINT_EVERY) + GLINT_EVERY) % GLINT_EVERY) / GLINT_SWEEP;
-  return p < 1 ? easeInOut(p) : null;
-}
+// In the bonus the bar says BONUS in the booth's lettering, and flashes every 0.6 s from the quota:
+// the gold bar with BONUS stamped into it in dark letters, then the bar dark with BONUS glowing yellow.
+const BONUS_FLASH = 0.6;
+const BONUS_DARK = '#17100a'; // the panel's own dark
+const BONUS_GLOW = '#ffd23f'; // the booth's sign yellow
+const bonusDark = (t = game.T - game.bonusAt) => Math.floor(t / BONUS_FLASH + 1e-9) % 2 === 1;
 let stampsDrawn = 0; // for the tests: stamps drawn this frame, and the last one's box
 let lastStamp = null;
 function bonusStamp(x, y, w, h) {
-  const glint = bonusGlint();
-  if (glint !== null) {
-    const gx = x - GLINT_W / 2 + glint * (w + GLINT_W);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    const gr = ctx.createLinearGradient(gx - GLINT_W / 2, 0, gx + GLINT_W / 2, 0);
-    gr.addColorStop(0, 'rgba(255, 255, 240, 0)');
-    gr.addColorStop(0.5, 'rgba(255, 255, 240, 0.75)');
-    gr.addColorStop(1, 'rgba(255, 255, 240, 0)');
-    ctx.fillStyle = gr;
-    ctx.fillRect(x, y, w, h);
-    ctx.restore();
-  }
+  const dark = bonusDark();
   const px = h + 2 - 2.5; // the bar's height less 2.5
   ctx.font = signFont(px);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const cx = x + w / 2;
   const cy = y + h / 2 + 0.5;
-  ctx.fillStyle = 'rgba(255, 244, 200, 0.55)';
-  ctx.fillText('BONUS', cx, cy + 0.7);
-  ctx.fillStyle = '#5a3405';
-  ctx.fillText('BONUS', cx, cy);
+  if (dark) {
+    ctx.fillStyle = BONUS_DARK;
+    ctx.fillRect(x, y, w, h);
+    ctx.save();
+    ctx.shadowColor = '#ffb21a';
+    ctx.shadowBlur = 5;
+    ctx.fillStyle = BONUS_GLOW;
+    ctx.fillText('BONUS', cx, cy);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = 'rgba(255, 244, 200, 0.55)';
+    ctx.fillText('BONUS', cx, cy + 0.7);
+    ctx.fillStyle = '#5a3405';
+    ctx.fillText('BONUS', cx, cy);
+  }
   stampsDrawn++;
-  lastStamp = { x, y, w, h, px, font: ctx.font, textW: ctx.measureText('BONUS').width, glint };
+  lastStamp = { x, y, w, h, px, font: ctx.font, textW: ctx.measureText('BONUS').width, dark, colour: dark ? BONUS_GLOW : '#5a3405' };
 }
 function drawGoalBoard(g) {
   const cfg = game.cfg;
@@ -2832,7 +2814,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern, stampsDrawn: () => stampsDrawn, lastStamp: () => lastStamp, goalBoard: () => hudLayout().goal, bonusGlint, easeInOut, GLINT_SWEEP, GLINT_EVERY, GLINT_W, BONUS_GAP, CLEARED_FOR, RING_SCALE,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern, stampsDrawn: () => stampsDrawn, lastStamp: () => lastStamp, goalBoard: () => hudLayout().goal, bonusDark, BONUS_FLASH, BONUS_DARK, BONUS_GLOW, CLEARED_FOR, RING_SCALE,
       // The count board's ring, in stage units and in CSS px (centres; the board's swell aside).
       goalRing: () => {
         const g = hudLayout().goal;
