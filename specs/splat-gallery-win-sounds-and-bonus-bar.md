@@ -39,7 +39,8 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 
 - **The sounds come from the Kenney All-in-1 bundle in the private repo** (`meirmsn/games-private`,
   `Audio/Music Jingles`, CC0), converted to MP3 like the game's other sounds. The owner chose them
-  by ear from Claude's listening page, 2026-11-18.
+  by ear from Claude's listening page, 2026-11-18. The goal sound is the exception since
+  2026-11-19: the owner's own jingle (below).
 - **Round won (rounds 1 to 5): W2**, Kenney's `jingles-steel_00` (a cheerful rising steel-drum
   tune, 1.4 s), as `sounds/cleared.mp3`. It plays once, when "Round cleared" appears (owner,
   2026-11-18). Rejected: W1, W3 to W6.
@@ -48,34 +49,40 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   the owner at the go).
 - **"Closing time!" (round 6 won) keeps its 2 s and its `finale` sound**; W2 is for rounds 1 to 5
   (Claude; confirmed by the owner at the go).
-- **Quota reached while time is left: G1, three times**, Kenney's `jingles-steel_14` (a quick
-  rising steel-drum flourish, 0.9 s), as `sounds/bonus.mp3`, in place of today's `quota` sound. It
-  plays when the quota is reached, then again 0.9 s and 1.8 s later on `game.T` (one after the
-  other, not overlapping), "so that you know that something is going on" (owner, 2026-11-18).
+- **Quota reached while time is left: the owner's "win jingle 2", once** (changed by the owner
+  after the go, 2026-11-19: "We need a sound for when you get to the bonus. It's not clear that it's
+  celebrating"; then, given the owner's own three jingles, "For when achieving the goal, I think
+  Jingle 2 sounds good"). The owner made it (ElevenLabs) and uploaded it as `win-jingle-2.mp3` (1.5
+  s); it is converted to mono MP3 like the game's other sounds, as `sounds/bonus.mp3`, in place of
+  today's `quota` sound. It plays once, when the quota is reached: at 1.5 s it says "celebration"
+  on its own, so the repeats (G1, Kenney's `jingles-steel_14`, three times, 0.9 s apart, the
+  owner's choice of 2026-11-18) go. Rejected: Kenney's C1 to C8 from Claude's second listening
+  page; the owner's jingles 1 and 3, kept with jingle 2 in the private repo for later.
   It starts only in play: a ball still in the air that crosses the quota after the time has run
-  out starts no bonus (no sound, no BONUS), since the round is already decided. Repeats that haven't
-  started when the round ends are dropped, and a new round, Restart or Play again clears them, so
-  they never carry over. A `bonus` already sounding when `cleared` starts plays out under it: changed by the
-  owner after the go, 2026-11-18, choosing "Let them overlap" over stopping it (the shared sound
-  code can't stop a sound, and changing it would need its own PR first) or delaying `cleared`. Like everything on `game.T`, the repeats wait through a pause, a phone turn
-  and the 1 s count-in after them; while muted they keep their times silently. Rejected: keeping
-  today's pizzicato run; G2 to G4.
+  out starts no bonus (no sound, no BONUS), since the round is already decided. A `bonus` still
+  sounding when `cleared` starts plays out under it: changed by the owner after the go,
+  2026-11-18, choosing "Let them overlap" over stopping it (the shared sound code can't stop a
+  sound, and changing it would need its own PR first) or delaying `cleared`.
 - **The bar says BONUS: option C** (owner, 2026-11-18). From the moment the quota is reached until
   the round ends, and through the round-won moment, "BONUS" is stamped into the gold bar in dark
   letters in the booth's lettering (`SIGN_FONT`), sized to the bar (its height less 2.5 units: 8.5 units in landscape,
   11.5 in portrait). The small "Bonus!" sign on the
   counter is gone, including the one that waited for a frenzy to end; `game.bonusLater`, which only held that sign, goes. Rejected: A (engraved, no
   glint), B (dark bar, glowing letters).
-- **The glint sweeps left to right with easing** (owner, 2026-11-18, "not super fast, not super
-  slow, but maybe with some easing"; the timing is Claude's): a soft bright band crosses the bar
-  from its left edge to its right in 0.9 s, easing in and out (slow start, fast middle, slow
-  finish), then the bar rests for 1.1 s, so a glint every 2 s, the first starting the moment the
-  quota is reached. The band is 20 units wide, clipped to the bar. It runs on `game.T`, so it
-  freezes with pause and turn. Rejected: the mockup's even 1.4 s sweep with no rest.
+- **The BONUS bar flashes, F3** (changed by the owner after the go, 2026-11-19: "I think we need
+  to start flashing the bonus bar [...] the bonus word itself has to be uh, also flashing on the
+  opposite so that you can still read it. Like when the gold bar is gold and the bonus is black.
+  When the gold bar is black or missing, then the bonus word is yellow"; then "F3 i think, for the
+  rest of the match"). Wherever the bar shows BONUS it swaps every 0.6 s, counted from the moment
+  the quota is reached: 0.6 s gold bar with the dark stamped BONUS, then 0.6 s dark bar (the
+  panel's `#17100a`) with BONUS in glowing yellow (`#ffd23f`, the booth's sign yellow), and so on.
+  It runs on `game.T`, so it freezes with pause and turn. It replaces the glint (the owner's
+  2026-11-18 choice: a 20-unit band sweeping every 2 s), which goes. Rejected: F1 (0.25 s), F2
+  (0.4 s); flashing only for the first 3 s.
 - **No gold rim on the board at the quota** (owner, 2026-11-18, during the build, looking at the
   board past the quota: "Not sure what the yellow border around the of that frame is. Can you
   remove it?"): the brass rim `drawGoalBoard` adds around the plank once the count reaches the
-  quota goes; BONUS and its glint on the bar mark the bonus instead. Rejected: keeping it.
+  quota goes; BONUS on the bar marks the bonus instead. Rejected: keeping it.
 - **The lose sound stays as it is** (owner, 2026-11-18: "I think there is a sound effect when you
   lose").
 - **The red ring goes back outside the frame** (owner, 2026-11-18): when time runs out short, and
@@ -100,13 +107,12 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   2.5 s, and the next round's intro starts 3.1 s after the round ends.
 - **AC-3** When round 6 is won, `finale` plays as before, not `cleared`, and the "Closing time!"
   card shows 2 s after the round ends, as before.
-- **AC-4** When the quota is reached in play (`mode` `play`, time left), `bonus` plays then, again 0.9 s later and again
-  1.8 s later (on `game.T`), three times in all. `quota` never plays. Reaching the quota again in
-  the same round (more hits) plays nothing more.
-- **AC-5** No new `bonus` starts at or after the round's end, nor after Restart, Play again or a new
+- **AC-4** When the quota is reached in play (`mode` `play`, time left), `bonus` plays once, then.
+  `quota` never plays. Reaching the quota again in the same round (more hits), or any time after,
+  plays no more `bonus`.
+- **AC-5** No `bonus` starts at or after the round's end, nor after Restart, Play again or a new
   round. A `bonus` that started before the round's end may still be sounding when `cleared`
-  starts (owner, 2026-11-18). While the game is paused or turned, no `bonus` plays, and the
-  remaining ones play at their times once `game.T` runs again. Muted, they keep their times.
+  starts (owner, 2026-11-18).
 - **AC-6** A ball that lands after the time has run out (`mode` `lost`) and crosses the quota starts
   no bonus: no `bonus` sound, `game.bonus` stays false, and the bar keeps flashing red with no
   BONUS.
@@ -116,11 +122,10 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   the groove flashes red, it shows no text. Whether it reads is judged on the PR's screenshots —
   verified by review: phone-size screenshots of the bar in both layouts.
 - **AC-8** No "Bonus!" banner shows at any point, with or without a frenzy.
-- **AC-9** While the bar shows BONUS, a glint 20 units wide crosses it left to right: with `t` the `game.T`
-  since the quota was reached and `p = (t mod 2) / 0.9`, for `p` under 1 the glint's centre is at `ease(p)` of the way across (plus its half-width
-  either side), where `ease` is an ease-in-out curve (`ease(0)=0`, `ease(0.5)=0.5`, `ease(1)=1`,
-  slower at both ends than in the middle). For the rest of each 2 s there is no glint. It stays
-  inside the bar.
+- **AC-9** While the bar shows BONUS it flashes: with `t` the `game.T` since the quota was
+  reached, for `floor(t / 0.6)` even the bar is gold with BONUS in dark letters, and for it odd the
+  bar is dark (`#17100a`) with BONUS in glowing yellow (`#ffd23f`), the same size and place. It
+  keeps flashing for as long as BONUS shows, and holds while the game is paused. No glint is drawn.
 - **AC-10** When time runs out short, and on the "Out of time" card, every red ring bulb's centre is
   3 units outside the board's plank, on one of its four sides (the top row lowered only where the
   screen's top would cut a bulb, as in Decisions), and its radius is 1.15 times the
@@ -131,8 +136,9 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
   its grow-in and chase are as before.
 - **AC-12** The count board never has a brass rim around its plank: past the quota it draws the
   same number of brass pieces as under it (the bar alone).
-- **AC-13** `sounds/cleared.mp3` and `sounds/bonus.mp3` are the Kenney files named in Decisions,
-  converted to MP3; the README's credits line still covers them. `sounds/quota.mp3` is removed, as
+- **AC-13** `sounds/cleared.mp3` is the Kenney file named in Decisions and `sounds/bonus.mp3` the
+  owner's jingle 2, each a mono MP3 at 44.1 kHz; the README's credits line still covers the Kenney
+  sounds. `sounds/quota.mp3` is removed, as
   nothing plays it.
 - **AC-14** Nothing else changes: the lose sound and its timing, the timer, the frenzy, the hit
   swell and the board's digits. The existing Splat Gallery tests pass, apart from those whose
@@ -145,12 +151,12 @@ baseline is the booth's own pieces (`brass`, `marqueeBulb`, `BULB.red`, `SIGN_FO
 | State                         | Bar                                | Ring             | Sound                    |
 | ----------------------------- | ---------------------------------- | ---------------- | ------------------------ |
 | Playing, under the quota      | brass, filling                     | none             |                          |
-| Quota reached, time left      | gold, BONUS, glint every 2 s, no rim | none             | `bonus` ×3, 0.9 s apart  |
-| Round won, rounds 1–5 (3.1 s) | gold, BONUS, glint                 | gold, outside    | `cleared`                |
-| Round 6 won (2 s)             | gold, BONUS, glint                 | gold, outside    | `finale` (as today)      |
+| Quota reached, time left      | gold/dark, BONUS, flashing 0.6 s, no rim | none         | `bonus` once             |
+| Round won, rounds 1–5 (3.1 s) | BONUS, flashing                    | gold, outside    | `cleared`                |
+| Round 6 won (2 s)             | BONUS, flashing                    | gold, outside    | `finale` (as today)      |
 | Round lost (1.5 s)            | groove flashes red                 | red, outside     | `lost` (as today)        |
 | "Out of time" card            | groove, no flash                   | red, outside     |                          |
-| "Closing time!" card          | gold, BONUS, glint                 | gold, outside    |                          |
+| "Closing time!" card          | BONUS, flashing                    | gold, outside    |                          |
 
 ## Out of scope
 
