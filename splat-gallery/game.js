@@ -35,6 +35,7 @@ const { sound } = mountShell({
     alert10: 'sounds/alert10.mp3',
     alert5: 'sounds/alert5.mp3',
     alarm: 'sounds/alarm.mp3',
+    coins: 'sounds/coins.mp3',
   },
 });
 
@@ -82,9 +83,9 @@ const ROUNDS = [
   { name: 'Warm-up', bg: 'wood', quota: 7, vNear: 30, vFar: 55, frenzy: true },
   { name: 'Pop-ups', bg: 'red', shade: true, quota: 13, vNear: 34, vFar: 62, pops: true, frenzy: true, tiny: 1 },
   { name: 'Drop-downs', bg: 'blue', quota: 18, vNear: 38, vFar: 68, pops: true, drops: true, frenzy: true, tiny: 1 },
-  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, frenzy: true, tiny: 2 },
-  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 2, frenzy: true, tiny: 2 },
-  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 1, frenzy: true, double: true, lamps: true, tiny: 2 },
+  { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, turnFace: 6.1, frenzy: true, tiny: 2 },
+  { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 5, frenzy: true, tiny: 2 },
+  { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 3, frenzy: true, double: true, lamps: true, tiny: 2 },
   // The last round (specs/splat-gallery-sharpshooter.md): an empty booth where targets rise from
   // below one at a time (`sharp`); nothing crosses. Its quota, 26, tuned by simulated play: the
   // scripted expert clears it in most runs, the average player in some, the beginner never.
@@ -300,6 +301,116 @@ function makeMasks() {
     masks[name] = { w, h, a, top };
   }
   for (const name of ['water1', 'water2', 'grass1']) makeTile(name);
+  makeGold('duck_target_yellow');
+}
+
+// The gold duck's deep metallic gold (specs/splat-gallery-gold-ducks-and-turns.md): its sprite toned
+// from dark amber-gold in its shadows to the game's gold (#ffd23f, the tiny target's rim) in its
+// lights, so a painted target's rings still show; a dark-gold outline round it; and, drawn each
+// frame, a band of near-white shine sweeping across it.
+const GOLD_LOOK = { dark: [122, 74, 0], light: [255, 210, 63], curve: 3.6, top: 1.35, foot: 0.25, outline: '#6e3c00', pad: 14 };
+const golds = {};
+function makeGold(name) {
+  const [fx0, fy0, w, h] = FRAMES[name];
+  const P = GOLD_LOOK.pad;
+  const tone = document.createElement('canvas');
+  tone.width = w;
+  tone.height = h;
+  const g = tone.getContext('2d', { willReadFrequently: true });
+  g.drawImage(atlas, fx0, fy0, w, h, 0, 0, w, h);
+  const img = g.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    // Lit from above, like polished metal: brightest along its top, deepest at its foot.
+    const row = Math.floor(i / 4 / w) / h;
+    const lit = lerp(GOLD_LOOK.top, GOLD_LOOK.foot, row);
+    const u = clamp(((0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255) ** GOLD_LOOK.curve * lit, 0, 1);
+    for (let j = 0; j < 3; j++) d[i + j] = Math.round(lerp(GOLD_LOOK.dark[j], GOLD_LOOK.light[j], u));
+  }
+  g.putImageData(img, 0, 0);
+  // The outline: the sprite's silhouette in dark gold, spread `pad` source pixels every way.
+  const sil = document.createElement('canvas');
+  sil.width = w;
+  sil.height = h;
+  const sg = sil.getContext('2d');
+  sg.drawImage(tone, 0, 0);
+  sg.globalCompositeOperation = 'source-in';
+  sg.fillStyle = GOLD_LOOK.outline;
+  sg.fillRect(0, 0, w, h);
+  const line = document.createElement('canvas');
+  line.width = w + 2 * P;
+  line.height = h + 2 * P;
+  const lg = line.getContext('2d');
+  for (let a = 0; a < 24; a++) {
+    const q = (a * Math.PI) / 12;
+    lg.drawImage(sil, P + Math.cos(q) * P, P + Math.sin(q) * P);
+  }
+  for (let r = 1; r < P; r++) for (let a = 0; a < 8; a++) lg.drawImage(sil, P + Math.cos((a * Math.PI) / 4) * r, P + Math.sin((a * Math.PI) / 4) * r);
+  // A scratch canvas the shine is laid on each frame, atop the toned sprite only.
+  const shine = document.createElement('canvas');
+  shine.width = w;
+  shine.height = h;
+  golds[name] = { tone, line, shine, w, h };
+}
+// Where the shine's band is, as a share of the way across: sweeping to and fro, never off the duck.
+const shineAt = () => 0.3 + 0.45 * (0.5 - 0.5 * Math.cos(game.T * 2.2));
+function goldSprite(name, x, y, w, h, flip = false) {
+  const G = golds[name];
+  if (!G) return sprite(name, x, y, w, h, flip);
+  const sg = G.shine.getContext('2d');
+  sg.globalCompositeOperation = 'copy';
+  sg.drawImage(G.tone, 0, 0);
+  sg.globalCompositeOperation = 'source-atop';
+  const c = shineAt() * G.w;
+  // A slanted band across the body: the gradient runs mostly sideways, so its stripes stand
+  // nearly upright, leaning a little.
+  const band = G.w * 0.1;
+  const grad = sg.createLinearGradient(c - band, G.h / 2 - band * 0.45, c + band, G.h / 2 + band * 0.45);
+  grad.addColorStop(0, 'rgba(255,252,240,0)');
+  grad.addColorStop(0.32, 'rgba(255,252,240,0.35)');
+  grad.addColorStop(0.44, 'rgba(255,252,240,1)');
+  grad.addColorStop(0.56, 'rgba(255,252,240,1)');
+  grad.addColorStop(0.68, 'rgba(255,252,240,0.35)');
+  grad.addColorStop(1, 'rgba(255,252,240,0)');
+  sg.fillStyle = grad;
+  sg.fillRect(0, 0, G.w, G.h);
+  sg.globalCompositeOperation = 'source-over';
+  const s = w / G.w;
+  const P = GOLD_LOOK.pad * s;
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) {
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(G.line, -P, -P, w + 2 * P, h + 2 * P);
+  ctx.drawImage(G.shine, 0, 0, w, h);
+  ctx.restore();
+}
+
+// A gold duck's sparkles twinkle: each grows in, holds, fades out and is gone a while, then another
+// appears somewhere new. Slot 0 is the large one at its head; 1–3 trail behind it.
+const TWINKLE = { period: 1.1, grow: 0.18, hold: 0.5, fade: 0.75 };
+const hash = (a, b, c) => {
+  const v = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+function goldSparkles(t, w, h) {
+  const out = [];
+  for (let i = 0; i < 4; i++) {
+    const at = game.T / TWINKLE.period + i * 0.37 + t.id * 0.13;
+    const k = Math.floor(at);
+    const u = (at - k) * TWINKLE.period;
+    if (u >= TWINKLE.fade) continue;
+    const grow = Math.min(1, u / TWINKLE.grow);
+    const alpha = u < TWINKLE.hold ? grow : 1 - (u - TWINKLE.hold) / (TWINKLE.fade - TWINKLE.hold);
+    const j = hash(t.id, i, k);
+    const r = (i === 0 ? 0.3 : 0.17 - i * 0.02) * w * grow;
+    const x = i === 0 ? t.dir * w * (0.22 + 0.14 * j) : -t.dir * w * (0.38 + 0.2 * i + 0.1 * j);
+    const y = i === 0 ? -h * (0.38 + 0.1 * hash(k, i, t.id)) : -h * 0.2 + h * 0.3 * hash(k, t.id, i);
+    out.push({ i, x, y, r, alpha, a: game.T * 2 + i + k });
+  }
+  return out;
 }
 
 // A strip's tile, made to meet itself (specs/splat-gallery-near-water.md): the grass tile's first
@@ -477,6 +588,7 @@ function faceFor(kind, face) {
 function makeTarget(kind, opts = {}) {
   const lane = L.lanes[opts.lane ?? L.n - 1];
   const cfg = game.cfg || {};
+  const turnTimes = turnCycle(cfg);
   const t = {
     id: nextId++,
     kind,
@@ -490,7 +602,8 @@ function makeTarget(kind, opts = {}) {
     y: lane.line,
     phase: rand(0, Math.PI * 2),
     turn: opts.turn ?? !!cfg.turn,
-    turnT: opts.turnT ?? rand(0, 3.9),
+    turnT: opts.turnT ?? rand(0, turnTimes.reduce((a, b) => a + b, 0)),
+    turnTimes,
     upFor: opts.upFor ?? 1.8,
     popT: opts.up ? 0.35 : 0,
     splats: [],
@@ -526,10 +639,13 @@ function rockAngle(t) {
 const dropTop = (t) => L.top + 40 - dims(t)[1];
 
 // Turnabouts: 2.2 s facing, a 0.25 s turn, 1.2 s showing the back, a 0.25 s turn. A turn counts as
-// back.
+// back. A round may face longer (`turnFace`): round 4 faces 6.1 s, turning half as often
+// (specs/splat-gallery-gold-ducks-and-turns.md). Each target keeps the cycle of the round it came in.
 const TURN = [2.2, 0.25, 1.2, 0.25];
+const turnCycle = (cfg) => [cfg.turnFace ?? TURN[0], TURN[1], TURN[2], TURN[3]];
 function turnState(t) {
   if (!t.turn) return { back: false, sx: 1, showBack: false };
+  const TURN = t.turnTimes || turnCycle({});
   const cyc = TURN.reduce((a, b) => a + b, 0);
   let u = ((t.turnT % cyc) + cyc) % cyc;
   if (u < TURN[0]) return { back: false, sx: 1, showBack: false };
@@ -644,6 +760,19 @@ function launchTiny() {
   }
   return null;
 }
+
+// When a round's gold ducks are due, on its own clock (`elapsed`): between 4 and 24 s, re-drawn
+// until every two are at least 3 s apart, so each gets noticed
+// (specs/splat-gallery-gold-ducks-and-turns.md).
+const GOLD = { from: 4, to: 24, gap: 3 };
+function goldSchedule(n) {
+  if (!n) return [];
+  for (;;) {
+    const due = Array.from({ length: n }, () => rand(GOLD.from, GOLD.to)).sort((a, b) => a - b);
+    if (due.every((v, i) => i === 0 || v - due[i - 1] >= GOLD.gap)) return due;
+  }
+}
+
 // When in the round (on its own clock, `game.elapsed`) its tiny targets are due: 6–24 s in, 6 s apart.
 function tinySchedule(n) {
   if (!n) return [];
@@ -735,7 +864,7 @@ function startRound(n) {
   game.missRow = 0;
   game.dirs = L.lanes.map(() => (rng() < 0.5 ? 1 : -1));
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
-  if (cfg.gold) for (let g = 0; g < cfg.gold; g++) game.spawn.gold.push(rand(5, 24));
+  game.spawn.gold = goldSchedule(cfg.gold);
   game.spawn.tiny = tinySchedule(cfg.tiny);
   // The Sharpshooter's sequence: the wait before the next rise (null until the booth is empty), how
   // many have risen, whether the last single was a flash, and whether a frenzy has just ended.
@@ -1132,6 +1261,7 @@ function spawnStep(dt, cfg) {
     if (sp.gold[g] > 0 && game.elapsed >= sp.gold[g]) {
       const waters = L.lanes.filter((l) => l.kind === 'water').map((l) => l.i);
       launchMover(pick(waters), cfg, true);
+      sfx('coins');
       sp.gold[g] = -1;
     }
   }
@@ -1835,7 +1965,10 @@ function drawTarget(t) {
   ctx.scale(ts.sx, 1);
   let name = t.face;
   if (ts.showBack) name = t.isDuck ? 'duck_back' : 'target_back';
-  sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
+  // A gold duck face on is all gold, with sparkles; turning or on its back, it's any duck.
+  const golden = t.kind === 'gold' && !ts.back;
+  if (golden) goldSprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
+  else sprite(name, -w / 2, -h / 2, w, h, t.isDuck && t.dir < 0);
   if (t.kind === 'frenzy') {
     // Little marquee bulbs set into its white border, chasing like the frenzy's own marquee: it's
     // what a hit sets off.
@@ -1854,11 +1987,11 @@ function drawTarget(t) {
     ctx.stroke();
     sparkle(w * 0.42, -h * 0.42, w * 0.3, game.T * 3);
   }
-  if (t.kind === 'gold' && !ts.showBack) {
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.globalAlpha = 0.25 + 0.2 * Math.sin(game.T * 8);
-    sprite(name, -w / 2, -h / 2, w, h, t.dir < 0);
-    ctx.globalCompositeOperation = 'source-over';
+  if (golden) {
+    for (const p of goldSparkles(t, w, h)) {
+      ctx.globalAlpha = p.alpha;
+      sparkle(p.x, p.y, p.r, p.a, p.i);
+    }
     ctx.globalAlpha = 1;
   }
   for (const s of t.splats) {
@@ -1873,8 +2006,8 @@ function drawTarget(t) {
   ctx.globalAlpha = 1;
 }
 
-// A four-pointed star of light, turning.
-function sparkle(x, y, r, a) {
+// A four-pointed star of light, turning. `tag` names it in the frame's log, for the tests.
+function sparkle(x, y, r, a, tag = null) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(a);
@@ -1889,8 +2022,10 @@ function sparkle(x, y, r, a) {
   ctx.fill();
   ctx.restore();
   sparklesDrawn++;
+  sparkleLog.push({ tag, r, alpha: ctx.globalAlpha });
 }
 let sparklesDrawn = 0; // in the last frame (for the tests)
+let sparkleLog = []; // each drawn in the last frame: its tag, size and opacity
 
 // A hit target's pose: the mechanism under the booth pulls it straight down along its stick, the
 // stick going with it, out of sight behind its strip; a drop-down is hauled up behind the valance.
@@ -2576,6 +2711,7 @@ function drawLamps() {
 function draw() {
   polesDrawn = 0;
   sparklesDrawn = 0;
+  sparkleLog = [];
   paintClipped = 0;
   signsWorn = 0;
   signTexts = [];
@@ -2881,6 +3017,18 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
         return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
       }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, SHARP, ASSIST_OFF_FROM, launchSharp, sharpStep, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
+      // Draws one target alone on a cleared canvas, as the booth's frame would place it.
+      drawAlone(t) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * ox, dpr * oy);
+        sparklesDrawn = 0;
+        sparkleLog = [];
+        drawTarget(t);
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        return sparklesDrawn;
+      },
+      goldSchedule, GOLD, GOLD_LOOK, turnCycle, TWINKLE, sparkleLog: () => sparkleLog,
       balls: () => balls,
       paint: () => paint,
       clear() {

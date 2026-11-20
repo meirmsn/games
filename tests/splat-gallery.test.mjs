@@ -536,7 +536,8 @@ test('splat-gallery AC-8: the frontmost thing takes the shot: a strip before its
     // A turned mover in front of a drop-down in the same lane: its back takes the shot.
     g.clear();
     g.makeTarget('drop', { lane: 3, x: 200, up: true, turn: false });
-    g.makeTarget('target', { lane: 3, x: 200, speed: 0, turn: true, turnT: 3.0 });
+    // Round 4's cycle (splat-gallery-gold-ducks-and-turns): 6.1 s facing, 0.25 s turning; 7.0 s is its back.
+    g.makeTarget('target', { lane: 3, x: 200, speed: 0, turn: true, turnT: 7.0 });
     const r2 = g.resolve(200, g.L.lanes[3].line);
     out.back = [r2.what, r2.t && r2.t.kind];
     return out;
@@ -809,7 +810,8 @@ test('splat-gallery-frenzy-counts AC-4: a back or a miss in a frenzy adds no pip
   await page.evaluate(() => {
     const g = window.__gallery;
     g.startFrenzy();
-    g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: true, turnT: 3.0 });
+    // On its back in round 4's 7.8 s cycle (splat-gallery-gold-ducks-and-turns AC-6).
+    g.makeTarget('target', { lane: 2, x: 200, speed: 0, turn: true, turnT: 7.0 });
   });
   assert.equal((await shoot(page, 200, 2)).what, 'back');
   assert.equal((await shoot(page, 60, 0)).what !== 'body', true);
@@ -3301,6 +3303,360 @@ test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy mar
   assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
   assert.equal(await page.evaluate(() => window.__gallery.ui().timerText), '0', 'the timer shows 0 as before');
   assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
+  await context.close();
+});
+
+// ---------- More gold ducks, and gentler turns in round 4 (specs/splat-gallery-gold-ducks-and-turns.md) ----------
+
+// Plays a round from its start for `secs` on its own clock, the frenzy target kept away, and returns
+// the gold ducks sent and when (on the round's clock), the jingles heard in the step each was sent,
+// and all the jingles heard.
+const goldRun = (page, round, seed, secs = 30, frenzyAt = null) =>
+  page.evaluate(
+    ({ round, seed, secs, frenzyAt }) => {
+      const g = window.__gallery;
+      g.manual = true;
+      g.startRun({ seed });
+      if (round !== 1) g.startRound(round);
+      const G = g.game;
+      G.mode = 'play';
+      G.banner = null;
+      G.frenzyTimes = [];
+      const due = [...G.spawn.gold];
+      const seen = new Set(g.targets().filter((t) => t.kind === 'gold').map((t) => t.id));
+      const sent = [];
+      let frenzyEnd = null;
+      let coins = 0;
+      for (let i = 0; i < secs * 60 + 7 * 60 && G.mode === 'play' && G.time > 0.05; i++) {
+        if (frenzyAt !== null && frenzyEnd === null && G.elapsed >= frenzyAt) {
+          g.startFrenzy();
+          frenzyEnd = -1;
+        }
+        g.heard.length = 0;
+        const wasFrenzy = G.frenzy > 0;
+        g.step(1 / 60);
+        coins += g.heard.filter((n) => n === 'coins').length;
+        if (frenzyEnd === -1 && wasFrenzy && G.frenzy <= 0) frenzyEnd = i;
+        for (const t of g.targets()) {
+          if (t.kind !== 'gold' || seen.has(t.id)) continue;
+          seen.add(t.id);
+          sent.push({ at: G.elapsed, step: i, inFrenzy: G.frenzy > 0, coins: g.heard.filter((n) => n === 'coins').length, speed: t.speed, lane: t.lane });
+        }
+        if (G.time < 0.2) G.time = 30; // keep the round going for the whole draw
+      }
+      return { due, sent, frenzyEnd, coins };
+    },
+    { round, seed, secs, frenzyAt }
+  );
+
+test('splat-gallery-gold-ducks-and-turns AC-1, splat-gallery-gold-ducks-and-turns AC-4: round 5 sends exactly 5 gold ducks and round 6 exactly 3, each with the coin jingle in the step it is sent; no other round has one or the jingle', async () => {
+  const { context, page } = await open();
+  // Round 7, the Sharpshooter (specs/splat-gallery-sharpshooter.md), has none either.
+  const want = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 5, 6: 3, 7: 0 };
+  assert.deepEqual(await page.evaluate(() => window.__gallery.ROUNDS.slice(1).map((r) => r.gold || 0)), [0, 0, 0, 0, 5, 3, 0]);
+  for (const [n, count] of Object.entries(want)) {
+    const r = await goldRun(page, Number(n), 40 + Number(n));
+    assert.equal(r.sent.length, count, `round ${n}: ${r.sent.length} gold ducks`);
+    assert.equal(r.due.length, count, `round ${n}: ${r.due.length} due`);
+    for (const s of r.sent) assert.equal(s.coins, 1, `round ${n}: the jingle once, in the step its gold duck was sent: ${JSON.stringify(s)}`);
+    assert.equal(r.coins, count, `round ${n}: the jingle ${r.coins} times, once per gold duck`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-2: over 200+ seeded rounds 5 and 6 every gold duck is due 4–24 s in, on the round’s clock, at least 3 s after the one before; one due in a frenzy comes after it', async () => {
+  const { context, page } = await open();
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    const bad = [];
+    let rounds = 0;
+    for (let k = 0; k < 120; k++) {
+      g.startRun({ seed: 7000 + k * 104729 });
+      for (const n of [5, 6]) {
+        g.startRound(n);
+        rounds++;
+        const due = g.game.spawn.gold;
+        if (due.length !== g.ROUNDS[n].gold) bad.push({ n, due });
+        for (let i = 0; i < due.length; i++) {
+          if (due[i] < 4 || due[i] > 24) bad.push({ n, due, why: 'window' });
+          if (i && due[i] - due[i - 1] < 3) bad.push({ n, due, why: 'gap' });
+        }
+      }
+    }
+    return { rounds, bad };
+  });
+  assert.ok(r.rounds >= 200, `${r.rounds} rounds`);
+  assert.deepEqual(r.bad, []);
+  // Sent on the round's own clock, at the moment each is due; one due in a frenzy comes once it ends.
+  const run = await goldRun(page, 5, 11);
+  run.sent.forEach((s, i) => assert.ok(Math.abs(s.at - run.due[i]) < 1 / 30, `sent at ${s.at}, due ${run.due[i]}`));
+  const due = run.due;
+  const frenzyAt = due[1] - 0.5; // a frenzy (7 s) over the second gold duck's time
+  const fr = await goldRun(page, 5, 11, 30, frenzyAt);
+  assert.deepEqual(fr.due, due, 'the same draw');
+  const second = fr.sent[1];
+  assert.ok(!second.inFrenzy && second.step > fr.frenzyEnd - 1, `the duck due in the frenzy came after it: ${JSON.stringify(second)} frenzy ended at step ${fr.frenzyEnd}`);
+  await context.close();
+});
+
+// A gold duck and an ordinary yellow target-duck, each drawn alone, the same way, on a cleared
+// canvas, the clock held at T: how they compare (AC-3).
+const goldVsPlain = (page, opts = {}, T = 0.4) =>
+  page.evaluate(
+    ({ opts, T }) => {
+      const g = window.__gallery;
+      const c = document.querySelector('#booth');
+      const cx = c.getContext('2d');
+      g.game.rock = 0;
+      g.game.T = T;
+      const shot = (kind, face) => {
+        g.clear();
+        const t = g.makeTarget(kind, { lane: 4, x: g.stage().SW / 2, speed: 0, turn: false, dir: 1, ...(face ? { face } : {}), ...opts });
+        t.phase = 0;
+        t.id = 1; // the same sparkles for every drawing at T
+        const sparkles = g.drawAlone(t);
+        t.state = 'gone';
+        return { d: cx.getImageData(0, 0, c.width, c.height).data, sparkles };
+      };
+      const plain = shot('duck', 'duck_target_yellow');
+      // The stick it stands on, in canvas px: from its middle down (the stick is no part of its edge).
+      const dpr = c.width / innerWidth;
+      const mid = g.toClient(g.stage().SW / 2, g.L.lanes[4].line);
+      const stick = { x: mid.x * dpr, y: mid.y * dpr, half: (g.stickWidth(g.L.lanes[4]) / 2) * g.stage().k * dpr + 4 };
+      const gold = shot('gold');
+      const W = c.width;
+      const stats = (d) => {
+        let n = 0;
+        const sum = [0, 0, 0];
+        for (let i = 0; i < d.length; i += 4) {
+          if (d[i + 3] < 200) continue;
+          n++;
+          for (let j = 0; j < 3; j++) sum[j] += d[i + j];
+        }
+        const m = sum.map((v) => v / n);
+        const [r, gg, b] = m.map((v) => v / 255);
+        const hi = Math.max(r, gg, b);
+        const lo = Math.min(r, gg, b);
+        let hue = 0;
+        if (hi > lo) hue = hi === r ? (60 * (gg - b)) / (hi - lo) : hi === gg ? 60 * (2 + (b - r) / (hi - lo)) : 60 * (4 + (r - gg) / (hi - lo));
+        return { n, mean: (m[0] + m[1] + m[2]) / 3, hue: (hue + 360) % 360 };
+      };
+      // Just outside the sprite's own edge: wholly clear in the plain drawing, with a plain opaque
+      // pixel within 2 px.
+      const P = plain.d;
+      const G = gold.d;
+      const inPlain = (x, y) => P[(y * W + x) * 4 + 3] >= 128;
+      let ring = 0;
+      let lined = 0;
+      let shine = 0;
+      let inside = 0;
+      for (let y = 2; y < c.height - 2; y++) {
+        for (let x = 2; x < W - 2; x++) {
+          const i = (y * W + x) * 4;
+          if (inPlain(x, y)) {
+            inside++;
+            if (G[i] >= 230 && G[i + 1] >= 230 && G[i + 2] >= 230) shine++;
+            continue;
+          }
+          if (P[i + 3] > 0) continue; // the sprite's own soft edge
+          if (Math.abs(x - stick.x) <= stick.half && y > stick.y) continue; // beside its stick, not its edge
+          let near = false;
+          for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2 && !near; dx++) near = inPlain(x + dx, y + dy);
+          if (!near) continue;
+          ring++;
+          if (G[i + 3] >= 200 && G[i] > G[i + 1] && G[i + 1] > G[i + 2] && G[i] <= 140) lined++;
+        }
+      }
+      let same = true;
+      for (let i = 0; i < P.length && same; i++) same = P[i] === G[i];
+      return { plain: stats(P), gold: stats(G), ring, lined, shine, inside, sparkles: gold.sparkles, plainSparkles: plain.sparkles, same };
+    },
+    { opts, T }
+  );
+
+test('splat-gallery-gold-ducks-and-turns AC-3: face on, a gold duck is deep metallic gold, 40+ levels darker than a yellow duck with a 35–50° hue, a dark-gold outline and a band of near-white shine; turning or on its back it is any duck’s back', async () => {
+  const { context, page } = await open();
+  await ready(page, 5);
+  // At moments every 0.3 s over a whole sweep of the shine (2π / 2.2 s), its sparkles coming and going.
+  for (let T = 0; T < 2.9; T += 0.3) {
+    const r = await goldVsPlain(page, {}, T);
+    const dark = r.plain.mean - r.gold.mean;
+    assert.ok(dark >= 40, `T ${T}: ${dark.toFixed(1)} levels darker (${r.gold.mean.toFixed(1)} vs ${r.plain.mean.toFixed(1)})`);
+    assert.ok(r.gold.hue >= 35 && r.gold.hue <= 50, `T ${T}: hue ${r.gold.hue.toFixed(1)}°`);
+    assert.ok(r.ring > 100 && r.lined / r.ring >= 0.8, `T ${T}: the dark-gold outline: ${r.lined} of ${r.ring} edge pixels`);
+    assert.ok(r.shine >= r.inside * 0.01, `T ${T}: a band of shine: ${r.shine} of ${r.inside} pixels`);
+  }
+  // Turning (0.1 s into the turn: still its face, squeezed) and on its back: drawn exactly as an
+  // ordinary duck, with no sparkles.
+  for (const [what, turnT] of [['turning', 2.3], ['back', 3.0]]) {
+    const r = await goldVsPlain(page, { turn: true, turnT });
+    assert.ok(r.same, `${what}: pixel for pixel an ordinary duck`);
+    assert.equal(r.sparkles, 0, `${what}: no sparkles`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-8: a gold duck’s sparkles twinkle: what is drawn differs 0.3 s apart, and over 2 s each has been fully shown and gone', async () => {
+  const { context, page } = await open();
+  await ready(page, 5);
+  const r = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.rock = 0;
+    g.clear();
+    const t = g.makeTarget('gold', { lane: 4, x: g.stage().SW / 2, speed: 0, turn: false });
+    const at = (T) => {
+      g.game.T = T;
+      g.drawAlone(t);
+      return g.sparkleLog().map((s) => ({ tag: s.tag, r: +s.r.toFixed(3), alpha: +s.alpha.toFixed(3) }));
+    };
+    const pairs = [];
+    for (let T = 0; T < 3; T += 0.25) pairs.push([at(T), at(T + 0.3)]);
+    // Over 2 s, sampled each frame: for each sparkle, its largest size, whether it was ever fully
+    // shown at it, and whether it was ever gone.
+    const seen = {};
+    const frames = [];
+    for (let i = 0; i <= 120; i++) frames.push(at(10 + i / 60));
+    for (const f of frames) for (const s of f) seen[s.tag] = Math.max(seen[s.tag] || 0, s.r);
+    const tags = Object.keys(seen);
+    const each = tags.map((tag) => ({
+      tag,
+      shown: frames.some((f) => f.some((s) => String(s.tag) === tag && s.alpha >= 0.999 && s.r >= seen[tag] - 1e-3)),
+      gone: frames.some((f) => !f.some((s) => String(s.tag) === tag)),
+    }));
+    t.state = 'gone';
+    return { pairs, each };
+  });
+  for (const [a, b] of r.pairs) assert.notDeepEqual(a, b, `the sparkles change in 0.3 s: ${JSON.stringify(a)}`);
+  assert.ok(r.each.length >= 3, `a head sparkle and a trail: ${JSON.stringify(r.each)}`);
+  for (const s of r.each) assert.ok(s.shown && s.gone, `sparkle ${s.tag} fully shown and gone within 2 s: ${JSON.stringify(s)}`);
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-5: a gold duck still scores 100 and 2 pips, a bullseye doubling the points, refills the hopper, and crosses at 1.6× its lane’s speed', async () => {
+  const { context, page } = await open();
+  await ready(page, 5);
+  for (const where of ['body', 'bull']) {
+    const t = await place(page, 'gold', { lane: 4, x: 200 });
+    await page.evaluate(() => (window.__gallery.game.hopper = 2));
+    const s0 = await state(page);
+    const dx = where === 'bull' ? 0 : -t.w * 0.33;
+    const bull = await page.evaluate(({ id, dx }) => {
+      const g = window.__gallery;
+      const o = g.targets().find((x) => x.id === id);
+      const [w, h] = g.dims(o);
+      const D = g.DUCK_BULL;
+      return { x: o.x - w / 2 + D.u * w + dx, y: o.y - h / 2 + D.v * h };
+    }, { id: t.id, dx });
+    await page.evaluate(({ x, y }) => {
+      const g = window.__gallery;
+      g.aimAt(x, y);
+      g.game.lastFire = -1;
+      g.fire();
+      for (let i = 0; i < 40; i++) g.step(1 / 60);
+    }, bull);
+    const s = await state(page);
+    assert.equal(s.pips - s0.pips, 2, `${where}: 2 pips`);
+    const pts = s.score - s0.score;
+    assert.ok(where === 'bull' ? pts === 200 : pts === 100, `${where}: ${pts} points`);
+    assert.equal(s.hopper, (await page.evaluate(() => window.__gallery.HOPPER)), `${where}: the hopper full`);
+    await page.evaluate(() => window.__gallery.clear());
+  }
+  const run = await goldRun(page, 5, 3);
+  const speeds = await page.evaluate(() => {
+    const g = window.__gallery;
+    return g.L.lanes.map((_, i) => g.laneSpeed(g.ROUNDS[5], i));
+  });
+  for (const s of run.sent) assert.ok(Math.abs(s.speed - speeds[s.lane] * 1.6) < 1e-9, `crosses at 1.6×: ${s.speed} in lane ${s.lane}`);
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-6: round 4 faces 6.1 s, turns 0.25, shows its back 1.2, turns 0.25 (7.8 s), starting anywhere in it; rounds 5 and 6 as before (3.9 s)', async () => {
+  const { context, page } = await open();
+  for (const [n, face] of [[4, 6.1], [5, 2.2], [6, 2.2]]) {
+    await ready(page, n);
+    const r = await page.evaluate(() => {
+      const g = window.__gallery;
+      const t = g.makeTarget('target', { lane: 2, x: 200, speed: 0 });
+      const at = (u) => {
+        t.turnT = u;
+        const s = g.turnState(t);
+        return s.showBack ? 'back' : s.back ? 'turning' : 'face';
+      };
+      // Where each phase starts and ends, sampled every 10 ms over two cycles.
+      const marks = [];
+      let last = null;
+      for (let i = 0; i <= 1600; i++) {
+        const u = i / 100;
+        const s = g.turnState(Object.assign(t, { turnT: u }));
+        const ph = !s.back ? 'face' : s.showBack ? 'back' : 'turning';
+        if (ph !== last) marks.push([ph, u]);
+        last = ph;
+      }
+      const starts = [];
+      for (let k = 0; k < 400; k++) starts.push(g.makeTarget('target', { lane: 2, x: 200, speed: 0 }).turnT);
+      g.clear();
+      return { turn: t.turn, marks, starts, at: [at(0), at(2.3), at(3.0)] };
+    });
+    const cyc = face + 1.7;
+    assert.ok(r.turn, `round ${n}: every target turns`);
+    // face → turning (face squeezed, then back) → back → turning → face
+    const changes = r.marks.map(([ph, u]) => [ph, Math.round(u * 100) / 100]);
+    const backStart = changes.find(([ph]) => ph === 'back')[1];
+    const faceAgain = changes.filter(([ph]) => ph === 'face')[1][1];
+    assert.ok(Math.abs(changes.find(([ph]) => ph === 'turning')[1] - face) < 0.011, `round ${n}: faces ${face} s: ${JSON.stringify(changes)}`);
+    assert.ok(Math.abs(backStart - (face + 0.125)) < 0.011, `round ${n}: the back shows halfway through a 0.25 s turn`);
+    assert.ok(Math.abs(faceAgain - cyc) < 0.011, `round ${n}: a ${cyc} s cycle: ${JSON.stringify(changes)}`);
+    // Its back shows from halfway through the first turn to halfway through the second: 1.2 s on its
+    // back between two 0.25 s turns.
+    const backEnd = changes.filter(([ph, u]) => ph === 'turning' && u > backStart)[0][1];
+    assert.ok(Math.abs(backEnd - (face + 0.25 + 1.2 + 0.125)) < 0.011, `round ${n}: 1.2 s on its back: ${JSON.stringify(changes)}`);
+    // Each target starts anywhere in its round's cycle.
+    assert.ok(Math.min(...r.starts) >= 0 && Math.max(...r.starts) <= cyc, `round ${n}: starts in [0, ${cyc}]`);
+    assert.ok(Math.max(...r.starts) > cyc - 0.3 && Math.min(...r.starts) < 0.3, `round ${n}: starts over the whole cycle: ${Math.min(...r.starts)}–${Math.max(...r.starts)}`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-gold-ducks-and-turns AC-7: coins.mp3 is no louder (RMS) than frenzyhit.mp3, plays at gain 1, and the mute silences it', async () => {
+  const { context, page } = await open();
+  const loud = await page.evaluate(async () => {
+    const ac = new OfflineAudioContext(1, 44100, 44100);
+    const out = {};
+    for (const n of ['coins', 'frenzyhit']) {
+      const d = (await ac.decodeAudioData(await fetch(`sounds/${n}.mp3`).then((r) => r.arrayBuffer()))).getChannelData(0);
+      let sum = 0;
+      let count = 0;
+      for (const v of d) {
+        if (Math.abs(v) > 1e-3) {
+          sum += v * v;
+          count++;
+        }
+      }
+      out[n] = Math.sqrt(sum / count);
+      out[n + 'Secs'] = d.length / 44100;
+    }
+    return out;
+  });
+  assert.ok(loud.coins <= loud.frenzyhit, `coins ${loud.coins.toFixed(3)} vs frenzyhit ${loud.frenzyhit.toFixed(3)}`);
+  assert.ok(loud.coinsSecs < 1.05, `short: ${loud.coinsSecs.toFixed(2)} s (decoders pad a few ms)`);
+  // Sent unmuted: played at gain 1 through the audio context; muted: nothing plays.
+  await ready(page, 5);
+  const bytes = await page.evaluate(() => fetch('sounds/coins.mp3').then((r) => r.arrayBuffer()).then((b) => b.byteLength));
+  const send = () =>
+    page.evaluate((bytes) => {
+      const g = window.__gallery;
+      const from = window.__played.length;
+      g.game.spawn.gold = [g.game.elapsed + 1e-6];
+      g.step(1 / 60);
+      return { gain: g.heardOpts.coins && g.heardOpts.coins.gain, played: window.__played.slice(from).filter((p) => p.bytes === bytes).length };
+    }, bytes);
+  const on = await send();
+  assert.deepEqual(on, { gain: 1, played: 1 }, 'played, at gain 1');
+  await page.locator('[data-mute]').click();
+  await page.evaluate(() => (window.__gallery.game.mode = 'play'));
+  const off = await send();
+  assert.equal(off.played, 0, 'silent under the mute');
   await context.close();
 });
 
