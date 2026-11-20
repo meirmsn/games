@@ -87,8 +87,23 @@ const ROUNDS = [
   { name: 'Turnabouts', bg: 'green', quota: 24, vNear: 40, vFar: 72, pops: true, drops: true, turn: true, turnFace: 6.1, frenzy: true, tiny: 2 },
   { name: 'Gold rush', bg: 'wood', dusk: true, quota: 30, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 5, frenzy: true, tiny: 2 },
   { name: 'Closing time', bg: 'blue', dusk: true, quota: 34, vNear: 50, vFar: 90, pops: true, drops: true, turn: true, gold: 3, frenzy: true, double: true, lamps: true, tiny: 2 },
+  // The last round (specs/splat-gallery-sharpshooter.md): an empty booth where targets rise from
+  // below one at a time (`sharp`); nothing crosses. Its quota, 26, tuned by simulated play: the
+  // scripted expert clears it in most runs, the average player in some, the beginner never.
+  { name: 'Sharpshooter', bg: 'red', dusk: true, quota: 26, vNear: 34, vFar: 62, sharp: true, frenzy: true },
 ];
-const LAST_ROUND = 6;
+const LAST_ROUND = 7;
+// The hidden assist is off from Closing time on.
+const ASSIST_OFF_FROM = 6;
+// The Sharpshooter's targets (specs/splat-gallery-sharpshooter.md): a fair one rises in 0.35 s and
+// stays up 2.2 s; a flash (60% of eligible singles, about one in four of all; never in the nearest
+// lane, the first three rises or twice running) rises in 0.2 s and stays up 0.15 s. The next rises 0.6–1.4 s after the booth is empty (0.3–0.7 s from 10 s left);
+// from 15 s in about one rise in three is a pair. No rise with under 1.5 s left.
+const SHARP = {
+  first: 0.8, gap: [0.6, 1.4], lateGap: [0.3, 0.7], lateFrom: 10, lastSecs: 1.5,
+  fair: { rise: 0.35, up: 2.2 }, flash: { rise: 0.2, up: 0.15 }, flashP: 0.6, safeRises: 3,
+  pairFrom: 15, pairP: 1 / 3, frenzyUp: 1.6, afterFrenzy: 0.8,
+};
 // The tiny target (specs/splat-gallery-goal-and-tiny-target.md): a brief pop-up in the farthest
 // lane, from round 2, worth the most pips and points; 0.6 of a far target, never under 30 CSS px.
 const TINY = { pips: 5, base: 250, upFor: 1.4, scale: 0.6, minPx: 30, from: 6, to: 24, gap: 6, retry: 0.25, lastSecs: 2 };
@@ -693,6 +708,15 @@ function launchPop(i, upFor = 1.8) {
 function launchFrenzyTarget() {
   const n = L.n;
   const cfg = game.cfg;
+  if (cfg.sharp) {
+    // The Sharpshooter's rises from below, in one of the two farthest lanes, for 1.6 s.
+    const i = pick(n > 3 ? [0, 1] : [0]);
+    const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, upFor: SHARP.frenzyUp });
+    t.motion = 'pop';
+    t.y = hiddenY(t);
+    t.x = freeSpot(i, dims(t)[0] * 1.2);
+    return t;
+  }
   if (game.round === 1) {
     const i = n - 1 - (n > 2 && rng() < 0.5 ? 1 : 0);
     const t = makeTarget('frenzy', { lane: i, face: 'target_colored', turn: false, big: 1.15, upFor: 3.5 });
@@ -843,6 +867,9 @@ function startRound(n) {
   game.spawn = { movers: L.lanes.map(() => rand(0.2, 2.6)), pop: rand(1.2, 3.4), drop: rand(2.2, 4.4), gold: [] };
   game.spawn.gold = goldSchedule(cfg.gold);
   game.spawn.tiny = tinySchedule(cfg.tiny);
+  // The Sharpshooter's sequence: the wait before the next rise (null until the booth is empty), how
+  // many have risen, whether the last single was a flash, and whether a frenzy has just ended.
+  if (cfg.sharp) game.spawn.sharp = { wait: SHARP.first, rises: 0, lastFlash: false, afterFrenzy: false };
   targets = targets.filter((t) => t.state !== 'live');
   game.mode = 'intro';
   game.modeT = 0;
@@ -1056,7 +1083,7 @@ function hitTest(t, px0, py0, grow) {
 }
 
 function assistNow() {
-  return game.round === LAST_ROUND ? 0 : game.assist;
+  return game.round >= ASSIST_OFF_FROM ? 0 : game.assist;
 }
 
 // A hit's multiplier: the bullseye's ×2, then the higher of the bonus (by the lane's depth) and the
@@ -1209,6 +1236,7 @@ function popup(x, y, text, color) {
 // ---------- The simulation ----------
 
 function spawnStep(dt, cfg) {
+  if (cfg.sharp) return sharpStep(dt);
   const sp = game.spawn;
   const fr = game.frenzy > 0;
   for (let i = 0; i < L.n; i++) {
@@ -1261,6 +1289,72 @@ function spawnStep(dt, cfg) {
       sp.frenzy = rand(0.22, 0.4);
     }
   }
+}
+
+// A Sharpshooter target rises from behind a lane's strip, anywhere along it, and stays up `up` s.
+function launchSharp(i, { rise, up }, x) {
+  const t = makeTarget('pop', { lane: i, upFor: up });
+  t.rise = rise;
+  t.x = x ?? freeSpot(i, dims(t)[0] * 1.2);
+  return t;
+}
+// Two fair targets in different lanes, their centres at least twice the wider one's width apart.
+function launchSharpPair() {
+  const lanes = L.lanes.map((l) => l.i);
+  const a = pick(lanes);
+  const b = pick(lanes.filter((i) => i !== a));
+  const w = 142 * Math.max(L.lanes[a].s, L.lanes[b].s);
+  // The left one anywhere that leaves room for the right one, then which is which drawn.
+  const gap = 2 * w + rand(0, 40);
+  const left = rand(60, Math.max(60, SW - 60 - gap));
+  const [xa, xb] = rng() < 0.5 ? [left, left + gap] : [left + gap, left];
+  return [launchSharp(a, SHARP.fair, xa), launchSharp(b, SHARP.fair, xb)];
+}
+// The Sharpshooter (specs/splat-gallery-sharpshooter.md): one at a time from below, later sometimes
+// two; the frenzy target takes a rise of its own; in a frenzy, pop-ups spring up across every lane.
+function sharpStep(dt) {
+  const sp = game.spawn;
+  const q = sp.sharp;
+  if (!q) return; // a test's empty booth
+  if (game.frenzy > 0) {
+    q.wait = null;
+    q.afterFrenzy = true;
+    sp.frenzy -= dt;
+    if (sp.frenzy <= 0) {
+      launchPop(Math.floor(rng() * L.n), 1.4);
+      sp.frenzy = rand(0.22, 0.4);
+    }
+    return;
+  }
+  if (targets.some((t) => t.state === 'live')) {
+    q.wait = null;
+    return;
+  }
+  if (q.wait === null) {
+    const late = game.time <= SHARP.lateFrom;
+    q.wait = q.afterFrenzy ? SHARP.afterFrenzy : rand(...(late ? SHARP.lateGap : SHARP.gap));
+    q.afterFrenzy = false;
+  }
+  q.wait -= dt;
+  if (q.wait > 0) return;
+  q.wait = null;
+  if (game.time < SHARP.lastSecs) return;
+  q.rises++;
+  if (!game.frenzyDone && game.frenzyTimes.length && game.elapsed >= game.frenzyTimes[0]) {
+    game.frenzyTimes.shift();
+    launchFrenzyTarget();
+    q.lastFlash = false;
+    return;
+  }
+  if (game.elapsed >= SHARP.pairFrom && rng() < SHARP.pairP) {
+    launchSharpPair();
+    q.lastFlash = false;
+    return;
+  }
+  const flash = q.rises > SHARP.safeRises && !q.lastFlash && L.n > 1 && rng() < SHARP.flashP;
+  const lanes = L.lanes.map((l) => l.i).filter((i) => !flash || i < L.n - 1);
+  launchSharp(pick(lanes), flash ? SHARP.flash : SHARP.fair);
+  q.lastFlash = flash;
 }
 
 // The timer's cues: a chime and a swell at half time; at 10 s a hand bell is rung fast; at 5 s the
@@ -1683,10 +1777,12 @@ function update(dt) {
       // A tiny target keeps its 1.4 s whatever happens: a frenzy doesn't speed it up.
       t.popT += dt * (t.kind === 'tiny' ? 1 : speed);
       const up = t.upFor;
+      // Rising and dropping take 0.35 s; a Sharpshooter's flash takes 0.2 s (`rise`).
+      const rise = t.rise ?? 0.35;
       let h;
-      if (t.popT < 0.35) h = t.popT / 0.35;
-      else if (t.popT < 0.35 + up) h = 1;
-      else if (t.popT < 0.7 + up) h = 1 - (t.popT - 0.35 - up) / 0.35;
+      if (t.popT < rise) h = t.popT / rise;
+      else if (t.popT < rise + up) h = 1;
+      else if (t.popT < 2 * rise + up) h = 1 - (t.popT - rise - up) / rise;
       else {
         h = 0;
         t.state = 'gone';
@@ -1695,7 +1791,7 @@ function update(dt) {
       const from = t.kind === 'drop' ? dropTop(t) : hiddenY(t);
       const wasHidden = t.y > lane.strip;
       t.y = from + (lane.line - from) * e;
-      if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < 0.35 && game.mode === 'play') {
+      if (t.kind !== 'drop' && wasHidden && t.y <= lane.strip && t.popT < rise && game.mode === 'play') {
         // The tiny target rings a bright ting as it rises; the rest splash.
         if (t.kind === 'tiny') sfx('ding', { gain: 0.8, rate: 1.7 });
         else sfx('splash', { gain: 0.3, rate: rand(1.2, 1.5) });
@@ -2955,7 +3051,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
       goalRing: () => {
         const g = hudLayout().goal;
         return goalRing(g).map((b) => ({ ...b, sx: g.x + g.w / 2 + b.x, sy: g.y + g.h / 2 + b.y, cx: ox + (g.x + g.w / 2 + b.x) * k, cy: oy + (g.y + g.h / 2 + b.y) * k }));
-      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
+      }, MARQUEE_COLOURS, SIGN_FONT, chipped, FRENZY_FLASH, stickWidth, paintShowsAt, paintClipped: () => paintClipped, polesDrawn: () => polesDrawn, sparklesDrawn: () => sparklesDrawn, signTexts: () => signTexts, fx: () => fx, launchTiny, tinyScale, TINY, TIP, ROUND_INTRO, BULB, timerBulbs, marqueeBulbs, MARQUEE_R, timerBulbRadius: () => hudLayout().timer.font / 10.5, arcPoints, ARC_SHARE, flightTime, laneAt, launchPop, launchFrenzyTarget, SHARP, ASSIST_OFF_FROM, launchSharp, sharpStep, timerColour, launchDrop, dropLanes, multiplier, stripY, paintAlpha, sway, swayY, swayPeriod, waveDepth, tileWidth, stripsMarked,
       targets: () => targets,
       // Draws one target alone on a cleared canvas, as the booth's frame would place it.
       drawAlone(t) {
