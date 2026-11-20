@@ -7,6 +7,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { serve } from './serve.mjs';
 import { launch, realFrames, waitFor, within, scaled } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -3523,9 +3524,12 @@ test('splat-gallery-win-sounds-and-bonus-bar AC-9: the BONUS bar flashes every 0
     window.__gallery.pause();
     window.__gallery.manual = false;
   });
-  const before = await page.evaluate(() => window.__gallery.lastStamp().dark);
+  const before = await page.evaluate(() => ({ dark: window.__gallery.lastStamp().dark, T: window.__gallery.game.T }));
   await realFrames(page, 50);
-  assert.equal(await page.evaluate(() => window.__gallery.lastStamp().dark), before, 'held while paused');
+  const held = await page.evaluate(() => ({ dark: window.__gallery.lastStamp().dark, T: window.__gallery.game.T, n: window.__gallery.stampsDrawn() }));
+  assert.equal(held.n, 1, 'the bar is still drawn while paused');
+  assert.equal(held.T, before.T, 'the clock holds');
+  assert.equal(held.dark, before.dark, 'held while paused');
   await context.close();
 });
 
@@ -3596,12 +3600,33 @@ test('splat-gallery-win-sounds-and-bonus-bar AC-12: no brass rim around the boar
   await context.close();
 });
 
-test('splat-gallery-win-sounds-and-bonus-bar AC-13: cleared and bonus are the Kenney MP3s; quota.mp3 is gone; the credit stands', () => {
+// The first MPEG audio frame's header, past any ID3v2 tag: version, layer, sample rate, channels.
+function mp3Header(buf) {
+  let i = 0;
+  if (buf.subarray(0, 3).toString() === 'ID3') i = 10 + ((buf[6] << 21) | (buf[7] << 14) | (buf[8] << 7) | buf[9]);
+  while (i < buf.length - 4 && !(buf[i] === 0xff && (buf[i + 1] & 0xe0) === 0xe0)) i++;
+  const [b1, b2, b3] = [buf[i + 1], buf[i + 2], buf[i + 3]];
+  const version = { 3: 'MPEG1', 2: 'MPEG2', 0: 'MPEG2.5' }[(b1 >> 3) & 3];
+  const layer = { 1: 'III', 2: 'II', 3: 'I' }[(b1 >> 1) & 3];
+  const rate = { MPEG1: [44100, 48000, 32000], MPEG2: [22050, 24000, 16000], 'MPEG2.5': [11025, 12000, 8000] }[version][(b2 >> 2) & 3];
+  return { version, layer, rate, mono: (b3 >> 6) === 3 };
+}
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-13: cleared is Kenney\'s jingles-steel_00 and bonus the owner\'s jingle 2, each mono MP3 at 44.1 kHz; quota.mp3 is gone; the credit stands', () => {
   const src = readFileSync(new URL('../splat-gallery/game.js', import.meta.url), 'utf8');
-  for (const [name, file] of [['cleared', 'cleared.mp3'], ['bonus', 'bonus.mp3']]) {
-    assert.match(src, new RegExp(`${name}: 'sounds/${file}'`));
-    const b = readFileSync(new URL(`../splat-gallery/sounds/${file}`, import.meta.url));
-    assert.ok(b.length > 4000 && (b.subarray(0, 3).toString() === 'ID3' || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)), `${file} is an MP3`);
+  // Which recording: the sha-256 of each file as converted (ffmpeg -ac 1 -ar 44100 -b:a 96k) from
+  // its source, Kenney's Music Jingles/Audio (Steeldrum)/jingles-steel_00.ogg and the owner's
+  // win-jingle-2.mp3 (kept in meirmsn/games-private owner-audio/). A re-conversion changes the
+  // hash on purpose: this test is then updated with the new file.
+  const want = {
+    cleared: '1e9673233126924a95d036205fccfc6a3eeb55329b3f146f36f596b87c30056f',
+    bonus: 'd1c66f3a60f701dd65922757ea4e2ec5b1b15ea26ba4ea936dcc58f4561cab24',
+  };
+  for (const [name, sha] of Object.entries(want)) {
+    assert.match(src, new RegExp(`${name}: 'sounds/${name}\\.mp3'`));
+    const b = readFileSync(new URL(`../splat-gallery/sounds/${name}.mp3`, import.meta.url));
+    assert.equal(createHash('sha256').update(b).digest('hex'), sha, `${name}.mp3 is the recording named in the spec`);
+    assert.deepEqual(mp3Header(b), { version: 'MPEG1', layer: 'III', rate: 44100, mono: true }, `${name}.mp3: mono MP3 at 44.1 kHz`);
   }
   assert.doesNotMatch(src, /quota\.mp3|sfx\('quota'\)/);
   assert.throws(() => readFileSync(new URL('../splat-gallery/sounds/quota.mp3', import.meta.url)));
