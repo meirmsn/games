@@ -7,6 +7,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { serve } from './serve.mjs';
 import { launch, realFrames, waitFor, within, scaled } from './clock.mjs';
 import { FAKE_AUDIO } from './fake-audio.mjs';
@@ -579,7 +580,8 @@ test('splat-gallery AC-10: when the time runs out, a met quota goes on to the ne
   });
   await steps(page, 0.05);
   assert.equal((await state(page)).mode, 'won');
-  await steps(page, 1.7);
+  // "Round cleared" holds 3 s, the intro 0.1 s after (splat-gallery-win-sounds-and-bonus-bar AC-2).
+  await steps(page, 3.2);
   let s = await state(page);
   assert.deepEqual([s.round, s.mode, s.time], [2, 'intro', 30]);
   await ready(page);
@@ -820,7 +822,7 @@ test('splat-gallery-frenzy-counts AC-4: a back or a miss in a frenzy adds no pip
   await context.close();
 });
 
-test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reaching the quota in a frenzy starts the bonus with its sound under the Frenzy sign; Bonus shows as the frenzy ends, and not after a frenzy short of it', async () => {
+test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reaching the quota in a frenzy starts the bonus with its sound under the Frenzy sign; no Bonus sign, before or after (splat-gallery-win-sounds-and-bonus-bar AC-8)', async () => {
   const { context, page } = await open();
   await ready(page, 2);
   const quota = await page.evaluate(() => window.__gallery.ROUNDS[2].quota);
@@ -845,13 +847,14 @@ test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reachi
   let s = await state(page);
   u = await page.evaluate(() => window.__gallery.ui());
   assert.ok(s.frenzy > 0 && s.bonus, 'the frenzy and the bonus');
-  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('quota')), 'the quota sound');
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('bonus')), 'the bonus sound');
   assert.equal(u.banner, 'Frenzy!');
-  // As that frenzy ends, the Bonus sign shows.
+  // As that frenzy ends, no Bonus sign: BONUS is on the bar.
   await steps(page, 7.1);
   u = await page.evaluate(() => window.__gallery.ui());
   assert.equal((await state(page)).frenzy, 0);
-  assert.equal(u.banner, 'Bonus!', 'the Bonus sign as the frenzy ends');
+  assert.notEqual(u.banner, 'Bonus!', 'no Bonus sign as the frenzy ends');
+  assert.equal(u.goalStamp, true, 'BONUS on the bar');
   // A frenzy shot's pip reaches the quota: the same.
   await page.evaluate((quota) => {
     const g = window.__gallery;
@@ -865,9 +868,9 @@ test('splat-gallery-frenzy-counts AC-5, splat-gallery-frenzy-counts AC-6: reachi
   s = await state(page);
   u = await page.evaluate(() => window.__gallery.ui());
   assert.deepEqual([s.pips, s.bonus, u.banner], [quota, true, 'Frenzy!']);
-  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('quota')));
+  assert.ok(await page.evaluate(() => window.__gallery.heard.includes('bonus')));
   await steps(page, 7.1);
-  assert.equal((await page.evaluate(() => window.__gallery.ui())).banner, 'Bonus!');
+  assert.notEqual((await page.evaluate(() => window.__gallery.ui())).banner, 'Bonus!');
   await context.close();
 });
 
@@ -1087,16 +1090,16 @@ async function statesCheck(o = {}) {
   const t = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
   await shoot(page, t.x, 4);
   u = await ui();
-  assert.deepEqual(row(u), [false, false, false, false, 'Bonus!', true, 'gold', 'running'], 'bonus');
-  assert.ok(u.pill.top >= u.pill.counterTop, `the Bonus pill sits on the counter, clear of every lane: ${JSON.stringify(u.pill)}`);
+  assert.deepEqual(row(u), [false, false, false, false, null, true, 'gold', 'running'], 'bonus: no sign, the bar gold');
   // Round won: the tally.
   await page.evaluate(() => (window.__gallery.game.time = 0.01));
   await steps(page, 0.05);
   u = await ui();
   assert.deepEqual([u.banner, u.pips], ['Round cleared', 'gold']);
   assert.match(u.bannerSub, /^\+\d+ points$/);
-  // A frenzy: its pill, the timer stopped.
-  await steps(page, 3);
+  // A frenzy: its pill, the timer stopped. Into the next round first ("Round cleared" holds 3 s and
+  // the intro comes at 3.1 s since splat-gallery-win-sounds-and-bonus-bar AC-2).
+  await steps(page, 3.2);
   await page.evaluate(() => {
     const g = window.__gallery;
     g.game.mode = 'play';
@@ -1165,7 +1168,7 @@ test('splat-gallery AC-19: a shot, a splat, a hit, a bullseye, an empty hopper, 
   const q = await place(page, 'duck', { lane: 4, x: 200, face: 'duck_yellow' });
   await clearHeard();
   await shoot(page, q.x, 4);
-  assert.ok((await heard()).includes('quota'));
+  assert.ok((await heard()).includes('bonus'));
   // The frenzy target.
   const ft = await page.evaluate(() => {
     const t = window.__gallery.launchFrenzyTarget();
@@ -2657,7 +2660,7 @@ const placeTiny = (page, x = 200) =>
   }, x);
 const goal = (page) => page.evaluate(() => {
   const u = window.__gallery.ui();
-  return { text: u.goalText, colour: u.goalColour, fill: Math.round(u.goalFill * 1000) / 1000, rim: u.goalRim, bar: u.pips };
+  return { text: u.goalText, colour: u.goalColour, fill: Math.round(u.goalFill * 1000) / 1000, stamp: u.goalStamp, bar: u.pips };
 });
 
 test('splat-gallery-goal-and-tiny-target AC-1: a bottle-green count board at the top right counts the pips scored, a brass bar under its digits; hidden on the start screen', async () => {
@@ -2665,7 +2668,7 @@ test('splat-gallery-goal-and-tiny-target AC-1: a bottle-green count board at the
   const start = await page.evaluate(() => window.__gallery.ui());
   assert.deepEqual([start.goalText, start.goalColour], ['', 'hidden'], 'hidden on the start screen');
   await ready(page, 3);
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, stamp: false, bar: 'shown' });
   await page.evaluate(() => (window.__gallery.game.pips = 6));
   await realFrames(page, 2);
   const d = await page.evaluate(() => {
@@ -2685,7 +2688,7 @@ test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their 
   await ready(page, 3);
   const far = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   assert.equal((await shoot(page, far.x + far.w * 0.38, 0)).what, 'body');
-  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown' }, 'counted as the ball lands');
+  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, stamp: false, bar: 'shown' }, 'counted as the ball lands');
   // A gold duck counts 2, a near target 1, a tiny target 5.
   for (const [kind, lane, opts, n] of [['gold', 4, {}, 2], ['duck', 4, { face: 'duck_yellow' }, 1]]) {
     const t = await place(page, kind, { lane, x: 200, ...opts });
@@ -2696,21 +2699,22 @@ test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their 
   const tiny = await placeTiny(page);
   assert.equal((await shoot(page, tiny.x + tiny.w * 0.38, 0)).kind, 'tiny');
   assert.equal((await goal(page)).text, '11', 'the tiny target counts 5');
-  // The quota met: the bar full and gold, the rim, the bulbs still green; it counts on past it.
+  // The quota met: the bar full and gold, BONUS on it, the bulbs still green; it counts on past it.
   await page.evaluate(() => (window.__gallery.game.pips = 15));
   const last = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, last.x + last.w * 0.38, 0);
   assert.equal((await state(page)).bonus, true);
-  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold' });
+  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, stamp: true, bar: 'gold' });
   const more = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
   await shoot(page, more.x + more.w * 0.38, 0);
   assert.equal((await goal(page)).text, '21', 'it keeps counting in the bonus');
   await realFrames(page, 2);
-  const withRim = await page.evaluate(() => window.__gallery.brassDrawn());
+  const past = await page.evaluate(() => window.__gallery.brassDrawn());
   await page.evaluate(() => (window.__gallery.game.pips = 17));
   await realFrames(page, 2);
-  const noRim = await page.evaluate(() => window.__gallery.brassDrawn());
-  assert.equal(withRim, noRim + 1, 'the board has a brass rim at the quota');
+  const under = await page.evaluate(() => window.__gallery.brassDrawn());
+  // No brass rim at the quota since splat-gallery-win-sounds-and-bonus-bar AC-12.
+  assert.equal(past, under, 'no brass rim around the board at the quota');
   // The time running out short flashes the bar.
   await page.evaluate(() => {
     const g = window.__gallery;
@@ -2722,7 +2726,7 @@ test('splat-gallery-goal-and-tiny-target AC-2: hits count the board up by their 
   assert.equal((await goal(page)).bar, 'flash');
   // The next round: 0, empty, no rim.
   await page.evaluate(() => window.__gallery.startRound(4));
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, stamp: false, bar: 'shown' });
   await context.close();
 });
 
@@ -3021,7 +3025,7 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
     return { mode: g.game.mode, tiny: g.targets().filter((o) => o.kind === 'tiny').length };
   });
   assert.deepEqual(intro, { mode: 'intro', tiny: 0 });
-  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, rim: false, bar: 'shown' });
+  assert.deepEqual(await goal(page), { text: '0', colour: 'green', fill: 0, stamp: false, bar: 'shown' });
   await ready(page, 3);
   // Round won: the quota met as the time runs out; between rounds the bar stays gold and rimmed.
   await page.evaluate(() => {
@@ -3032,7 +3036,7 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
     g.step(1 / 60);
   });
   assert.equal((await state(page)).mode, 'won');
-  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, rim: true, bar: 'gold' });
+  assert.deepEqual(await goal(page), { text: '18', colour: 'green', fill: 1, stamp: true, bar: 'gold' });
   // Between rounds, a tiny target that falls due never rises.
   const afterWon = await page.evaluate(() => {
     const g = window.__gallery;
@@ -3063,7 +3067,7 @@ test('splat-gallery-goal-and-tiny-target AC-2: the board through the states tabl
   await shoot(page, t.x + t.w * 0.38, 0);
   await page.evaluate(() => window.__gallery.gameOver());
   assert.equal((await page.evaluate(() => window.__gallery.ui().over)), true);
-  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, rim: false, bar: 'shown' });
+  assert.deepEqual(await goal(page), { text: '3', colour: 'green', fill: Math.round((3 / 18) * 1000) / 1000, stamp: false, bar: 'shown' });
   // Paused (the pause card, dimming the booth), then turned (the grey veil): real frames run, and
   // neither the board, its swell nor a tiny target that's up moves.
   for (const flag of ['paused', 'turned']) {
@@ -3161,7 +3165,8 @@ test('splat-gallery-board-lights AC-2: the bar and the gold rim are still brass'
     G.bonus = true;
   });
   await realFrames(page, 2);
-  assert.equal(await page.evaluate(() => window.__gallery.brassDrawn()), 2, 'the bar and the rim');
+  // No rim since splat-gallery-win-sounds-and-bonus-bar AC-12: the bar alone.
+  assert.equal(await page.evaluate(() => window.__gallery.brassDrawn()), 1, 'the bar alone, no rim');
   await context.close();
 });
 
@@ -3195,7 +3200,8 @@ test('splat-gallery-board-lights AC-4: a won round grows a ring of bulbs that ch
   });
   // Clockwise from the top left: the first bulbs run along the top, left to right.
   assert.ok(r[1].x > r[0].x && r[1].y === r[0].y, 'clockwise from the top left');
-  await steps(page, 1.2);
+  // The intro comes 3.1 s after the round ends (splat-gallery-win-sounds-and-bonus-bar AC-2).
+  await steps(page, 2.6);
   assert.equal((await state(page)).mode, 'intro');
   assert.deepEqual(await ring(page), [], 'gone at the next intro');
   await context.close();
@@ -3303,6 +3309,351 @@ test('splat-gallery-board-lights AC-9: the ring leaves the timer, the frenzy mar
   assert.equal(after.marquee, false, 'no frenzy marquee with the ring');
   assert.equal(await page.evaluate(() => window.__gallery.ui().timerText), '0', 'the timer shows 0 as before');
   assert.equal(after.text, String(await page.evaluate(() => window.__gallery.game.cfg.quota - 1)), 'the digits show the count as before');
+  await context.close();
+});
+
+// ---------- specs/splat-gallery-win-sounds-and-bonus-bar.md ----------
+
+const count = (page, name) => page.evaluate((n) => window.__gallery.heard.filter((x) => x === n).length, name);
+const hush = (page) => page.evaluate(() => (window.__gallery.heard.length = 0));
+// Reach the quota with a hit in play: the count one short, then a hit on a still target.
+async function reachQuota(page) {
+  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  const hit = await shoot(page, t.x + t.w * 0.38, 0);
+  assert.ok(['body', 'bull'].includes(hit.what), `the hit lands: ${JSON.stringify(hit)}`);
+  assert.equal((await state(page)).bonus, true, 'the bonus started');
+}
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-1: a won round from 1 to 5 plays cleared once, and no bonus or quota starts with it', async () => {
+  const { context, page } = await open();
+  for (const round of [1, 5]) {
+    await ready(page, round);
+    await hush(page);
+    assert.equal(await endRound(page, true, 0), 'won');
+    const h = await page.evaluate(() => window.__gallery.heard.slice());
+    assert.deepEqual(h.filter((x) => ['cleared', 'bonus', 'quota'].includes(x)), ['cleared'], `round ${round}: ${h}`);
+    await steps(page, 3);
+    assert.equal(await count(page, 'cleared'), 1, `round ${round}: once`);
+  }
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-2: Round cleared shows for 3 s, the next intro 3.1 s after the round ends', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  await endRound(page, true, 0);
+  const at = async () => (await page.evaluate(() => window.__gallery.ui())).banner;
+  await steps(page, 0.2);
+  assert.equal(await at(), 'Round cleared');
+  await steps(page, 2.5); // 2.7 s in: still up
+  assert.equal(await at(), 'Round cleared');
+  const life = await page.evaluate(() => window.__gallery.game.banner.life);
+  assert.equal(life, 3);
+  // Fully visible from the end of its 0.18 s rise to the start of its 0.25 s fade: at least 2.5 s.
+  assert.ok(life - 0.25 - 0.18 >= 2.5);
+  await steps(page, 0.35); // 3.05 s
+  assert.equal((await state(page)).mode, 'won', 'not before 3.1 s');
+  await steps(page, 0.1);
+  const s = await state(page);
+  assert.deepEqual([s.mode, s.round], ['intro', 3], 'the intro at 3.1 s');
+  await context.close();
+});
+
+// The last round is the Sharpshooter, round 7, since specs/splat-gallery-sharpshooter.md (it was round 6).
+test('splat-gallery-win-sounds-and-bonus-bar AC-3: the last round won plays finale, not cleared, and its card comes at 2 s', async () => {
+  const { context, page } = await open();
+  await ready(page, 7);
+  await hush(page);
+  await endRound(page, true, 1.95);
+  assert.equal((await state(page)).mode, 'won');
+  await steps(page, 0.1);
+  assert.equal((await state(page)).mode, 'over');
+  assert.equal(await count(page, 'cleared'), 0);
+  assert.equal(await count(page, 'finale'), 1);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).over, true);
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-4: reaching the quota in play plays bonus once, never quota, and not again past it', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  await hush(page);
+  await reachQuota(page);
+  assert.equal(await count(page, 'bonus'), 1, 'at once');
+  await steps(page, 3);
+  assert.equal(await count(page, 'bonus'), 1, 'no repeats');
+  // More hits past the quota: nothing more.
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 0);
+  await steps(page, 1);
+  assert.equal(await count(page, 'bonus'), 1, 'once in all');
+  assert.equal(await count(page, 'quota'), 0, 'quota never plays');
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-5: no bonus starts at or after the round ends, nor after a new round or Play again', async () => {
+  const { context, page } = await open();
+  // The quota reached on the round's last frame: one bonus, then cleared, and nothing after.
+  await ready(page, 2);
+  await hush(page);
+  await reachQuota(page);
+  await page.evaluate(() => (window.__gallery.game.time = 1 / 120));
+  await steps(page, 3);
+  assert.equal(await count(page, 'bonus'), 1, 'one, and cleared after it');
+  assert.equal(await count(page, 'cleared'), 1);
+  const h = await page.evaluate(() => window.__gallery.heard.slice());
+  assert.ok(h.indexOf('bonus') < h.indexOf('cleared'), `bonus before cleared: ${h}`);
+  // A new round, and a new run (Play again), start with no bonus and play none.
+  for (const next of [() => window.__gallery.startRound(3), () => window.__gallery.startRun({ seed: 2 })]) {
+    await ready(page, 2);
+    await reachQuota(page);
+    await hush(page);
+    await page.evaluate(next);
+    assert.equal((await state(page)).bonus, false, 'the bonus is over');
+    await steps(page, 3);
+    assert.equal(await count(page, 'bonus'), 0, 'no bonus after it');
+  }
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-6: a ball landing after the time ran out starts no bonus', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  await hush(page);
+  await page.evaluate(() => (window.__gallery.game.pips = window.__gallery.game.cfg.quota - 1));
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  assert.deepEqual(await shoot(page, t.x + t.w * 0.38, 0, { wait: false }), { fired: true });
+  await page.evaluate(() => {
+    const g = window.__gallery;
+    g.game.time = 0.01;
+    g.step(1 / 60);
+  });
+  assert.equal((await state(page)).mode, 'lost', 'the round ends with the ball in the air');
+  await steps(page, 0.7);
+  assert.equal(await page.evaluate(() => window.__gallery.balls().length), 0, 'the ball has landed');
+  const s = await state(page);
+  const u = await page.evaluate(() => window.__gallery.ui());
+  assert.equal(s.bonus, false);
+  assert.equal(await count(page, 'bonus'), 0);
+  assert.deepEqual([u.pips, u.goalStamp], ['flash', false]);
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-7: BONUS on the bar from the quota to the next intro, in the booth lettering, inside the bar, in both layouts; none under the quota or while it flashes', async () => {
+  for (const [viewport, px] of [[PORTRAIT, 11.5], [LANDSCAPE, 8.5]]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 2);
+    await realFrames(page, 2);
+    assert.equal(await page.evaluate(() => window.__gallery.stampsDrawn()), 0, 'under the quota: no text');
+    await reachQuota(page);
+    await realFrames(page, 2);
+    const m = await page.evaluate(() => ({ n: window.__gallery.stampsDrawn(), s: window.__gallery.lastStamp(), u: window.__gallery.ui() }));
+    assert.equal(m.n, 1, 'BONUS on the bar');
+    assert.equal(m.u.goalStamp, true);
+    assert.equal(m.s.px, px, `its size at ${viewport.width}×${viewport.height}`);
+    assert.match(m.s.font, /Rye/);
+    assert.ok(m.s.textW <= m.s.w && m.s.px <= m.s.h + 2, `inside the bar: ${JSON.stringify(m.s)}`);
+    // Through the round won, beside the Closing time card, and gone at the next intro.
+    await endRound(page, true, 1);
+    await realFrames(page, 2);
+    assert.equal(await page.evaluate(() => window.__gallery.stampsDrawn()), 1, 'while the round is won');
+    await steps(page, 2.2);
+    assert.equal((await state(page)).mode, 'intro');
+    await realFrames(page, 2);
+    assert.equal(await page.evaluate(() => window.__gallery.stampsDrawn()), 0, 'gone at the next intro');
+    await ready(page, 7); // the last round (specs/splat-gallery-sharpshooter.md)
+    await endRound(page, true, 2.1);
+    await realFrames(page, 2);
+    assert.equal(await page.evaluate(() => window.__gallery.ui().over), true);
+    assert.equal(await page.evaluate(() => window.__gallery.stampsDrawn()), 1, 'beside the Closing time card');
+    // While the groove flashes red: no text.
+    await ready(page, 2);
+    await endRound(page, false, 0.3);
+    await realFrames(page, 2);
+    assert.equal(await page.evaluate(() => window.__gallery.stampsDrawn()), 0, 'none while the bar flashes');
+    await context.close();
+  }
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-8: no Bonus banner, with or without a frenzy', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  const seen = async (s) => {
+    const out = [];
+    for (let t = 0; t < s; t += 0.1) {
+      await steps(page, 0.1);
+      out.push((await page.evaluate(() => window.__gallery.ui())).banner);
+    }
+    return out;
+  };
+  await reachQuota(page);
+  assert.ok(!(await seen(2)).includes('Bonus!'), 'no sign in play');
+  await ready(page, 2);
+  await page.evaluate(() => window.__gallery.startFrenzy());
+  await reachQuota(page);
+  assert.ok(!(await seen(8)).includes('Bonus!'), 'no sign in or after a frenzy');
+  await context.close();
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-9: the BONUS bar flashes every 0.6 s from the quota, gold with dark letters then dark with yellow letters, and holds while paused', async () => {
+  const { context, page } = await open();
+  const k = await page.evaluate(() => {
+    const g = window.__gallery;
+    return { flash: g.BONUS_FLASH, dark: g.BONUS_DARK, glow: g.BONUS_GLOW, at: [0, 0.3, 0.59, 0.61, 1.19, 1.21, 1.8, 2.5].map((t) => g.bonusDark(t)) };
+  });
+  assert.deepEqual([k.flash, k.dark, k.glow], [0.6, '#17100a', '#ffd23f']);
+  assert.deepEqual(k.at, [false, false, false, true, true, false, true, false]);
+  await ready(page, 2);
+  await steps(page, 0.73); // the clock at a point that isn't a multiple of 0.6
+  await reachQuota(page);
+  const drawnAt = async (t) => {
+    const at = await page.evaluate(() => window.__gallery.game.T - window.__gallery.game.bonusAt);
+    await steps(page, t - at);
+    await realFrames(page, 2);
+    return page.evaluate(() => ({ n: window.__gallery.stampsDrawn(), s: window.__gallery.lastStamp(), brass: window.__gallery.brassDrawn() }));
+  };
+  const gold = await drawnAt(0.3);
+  assert.deepEqual([gold.n, gold.s.dark, gold.s.colour], [1, false, '#5a3405'], 'first 0.6 s: gold, dark letters');
+  const dark = await drawnAt(0.9);
+  assert.deepEqual([dark.n, dark.s.dark, dark.s.colour], [1, true, '#ffd23f'], 'next 0.6 s: dark, yellow letters');
+  assert.equal(dark.s.px, gold.s.px, 'the same size');
+  assert.equal(dark.brass, gold.brass, 'the same pieces: the dark covers the gold bar');
+  const again = await drawnAt(1.5);
+  assert.equal(again.s.dark, false, 'gold again at 1.2 s');
+  // Paused, the flash holds.
+  await page.evaluate(() => {
+    window.__gallery.pause();
+    window.__gallery.manual = false;
+  });
+  const before = await page.evaluate(() => ({ dark: window.__gallery.lastStamp().dark, T: window.__gallery.game.T }));
+  await realFrames(page, 50);
+  const held = await page.evaluate(() => ({ dark: window.__gallery.lastStamp().dark, T: window.__gallery.game.T, n: window.__gallery.stampsDrawn() }));
+  assert.equal(held.n, 1, 'the bar is still drawn while paused');
+  assert.equal(held.T, before.T, 'the clock holds');
+  assert.equal(held.dark, before.dark, 'held while paused');
+  await context.close();
+});
+
+// The ring's layout outside the board (AC-10, AC-11): centres 3 units out on one of the four sides,
+// the top row lowered only where the screen's top would cut it, radius 1.15 digit bulbs.
+async function ringOutside(page, where) {
+  const m = await page.evaluate(() => {
+    const g = window.__gallery;
+    return { r: g.goalRing(), b: g.goalBoard(), oy: g.stage().oy, k: g.stage().k, top: g.L.top, mute: document.querySelector('[data-mute]').getBoundingClientRect().left };
+  });
+  assert.ok(m.r.length >= 16, `a ring at ${where}`);
+  const R = (m.b.font / 10.5) * 1.15;
+  const hw = m.b.w / 2 + 3;
+  const hh = m.b.h / 2 + 3;
+  const lowered = Math.max(-hh, -m.oy / m.k + R * 1.25 - (m.b.y + m.b.h / 2));
+  for (const x of m.r) {
+    assert.ok(near(x.r, R), `bulb ${x.i} radius at ${where}: ${x.r} vs ${R}`);
+    const onSide = near(Math.abs(x.x), hw, 1e-6) || near(x.y, hh, 1e-6) || near(x.y, lowered, 1e-6);
+    assert.ok(onSide && Math.abs(x.x) <= hw + 1e-6 && x.y >= lowered - 1e-6 && x.y <= hh + 1e-6, `bulb ${x.i} outside the plank at ${where}: ${x.x}, ${x.y}`);
+    assert.ok(x.sy >= m.top - 1e-6, `bulb ${x.i} under the safe-area top at ${where}`);
+    assert.ok(x.cx < m.mute, `bulb ${x.i} left of the sound button at ${where}`);
+  }
+  // The sides away from the screen's top stay 3 units out.
+  assert.ok(m.r.some((x) => near(x.y, hh)) && m.r.some((x) => near(x.x, -hw)) && m.r.some((x) => near(x.x, hw)));
+  return m;
+}
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-10: the red ring sits outside the board, in portrait and landscape', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    await ready(page, 2);
+    await endRound(page, false, 0.7);
+    const red = await page.evaluate(() => window.__gallery.BULB.red);
+    const m = await ringOutside(page, `${viewport.width}×${viewport.height} lost`);
+    assert.ok(m.r.some((b) => b.col === red), 'red');
+    await steps(page, 1);
+    assert.equal((await page.evaluate(() => window.__gallery.ui())).over, true);
+    await ringOutside(page, `${viewport.width}×${viewport.height} card`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-11: the gold ring sits outside the board too, when won and beside the Closing time card', async () => {
+  for (const viewport of [PORTRAIT, LANDSCAPE]) {
+    const { context, page } = await open({ viewport });
+    const colours = await page.evaluate(() => window.__gallery.MARQUEE_COLOURS);
+    await ready(page, 2);
+    await endRound(page, true, 0.7);
+    const m = await ringOutside(page, `${viewport.width}×${viewport.height} won`);
+    assert.ok(m.r.some((b) => colours.includes(b.col)), 'gold');
+    await ready(page, 6);
+    await endRound(page, true, 2.1);
+    await ringOutside(page, `${viewport.width}×${viewport.height} closing`);
+    await context.close();
+  }
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-12: no brass rim around the board past the quota', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  await page.evaluate(() => (window.__gallery.game.pips = 3));
+  await realFrames(page, 2);
+  const under = await page.evaluate(() => window.__gallery.brassDrawn());
+  assert.equal(under, 1, 'under the quota: the bar');
+  await reachQuota(page);
+  await realFrames(page, 2);
+  assert.equal(await page.evaluate(() => window.__gallery.brassDrawn()), under, 'the bar alone');
+  await context.close();
+});
+
+// The first MPEG audio frame's header, past any ID3v2 tag: version, layer, sample rate, channels.
+function mp3Header(buf) {
+  let i = 0;
+  if (buf.subarray(0, 3).toString() === 'ID3') i = 10 + ((buf[6] << 21) | (buf[7] << 14) | (buf[8] << 7) | buf[9]);
+  while (i < buf.length - 4 && !(buf[i] === 0xff && (buf[i + 1] & 0xe0) === 0xe0)) i++;
+  const [b1, b2, b3] = [buf[i + 1], buf[i + 2], buf[i + 3]];
+  const version = { 3: 'MPEG1', 2: 'MPEG2', 0: 'MPEG2.5' }[(b1 >> 3) & 3];
+  const layer = { 1: 'III', 2: 'II', 3: 'I' }[(b1 >> 1) & 3];
+  const rate = { MPEG1: [44100, 48000, 32000], MPEG2: [22050, 24000, 16000], 'MPEG2.5': [11025, 12000, 8000] }[version][(b2 >> 2) & 3];
+  return { version, layer, rate, mono: (b3 >> 6) === 3 };
+}
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-13: cleared is Kenney\'s jingles-steel_00 and bonus the owner\'s jingle 2, each mono MP3 at 44.1 kHz; quota.mp3 is gone; the credit stands', () => {
+  const src = readFileSync(new URL('../splat-gallery/game.js', import.meta.url), 'utf8');
+  // Which recording: the sha-256 of each file as converted (ffmpeg -ac 1 -ar 44100 -b:a 96k) from
+  // its source, Kenney's Music Jingles/Audio (Steeldrum)/jingles-steel_00.ogg and the owner's
+  // win-jingle-2.mp3 (kept in meirmsn/games-private owner-audio/). A re-conversion changes the
+  // hash on purpose: this test is then updated with the new file.
+  const want = {
+    cleared: '1e9673233126924a95d036205fccfc6a3eeb55329b3f146f36f596b87c30056f',
+    bonus: 'd1c66f3a60f701dd65922757ea4e2ec5b1b15ea26ba4ea936dcc58f4561cab24',
+  };
+  for (const [name, sha] of Object.entries(want)) {
+    assert.match(src, new RegExp(`${name}: 'sounds/${name}\\.mp3'`));
+    const b = readFileSync(new URL(`../splat-gallery/sounds/${name}.mp3`, import.meta.url));
+    assert.equal(createHash('sha256').update(b).digest('hex'), sha, `${name}.mp3 is the recording named in the spec`);
+    assert.deepEqual(mp3Header(b), { version: 'MPEG1', layer: 'III', rate: 44100, mono: true }, `${name}.mp3: mono MP3 at 44.1 kHz`);
+  }
+  assert.doesNotMatch(src, /quota\.mp3|sfx\('quota'\)/);
+  assert.throws(() => readFileSync(new URL('../splat-gallery/sounds/quota.mp3', import.meta.url)));
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /Art and sound by \[Kenney\]/);
+});
+
+test('splat-gallery-win-sounds-and-bonus-bar AC-14: the lose sound and its timing, the timer and the hit swell are as before', async () => {
+  const { context, page } = await open();
+  await ready(page, 2);
+  // A hit still swells the board, and the timer still runs.
+  const t0 = (await state(page)).time;
+  const t = await place(page, 'target', { lane: 0, x: 200, face: 'target_red1' });
+  await shoot(page, t.x + t.w * 0.38, 0);
+  assert.ok((await page.evaluate(() => window.__gallery.ui().goalPulse)) > 0, 'the hit swell');
+  assert.ok((await state(page)).time < t0, 'the timer runs');
+  // Time up short: lost at once, as before; the card at 1.5 s.
+  await hush(page);
+  assert.equal(await endRound(page, false, 0), 'lost');
+  assert.deepEqual(await page.evaluate(() => window.__gallery.heard.slice()), ['lost']);
+  await steps(page, 1.45);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).over, false);
+  await steps(page, 0.1);
+  assert.equal((await page.evaluate(() => window.__gallery.ui())).over, true);
+  assert.equal(await count(page, 'lost'), 1);
   await context.close();
 });
 
@@ -3737,7 +4088,7 @@ test('splat-gallery-sharpshooter AC-2: winning Closing time goes on to round 7, 
   const { context, page } = await open();
   await ready(page, 6);
   await page.evaluate(() => (window.__gallery.heard.length = 0));
-  await endRound(page, true, 1.7);
+  await endRound(page, true, 3.2); // "Round cleared" holds 3 s (specs/splat-gallery-win-sounds-and-bonus-bar.md)
   const r = await page.evaluate(() => {
     const g = window.__gallery;
     return { round: g.game.round, mode: g.game.mode, finale: g.heard.includes('finale'), over: g.ui().over };

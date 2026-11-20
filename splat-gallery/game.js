@@ -24,7 +24,8 @@ const { sound } = mountShell({
     dry: 'sounds/tick.mp3',
     splash: 'sounds/splash.mp3',
     round: 'sounds/round.mp3',
-    quota: 'sounds/quota.mp3',
+    bonus: 'sounds/bonus.mp3',
+    cleared: 'sounds/cleared.mp3',
     lost: 'sounds/lost.mp3',
     finale: 'sounds/finale.mp3',
     music: 'sounds/music.mp3',
@@ -543,7 +544,7 @@ const game = {
   pips: 0,
   goalPulse: 0,
   bonus: false,
-  bonusLater: false, // the quota was reached in a frenzy: show "Bonus!" when it ends
+  bonusAt: 0, // game.T when the quota was reached: the bar's flashing counts from it
   time: ROUND_TIME, // left in the round
   elapsed: 0, // in the round, on the timer's own clock
   T: 0, // the simulation's time
@@ -852,7 +853,7 @@ function startRound(n) {
   game.goalPulse = 0;
   game.roundScore = 0;
   game.bonus = false;
-  game.bonusLater = false;
+  game.bonusAt = 0;
   game.time = ROUND_TIME;
   game.elapsed = 0;
   game.frenzy = 0;
@@ -890,13 +891,18 @@ function banner(text, sub = '', life = 1.2, small = false, goal = '', tip = '') 
   game.banner = { text, sub, goal, tip, t: 0, life, small };
 }
 
+// How long "Round cleared" shows; the next round's intro starts 0.1 s after it.
+const CLEARED_FOR = 3;
 function roundOver() {
   endFrenzy();
   if (game.pips >= game.cfg.quota) {
     game.mode = 'won';
     game.modeT = 0;
     if (game.round === LAST_ROUND) banner('Closing time!', `${game.score.toLocaleString('en-US')} points`, 2);
-    else banner('Round cleared', `+${game.roundScore.toLocaleString('en-US')} points`, 1.5);
+    else {
+      banner('Round cleared', `+${game.roundScore.toLocaleString('en-US')} points`, CLEARED_FOR);
+      sfx('cleared');
+    }
   } else {
     game.mode = 'lost';
     game.modeT = 0;
@@ -956,9 +962,6 @@ function endFrenzy() {
   game.frenzy = 0;
   game.galopAt = 0;
   if (game.banner && game.banner.text === 'Frenzy!') game.banner = null;
-  // The quota was reached in the frenzy: its "Bonus!" sign shows now, unless the round is over.
-  if (game.bonusLater && game.mode === 'play' && game.time > 0) banner('Bonus!', '', 1.4, true);
-  game.bonusLater = false;
   if (was && (game.mode === 'play' || game.mode === 'won')) music('music');
 }
 
@@ -1157,17 +1160,17 @@ function landOn(b) {
   return r;
 }
 
-// The count board climbs at once, with a swell; the hit shows only its points. Reaching the quota
-// starts the bonus; in a frenzy its sign waits for the frenzy's end.
+// The count board climbs at once, with a swell; the hit shows only its points. Reaching the quota in
+// play starts the bonus: BONUS on the bar, and its jingle, once. A ball landing after the time has
+// run out counts but starts no bonus: the round is already decided.
 function addPips(n) {
   const was = game.pips;
   game.pips += n;
   game.goalPulse = 1;
-  if (was < game.cfg.quota && game.pips >= game.cfg.quota) {
+  if (game.mode === 'play' && was < game.cfg.quota && game.pips >= game.cfg.quota) {
     game.bonus = true;
-    sfx('quota');
-    if (game.frenzy > 0) game.bonusLater = true;
-    else banner('Bonus!', '', 1.4, true);
+    game.bonusAt = game.T;
+    sfx('bonus');
   }
 }
 
@@ -1819,7 +1822,7 @@ function update(dt) {
     game.time = 0;
     roundOver();
   }
-  if (game.mode === 'won' && game.modeT >= (game.round === LAST_ROUND ? 2 : 1.6)) {
+  if (game.mode === 'won' && game.modeT >= (game.round === LAST_ROUND ? 2 : CLEARED_FOR + 0.1)) {
     if (game.round === LAST_ROUND) {
       game.ended = 'closing';
       sfx('finale');
@@ -2145,15 +2148,46 @@ function goalBarState() {
   if (game.mode === 'lost') return 'flash';
   return game.bonus ? 'gold' : 'shown';
 }
+// In the bonus the bar says BONUS in the booth's lettering, and flashes every 0.6 s from the quota:
+// the gold bar with BONUS stamped into it in dark letters, then the bar dark with BONUS glowing yellow.
+const BONUS_FLASH = 0.6;
+const BONUS_DARK = '#17100a'; // the panel's own dark
+const BONUS_GLOW = '#ffd23f'; // the booth's sign yellow
+const bonusDark = (t = game.T - game.bonusAt) => Math.floor(t / BONUS_FLASH + 1e-9) % 2 === 1;
+let stampsDrawn = 0; // for the tests: stamps drawn this frame, and the last one's box
+let lastStamp = null;
+function bonusStamp(x, y, w, h) {
+  const dark = bonusDark();
+  const px = h + 2 - 2.5; // the bar's height less 2.5
+  ctx.font = signFont(px);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const cx = x + w / 2;
+  const cy = y + h / 2 + 0.5;
+  if (dark) {
+    ctx.fillStyle = BONUS_DARK;
+    ctx.fillRect(x, y, w, h);
+    ctx.save();
+    ctx.shadowColor = '#ffb21a';
+    ctx.shadowBlur = 5;
+    ctx.fillStyle = BONUS_GLOW;
+    ctx.fillText('BONUS', cx, cy);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = 'rgba(255, 244, 200, 0.55)';
+    ctx.fillText('BONUS', cx, cy + 0.7);
+    ctx.fillStyle = '#5a3405';
+    ctx.fillText('BONUS', cx, cy);
+  }
+  stampsDrawn++;
+  lastStamp = { x, y, w, h, px, font: ctx.font, textW: ctx.measureText('BONUS').width, dark, colour: dark ? BONUS_GLOW : '#5a3405' };
+}
 function drawGoalBoard(g) {
   const cfg = game.cfg;
-  const met = game.pips >= cfg.quota;
   const swell = 1 + 0.18 * Math.sin(Math.PI * Math.min(1, game.goalPulse));
   ctx.save();
   ctx.translate(g.x + g.w / 2, g.y + g.h / 2);
   ctx.scale(swell, swell);
-  // Once the count reaches the quota the board gets a gold brass rim; the bulbs stay green.
-  if (met) brass(-g.w / 2 - 3, -g.h / 2 - 3, g.w + 6, g.h + 6, true);
   plank(-g.w / 2, -g.h / 2, g.w, g.h, { tone: -0.12 });
   const { bar, panelH } = g;
   ctx.fillStyle = '#17100a';
@@ -2180,6 +2214,7 @@ function drawGoalBoard(g) {
   }
   const f = clamp(game.pips / cfg.quota, 0, 1);
   if (f > 0) brass(bx, by + 1, bw * f, bh - 2, game.bonus);
+  if (game.bonus && goalBarState() !== 'flash') bonusStamp(bx, by + 1, bw, bh - 2);
   for (const b of goalRing(g)) if (b.grow > 0) marqueeBulb(b.x, b.y, b.r * b.grow, b.col);
   ctx.restore();
 }
@@ -2194,20 +2229,20 @@ function goalRingKind() {
   return null;
 }
 const RING_GROW = 0.6; // s: every bulb full size by then, growing in one after another
-// The ring's bulbs relative to the board's centre: set into the plank's frame, their centres in the
-// middle of its 6-unit border all the way round, small enough to sit in it; evenly round it clockwise
-// from the top left, an even count, so red and dark alternate all the way round. Where the board
-// sits against the screen's top, the top row comes down a little, so no bulb is cut in half. Each
-// has its size so far (`grow`, 0 to 1) and its colour (null: dark).
-const RING_R = 2.6;
+// The ring's bulbs relative to the board's centre: just outside its plank, their centres 3 units out
+// all the way round, each a little larger than the board's digit bulbs; evenly round it clockwise
+// from the top left, an even count, so red and dark alternate all the way round. Each has its size
+// so far (`grow`, 0 to 1) and its colour (null: dark).
+const RING_SCALE = 1.15; // a ring bulb's radius, to a digit bulb's
 function goalRing(g) {
   const kind = goalRingKind();
   if (!kind) return [];
-  const R = RING_R;
-  const x0 = -g.w / 2 + 3;
-  const y0 = Math.max(-g.h / 2 + 3, -oy / k + R * 1.25 - (g.y + g.h / 2));
-  const w = g.w - 6;
-  const h = g.h / 2 - 3 - y0;
+  const R = (g.font / 10.5) * RING_SCALE;
+  const x0 = -g.w / 2 - 3;
+  // Where the board sits against the screen's top, the top row comes down just enough to show whole.
+  const y0 = Math.max(-g.h / 2 - 3, -oy / k + R * 1.25 - (g.y + g.h / 2));
+  const w = g.w + 6;
+  const h = g.h / 2 + 3 - y0;
   const per = 2 * (w + h);
   let n = Math.round(per / (R * 3.4));
   n += n % 2;
@@ -2718,6 +2753,7 @@ function draw() {
   paintballsDrawn = 0;
   bandsDrawn = 0;
   brassDrawn = 0;
+  stampsDrawn = 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#3a2414';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3010,7 +3046,7 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
     window.__gallery = {
       game, aim, heard, heardOpts, memory, L, ROUNDS, PALETTE, BULL, DUCK_BULL, HOPPER,
       step: update, startRun, startRound, gameOver, fire, resolve, makeTarget, dims, turnState, assistNow, pause, resume,
-      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern,
+      aimPoint, setPull, pouch, rockAngle, pivotOf, knockPose, KNOCK_LEN, signsWorn: () => signsWorn, bandsDrawn: () => bandsDrawn, BAND, slingLive, musicTempo, musicSpeed: () => musicSpeed, rushNow, ROLL_LEN, laneDir, laneSpeed, MUSIC_GAIN, musicNow: () => ({ name: musicName, gain: musicGain }), frenzyRing, paintballsDrawn: () => paintballsDrawn, brassDrawn: () => brassDrawn, brushedPattern, stampsDrawn: () => stampsDrawn, lastStamp: () => lastStamp, goalBoard: () => hudLayout().goal, bonusDark, BONUS_FLASH, BONUS_DARK, BONUS_GLOW, CLEARED_FOR, RING_SCALE,
       // The count board's ring, in stage units and in CSS px (centres; the board's swell aside).
       goalRing: () => {
         const g = hudLayout().goal;
@@ -3061,7 +3097,8 @@ Promise.all([atlas.decode(), splatImg.decode()]).then(
           goalText: !shown || !game.cfg ? '' : String(Math.min(99, game.pips)),
           goalColour: !shown || !game.cfg ? 'hidden' : 'green',
           goalFill: !shown || !game.cfg ? 0 : clamp(game.pips / game.cfg.quota, 0, 1),
-          goalRim: !!shown && !!game.cfg && game.pips >= game.cfg.quota,
+          // BONUS stamped on the bar (splat-gallery-win-sounds-and-bonus-bar AC-7).
+          goalStamp: !!shown && !!game.cfg && game.bonus && goalBarState() !== 'flash',
           goalPulse: game.goalPulse,
           hud: shown,
           pips: !shown || !game.cfg ? 'hidden' : game.mode === 'lost' ? 'flash' : game.bonus ? 'gold' : 'shown',
