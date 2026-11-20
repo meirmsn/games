@@ -4152,6 +4152,53 @@ test('splat-gallery-sharpshooter AC-5: until 15 s in, one target at a time, each
   await context.close();
 });
 
+test('splat-gallery-sharpshooter AC-5: after a hit, the next target rises 0.6–1.4 s after the hit, not after the hit one would have dropped', async () => {
+  const { context, page } = await open();
+  const waits = await page.evaluate(() => {
+    const g = window.__gallery;
+    g.manual = true;
+    const dt = 1 / 60;
+    const out = [];
+    for (let seed = 300; seed < 312; seed++) {
+      g.startRun({ seed });
+      g.startRound(7);
+      g.game.frenzyTimes = [];
+      g.game.rock = 0;
+      g.game.assist = 0;
+      while (g.game.mode !== 'play') g.step(dt);
+      // The first target, once fully up: hit it in the middle.
+      let t = null;
+      while (!t) {
+        g.step(dt);
+        t = g.targets().find((o) => o.state === 'live' && o.popT >= 0.35);
+      }
+      g.aimAt(t.x, t.y);
+      g.game.lastFire = -1;
+      g.game.lastLand = null;
+      g.fire();
+      while (!g.game.lastLand) g.step(dt);
+      const hitAt = g.game.T;
+      const hit = t.state === 'knocked';
+      // It would have stayed up until popT reaches 0.35 + 2.2, then dropped for 0.35 s.
+      const wouldGoneAt = hitAt + (0.35 + 2.2 + 0.35 - t.popT);
+      const seen = new Set(g.targets().map((o) => o.id));
+      let nextAt = null;
+      while (nextAt === null) {
+        g.step(dt);
+        if (g.targets().some((o) => o.state === 'live' && !seen.has(o.id))) nextAt = g.game.T;
+      }
+      out.push({ hit, wait: nextAt - hitAt, before: nextAt < wouldGoneAt });
+    }
+    return out;
+  });
+  for (const w of waits) {
+    assert.ok(w.hit, 'the shot hit the target');
+    assert.ok(w.wait >= 0.6 - 1e-6 && w.wait <= 1.4 + 2 / 60, `the next rose ${w.wait} s after the hit`);
+    assert.ok(w.before, 'before the hit one would have dropped out of sight');
+  }
+  await context.close();
+});
+
 test('splat-gallery-sharpshooter AC-6: from 15 s in, a third or so of rises are pairs, in different lanes and far apart; never more than two up', async () => {
   for (const viewport of [PORTRAIT, LANDSCAPE]) {
     const { context, page } = await open({ viewport });
